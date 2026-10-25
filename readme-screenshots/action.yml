@@ -1,0 +1,66 @@
+name: README screenshots, publish
+description: >-
+  Opens, refreshes or closes the one bot PR from bot/readme-screenshots, or
+  brings it up to date with main, from what the capture job found
+  (publish.mjs's header says when each happens and what the PR says). The
+  only step of the app's publishing job, which needs contents and
+  pull-requests write and runs no npm; the capture job (decide, the app's
+  own capture, then compare) runs with a read-only token.
+
+inputs:
+  token:
+    description: >-
+      Pushes the branch and opens the PR: secrets.BOT_PR_TOKEN, a
+      fine-grained token on the app with Contents and Pull requests read and
+      write, falling back to github.token. GitHub runs no workflow on a push
+      or PR the Actions token makes, so with it the PR's required checks
+      never report and it can't merge; the Actions token works at all only if
+      Settings > Actions > General allows Actions to create pull requests.
+    required: true
+  capture:
+    description: "'true' when the capture job took and compared screenshots."
+    required: true
+  changed:
+    description: The screenshots that changed (compare's output), space-separated.
+    default: ""
+  base:
+    description: >-
+      The main commit to branch from and show as "before": the commit the
+      screenshots were taken at by default. A workflow triggered by a merged
+      PR passes main.
+    default: ${{ github.sha }}
+  source-pr:
+    description: The PR whose merge took the screenshots, named in the description.
+    default: ""
+  run-url:
+    description: The run that took them, linked in the description; this run by default.
+    default: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ inputs.base }}
+        token: ${{ inputs.token }}
+
+    - uses: actions/download-artifact@v8
+      if: inputs.changed != ''
+      with:
+        name: readme-screenshots
+        path: ${{ runner.temp }}/readme-screenshots
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Open, refresh or close the PR
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        CAPTURE: ${{ inputs.capture }}
+        CHANGED: ${{ inputs.changed }}
+        SHOTS: ${{ runner.temp }}/readme-screenshots
+        SOURCE_PR: ${{ inputs.source-pr }}
+        RUN_URL: ${{ inputs.run-url }}
+      run: node "$GITHUB_ACTION_PATH/publish.mjs"
