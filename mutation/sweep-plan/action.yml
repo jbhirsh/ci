@@ -1,0 +1,48 @@
+name: Mutation sweep plan
+description: >-
+  The monthly mutation sweep, part 1 (the mutation-sweep workflow's plan
+  job): splits the files the Stryker config's `mutate` globs select into
+  `sweep.shards` shards of near-equal weight (sweep.mjs). Main's last
+  results are restored only to weigh each file; no shard starts from them,
+  as a sweep re-tests everything. Needs no install: the plan reads only git,
+  the config and the results.
+outputs:
+  matrix:
+    description: The shard job matrix, one entry per shard with its files comma-joined as `mutate`.
+    value: ${{ steps.plan.outputs.matrix }}
+  count:
+    description: How many shards there are (fewer than asked when there are fewer files).
+    value: ${{ steps.plan.outputs.count }}
+  timeout-minutes:
+    description: Each shard job's limit (`sweep.timeoutMinutes`).
+    value: ${{ steps.settings.outputs.sweep-timeout-minutes }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Read the mutation settings
+      id: settings
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../settings.mjs"
+
+    - name: Cache keys
+      id: keys
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../cache.mjs" main
+
+    - name: Restore main's last results (for weights only)
+      uses: actions/cache/restore@v6
+      with:
+        path: reports/stryker-incremental.json
+        key: ${{ steps.keys.outputs.key }}
+        restore-keys: ${{ steps.keys.outputs.restore-keys }}
+
+    - name: Split the mutate scope
+      id: plan
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../sweep.mjs" plan reports/stryker-incremental.json

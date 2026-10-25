@@ -1,0 +1,76 @@
+# The monthly mutation sweep, for an app's mutation workflow to call on its
+# schedule (and by hand): a drift sensor for what PR runs can't see. They
+# mutate only the lines a PR changes, so test erosion elsewhere (a test
+# refactor weakening assertions on untouched code, a helper, test data or a
+# dependency changing what the tests check) shows up only here. It also
+# refreshes main's baseline, which PR runs start from.
+#
+# A sweep tests every mutant from scratch, which as one job outgrew the job's
+# limit, and a run cut off saves nothing. So it runs in three parts, each a
+# composite action in mutation/ (their descriptions say what each does, and
+# mutation/sweep.mjs the rules for splitting and merging):
+#   plan   splits the files into `sweep.shards` shards of near-equal weight;
+#   shard  tests one shard's files, a job each, in parallel;
+#   merge  merges their results, judges the whole and saves it as main's
+#          baseline, only when every shard reported.
+# The settings are the app's `.github/ci.json` `mutation` key. No required
+# check may depend on these jobs' names, which show as "<caller job> / plan"
+# and so on; only scheduled and manual runs call this.
+#
+# Usage, in the app's mutation workflow:
+#   sweep:
+#     name: Mutation sweep
+#     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+#     uses: jbhirsh/ci/.github/workflows/mutation-sweep.yml@main
+name: Mutation sweep
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      count: ${{ steps.plan.outputs.count }}
+      timeout-minutes: ${{ steps.plan.outputs.timeout-minutes }}
+    steps:
+      - id: plan
+        uses: jbhirsh/ci/mutation/sweep-plan@main
+
+  # fail-fast off: one failing shard doesn't cancel the rest, whose results
+  # still show where the files stand.
+  shard:
+    name: shard ${{ matrix.shard }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeout-minutes) }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: jbhirsh/ci/mutation/sweep-shard@main
+        with:
+          shard: ${{ matrix.shard }}
+          mutate: ${{ matrix.mutate }}
+
+  # Runs when some shards failed too (not when the run was cancelled): the
+  # merge then shows the partial score and fails, leaving the baseline.
+  merge:
+    name: merge
+    needs: [plan, shard]
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: jbhirsh/ci/mutation/sweep-merge@main
+        with:
+          count: ${{ needs.plan.outputs.count }}
