@@ -1,0 +1,41 @@
+name: PR visuals
+description: >-
+  Fails a pull request that changes the UI when its description shows none
+  of it (check.mjs's header says what counts, and the app's `visuals`
+  settings in .github/ci.json say which files are UI). Run it from a workflow
+  triggered on pull_request types opened, edited, synchronize, reopened and
+  ready_for_review: it re-runs on description edits, so adding the pictures
+  turns it green without a new push. The job needs contents and
+  pull-requests read. No path filter on the trigger: the check passes a PR
+  with no UI files on its own, so it can be a required check.
+
+inputs:
+  github-token:
+    description: A token that can read the pull request's files.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+        sparse-checkout: .github
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Check the description shows UI changes
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR: ${{ github.event.pull_request.number }}
+        # Passed through the environment, never interpolated into the script.
+        PR_BODY: ${{ github.event.pull_request.body }}
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+      run: |
+        set -o pipefail
+        # The files API pages through large PRs, where `gh pr diff` gives up.
+        gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' \
+          | node "$GITHUB_ACTION_PATH/check.mjs"
