@@ -1,0 +1,81 @@
+# The weekly audit, for an app's weekly-audit.yml to call: the checks that
+# need the whole repository at once, too slow or too noisy to gate a PR,
+# each a job running audit/action.yml (audit/run.mjs's header says what each
+# runs; audit/issue.mjs how its tracking issue is kept):
+#
+#   - Dead code (knip), Duplicated code (jscpd), Broken links (lychee): each
+#     keeps one issue labelled weekly-audit, opened or rewritten while there
+#     are findings, closed once a run comes back clean.
+#   - Architecture graph (dependency-cruiser): an artifact, linked from the
+#     run's summary.
+#
+# The run stays green unless a tool breaks; the issues are the alert. Not a
+# PR workflow, so no required check depends on these job names.
+#
+# The caller grants the permissions (a called workflow can only narrow
+# them):
+#
+#   jobs:
+#     audit:
+#       uses: jbhirsh/ci/.github/workflows/audit.yml@main
+#       permissions:
+#         contents: read
+#         issues: write
+#
+# Each job calls the action at @main, as the apps do: this file and the
+# action move together.
+name: Weekly audit
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  dead-code:
+    name: Dead code (knip)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: jbhirsh/ci/audit@main
+        with:
+          check: knip
+
+  duplicates:
+    name: Duplicated code (jscpd)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: jbhirsh/ci/audit@main
+        with:
+          check: jscpd
+
+  links:
+    name: Broken links (lychee)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: jbhirsh/ci/audit@main
+        with:
+          check: lychee
+
+  architecture:
+    name: Architecture graph (dependency-cruiser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: jbhirsh/ci/audit@main
+        with:
+          check: graph
