@@ -1,0 +1,215 @@
+# Claude Review: the AI code review every app runs on its pull requests,
+# as its required "Claude Review" check. The app's workflow
+# (.github/workflows/claude-review.yml) is a stub: its trigger, its job (whose
+# `name:` is the required check), the job's permissions, and one step calling
+# this action at @main with the Claude token. Everything else is here, so a
+# change to the review reaches all three apps at once.
+#
+# What it does:
+#   1. Renders the prompt (render.mjs): prompt.md, the shared review, plus
+#      the app's own guide (`review.instructions` in `.github/ci.json`,
+#      settings.mjs), both read from the PR's base branch.
+#   2. Runs the review (claude-code-action). It leaves an inline comment per
+#      merge blocker and one summary comment saying what it read.
+#   3. Checks the review read every changed file's diff (coverage.mjs, from
+#      the review's own tool calls), lockfiles, images, fonts and the app's
+#      `review.skip` globs aside. A file it never read goes back to a second
+#      pass (followup.md); a file still unread after that fails the check.
+#      It was added after a review passed sift #188 twice having seen its
+#      tests only in `--stat`.
+#
+# The prompts ask only for what no automated check of the apps decides:
+# each app's CI already runs lint, Prettier, the type-check and type
+# coverage, dependency-cruiser, tests with a coverage gate, mutation
+# testing, the commit-message check, secret scanning, Semgrep, npm audit, PR
+# visuals and its end-to-end and visual tests, and the review is told to
+# leave all of that alone. Don't add an instruction a check already covers.
+#
+# How claude-code-action skips a PR (read from its source, src/github/
+# token.ts and src/entrypoints/run.ts, October 2026): before it starts, it
+# exchanges the job's GitHub OIDC token for the Claude GitHub App's token at
+# api.anthropic.com. That service refuses the exchange (401 "Workflow
+# validation failed", error code workflow_not_found_on_default_branch) when
+# the workflow file the run comes from (the OIDC token's workflow_ref: the
+# app's stub, not this action) doesn't exist on the default branch with
+# identical content. The action then sets its internal
+# skipped_due_to_workflow_validation_mismatch output, logs a warning, gives
+# no execution_file, and the step succeeds, so the required check passes
+# without a review. Consequences of this layout:
+#   - Only a PR that edits the app's claude-review.yml stub skips review.
+#     A PR that edits any other workflow, or a change to this action (which
+#     lives in jbhirsh/ci, not in the PR), is reviewed. When the review
+#     skips, the step after it puts a warning on the run and in its summary
+#     instead of passing silently.
+#   - A PR can't change what its own review runs or reads: this action comes
+#     from jbhirsh/ci@main, the app's settings and guide are read from the
+#     base branch (config.mjs), and claude-code-action restores CLAUDE.md
+#     and .claude/ from the base before Claude starts.
+#   - No new route to the secrets. A pull_request run executes the PR's
+#     copy of the stub, so a same-repo PR could add a step that prints a
+#     secret, exactly as it could with the whole review in the app's file
+#     before; only people with write access can push such a branch. Fork
+#     PRs get no secrets, and Dependabot's get only Dependabot secrets.
+#     The token goes into this action as an input and from here only to
+#     claude-code-action.
+name: Claude Review
+description: >-
+  Reviews a pull request with Claude Code, checks it read every changed
+  file's diff (a second pass for any it missed, failing if still unread),
+  and leaves inline comments for merge blockers and one summary comment.
+
+inputs:
+  claude_code_oauth_token:
+    description: >-
+      Claude Code OAuth token (the app's CLAUDE_CODE_OAUTH_TOKEN secret).
+      Give this or anthropic_api_key.
+    required: false
+    default: ""
+  anthropic_api_key:
+    description: Anthropic API key, instead of the OAuth token.
+    required: false
+    default: ""
+  github_token:
+    description: >-
+      Token for the `gh` calls the review makes (reading the PR, posting the
+      summary comment). The job needs pull-requests and issues write, and
+      id-token write for claude-code-action's own app token.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        # The diff against the base, and the base's settings (config.mjs).
+        fetch-depth: 0
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Render the review prompt
+      id: render
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        CONFIG_REF: origin/${{ github.event.pull_request.base.ref }}
+      run: node "$GITHUB_ACTION_PATH/render.mjs" review
+
+    - uses: anthropics/claude-code-action@v1
+      id: review
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+      with:
+        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        # claude-code-action refuses to run for a bot actor unless it's
+        # listed ("Workflow initiated by non-human actor"). Dependabot's
+        # bumps are reviewed, and claude[bot] pushes autofix's commits;
+        # without it the review fails on them and, being required, blocks
+        # the PR. Just these two, never "*".
+        allowed_bots: "dependabot[bot],claude[bot]"
+        prompt: ${{ steps.render.outputs.prompt }}
+        classify_inline_comments: "true"
+        display_report: "true"
+        show_full_output: "true"
+        # Reading every changed file one diff at a time takes turns on a
+        # big PR (sift ran at 200).
+        claude_args: |
+          --max-turns 200
+          --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git fetch:*),Bash(git checkout:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git branch:*),Bash(git ls-files:*),mcp__github_inline_comment__create_inline_comment"
+
+    # No execution file from a step that succeeded: claude-code-action
+    # skipped, almost always because this PR edits the app's
+    # claude-review.yml (header). Say so rather than pass silently.
+    - name: Note a skipped review
+      if: steps.review.outcome == 'success' && steps.review.outputs.execution_file == ''
+      shell: bash
+      run: |
+        msg="claude-code-action skipped this review: a PR that edits .github/workflows/claude-review.yml isn't reviewed until the edit is on the default branch. Review it by hand."
+        echo "::warning title=Claude Review skipped::$msg"
+        echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Check the review read every changed file
+      id: coverage
+      if: steps.review.outputs.execution_file != ''
+      shell: bash
+      env:
+        REPO_DIR: ${{ github.workspace }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        SKIP: ${{ steps.render.outputs.skip }}
+        EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+      run: |
+        set -o pipefail
+        # The follow-up writes its log to the same path.
+        cp "$EXECUTION_FILE" "$RUNNER_TEMP/review-pass-1.json"
+        git -c core.quotePath=false diff --name-only -M "origin/$BASE_REF...HEAD" \
+          | node "$GITHUB_ACTION_PATH/coverage.mjs" "$RUNNER_TEMP/review-pass-1.json" \
+          > "$RUNNER_TEMP/unread.txt"
+        if [ -s "$RUNNER_TEMP/unread.txt" ]; then
+          echo "The review didn't read:"
+          cat "$RUNNER_TEMP/unread.txt"
+          {
+            echo 'unread<<UNREAD_EOF'
+            cat "$RUNNER_TEMP/unread.txt"
+            echo 'UNREAD_EOF'
+          } >> "$GITHUB_OUTPUT"
+        else
+          echo "The review read every changed file."
+        fi
+
+    - name: Render the follow-up prompt
+      id: render-followup
+      if: steps.coverage.outputs.unread != ''
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        CONFIG_REF: origin/${{ github.event.pull_request.base.ref }}
+        UNREAD: ${{ steps.coverage.outputs.unread }}
+      run: node "$GITHUB_ACTION_PATH/render.mjs" followup
+
+    - uses: anthropics/claude-code-action@v1
+      id: followup
+      if: steps.coverage.outputs.unread != ''
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+      with:
+        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        allowed_bots: "dependabot[bot],claude[bot]"
+        prompt: ${{ steps.render-followup.outputs.prompt }}
+        classify_inline_comments: "true"
+        display_report: "true"
+        show_full_output: "true"
+        claude_args: |
+          --max-turns 100
+          --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(git rev-parse:*),Bash(git ls-files:*),mcp__github_inline_comment__create_inline_comment"
+
+    - name: Fail if files are still unread
+      if: steps.coverage.outputs.unread != ''
+      shell: bash
+      env:
+        REPO_DIR: ${{ github.workspace }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        SKIP: ${{ steps.render.outputs.skip }}
+        FOLLOWUP_FILE: ${{ steps.followup.outputs.execution_file }}
+      run: |
+        set -o pipefail
+        passes=("$RUNNER_TEMP/review-pass-1.json")
+        if [ -n "$FOLLOWUP_FILE" ]; then
+          passes+=("$FOLLOWUP_FILE")
+        fi
+        unread=$(git -c core.quotePath=false diff --name-only -M "origin/$BASE_REF...HEAD" \
+          | node "$GITHUB_ACTION_PATH/coverage.mjs" "${passes[@]}")
+        if [ -n "$unread" ]; then
+          while IFS= read -r file; do
+            echo "::error file=$file::Claude Review never read this file's diff, even on a second pass."
+          done <<< "$unread"
+          exit 1
+        fi
+        echo "The follow-up read the rest."

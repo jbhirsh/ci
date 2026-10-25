@@ -1,0 +1,65 @@
+[
+  { "type": "system", "subtype": "init" },
+  {
+    "type": "assistant",
+    "message": {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t1",
+          "name": "Bash",
+          "input": { "command": "git diff --stat -M origin/main...HEAD" }
+        },
+        {
+          "type": "tool_use",
+          "id": "t2",
+          "name": "Bash",
+          "input": {
+            "command": "git diff -M origin/main...HEAD -- src/utils/sorting.ts src/types/index.ts"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "t3",
+          "name": "Bash",
+          "input": {
+            "command": "git diff origin/main...HEAD -- __tests__/unit/sorting.test.ts | head -50"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "t4",
+          "name": "Bash",
+          "input": {
+            "command": "git diff -M origin/main...HEAD -- __tests__/fixtures/sessions/v8.json"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "type": "user",
+    "message": {
+      "content": [
+        { "type": "tool_result", "tool_use_id": "t1", "content": " 4 files changed" },
+        {
+          "type": "tool_result",
+          "tool_use_id": "t2",
+          "content": "diff --git a/src/utils/sorting.ts"
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "t3",
+          "content": "diff --git a/__tests__/unit/sorting.test.ts"
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "t4",
+          "content": "Permission denied",
+          "is_error": true
+        }
+      ]
+    }
+  },
+  { "type": "result", "subtype": "success", "num_turns": 2 }
+]

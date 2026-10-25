@@ -1,0 +1,96 @@
+[
+  { "type": "system", "subtype": "init", "tools": ["Bash", "Read"] },
+  {
+    "type": "assistant",
+    "message": {
+      "content": [
+        { "type": "text", "text": "Listing the changes." },
+        {
+          "type": "tool_use",
+          "id": "t1",
+          "name": "Bash",
+          "input": { "command": "git diff --stat -M origin/main...HEAD" }
+        }
+      ]
+    }
+  },
+  {
+    "type": "user",
+    "message": {
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "t1",
+          "content": " src/utils/sorting.ts | 4 ++--\n __tests__/unit/sorting.test.ts | 9 +++++++++\n package-lock.json | 12 ++++++------"
+        }
+      ]
+    }
+  },
+  {
+    "type": "assistant",
+    "message": {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t2",
+          "name": "Bash",
+          "input": { "command": "git diff -M origin/main...HEAD -- src/utils/sorting.ts" }
+        },
+        {
+          "type": "tool_use",
+          "id": "t3",
+          "name": "Bash",
+          "input": { "command": "git diff -M origin/main...HEAD -- __tests__/unit/sorting.test.ts" }
+        }
+      ]
+    }
+  },
+  {
+    "type": "user",
+    "message": {
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "t2",
+          "content": [
+            {
+              "type": "text",
+              "text": "diff --git a/src/utils/sorting.ts b/src/utils/sorting.ts\n-  return a - b;\n+  return b - a;"
+            }
+          ]
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "t3",
+          "content": "Output too large (61.2KB). Full output saved to: /tmp/claude/tool-results/t3.txt\n\nPreview (first 2KB):\ndiff --git a/__tests__/unit/sorting.test.ts"
+        }
+      ]
+    }
+  },
+  {
+    "type": "assistant",
+    "message": {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t4",
+          "name": "Read",
+          "input": { "file_path": "/tmp/claude/tool-results/t3.txt", "offset": 1, "limit": 2000 }
+        }
+      ]
+    }
+  },
+  {
+    "type": "user",
+    "message": {
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "t4",
+          "content": "1\tdiff --git a/__tests__/unit/sorting.test.ts"
+        }
+      ]
+    }
+  },
+  { "type": "result", "subtype": "success", "num_turns": 4 }
+]
