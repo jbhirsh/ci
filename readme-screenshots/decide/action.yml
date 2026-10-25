@@ -1,0 +1,32 @@
+name: README screenshots, decide
+description: >-
+  Says whether a push to main should retake the README's screenshots: when
+  what they show changed since this workflow's last finished run (decide.mjs's
+  header has the rules; the app's `readme-screenshots` settings in
+  .github/ci.json say what they show). A step of the app's capture job, after
+  its checkout, which needs the whole history (fetch-depth 0). The job needs
+  actions read, to find the last finished run.
+
+inputs:
+  github-token:
+    description: A token with actions read.
+    default: ${{ github.token }}
+
+outputs:
+  capture:
+    description: "'true' to retake the screenshots, 'false' to keep them."
+    value: ${{ steps.decide.outputs.capture }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Did what the screenshots show change since the last finished run?
+      id: decide
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: node "$GITHUB_ACTION_PATH/../decide.mjs"
