@@ -1,0 +1,82 @@
+# Every change here reaches all three apps on their next run, with no PR in
+# any of them (they call these tools at @main). So a PR here has to pass two
+# gates before it merges:
+#   - Check: this repo's own lint, formatting, types, tests (80% lines per
+#     file) and actionlint over its workflows.
+#   - Against <app>: each tool's self-test (`<tool>/selftest.mjs`) run
+#     against fog-and-frontier, sift and BoardGames as their `main` stands,
+#     with the app's dependencies installed, as the tools see them in the
+#     app's own CI. A tool an app doesn't use yet (no key in its
+#     `.github/ci.json`) is checked against its defaults.
+# Both job names are this repo's required checks.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      - name: Lint workflows (actionlint)
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+
+  apps:
+    name: Against ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [fog-and-frontier, sift, BoardGames]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: ci
+      - uses: actions/checkout@v7
+        with:
+          repository: jbhirsh/${{ matrix.app }}
+          ref: main
+          path: app
+          # The scope and audit tools read the app's history.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      # The packages the tools import from the app (Prettier, Playwright, …);
+      # no install scripts, which the self-tests don't need.
+      - run: npm ci --ignore-scripts
+        working-directory: app
+      - name: Self-tests
+        run: |
+          status=0
+          for test in ci/*/selftest.mjs; do
+            echo "::group::$test"
+            node "$test" "$GITHUB_WORKSPACE/app" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
