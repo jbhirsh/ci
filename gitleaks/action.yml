@@ -1,0 +1,42 @@
+name: Secret scan (gitleaks)
+description: >-
+  Checks out the app's full history and scans it with gitleaks: on a pull
+  request, the PR's commit range (fast, targeted, blocks the merge); on a
+  schedule or a manual run, every commit, as a drift sensor for a secret that
+  slipped in outside the PR path (a direct push, rewritten history, a new
+  gitleaks rule catching an old leak). gitleaks reads the app's own
+  .gitleaks.toml (its allowlist) when there is one: allowlist a false
+  positive there rather than disabling the job. Findings go to the job
+  summary and a results artifact; PR comments are off, so the job needs only
+  contents read. No GITLEAKS_LICENSE: the action is free for personal-account
+  repositories.
+
+inputs:
+  github-token:
+    description: >-
+      Read-only token. gitleaks-action uses it to resolve the PR's commit
+      range and for its license check; the scan itself runs on the checkout.
+    default: ${{ github.token }}
+  version:
+    description: >-
+      The gitleaks release to scan with. Pinned so a scan is deterministic and
+      matches the version the apps' histories were verified clean against;
+      otherwise the action falls back to its own default, which can shift
+      between gitleaks-action releases with nothing in the app to signal it.
+    default: "8.30.1"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        # Full history: PR runs diff the PR's commit range; scheduled runs
+        # sweep every commit.
+        fetch-depth: 0
+        persist-credentials: false
+
+    - uses: gitleaks/gitleaks-action@v3
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITLEAKS_ENABLE_COMMENTS: "false"
+        GITLEAKS_VERSION: ${{ inputs.version }}
