@@ -1,0 +1,110 @@
+name: Weekly audit check
+description: >-
+  One check of the weekly audit, from checkout to its tracking issue: knip
+  (dead code), jscpd (duplicated code), lychee (broken links in the
+  Markdown) or the dependency-cruiser graph (an artifact). run.mjs's header
+  says what each runs and reads, and audit/issue.mjs's how the issue is kept.
+  The reusable workflow .github/workflows/audit.yml runs all four as jobs;
+  an app calls that, not this.
+
+inputs:
+  check:
+    description: knip, jscpd, lychee or graph.
+    required: true
+  github-token:
+    description: >-
+      Issues write, for the tracking issue (unused by graph). lychee also uses
+      it, so github.com links aren't rate-limited.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the check
+      shell: bash
+      env:
+        CHECK: ${{ inputs.check }}
+      run: |
+        case "$CHECK" in
+          knip | jscpd | lychee | graph) ;;
+          *) echo "::error::check must be knip, jscpd, lychee or graph, not '$CHECK'"; exit 1 ;;
+        esac
+
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        cache: ${{ inputs.check != 'lychee' && 'npm' || '' }}
+
+    - if: inputs.check != 'lychee'
+      shell: bash
+      run: npm ci
+
+    - name: Run ${{ inputs.check }}
+      if: inputs.check == 'knip' || inputs.check == 'jscpd'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: node "$GITHUB_ACTION_PATH/run.mjs" "${{ inputs.check }}"
+
+    # Every Markdown file in the checkout; local links resolve against it,
+    # and --include-fragments checks #anchors too. Pinned by commit, and
+    # lychee by release, since run.mjs reads its JSON report (error_map).
+    - name: Run lychee
+      id: lychee
+      if: inputs.check == 'lychee'
+      uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+      with:
+        lycheeVersion: v0.24.2
+        args: >-
+          --no-progress --include-fragments --max-concurrency 8
+          --root-dir "${{ github.workspace }}"
+          --exclude-path node_modules --exclude-path dist
+          './**/*.md'
+        format: json
+        output: ${{ runner.temp }}/lychee.json
+        fail: false
+        jobSummary: false
+        token: ${{ inputs.github-token }}
+
+    - name: Report the broken links
+      if: inputs.check == 'lychee'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        EXIT_CODE: ${{ steps.lychee.outputs.exit_code }}
+      run: node "$GITHUB_ACTION_PATH/run.mjs" lychee "$RUNNER_TEMP/lychee.json" "$EXIT_CODE"
+
+    - name: Install Graphviz
+      if: inputs.check == 'graph'
+      shell: bash
+      run: sudo apt-get update -q && sudo apt-get install -y -q graphviz
+
+    - name: Draw the graph
+      if: inputs.check == 'graph'
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/run.mjs" graph "$RUNNER_TEMP/architecture"
+
+    - name: Upload the graph
+      id: upload
+      if: inputs.check == 'graph'
+      uses: actions/upload-artifact@v7
+      with:
+        name: architecture-graph
+        path: ${{ runner.temp }}/architecture
+        retention-days: 30
+
+    - name: Link it from the summary
+      if: inputs.check == 'graph'
+      shell: bash
+      env:
+        URL: ${{ steps.upload.outputs.artifact-url }}
+      run: |
+        {
+          echo '## Architecture graph'
+          echo
+          echo "[architecture-graph]($URL): architecture.svg (by folder), modules.svg (every module) and report.html."
+        } >> "$GITHUB_STEP_SUMMARY"
