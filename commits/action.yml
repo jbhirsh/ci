@@ -1,0 +1,29 @@
+name: Commit messages
+description: >-
+  Fails a pull request when one of its commits breaks a commit-message rule
+  (subject length, a body, no fixup or merge commits). The rules and why are
+  in check.mjs's header. Runs as a step of the app's CI job, before or after
+  its checkout: it reads the commits from the API, so a shallow checkout is
+  enough.
+
+inputs:
+  github-token:
+    description: A token that can read the pull request (pull-requests read).
+    default: ${{ github.token }}
+  pr-number:
+    description: The pull request to check; the one the event is about by default.
+    default: ${{ github.event.pull_request.number }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Check the commit messages
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+      run: node "$GITHUB_ACTION_PATH/check.mjs"
