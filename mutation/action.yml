@@ -1,0 +1,190 @@
+name: Mutation testing
+description: >-
+  Mutation testing (StrykerJS) for a pull request or a push to main, in one
+  job: the app's required check calls it as its only step. Line coverage
+  proves code ran; mutation testing proves the tests assert on it, by
+  mutating the source and checking a test fails.
+
+
+  On a pull request it mutates only the lines the PR adds or changes in the
+  files the Stryker config's `mutate` globs select (a new file, or one whose
+  test changed, whole; a reformat left out: scope.mjs), and skips Stryker
+  when there is nothing to mutate, unless the PR touches Stryker's setup,
+  which runs the smoke scope. The job still reports, as only Stryker's steps
+  are skipped. The scope is worked out once before the install, which can
+  only over-count, so a PR with nothing to mutate costs no install; then
+  again after it, with the app's Prettier. The run is incremental: it starts
+  from the PR's last results, or main's baseline (cache.mjs), narrowed to
+  this run's scope first (narrow.mjs), so a later push re-tests only what
+  it changed and the score is the changed code's alone. Stryker's
+  `thresholds.break` gates the run, and with `perFileThreshold` set so does
+  each file (gate.mjs).
+
+
+  On a push to main it refreshes main's baseline: the whole scope again,
+  incremental from the last baseline, so only what the merge changed is
+  re-tested. It gates nothing (main's own drift is the sweep's to judge),
+  and with no baseline yet it waits for a sweep rather than re-test
+  everything, which could outrun the job and save nothing. Any other event
+  does nothing here: the monthly sweep is the mutation-sweep workflow.
+
+
+  Settings come from the app's `.github/ci.json` (`mutation`, settings.mjs).
+  The checkout is part of this action (full history, to diff against the
+  base), so the job needs no other step.
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
+    # No npm cache yet: the first scope needs only Node, and setup-node's
+    # cache expects an install to fill it.
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Read the mutation settings
+      id: settings
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/settings.mjs"
+
+    - name: Not a pull request or a push
+      if: github.event_name != 'pull_request' && github.event_name != 'push'
+      shell: bash
+      run: echo "::notice::Mutation testing runs on pull requests and pushes; the sweep is the mutation-sweep workflow."
+
+    # Context values enter as env vars, not ${{ }} splices inside `run:`, so
+    # the shell treats them as data, never as script text.
+    - name: Determine mutation scope (before installing)
+      id: pre
+      if: github.event_name == 'pull_request'
+      shell: bash
+      env:
+        BASE_REF: ${{ github.base_ref }}
+      run: node "$GITHUB_ACTION_PATH/scope.mjs" "origin/${BASE_REF}"
+
+    - uses: actions/setup-node@v7
+      if: github.event_name == 'push' || steps.pre.outputs.run == 'true'
+      with:
+        node-version: 24
+        cache: npm
+
+    - name: Install
+      if: github.event_name == 'push' || steps.pre.outputs.run == 'true'
+      shell: bash
+      env:
+        INSTALL: ${{ steps.settings.outputs.install }}
+      run: bash -c "$INSTALL"
+
+    # Again with the app's Prettier, now installed: a file changed only in
+    # formatting drops out here.
+    - name: Determine mutation scope
+      id: scope
+      if: github.event_name == 'pull_request' && steps.pre.outputs.run == 'true'
+      shell: bash
+      env:
+        BASE_REF: ${{ github.base_ref }}
+      run: node "$GITHUB_ACTION_PATH/scope.mjs" "origin/${BASE_REF}"
+
+    - name: Cache keys
+      id: keys
+      if: github.event_name == 'push' || steps.scope.outputs.run == 'true'
+      shell: bash
+      env:
+        PR: ${{ github.event.pull_request.number }}
+      run: |
+        if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+          node "$GITHUB_ACTION_PATH/cache.mjs" pr "$PR"
+        else
+          node "$GITHUB_ACTION_PATH/cache.mjs" main
+        fi
+
+    - name: Restore incremental results
+      id: restore
+      if: steps.keys.outcome == 'success'
+      uses: actions/cache/restore@v6
+      with:
+        path: reports/stryker-incremental.json
+        key: ${{ steps.keys.outputs.key }}
+        restore-keys: ${{ steps.keys.outputs.restore-keys }}
+
+    - name: Narrow incremental results to the scope
+      if: steps.scope.outputs.run == 'true'
+      shell: bash
+      env:
+        MUTATE_SCOPE: ${{ steps.scope.outputs.mutate }}
+      run: node "$GITHUB_ACTION_PATH/narrow.mjs" reports/stryker-incremental.json "$MUTATE_SCOPE"
+
+    - name: Run Stryker (changed lines)
+      id: stryker
+      if: steps.scope.outputs.run == 'true'
+      shell: bash
+      env:
+        CONFIG: ${{ steps.settings.outputs.stryker-config }}
+        MUTATE_SCOPE: ${{ steps.scope.outputs.mutate }}
+        NODE_OPTIONS: ${{ steps.settings.outputs.node-options }}
+      run: npx stryker run "$CONFIG" --incremental --mutate "$MUTATE_SCOPE"
+
+    # A push's run only refreshes the baseline, so it never fails the job: a
+    # run under the threshold still saves its results, and one past its
+    # limit (push.timeoutMinutes, under the job's) ends as a warning rather
+    # than a cancelled job.
+    - name: Run Stryker (main, incremental)
+      id: main-run
+      if: github.event_name == 'push' && steps.restore.outputs.cache-matched-key != ''
+      shell: bash
+      env:
+        CONFIG: ${{ steps.settings.outputs.stryker-config }}
+        MINUTES: ${{ steps.settings.outputs.push-timeout-minutes }}
+        NODE_OPTIONS: ${{ steps.settings.outputs.node-options }}
+      run: |
+        status=0
+        timeout "${MINUTES}m" npx stryker run "$CONFIG" --incremental || status=$?
+        if [ "$status" -ne 0 ]; then
+          echo "::warning::Stryker exited $status on main; the sweep judges main's score."
+        fi
+
+    # Saved even when the run fails its gate: its results are still right,
+    # and the next push re-tests only what it changes. Not after a cancel,
+    # which can leave only the restored file behind. A push saves only on
+    # main, the one branch whose caches PRs can read. (A plain file check
+    # rather than hashFiles(), which a composite action's `if:` can't rely on.)
+    - name: Look for incremental results
+      id: results
+      if: >-
+        !cancelled()
+        && (steps.stryker.outcome == 'success' || steps.stryker.outcome == 'failure'
+          || steps.main-run.outcome == 'success')
+      shell: bash
+      run: |
+        if [ -f reports/stryker-incremental.json ]; then echo "exist=true" >> "$GITHUB_OUTPUT"; fi
+
+    - name: Save incremental results
+      if: >-
+        !cancelled() && steps.results.outputs.exist == 'true'
+        && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+      uses: actions/cache/save@v6
+      with:
+        path: reports/stryker-incremental.json
+        key: ${{ steps.keys.outputs.key }}
+
+    - name: Enforce the per-file threshold
+      if: steps.stryker.outcome == 'success' && steps.settings.outputs.per-file-threshold != ''
+      shell: bash
+      env:
+        MUTATE_SCOPE: ${{ steps.scope.outputs.mutate }}
+      run: node "$GITHUB_ACTION_PATH/gate.mjs"
+
+    # always(): a run under its threshold has still written the report that
+    # says why. warn: a run cut off by the job's limit writes none, and an
+    # upload error would only hide that.
+    - name: Upload mutation report
+      if: always() && (steps.scope.outputs.run == 'true' || steps.main-run.outcome == 'success')
+      uses: actions/upload-artifact@v7
+      with:
+        name: mutation-report
+        path: reports/mutation
+        if-no-files-found: warn
+        retention-days: 30

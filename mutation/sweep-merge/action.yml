@@ -1,0 +1,59 @@
+name: Mutation sweep merge
+description: >-
+  The monthly mutation sweep, part 3 (the mutation-sweep workflow's merge
+  job): merges the shards' results, judges the whole (Stryker's break
+  threshold on the merged score, and `perFileThreshold` on every file), and
+  saves it as main's baseline when every shard reported (sweep.mjs merge).
+  A complete sweep that fails its gate is still main's latest results and
+  still saved, since PR runs should start from them; a partial one shows
+  its score and fails, leaving the baseline as it was. A manual run on
+  another branch saves nothing: only main's caches reach PRs.
+inputs:
+  count:
+    description: How many shards the plan made, all of which must report.
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    # One directory per shard that finished. None finishing is the merge's
+    # to report, so a download with nothing to fetch can't stop it.
+    - name: Download the shards' results
+      continue-on-error: true
+      uses: actions/download-artifact@v8
+      with:
+        pattern: stryker-sweep-results-*
+        path: shards
+
+    - name: Merge and judge the shards
+      id: merge
+      shell: bash
+      env:
+        SHARDS: ${{ inputs.count }}
+      run: node "$GITHUB_ACTION_PATH/../sweep.mjs" merge shards "$SHARDS" reports/stryker-incremental.json
+
+    - name: Cache keys
+      id: keys
+      if: always() && steps.merge.outputs.complete == 'true'
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../cache.mjs" main
+
+    - name: Save main's baseline
+      if: always() && steps.merge.outputs.complete == 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@v6
+      with:
+        path: reports/stryker-incremental.json
+        key: ${{ steps.keys.outputs.key }}
+
+    - name: Upload the merged results
+      if: always() && steps.merge.outputs.complete == 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: mutation-results
+        path: reports/stryker-incremental.json
+        retention-days: 30

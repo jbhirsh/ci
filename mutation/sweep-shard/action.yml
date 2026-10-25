@@ -1,0 +1,67 @@
+name: Mutation sweep shard
+description: >-
+  The monthly mutation sweep, part 2 (one of the mutation-sweep workflow's
+  shard jobs): mutates one shard's files from no results, with the Stryker
+  config less its break threshold, since one part's score says nothing
+  about the whole (sweep.mjs config). With nothing restored, --incremental
+  tests every mutant and writes them all, which is what the merge reads.
+  Only a finished run's results are uploaded: Stryker can save a partial
+  file when interrupted, and the merge must count a shard cut short as
+  missing.
+inputs:
+  shard:
+    description: The shard's number, from 1, naming its artifacts.
+    required: true
+  mutate:
+    description: The shard's files, comma-joined, passed to --mutate in place of the config's globs.
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        cache: npm
+
+    - name: Read the mutation settings
+      id: settings
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../settings.mjs"
+
+    - name: Install
+      shell: bash
+      env:
+        INSTALL: ${{ steps.settings.outputs.install }}
+      run: bash -c "$INSTALL"
+
+    - name: Write the shard's config
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../sweep.mjs" config reports/stryker-shard.config.json
+
+    - name: Run Stryker (shard)
+      id: stryker
+      shell: bash
+      env:
+        MUTATE_SCOPE: ${{ inputs.mutate }}
+        NODE_OPTIONS: ${{ steps.settings.outputs.node-options }}
+      run: npx stryker run reports/stryker-shard.config.json --incremental --mutate "$MUTATE_SCOPE"
+
+    - name: Upload the shard's results
+      if: steps.stryker.outcome == 'success'
+      uses: actions/upload-artifact@v7
+      with:
+        name: stryker-sweep-results-${{ inputs.shard }}
+        path: reports/stryker-incremental.json
+        if-no-files-found: error
+        retention-days: 7
+
+    - name: Upload the shard's mutation report
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: mutation-report-${{ inputs.shard }}
+        path: reports/mutation
+        if-no-files-found: warn
+        retention-days: 30
