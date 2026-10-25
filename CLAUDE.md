@@ -7,8 +7,8 @@ pin: a merge here changes all three at once.
 ## Rules
 
 - **Never break an app.** A change must work for all three apps as their
-  `main` stands. CI runs every tool's self-test (`<tool>/selftest.mjs
-<app checkout>`) against each app; a new setting has a default that keeps
+  `main` stands. CI runs every tool's self-test (`selftest.mjs`, given an app's checkout)
+  against each app; a new setting has a default that keeps
   today's behaviour, and a setting is removed only after no app uses it.
 - **Docs live with the code.** Each module's header, each `action.yml`'s
   descriptions, each workflow's comments say what it does and why. README is

@@ -73,6 +73,7 @@ jobs:
         working-directory: app
       - name: Self-tests
         run: |
+          shopt -s nullglob
           status=0
           for test in ci/*/selftest.mjs; do
             echo "::group::$test"
