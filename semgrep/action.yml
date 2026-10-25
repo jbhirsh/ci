@@ -1,0 +1,26 @@
+name: SAST scan (Semgrep)
+description: >-
+  Checks out the app and scans it with Semgrep's free CLI and registry rules,
+  failing on any finding. What it scans (the app's `semgrep.paths` in
+  .github/ci.json) and the shared rule allowlist are in scan.mjs's header.
+  Needs only contents read: findings go to the log and the exit code, with no
+  PR comments.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Install Semgrep
+      shell: bash
+      run: pipx install semgrep
+
+    - name: Run Semgrep
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/scan.mjs"
