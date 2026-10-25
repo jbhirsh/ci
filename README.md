@@ -13,15 +13,17 @@ Each directory is one tool; its `action.yml` and module headers say what it
 does and what it reads from the app's `.github/ci.json`. This file is only a
 map; the documentation lives with the code.
 
-| Directory             | What                                                                                                                        |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `lib/`                | what every tool shares: the app's checkout, packages and settings; Actions outputs                                          |
-| `mutation/`           | Stryker on the lines a PR changed, and the monthly sweep (`.github/workflows/mutation-sweep.yml`)                           |
-| `commits/`            | the commit-message check                                                                                                    |
-| `visuals/`            | `PR visuals`: a UI change needs pictures in its description                                                                 |
-| `audit/`              | the weekly audit (`.github/workflows/audit.yml`): knip, jscpd, lychee, the dependency graph, one tracking issue per finding |
-| `readme-screenshots/` | the README screenshot bot's comparison and its one PR                                                                       |
-| `dependabot-merge/`   | auto-merge for Dependabot's npm PRs                                                                                         |
-| `gitleaks/`           | `Secret scan`                                                                                                               |
-| `semgrep/`            | `SAST scan`                                                                                                                 |
-| `gif/`                | before/after PR GIFs: the web recorder for fog and BoardGames, sift's videos, publishing to `screenshots`                   |
+| Directory             | What                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lib/`                | what every tool shares: the app's checkout, packages and settings; Actions outputs                                                                     |
+| `mutation/`           | Stryker on the lines a PR changed, and the monthly sweep (`.github/workflows/mutation-sweep.yml`)                                                      |
+| `commits/`            | the commit-message check                                                                                                                               |
+| `visuals/`            | `PR visuals`: a UI change needs pictures in its description                                                                                            |
+| `audit/`              | the weekly audit (`.github/workflows/audit.yml`): knip, jscpd, lychee, the dependency graph, one tracking issue per finding                            |
+| `readme-screenshots/` | the README screenshot bot's comparison and its one PR                                                                                                  |
+| `dependabot-merge/`   | auto-merge for Dependabot's npm PRs                                                                                                                    |
+| `gitleaks/`           | `Secret scan`                                                                                                                                          |
+| `semgrep/`            | `SAST scan`                                                                                                                                            |
+| `gif/`                | before/after PR GIFs: the web recorder for fog and BoardGames, sift's videos, publishing to `screenshots`                                              |
+| `review/`             | `Claude Review`: the AI review, and its check that every changed file was read                                                                         |
+| `autofix/`            | Claude autofix on bots' PRs: CI failures and review threads, once every run on the head has finished; `check-triggers` keeps its trigger list complete |
