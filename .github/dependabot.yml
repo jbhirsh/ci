@@ -1,0 +1,19 @@
+# This repo's dev tools and actions, on the apps' Monday 06:00 UTC slot. The
+# apps' own Dependabot bumps the packages these tools import from them.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    groups:
+      dev:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
