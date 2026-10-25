@@ -1,0 +1,18 @@
+# Fails a PR that leaves Claude autofix's trigger list out of step with the
+# app's workflows: a pull-request workflow neither in the list
+# (`on.workflow_run.workflows` in `.github/workflows/claude-autofix.yml`)
+# nor exempt (`autofix.exempt` in `.github/ci.json`, with its reason), or a
+# listed or exempt name no workflow has. ../check-triggers.mjs says why each
+# matters. A step of the app's CI job on pull requests, after `npm ci`: it
+# reads YAML with the app's own `yaml` package.
+name: Autofix triggers
+description: >-
+  Checks that every pull-request workflow wakes Claude autofix or is
+  exempt, and that its trigger list names only workflows that exist.
+
+runs:
+  using: composite
+  steps:
+    - name: Check autofix's trigger list
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../check-triggers.mjs"

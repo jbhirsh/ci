@@ -1,0 +1,346 @@
+# Claude autofix: fixes bots' PRs (Dependabot's) that nobody else will fix.
+# The app's workflow (.github/workflows/claude-autofix.yml) is a stub: its
+# `workflow_run` trigger, which lists the app's gating workflows by `name:`
+# (that list stays in the app, since only YAML can say it, and
+# check-triggers/action.yml, a step of the app's CI, keeps it complete), its
+# concurrency group, the job's permissions and timeout, and one step calling
+# this action at @main with the Claude token.
+#
+# On each listed workflow's completion it decides from the PR's state, not
+# from which run woke it (the concurrency group keeps one pending run, so a
+# later completion can replace the one that saw the event), and does at
+# most one of:
+#   - CI fixer, on an npm bump's current head once no pull-request
+#     workflow run there is still going (gate.mjs: a run that finds one
+#     exits, and the last to finish wakes the run that acts, since
+#     check-triggers.mjs holds every pull-request workflow the app doesn't
+#     exempt to the stub's list), so its one attempt sees every failure, a
+#     slow one's included: has Claude fix
+#     mechanical breakage from the bump (ci-fix.md), or comment when the fix
+#     is a behaviour decision or not the bump's fault. One attempt per head,
+#     two per PR, counted from its marker comments.
+#   - Review fixer, once CI (ci.yml) and Claude Review (claude-review.yml)
+#     are both green on the head (gate.mjs again): has Claude fix each
+#     unresolved review thread Claude Review or the owner opened, as fixup
+#     commits folded into the commits they fix (review-fix.md), and resolve
+#     those threads. One round per head, two per PR.
+# Nothing sleeps or polls: the completions are the clock.
+# Each fixer proves its fix before pushing with the app's own commands, the
+# steps of its CI that can run here (`autofix` in `.github/ci.json`,
+# settings.mjs and commands.mjs), read from the default branch. A person's
+# PR, a fork's PR and a PR labelled `no-auto-fix` are left alone.
+#
+# The job runs with a write token and unrestricted git/npm/gh, and acts on
+# review text: it checks out same-repo branches only, acts only on threads
+# from Claude Review or the owner, and counts only markers that
+# github-actions[bot] posted, since anyone can comment on a public PR. The
+# workflow_run event runs the stub from the default branch, so a PR can't
+# change it, and claude-code-action's workflow check (../review/action.yml
+# explains it) always passes here.
+name: Claude autofix
+description: >-
+  Fixes a bot's PR: mechanical breakage when a dependency bump fails a
+  check, and the review threads Claude Review or the owner left once the
+  build is green.
+
+inputs:
+  claude_code_oauth_token:
+    description: >-
+      Claude Code OAuth token (the app's CLAUDE_CODE_OAUTH_TOKEN secret).
+      Give this or anthropic_api_key.
+    required: false
+    default: ""
+  anthropic_api_key:
+    description: Anthropic API key, instead of the OAuth token.
+    required: false
+    default: ""
+  github_token:
+    description: >-
+      Token for this action's own `gh` calls (finding the PR, its checks and
+      threads, posting marker comments). Claude itself pushes with the Claude
+      GitHub App's token, which claude-code-action gets through the job's
+      id-token permission. The job needs contents, pull-requests and issues
+      write, actions read and id-token write.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve PR info
+      id: pr
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        # Through env, never ${{ }} in the script: branch names can hold
+        # quotes and $, which would be script injection.
+        HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        SHA: ${{ github.event.workflow_run.head_sha }}
+        EVENT: ${{ github.event.workflow_run.event }}
+      run: |
+        echo "skip=true" >> "$GITHUB_OUTPUT"
+        if [ "$EVENT" != "pull_request" ]; then
+          echo "The run was for a $EVENT event, not a pull request — skipping"
+          exit 0
+        fi
+        # A commit can belong to several PRs, in no set order; take the open
+        # one on this run's branch. None (e.g. CI finished after the merge
+        # deleted the branch) means nothing is left to fix.
+        PR_JSON=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/pulls" \
+          | jq -c --arg branch "$HEAD_BRANCH" 'map(select(.state == "open" and .head.ref == $branch))[0]')
+        if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "null" ]; then
+          echo "No open PR on this branch for $SHA — skipping"
+          exit 0
+        fi
+        # Same-repo only: never check out or run code from a fork PR.
+        HEAD_REPO=$(echo "$PR_JSON" | jq -r '.head.repo.full_name')
+        if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+          echo "PR head is a fork ($HEAD_REPO) — skipping"
+          exit 0
+        fi
+        NUMBER=$(echo "$PR_JSON" | jq -r '.number')
+        # Bots' PRs only (Dependabot today). A bot can't answer a review
+        # or fix its own build, so autofix does it; a person's PR is
+        # theirs to change.
+        if [ "$(echo "$PR_JSON" | jq -r '.user.type')" != "Bot" ]; then
+          echo "PR #$NUMBER was opened by a person — leaving it to its author"
+          exit 0
+        fi
+        BRANCH=$(echo "$PR_JSON" | jq -r '.head.ref')
+        LABELS=$(echo "$PR_JSON" | jq -r '[.labels[].name] | join(",")')
+        echo "PR #$NUMBER on branch $BRANCH (labels: $LABELS)"
+        echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+        echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+        if echo "$LABELS" | tr ',' '\n' | grep -qx "no-auto-fix"; then
+          echo "Labelled no-auto-fix — skipping"
+        else
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - uses: actions/checkout@v7
+      if: steps.pr.outputs.skip == 'false'
+      with:
+        ref: ${{ steps.pr.outputs.branch }}
+        fetch-depth: 0
+        # Don't leave the Actions token in git config: git would push with
+        # it instead of the Claude app token claude-code-action sets up, and
+        # GitHub holds every workflow on a push by that token
+        # ("action_required"), so the fix would never be checked.
+        persist-credentials: false
+
+    - uses: actions/setup-node@v7
+      if: steps.pr.outputs.skip == 'false'
+      with:
+        node-version: 24
+        cache: npm
+
+    # Red checks on a Dependabot PR have no one else to fix them: Dependabot
+    # can't fix its own PRs, Claude Review only comments, and the review
+    # fixer works only green builds. Its push re-runs CI and Claude Review,
+    # and the next run works the threads. (If it pushes nothing it has asked
+    # the owner to step in, and the red build blocks the merge anyway.)
+    - name: Check for failed checks to fix
+      id: ci
+      # Every completion, not only a failed one: the last workflow to finish
+      # may pass after an earlier one failed, and it's the run that acts.
+      if: steps.pr.outputs.skip == 'false'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        BRANCH: ${{ steps.pr.outputs.branch }}
+        PR: ${{ steps.pr.outputs.number }}
+        WORKFLOW_REF: ${{ github.workflow_ref }}
+        BASE_REF: ${{ github.event.repository.default_branch }}
+      run: |
+        set -o pipefail
+        echo "fix=false" >> "$GITHUB_OUTPUT"
+        # npm bumps only: a github-actions bump edits workflow files, which
+        # the app token can't push.
+        case "$BRANCH" in
+          dependabot/npm_and_yarn/*) ;;
+          *) echo "Not an npm bump — leaving it"; exit 0 ;;
+        esac
+        # Only the PR's current head; a newer push gets its own runs.
+        CURRENT=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.head.sha')
+        if [ "$CURRENT" != "$RUN_SHA" ]; then
+          echo "Run is for $RUN_SHA but the PR head is $CURRENT — skipping"
+          exit 0
+        fi
+        # One attempt per head, counted from the marker comment each attempt
+        # posts below, so two completions close together can't both fix
+        # (the concurrency group runs them one after the other). Only
+        # markers this workflow posted count: anyone can comment.
+        OWN=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+          --jq '.[] | select(.user.login == "github-actions[bot]") | .body')
+        MARKERS=$(echo "$OWN" | { grep -o '<!-- autofix-ci:[0-9a-f]* -->' || true; })
+        if echo "$MARKERS" | grep -qF "<!-- autofix-ci:$RUN_SHA -->"; then
+          echo "Already attempted on $RUN_SHA — skipping"
+          exit 0
+        fi
+        # Act only once no pull-request run on the head is still going
+        # (autofix's own and the app's exempt workflows aside); the last of
+        # them to finish wakes the run that gets past here (gate.mjs).
+        PENDING=$(node "$GITHUB_ACTION_PATH/gate.mjs" pending)
+        if [ -n "$PENDING" ]; then
+          echo "Still running on $RUN_SHA: $PENDING — the last of them to finish starts the fix"
+          exit 0
+        fi
+        # Every failed check on this head, not just this run's, so a
+        # workflow whose run got dropped from the queue still counts. Claude
+        # Review failing is never a code problem to fix, and neither is PR
+        # visuals: it wants pictures in the description, not a code change.
+        FAILED=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RUN_SHA/check-runs" --paginate \
+          --jq '.check_runs[] | select(.conclusion == "failure" and .name != "Claude Review" and .name != "PR visuals") | .name' | sort -u | paste -sd, - || true)
+        if [ -z "$FAILED" ]; then
+          echo "No failed checks besides Claude Review and PR visuals — nothing to fix"
+          exit 0
+        fi
+        # Two attempts per PR, so a fix that keeps failing can't loop.
+        ATTEMPTS=$(echo "$MARKERS" | { grep -c . || true; })
+        if [ "$ATTEMPTS" -ge 2 ]; then
+          if ! echo "$OWN" | grep -qF '<!-- autofix-ci-stopped -->'; then
+            BODY=$(printf '<!-- autofix-ci-stopped -->\nChecks are still failing after %s autofix attempts, so autofix has stopped on this PR. It needs a person.\n\n---\n_Generated by [Claude Code](https://claude.ai/code)_\n' "$ATTEMPTS")
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+          fi
+          exit 0
+        fi
+        BODY=$(printf '<!-- autofix-ci:%s -->\nAutofix is looking at the failed checks on %s: %s. Attempt %s of 2.\n\n---\n_Generated by [Claude Code](https://claude.ai/code)_\n' "$RUN_SHA" "${RUN_SHA:0:7}" "$FAILED" "$((ATTEMPTS + 1))")
+        gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+        {
+          echo "failed_checks=$FAILED"
+          echo "fix=true"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Render the CI fixer's prompt
+      id: ci-prompt
+      if: steps.ci.outputs.fix == 'true'
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        PR: ${{ steps.pr.outputs.number }}
+        BASE_REF: ${{ github.event.repository.default_branch }}
+        BRANCH: ${{ steps.pr.outputs.branch }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        FAILED_CHECKS: ${{ steps.ci.outputs.failed_checks }}
+      run: node "$GITHUB_ACTION_PATH/render.mjs" ci-fix
+
+    - uses: anthropics/claude-code-action@v1
+      if: steps.ci.outputs.fix == 'true'
+      with:
+        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        # workflow_run reports the initiating actor: dependabot[bot], or
+        # claude[bot] when the run followed an autofix push.
+        allowed_bots: "dependabot[bot],claude[bot]"
+        prompt: ${{ steps.ci-prompt.outputs.prompt }}
+        claude_args: |
+          --max-turns 80
+          --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
+
+    - name: Count unresolved threads
+      # Runs on any listed workflow's completion and decides from the PR's
+      # state. Green CI only: on a red build the review fixer would be
+      # changing code nobody has checked, and could patch the breakage
+      # outside the CI fixer's rules. Claude Review no longer waits for CI,
+      # so both must be green on the head; it doesn't fail for its findings.
+      # Not after the CI fixer ran in this job: it may have left edits in
+      # the checkout, and its push starts new runs that pick the round up.
+      id: threads
+      if: steps.pr.outputs.skip == 'false' && steps.ci.outputs.fix != 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        OWNER: ${{ github.repository_owner }}
+        NAME: ${{ github.event.repository.name }}
+        RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        PR: ${{ steps.pr.outputs.number }}
+      run: |
+        set -o pipefail
+        echo "count=0" >> "$GITHUB_OUTPUT"
+        # Fresh from the API: an earlier run, or the CI fixer, may have pushed.
+        CURRENT=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.head.sha')
+        if [ "$CURRENT" != "$RUN_SHA" ]; then
+          echo "Run is for $RUN_SHA but the PR head is $CURRENT — skipping"
+          exit 0
+        fi
+        # The latest run of each on this head (gate.mjs); whichever listed
+        # workflow finishes last, once both are green, gets past here.
+        NOT_GREEN=$(node "$GITHUB_ACTION_PATH/gate.mjs" green ci.yml claude-review.yml)
+        if [ -n "$NOT_GREEN" ]; then
+          echo "Not green on $RUN_SHA: $NOT_GREEN — the review fixer waits for CI and Claude Review to both be green"
+          exit 0
+        fi
+        # One round per head: every listed workflow's completion gets here
+        # once both are green, so without this two runs could each start a
+        # round on one head (and rework threads the first skipped). Only
+        # markers this workflow posted count: anyone can comment. The
+        # `autofix-review-round:<sha>` form is what sift's own workflow
+        # posted before it moved here.
+        OWN=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+          --jq '.[] | select(.user.login == "github-actions[bot]") | .body')
+        if echo "$OWN" | grep -qE "<!-- autofix-review-(head|round):$RUN_SHA -->"; then
+          echo "A review-fix round already started on $RUN_SHA — skipping"
+          exit 0
+        fi
+        UNRESOLVED=0
+        CURSOR=null
+        while : ; do
+          PAGE=$(gh api graphql \
+            -f query='query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{isResolved comments(first:1){nodes{author{__typename login}}}}}}}}' \
+            -F owner="$OWNER" \
+            -F name="$NAME" \
+            -F number="$PR" \
+            -F after="$CURSOR")
+          # Only threads Claude Review or the owner opened: anyone can
+          # comment on a public PR, and this job turns a thread into a
+          # pushed commit that can then auto-merge.
+          COUNT=$(echo "$PAGE" | jq --arg owner "$OWNER" '[.data.repository.pullRequest.reviewThreads.nodes[]
+              | select(.isResolved==false)
+              | select(.comments.nodes[0].author as $a
+                       | ($a.__typename == "Bot" and $a.login == "claude") or $a.login == $owner)] | length')
+          UNRESOLVED=$((UNRESOLVED + COUNT))
+          HAS_NEXT=$(echo "$PAGE" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')
+          if [ "$HAS_NEXT" != "true" ]; then break; fi
+          CURSOR=$(echo "$PAGE" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor')
+        done
+        echo "Unresolved threads: $UNRESOLVED"
+        if [ "$UNRESOLVED" -eq 0 ]; then exit 0; fi
+        # At most two review-fix rounds per PR. Claude Review also reviews
+        # autofix's own pushes, so review -> fix -> review could otherwise
+        # cycle forever.
+        ROUNDS=$(echo "$OWN" | { grep -c '<!-- autofix-review-round' || true; })
+        if [ "$ROUNDS" -ge 2 ]; then
+          echo "Two review-fix rounds already ran — leaving these threads to a person"
+          exit 0
+        fi
+        BODY=$(printf '<!-- autofix-review-round -->\n<!-- autofix-review-head:%s -->\nAutofix is addressing %s review thread(s). Round %s of 2.\n\n---\n_Generated by [Claude Code](https://claude.ai/code)_\n' "$RUN_SHA" "$UNRESOLVED" "$((ROUNDS + 1))")
+        gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+        echo "count=$UNRESOLVED" >> "$GITHUB_OUTPUT"
+
+    - name: Render the review fixer's prompt
+      id: review-prompt
+      if: steps.threads.outputs.count != '' && steps.threads.outputs.count != '0'
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        PR: ${{ steps.pr.outputs.number }}
+        BASE_REF: ${{ github.event.repository.default_branch }}
+      run: node "$GITHUB_ACTION_PATH/render.mjs" review-fix
+
+    - uses: anthropics/claude-code-action@v1
+      if: steps.threads.outputs.count != '' && steps.threads.outputs.count != '0'
+      with:
+        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        # workflow_run reports the initiating actor: dependabot[bot] for a
+        # Dependabot PR, claude[bot] after an autofix push.
+        allowed_bots: "dependabot[bot],claude[bot]"
+        # No track_progress: the action accepts it only on pull_request and
+        # issue events, and setting it on workflow_run fails the run.
+        prompt: ${{ steps.review-prompt.outputs.prompt }}
+        claude_args: |
+          --max-turns 80
+          --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
