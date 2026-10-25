@@ -1,0 +1,37 @@
+name: Dependabot auto-merge
+description: >-
+  Turns on GitHub's auto-merge (squash) for one of Dependabot's npm pull
+  requests. Dependabot can't enable auto-merge on its own PRs, so the app's
+  workflow calls this once, as the PR opens (types opened and reopened:
+  auto-merge survives later pushes, and a person who turns it off on one PR
+  shouldn't see it switched back on). GitHub then merges the PR only when the
+  branch rule on main is satisfied: every required check green and every
+  review thread resolved. So a Claude Review finding holds the bump until
+  claude-autofix (or a person) fixes and resolves it, and anything red keeps
+  it open. The branch rule is the gate; keep it listing every check a PR
+  runs.
+
+  npm only: the Actions token can't merge a PR that edits .github/workflows,
+  so bumps from the github-actions ecosystem are merged by hand. Any other PR
+  is left alone, so the app's job may call this on every PR; it filters with
+  the same condition first only to save starting a runner. The job needs
+  contents and pull-requests write (Dependabot's PRs get a read-only token
+  unless the job asks for more).
+
+inputs:
+  github-token:
+    description: A token with contents and pull-requests write.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Enable auto-merge (squash)
+      if: >-
+        github.event.pull_request.user.login == 'dependabot[bot]'
+        && startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/')
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_URL: ${{ github.event.pull_request.html_url }}
+      run: gh pr merge --auto --squash "$PR_URL"
