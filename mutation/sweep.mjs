@@ -158,6 +158,11 @@ export function splitShards(weights, count) {
  */
 export function plan({ tracked, mutate, results, lines, count, cwd }) {
   const files = tracked.filter((file) => inMutateScope(file, mutate)).sort();
+  // No file means no shard, and GitHub fails an empty matrix with a message
+  // that names neither the globs nor this repo: say what's wrong here.
+  if (files.length === 0) {
+    throw new Error(`no tracked file matches the mutate globs (${mutate.join(', ')})`);
+  }
   const known = results ? reportWeights(results, cwd) : new Map();
   return {
     shards: splitShards(fileWeights(files, lines, known), count),

@@ -178,6 +178,12 @@ describe('plan', () => {
   /** @param {string} file */
   const lines = (file) => text[file];
 
+  it('refuses a scope with no file in it, naming the globs', () => {
+    expect(() =>
+      plan({ tracked: ['README.md'], mutate, results: null, lines, count: 8, cwd: '/repo' }),
+    ).toThrow('no tracked file matches the mutate globs (src/utils/**/*.ts, src/App.tsx');
+  });
+
   it('splits the files the mutate globs select among the tracked ones, by lines without results', () => {
     const out = plan({ tracked, mutate, results: null, lines, count: 2, cwd: '/repo' });
     expect(out.fromResults).toBe(false);
