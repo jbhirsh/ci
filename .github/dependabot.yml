@@ -12,7 +12,9 @@ updates:
       dev:
         patterns: ["*"]
   - package-ecosystem: github-actions
-    directory: /
+    # The workflows and every tool's action.yml (a tool's sub-actions sit one
+    # folder down): `directory: /` would read only .github/workflows.
+    directories: ["/", "/*", "/*/*"]
     schedule:
       interval: weekly
       day: monday
