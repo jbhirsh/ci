@@ -1,9 +1,11 @@
 # Every change here reaches all three apps on their next run, with no PR in
 # any of them (they call these tools at @main). So a PR here has to pass two
 # gates before it merges:
-#   - Check: this repo's own lint, formatting, types, tests (80% lines per
-#     file) and actionlint over its workflows.
-#   - Against <app>: each tool's self-test (`<tool>/selftest.mjs`) run
+#   - Check: this repo's own lint (with lint/actions.mjs over every
+#     action.yml, which actionlint never reads), formatting, types, tests
+#     (80% lines per file) and actionlint over its workflows.
+#   - Against <app>: the app's calls into this repo checked against what
+#     they call, and each tool's self-test (`<tool>/selftest.mjs`) run
 #     against fog-and-frontier, sift and BoardGames as their `main` stands,
 #     with the app's dependencies installed, as the tools see them in the
 #     app's own CI. A tool an app doesn't use yet (no key in its
@@ -66,11 +68,18 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: |
+            ci/package-lock.json
+            app/package-lock.json
       # The packages the tools import from the app (Prettier, Playwright, …);
       # no install scripts, which the self-tests don't need.
       - run: npm ci --ignore-scripts
         working-directory: app
+      # This repo's dev tools, for the action lint's YAML parser.
+      - run: npm ci --ignore-scripts
+        working-directory: ci
+      - name: The app's calls into this repo fit what they call
+        run: node ci/lint/actions.mjs --app app
       - name: Self-tests
         run: |
           shopt -s nullglob
