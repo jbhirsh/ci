@@ -35,7 +35,7 @@ describe('decide', () => {
       shown: [],
     });
     expect(decide({ event: 'push', since: null, changed: [], settings: FOG }).reason).toBe(
-      'no finished run to count from',
+      'no successful run to count from',
     );
     expect(decide({ event: 'push', since: SHA, changed: null, settings: FOG }).reason).toBe(
       "abcdef1 isn't in the history",
@@ -91,7 +91,7 @@ describe('main', () => {
     GITHUB_WORKFLOW_REF: 'o/r/.github/workflows/readme-screenshots.yml@refs/heads/main',
   };
 
-  it('finds the last finished run of this workflow on main, and diffs from it', () => {
+  it('finds the last successful run of this workflow on main, and diffs from it', () => {
     const calls = /** @type {string[][]} */ ([]);
     const lines = main(
       env,
@@ -112,8 +112,8 @@ describe('main', () => {
     ]);
   });
 
-  it('retakes them with no finished run, and asks nothing when run by hand', () => {
-    expect(main(env, () => '', root)[0]).toContain('no finished run to count from');
+  it('retakes them with no successful run, and asks nothing when run by hand', () => {
+    expect(main(env, () => '', root)[0]).toContain('no successful run to count from');
     const run = vi.fn(() => '');
     expect(main({ GITHUB_EVENT_NAME: 'workflow_dispatch' }, run, root)[0]).toContain(
       'run by workflow_dispatch',

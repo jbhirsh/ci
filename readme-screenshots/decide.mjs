@@ -1,14 +1,14 @@
 // Whether to retake the README's screenshots on this push to main: when a
 // file they show (settings.mjs: `shows`, less `ignore`) changed since the
-// last run of this workflow that finished, or the run was started by hand,
-// or there's no finished run to count from (or its commit is gone from
-// history). Counting from the last finished run, not the push's parent,
+// last successful run of this workflow, or the run was started by hand,
+// or there's no successful run to count from (or its commit is gone from
+// history). Counting from the last successful run, not the push's parent,
 // means a UI push whose run a later push cancelled is still caught.
 //
 //   node decide.mjs        sets the `capture` output to true or false
 //
 // Runs in the app's checkout, which needs its whole history (fetch-depth
-// 0). Reads the last finished run with `gh` (GH_TOKEN with actions read),
+// 0). Reads the last successful run with `gh` (GH_TOKEN with actions read),
 // for the workflow GITHUB_WORKFLOW_REF names, on main.
 
 import { execFileSync } from 'node:child_process';
@@ -36,13 +36,13 @@ export function workflowFile(ref) {
  *
  * @param {{ event: string, since: string | null, changed: string[] | null,
  *   settings: import('./settings.mjs').Settings }} input
- *   `since` is the last finished run's commit; `changed` the files changed
+ *   `since` is the last successful run's commit; `changed` the files changed
  *   since it (null when that commit isn't in the history)
  * @returns {{ capture: boolean, reason: string, shown: string[] }}
  */
 export function decide({ event, since, changed, settings: s }) {
   if (event !== 'push') return { capture: true, reason: `run by ${event}`, shown: [] };
-  if (!since) return { capture: true, reason: 'no finished run to count from', shown: [] };
+  if (!since) return { capture: true, reason: 'no successful run to count from', shown: [] };
   if (changed === null) {
     return { capture: true, reason: `${since.slice(0, 7)} isn't in the history`, shown: [] };
   }
