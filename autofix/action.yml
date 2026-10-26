@@ -192,7 +192,7 @@ runs:
         # Review failing is never a code problem to fix, and neither is PR
         # visuals: it wants pictures in the description, not a code change.
         FAILED=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RUN_SHA/check-runs" --paginate \
-          --jq '.check_runs[] | select(.conclusion == "failure" and .name != "Claude Review" and .name != "PR visuals") | .name' | sort -u | paste -sd, - || true)
+          --jq '.check_runs[] | select((.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "startup_failure") and .name != "Claude Review" and .name != "PR visuals") | .name' | sort -u | paste -sd, -)
         if [ -z "$FAILED" ]; then
           echo "No failed checks besides Claude Review and PR visuals — nothing to fix"
           exit 0
