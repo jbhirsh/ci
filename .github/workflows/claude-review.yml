@@ -1,0 +1,42 @@
+name: Claude Review
+
+# AI code review on every PR to main, by the review action the apps use
+# (review/action.yml says what it does and what it leaves to CI). It runs
+# that action from main, not from the PR: a PR is reviewed by the reviewer
+# already merged, never by the copy it changes. This repo has no
+# .github/ci.json "review" key, so the defaults apply.
+#
+# claude-code-action skips (and still reports success on) a PR that edits the
+# workflow file it runs from, so only a PR that edits this file goes
+# unreviewed. The job's `name:` is a required status check.
+on:
+  pull_request:
+    branches: [main]
+
+# A new push supersedes the review of the previous head.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  # Run the JavaScript actions (claude-code-action et al.) on Node 24.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: Claude Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      # claude-code-action exchanges an OIDC token for the Claude app's token.
+      id-token: write
+    steps:
+      - uses: jbhirsh/ci/review@main
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
