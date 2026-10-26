@@ -95,7 +95,6 @@ export async function selftest(root, log = console.log) {
     });
     const inScope = tracked.filter((file) => inMutateScope(file, c.mutate)).sort();
     const planned = shards.flatMap((shard) => shard.files).sort();
-    if (inScope.length === 0) throw new Error('the mutate globs take no tracked file');
     if (JSON.stringify(planned) !== JSON.stringify(inScope)) {
       throw new Error('the shards do not hold every in-scope file exactly once');
     }

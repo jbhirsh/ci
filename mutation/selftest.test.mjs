@@ -83,7 +83,9 @@ describe('selftest', () => {
 
   it('fails a sweep with nothing in scope, and a scope that cannot run', async () => {
     const empty = await run(app({}, { mutate: ['lib/**/*.ts'] }).root);
-    expect(empty.lines).toContain('FAIL  sweep plan: the mutate globs take no tracked file');
+    expect(empty.lines).toContain(
+      'FAIL  sweep plan: no tracked file matches the mutate globs (lib/**/*.ts)',
+    );
     // The parent commit's object gone: git can name it but not read it.
     const broken = app({});
     const parent = broken.git('rev-parse', 'HEAD^').trim();
