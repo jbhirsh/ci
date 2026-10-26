@@ -23,6 +23,7 @@
 // reference-style markdown image (![alt][ref]). Reviewers cover those.
 
 import { pathToFileURL } from 'node:url';
+import { readAll } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
 import { globList, pick } from './match.mjs';
 
@@ -151,21 +152,8 @@ export function report(fileList, pr) {
   };
 }
 
-/**
- * Reads all of a stream. Streamed rather than readFileSync(0): on the runner
- * stdin is a non-blocking pipe from `gh api`, and a synchronous read that
- * finds it empty throws EAGAIN instead of waiting for the file list.
- *
- * @param {import('node:stream').Readable} stream
- */
-export async function readAll(stream) {
-  let input = '';
-  for await (const chunk of stream) input += chunk.toString();
-  return input;
-}
-
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { code, message } = report(await readAll(process.stdin), {
+  const { code, message } = report(await readAll(), {
     body: process.env.PR_BODY,
     author: process.env.PR_AUTHOR,
     settings: settings(appConfig('visuals', appRoot())),

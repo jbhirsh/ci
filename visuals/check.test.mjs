@@ -1,16 +1,8 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import {
-  DEFAULT_ADVICE,
-  checkPrVisuals,
-  readAll,
-  report,
-  settings,
-  visibleText,
-} from './check.mjs';
+import { DEFAULT_ADVICE, checkPrVisuals, report, settings, visibleText } from './check.mjs';
 
 // The three apps' settings, as their .github/ci.json give them.
 const FOG = settings({ ui: ['src/**/*.{tsx,css}'], notUi: ['**/*.test.tsx', 'src/test/**'] });
@@ -268,12 +260,6 @@ describe('report', () => {
     expect(report('assets/icon.png', { body: '', settings: SIFT }).message).toMatch(
       /simulator screenshots\.$/,
     );
-  });
-});
-
-describe('readAll', () => {
-  it('joins every chunk of a stream', async () => {
-    expect(await readAll(Readable.from(['a\n', Buffer.from('b\n')]))).toBe('a\nb\n');
   });
 });
 

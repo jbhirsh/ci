@@ -31,7 +31,7 @@
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { readStdin } from '../lib/actions.mjs';
+import { readAll } from '../lib/actions.mjs';
 
 /** Lockfiles and binaries may always be skipped, as the prompt allows. */
 const SKIPPABLE =
@@ -355,7 +355,7 @@ export function main(executionFiles, stdin, env, warn) {
 
 /* c8 ignore start: the CLI's three lines, run by action.yml */
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const unread = main(process.argv.slice(2), readStdin(), process.env, (m) =>
+  const unread = main(process.argv.slice(2), await readAll(), process.env, (m) =>
     process.stderr.write(m),
   );
   if (unread.length > 0) process.stdout.write(`${unread.join('\n')}\n`);
