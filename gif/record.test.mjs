@@ -2,7 +2,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OVERLAY_SCRIPT } from './overlay.mjs';
 import {
   FIRST_FRAME_MS,
@@ -127,6 +127,15 @@ function png(width, height, tag = '') {
 }
 
 describe('recordFrames', () => {
+  // The fake page's screencast and the recording's clock both run on a fake
+  // one, so a loaded machine can't change how many frames come, or when.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   /**
    * A page whose screencast sends a frame every 5 ms once started, each
    * stamped (in seconds) as `stamps` says, and alike every `same` frames,
@@ -205,7 +214,7 @@ describe('recordFrames', () => {
     // The clip is set on the page now, and again on each page it loads.
     expect(page.evaluate).toHaveBeenCalledWith(`window.__prGifClip = ${JSON.stringify(clip)}`);
     expect(loads).toHaveLength(1);
-    await new Promise((r) => setTimeout(r, 60));
+    await vi.advanceTimersByTimeAsync(60);
     const recording = await stop();
     expect(recording.sent).toBe(sent());
     expect(recording.sent).toBeGreaterThan(3);
@@ -243,7 +252,7 @@ describe('recordFrames', () => {
     const stop = await recordFrames(as(page), { x: 0, y: 0, width: 10, height: 10 }, dir, {
       fps: 50,
     });
-    await new Promise((r) => setTimeout(r, 80));
+    await vi.advanceTimersByTimeAsync(80);
     const { sent, stills } = await stop();
     expect(stills).toBeLessThan(sent / 3);
   });
@@ -252,7 +261,7 @@ describe('recordFrames', () => {
     const dir = temp();
     const { page } = fakePage({ width: 2200 });
     const stop = await recordFrames(as(page), { x: 0, y: 80, width: 1100, height: 560 }, dir);
-    await new Promise((r) => setTimeout(r, 20));
+    await vi.advanceTimersByTimeAsync(20);
     await stop();
     expect(readFileSync(path.join(dir, 'crop.txt'), 'utf8')).toBe('crop=2200:1120:0:160');
   });
@@ -262,7 +271,7 @@ describe('recordFrames', () => {
       const dir = temp();
       const { page } = fakePage({ stamps });
       const stop = await recordFrames(as(page), { x: 0, y: 0, width: 10, height: 10 }, dir);
-      await new Promise((r) => setTimeout(r, 60));
+      await vi.advanceTimersByTimeAsync(60);
       const { stills, seconds } = await stop();
       expect(stills).toBeGreaterThan(0);
       expect(seconds).toBeLessThan(5);
@@ -278,7 +287,7 @@ describe('recordFrames', () => {
     try {
       const { page } = fakePage({ moves: [{ x: 950, y: 10, t: Date.now() - 5000 }] });
       const stop = await recordFrames(as(page), { x: 0, y: 0, width: 900, height: 400 }, temp());
-      await new Promise((r) => setTimeout(r, 600));
+      await vi.advanceTimersByTimeAsync(600);
       const { rests } = await stop();
       expect(rests).toHaveLength(1);
       expect(rests[0]).toMatchObject({ x: 950, y: 10, at: 0 });
@@ -293,24 +302,19 @@ describe('recordFrames', () => {
   it("still finishes when the page can't be asked anything any more", async () => {
     const { page } = fakePage({ evaluateFails: true });
     const stop = await recordFrames(as(page), { x: 0, y: 0, width: 10, height: 10 }, temp());
-    await new Promise((r) => setTimeout(r, 20));
+    await vi.advanceTimersByTimeAsync(20);
     const { stills, rests } = await stop();
     expect(stills).toBeGreaterThan(0);
     expect(rests).toEqual([]);
   });
 
   it('gives up on a screencast that sends nothing, still stopping it', async () => {
-    vi.useFakeTimers();
-    try {
-      const { page, cdp } = fakePage({ silent: true });
-      const stop = await recordFrames(as(page), { x: 0, y: 0, width: 10, height: 10 }, temp());
-      const failed = expect(stop()).rejects.toThrow('recordFrames: no frame came in 5 s');
-      await vi.advanceTimersByTimeAsync(FIRST_FRAME_MS);
-      await failed;
-      expect(cdp.send).toHaveBeenLastCalledWith('Page.stopScreencast');
-      expect(cdp.detach).toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
+    const { page, cdp } = fakePage({ silent: true });
+    const stop = await recordFrames(as(page), { x: 0, y: 0, width: 10, height: 10 }, temp());
+    const failed = expect(stop()).rejects.toThrow('recordFrames: no frame came in 5 s');
+    await vi.advanceTimersByTimeAsync(FIRST_FRAME_MS);
+    await failed;
+    expect(cdp.send).toHaveBeenLastCalledWith('Page.stopScreencast');
+    expect(cdp.detach).toHaveBeenCalled();
   });
 });
