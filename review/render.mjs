@@ -21,6 +21,13 @@ import { bullets, fill } from './template.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * This repository's root, wherever it runs from: in CI, the copy of
+ * jbhirsh/ci GitHub downloaded to run the action, which the review may read
+ * (action.yml's `--add-dir`) to check what a PR says about a shared tool.
+ */
+export const CI_DIR = path.resolve(HERE, '..');
+
 /** @typedef {'review' | 'followup'} Pass */
 
 /**
@@ -60,6 +67,7 @@ export function renderPrompt(pass, settings, run) {
     pr: run.pr,
     base: run.base,
     repoDir: run.repoDir,
+    ciDir: CI_DIR,
     skippable,
     appGuide: appGuide(settings),
     unread: bullets(run.unread ?? [], '  '),
