@@ -220,7 +220,17 @@ export function main(argv, deps = defaultDeps()) {
     const [report, exitCode] = rest;
     if (!report || exitCode === undefined) throw new Error('lychee <report.json> <exit code>');
     if (exitCode !== '0' && exitCode !== '2') throw new Error(`lychee failed (exit ${exitCode})`);
-    findings = lycheeFindings(JSON.parse(readFileSync(report, 'utf8')));
+    /** @type {unknown} */
+    const parsed = JSON.parse(readFileSync(report, 'utf8'));
+    // lychee lists broken links under error_map (fail_map once). A report
+    // with neither changed shape: fail, rather than read it as a clean sweep.
+    // (Exit 2 alone isn't the sign: an unknown status, LinkedIn's 999, exits
+    // 2 with an empty error_map.)
+    const r = typeof parsed === 'object' && parsed !== null ? parsed : {};
+    if (!('error_map' in r) && !('fail_map' in r)) {
+      throw new Error("lychee's report has no error_map: update lycheeFindings to its format");
+    }
+    findings = lycheeFindings(parsed);
   } else {
     throw new Error(
       'usage: run.mjs knip|jscpd [--dry-run] | lychee <report.json> <exit code> [--dry-run] | graph <out dir>',
