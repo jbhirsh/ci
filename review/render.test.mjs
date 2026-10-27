@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { appGuide, main, renderPrompt, template } from './render.mjs';
+import { CI_DIR, appGuide, main, renderPrompt, template } from './render.mjs';
 import { placeholders } from './template.mjs';
 import { testApp, writeFiles } from './testApp.mjs';
 
@@ -8,7 +10,7 @@ const none = { instructions: null, guide: '', skip: [] };
 
 describe('the templates', () => {
   it('ask only for the values render.mjs gives', () => {
-    const given = ['repo', 'pr', 'base', 'repoDir', 'skippable', 'appGuide', 'unread'];
+    const given = ['repo', 'pr', 'base', 'repoDir', 'ciDir', 'skippable', 'appGuide', 'unread'];
     for (const pass of /** @type {const} */ (['review', 'followup'])) {
       for (const name of placeholders(template(pass))) expect(given).toContain(name);
     }
@@ -24,6 +26,13 @@ describe('renderPrompt', () => {
     expect(prompt).toContain('gh api repos/jbhirsh/app/issues/7/comments');
     expect(prompt).toContain('Lockfiles, images, fonts and the generated files `src/gql/**` may');
     expect(prompt).toContain('## This app (from `g.md`)\n\n## Auth\n\nGates.');
+  });
+  it('points the review at this repository, to check what a PR says about a shared tool', () => {
+    const prompt = renderPrompt('review', none, run);
+    expect(prompt).toContain(`SHARED_CI: ${CI_DIR}`);
+    expect(prompt).toContain('read the tool there and check it');
+    expect(path.basename(CI_DIR)).not.toBe('review');
+    expect(existsSync(path.join(CI_DIR, 'review', 'action.yml'))).toBe(true);
   });
   it('says when the app has no guide or skip globs', () => {
     const prompt = renderPrompt('review', none, run);
