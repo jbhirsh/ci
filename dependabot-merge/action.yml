@@ -1,7 +1,9 @@
 name: Dependabot auto-merge
 description: >-
-  Turns on GitHub's auto-merge (squash) for one of Dependabot's npm pull
-  requests. Dependabot can't enable auto-merge on its own PRs, so the app's
+  Turns on GitHub's auto-merge for one of Dependabot's npm pull requests, as
+  a rebase merge: the one method all four repositories allow (this one allows
+  no other), and for a one-commit bump it lands the same commit a squash
+  would. Dependabot can't enable auto-merge on its own PRs, so the app's
   workflow calls this once, as the PR opens (types opened and reopened:
   auto-merge survives later pushes, and a person who turns it off on one PR
   shouldn't see it switched back on). GitHub then merges the PR only when the
@@ -26,7 +28,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Enable auto-merge (squash)
+    - name: Enable auto-merge (rebase)
       if: >-
         github.event.pull_request.user.login == 'dependabot[bot]'
         && startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/')
@@ -34,4 +36,4 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         PR_URL: ${{ github.event.pull_request.html_url }}
-      run: gh pr merge --auto --squash "$PR_URL"
+      run: gh pr merge --auto --rebase "$PR_URL"
