@@ -1,0 +1,19 @@
+name: Pins
+description: >-
+  Fails when a version is pinned with no reason written beside it: a
+  package.json range short of the next major, an override, a Dependabot
+  ignore rule, an action or image below its major, a tool version. What
+  counts, and where a reason goes, is in check.mjs's header. Runs as a step
+  of the app's CI job after its checkout and install (Expo's list of the
+  versions its SDK chooses comes from node_modules).
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Check for pins without a reason
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/check.mjs"
