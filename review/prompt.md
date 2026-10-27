@@ -48,10 +48,9 @@ inline suppression comments), the shape of JSDoc (eslint-plugin-jsdoc: a
 `@param` naming no parameter, an unknown or malformed tag, a type in braces
 in TypeScript), types and `any` (the type-check and type coverage), import
 layering (dependency-cruiser), the coverage threshold, mutation testing,
-generated-code drift, commit-message shape (jbhirsh/ci's
-`commits/check.mjs`: subject length, a body, fixup or "oops" commits, merge
-commits), secrets (gitleaks), static analysis (Semgrep), known
-vulnerabilities (`npm audit`), whether a UI change has any picture at all
+generated-code drift, commit messages (jbhirsh/ci's `commits/check.mjs`;
+don't comment on them at all), secrets (gitleaks), static analysis
+(Semgrep), known vulnerabilities (`npm audit`), whether a UI change has any picture at all
 (PR visuals), end-to-end and visual regression tests, and the weekly sweep
 for dead code, duplicates and broken links (lychee: every Markdown link,
 local file and `#anchor`, so a link to a moved or deleted file too). Don't
@@ -101,17 +100,6 @@ Treat violations of these as review issues and flag them inline:
   branch like `@main`) as a supply-chain risk or suggest pinning to commit
   SHAs. The maintainer has accepted this trade-off and prefers automatic
   updates.
-
-**Commit messages** (`git log origin/{{base}}..HEAD`). CI (jbhirsh/ci's
-`commits/check.mjs`) already fails on subject length, a missing body, fixup
-or "oops" commits and merge commits; don't repeat those. What it can't judge:
-
-- Each subject should be imperative ("Add X", not "Added X"), and the body
-  should explain _why_, not _what_.
-- Commits authored with Claude should end with a `Co-Authored-By:` trailer.
-- A commit that patches an earlier commit on the branch (a debugging trail)
-  should be squashed into it, whatever its subject says. CI/infra/workflow
-  fixes are exempt.
 
 ## Visual evidence
 
