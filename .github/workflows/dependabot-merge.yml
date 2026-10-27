@@ -1,0 +1,32 @@
+# Turn on GitHub's auto-merge for each of Dependabot's npm PRs, as it opens:
+# this repo's own action, as the apps call it (dependabot-merge/action.yml
+# says why the ruleset on main is the gate). Those bumps touch only this
+# repo's dev tools, which the apps never run, and merge only once every
+# required check is green. Action bumps change what the apps run, so they
+# stay merged by hand.
+name: Dependabot Auto-Merge
+
+on:
+  pull_request:
+    branches: [main]
+    # Only when the PR opens: auto-merge survives later pushes, and a person
+    # who turns it off on one PR shouldn't see it switched back on.
+    types: [opened, reopened]
+
+permissions: {}
+
+jobs:
+  auto-merge:
+    name: Enable auto-merge
+    # The action checks this too; filtering here saves starting a runner.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]'
+      && startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Dependabot PRs get a read-only token unless the job asks for more.
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: jbhirsh/ci/dependabot-merge@main
