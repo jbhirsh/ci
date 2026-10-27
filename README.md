@@ -18,6 +18,7 @@ map; the documentation lives with the code.
 | `lib/`                | what every tool shares: the app's checkout, packages and settings; Actions outputs                                                                     |
 | `mutation/`           | Stryker on the lines a PR changed, and the monthly sweep (`.github/workflows/mutation-sweep.yml`)                                                      |
 | `commits/`            | the commit-message check                                                                                                                               |
+| `pins/`               | a version pinned (package.json, overrides, Dependabot ignores, actions, images, tools) needs a reason beside it                                        |
 | `visuals/`            | `PR visuals`: a UI change needs pictures in its description                                                                                            |
 | `audit/`              | the weekly audit (`.github/workflows/audit.yml`): knip, jscpd, lychee, the dependency graph, one tracking issue per finding                            |
 | `readme-screenshots/` | the README screenshot bot's comparison and its one PR                                                                                                  |
