@@ -28,9 +28,10 @@
 # Each fixer proves its fix before pushing with the app's own commands, the
 # steps of its CI that can run here (`autofix` in `.github/ci.json`,
 # settings.mjs and commands.mjs), read from the default branch. A person's
-# PR, a fork's PR, a PR labelled `no-auto-fix` and the PR of an app's
-# Dependabot group named `blocked-majors` (majors that wait on another
-# package, red until it catches up) are left alone.
+# PR, a fork's PR and a PR labelled `no-auto-fix` are left alone, and so are
+# the red checks (not the review threads) of a PR from an app's Dependabot
+# group named `blocked-<package>`: a major that waits on another package,
+# red until it catches up.
 #
 # The job runs with a write token and unrestricted git/npm/gh, and acts on
 # review text: it checks out same-repo branches only, acts only on threads
@@ -115,12 +116,6 @@ runs:
         echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
         if echo "$LABELS" | tr ',' '\n' | grep -qx "no-auto-fix"; then
           echo "Labelled no-auto-fix — skipping"
-        elif [[ "$BRANCH" == dependabot/*/blocked-majors-* ]]; then
-          # An app's Dependabot group "blocked-majors" holds the majors that
-          # wait on another package (its dependabot.yml says which, and
-          # why): red until that package catches up, then green, and
-          # auto-merge takes it. There is nothing here for autofix to fix.
-          echo "Dependabot's blocked-majors group — waits on another package, skipping"
         else
           echo "skip=false" >> "$GITHUB_OUTPUT"
         fi
@@ -167,6 +162,14 @@ runs:
         # npm bumps only: a github-actions bump edits workflow files, which
         # the app token can't push.
         case "$BRANCH" in
+          # An app's Dependabot groups named blocked-<package> hold majors
+          # that wait on another package (its dependabot.yml says which,
+          # and why): red until that package catches up, then green, and
+          # auto-merge takes it. Its red checks are nothing to fix; its
+          # review threads, once green, still are.
+          dependabot/*/blocked-*)
+            echo "A Dependabot blocked-* group — red until another package catches up, leaving its checks"
+            exit 0 ;;
           dependabot/npm_and_yarn/*) ;;
           *) echo "Not an npm bump — leaving it"; exit 0 ;;
         esac
