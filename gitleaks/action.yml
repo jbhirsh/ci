@@ -19,11 +19,12 @@ inputs:
     default: ${{ github.token }}
   version:
     description: >-
-      The gitleaks release to scan with. Pinned so a scan is deterministic and
-      matches the version the apps' histories were verified clean against;
-      otherwise the action falls back to its own default, which can shift
-      between gitleaks-action releases with nothing in the app to signal it.
-    default: "8.30.1"
+      The gitleaks release to scan with: the newest by default, so its newest
+      rules read every push. Without it the action falls back to a version
+      it carries, which falls behind. A rule that finds something new in an
+      app's history fails that app's weekly sweep: a real finding to fix or
+      allowlist, not a reason to hold gitleaks back.
+    default: latest
 
 runs:
   using: composite

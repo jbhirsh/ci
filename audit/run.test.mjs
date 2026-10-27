@@ -130,6 +130,22 @@ describe('main', () => {
     expect(() => main(['lychee'], d)).toThrow('lychee <report.json> <exit code>');
   });
 
+  it("fails on a lychee report that has no error_map, whatever lychee's exit", () => {
+    const dir = root();
+    const report = path.join(dir, 'lychee.json');
+    const { d } = deps({ gh: () => '[]' });
+    writeFileSync(report, JSON.stringify({ broken_links: { 'a.md': [{ url: 'u' }] } }));
+    expect(() => main(['lychee', report, '2', '--dry-run'], d)).toThrow('has no error_map');
+    expect(() => main(['lychee', report, '0', '--dry-run'], d)).toThrow('has no error_map');
+    writeFileSync(report, 'null');
+    expect(() => main(['lychee', report, '0', '--dry-run'], d)).toThrow('has no error_map');
+    // An unknown status (LinkedIn's 999) exits 2 with nothing in error_map.
+    writeFileSync(report, JSON.stringify({ unknown: 1, error_map: {} }));
+    expect(main(['lychee', report, '2', '--dry-run'], d)).toBe(
+      `${TITLES.lychee}: 0 found (dry run, issue left alone).`,
+    );
+  });
+
   it('refuses an unknown check', () => {
     expect(() => main(['eslint'], deps().d)).toThrow('usage');
   });
