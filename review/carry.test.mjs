@@ -160,6 +160,15 @@ describe('patch-ids across pushes', () => {
     expect(carriedAfter({ 'c.ts': null }, { 'c.ts': null })).toEqual([]);
   });
 
+  it('re-reads a file whose change differs only in whitespace', () => {
+    const root = testApp({ 'ci.yml': 'a:\n  b: 1\n', 'b.ts': lines(30) });
+    git(root, 'checkout', '-q', '-b', 'pr');
+    commit(root, { 'ci.yml': 'a:\n  b: 2\n', 'b.ts': lines(30, { 25: 'b changed' }) });
+    const before = ids(root);
+    commit(root, { 'ci.yml': 'a:\n    b: 2\n', 'b.ts': lines(30, { 25: 'b changed' }) });
+    expect(carriedAfter(before, ids(root))).toEqual(['b.ts']);
+  });
+
   it('takes a path literally, not as a glob', () => {
     const root = prApp();
     commit(root, { 'x[1].ts': 'one\n' });
