@@ -110,8 +110,12 @@ runs:
         key: claude-review-pr${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: claude-review-pr${{ github.event.pull_request.number }}-
 
+    # Carry-over only saves work: if planning fails, nothing is carried and
+    # every file is read (no plan file, an empty `carried`), and no record
+    # is saved.
     - name: Plan which files to read
       id: plan
+      continue-on-error: true
       shell: bash
       env:
         BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -273,7 +277,7 @@ runs:
     # Reached only when every pass finished and read every file it had to,
     # so the record claims nothing a review didn't read.
     - name: Record what this review read
-      if: steps.review.outputs.execution_file != ''
+      if: steps.review.outputs.execution_file != '' && steps.plan.outcome == 'success'
       shell: bash
       env:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -282,7 +286,7 @@ runs:
       run: node "$GITHUB_ACTION_PATH/carry.mjs" save
 
     - name: Save what this review read
-      if: steps.review.outputs.execution_file != ''
+      if: steps.review.outputs.execution_file != '' && steps.plan.outcome == 'success'
       uses: actions/cache/save@v6
       with:
         path: ${{ runner.temp }}/claude-review/record.json

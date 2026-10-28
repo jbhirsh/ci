@@ -63,8 +63,9 @@ export function carriedSection(carried, { repo, base }) {
   );
   return [
     `   Already reviewed: an earlier review of this PR read these files in full,`,
-    `   and their part of the diff is unchanged since (the same \`git patch-id --verbatim\``,
-    `   of \`git diff -M origin/${base}...HEAD -- <file>\`). You needn't read them`,
+    `   and their part of the diff is unchanged since (the same`,
+    `   \`git patch-id --verbatim\` of`,
+    `   \`git diff -M origin/${base}...HEAD -- <file>\`). You needn't read them`,
     `   again and the check doesn't ask you to; open any of them for context as`,
     `   you would code outside the diff. Their findings stand: the inline`,
     `   comments on them are still on the PR, and the notes on them are in your`,
