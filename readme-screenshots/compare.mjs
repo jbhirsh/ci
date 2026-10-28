@@ -9,57 +9,31 @@
 // Lists the replacements on stderr and sets the `changed` output to
 // them (space-separated). The README's folder itself is left alone: the job
 // holding the token writes them there (publish.mjs). Pixels are compared
-// with pixelmatch and decoded with pngjs from the app's node_modules
-// (importFromApp), so the app lists both among its devDependencies.
+// as lib/pixels.mjs says, so the app lists pixelmatch and pngjs among its
+// devDependencies.
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
-import { appConfig, appRoot, importFromApp } from '../lib/app.mjs';
+import { appConfig, appRoot } from '../lib/app.mjs';
+import { appPixels, diff } from '../lib/pixels.mjs';
 import { CHANGED_RATIO, isShotName, settings } from './settings.mjs';
 
-/**
- * @typedef {{ width: number, height: number, data: Uint8Array }} Image
- * @typedef {object} Pixels
- * @property {(png: Buffer) => Image} read decodes a PNG
- * @property {(a: Uint8Array, b: Uint8Array, out: null, width: number, height: number,
- *   options: { threshold: number }) => number} match counts the pixels that differ
- */
+/** @typedef {import('../lib/pixels.mjs').Pixels} Pixels */
 
-/**
- * pixelmatch and pngjs, from the app.
- *
- * @param {string} root
- * @returns {Promise<Pixels>}
- */
-export async function appPixels(root) {
-  const pixelmatch = /** @type {{ default: Pixels['match'] }} */ (
-    await importFromApp('pixelmatch', root)
-  );
-  const pngjs = /** @type {{ PNG: { sync: { read: Pixels['read'] } } }} */ (
-    await importFromApp('pngjs', root)
-  );
-  return { read: (png) => pngjs.PNG.sync.read(png), match: pixelmatch.default };
-}
+export { appPixels };
 
 /**
  * The share of pixels that differ between two PNGs, or 1 when their sizes
- * differ (a different framing is a change however it looks).
+ * differ (lib/pixels.mjs's diff).
  *
  * @param {Buffer} a
  * @param {Buffer} b
  * @param {Pixels} pixels
  */
 export function diffRatio(a, b, pixels) {
-  const before = pixels.read(a);
-  const after = pixels.read(b);
-  if (before.width !== after.width || before.height !== after.height) return 1;
-  if (before.width * before.height === 0) return 1;
-  const differing = pixels.match(before.data, after.data, null, before.width, before.height, {
-    threshold: 0.1,
-  });
-  return differing / (before.width * before.height);
+  return diff(a, b, pixels).ratio;
 }
 
 /**

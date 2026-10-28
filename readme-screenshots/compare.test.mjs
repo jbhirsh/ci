@@ -22,6 +22,8 @@ const pixels = {
     const { w, h, px } = JSON.parse(png.toString());
     return { width: w, height: h, data: Uint8Array.from(px) };
   },
+  write: (image) =>
+    Buffer.from(JSON.stringify({ w: image.width, h: image.height, px: [...image.data] })),
   match: (a, b) => a.reduce((n, v, i) => n + (v === b[i] ? 0 : 1), 0),
 };
 

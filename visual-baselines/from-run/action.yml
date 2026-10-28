@@ -1,0 +1,30 @@
+name: Visual baselines, rewrite from a run
+description: >-
+  Rewrites the visual regression's baselines from the screenshots this
+  commit's CI run took, and commits them to the branch the workflow ran on
+  (from-run.mjs's header says how): for an app whose screenshots no Linux
+  runner can take, sift's on the iOS Simulator. The only step of the app's
+  by-hand visual-baselines.yml after its checkout; the job needs contents
+  write and actions read. The Actions token's push starts no workflow, so
+  push again afterwards for the PR's checks to run on the new baselines.
+
+inputs:
+  github-token:
+    description: >-
+      Reads the run's artifact (actions read). The push goes out with the
+      checkout's credentials, so the job needs contents write too.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Rewrite the baselines from this commit's run
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REWRITTEN_BY: ${{ github.workflow }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+      run: node "$GITHUB_ACTION_PATH/../from-run.mjs"

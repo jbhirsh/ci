@@ -1,0 +1,34 @@
+name: Visual baselines, compare
+description: >-
+  Compares freshly taken screenshots with the committed baselines and fails
+  on any that changed, is new or wasn't taken (compare.mjs's header says
+  how), uploading each as taken and its diff as the `visual-diffs`
+  artifact. For an app whose screenshots come from somewhere that doesn't
+  compare them itself (sift's iOS Simulator shots). Run after the app's
+  dependencies are installed: pixelmatch and pngjs come from them.
+
+inputs:
+  fresh:
+    description: The folder holding the fresh screenshots.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Compare with the baselines
+      shell: bash
+      env:
+        FRESH: ${{ inputs.fresh }}
+      run: node "$GITHUB_ACTION_PATH/../compare.mjs" "$FRESH" "$RUNNER_TEMP/visual-diffs"
+
+    - uses: actions/upload-artifact@v7
+      if: failure()
+      with:
+        name: visual-diffs
+        path: ${{ runner.temp }}/visual-diffs
+        if-no-files-found: ignore
+        retention-days: 14
