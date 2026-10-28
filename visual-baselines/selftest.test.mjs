@@ -1,5 +1,3 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cli, selftest } from './selftest.mjs';
 import { fakePng, repo, withPixels } from './test-repo.mjs';
@@ -78,10 +76,7 @@ describe('selftest', () => {
 describe('cli', () => {
   it('prints the lines', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const root = app(undefined, { 'a.txt': '' });
-    mkdirSync(path.join(root, 'x'));
-    writeFileSync(path.join(root, 'x/y'), '');
-    await cli([root]);
+    await cli([app(undefined, { 'a.txt': '' })]);
     expect(log).toHaveBeenCalledWith(
       'visual-baselines: no settings; the app uses no shared visual regression yet.',
     );
