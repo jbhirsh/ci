@@ -56,7 +56,7 @@ export async function selftest(root) {
       throw new Error(`${shot} doesn't compare equal to itself`);
   }
   lines.push(
-    `visual-baselines: rewritten from ${workflow}'s ${name}; compared with up to ${s.ratio * 100}% of pixels differing.`,
+    `visual-baselines: rewritten from ${workflow}'s ${name}; compared with up to ${Number((s.ratio * 100).toFixed(4))}% of pixels differing.`,
   );
   return lines;
 }

@@ -58,16 +58,20 @@ export function downloadLatest({ run, workflow, name, sha, temp }) {
   ])
     .split('\n')
     .filter(Boolean);
+  let last = '';
   for (const id of ids) {
     try {
       run('gh', ['run', 'download', id, '--name', name, '--dir', temp]);
       return id;
-    } catch {
-      // No such artifact on this run: try the one before.
+    } catch (error) {
+      // Most likely no such artifact on this run: try the one before. The
+      // last reason goes in the error, in case it was something else (a
+      // token without actions: read).
+      last = error instanceof Error ? error.message : String(error);
     }
   }
   throw new Error(
-    `no finished ${workflow} run on ${sha.slice(0, 7)} has ${name}: run this once one has taken the screenshots`,
+    `no finished ${workflow} run on ${sha.slice(0, 7)} has ${name}: run this once one has taken the screenshots${last ? ` (last: ${last.trim()})` : ''}`,
   );
 }
 

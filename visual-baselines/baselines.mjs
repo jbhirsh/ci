@@ -113,10 +113,14 @@ export function commit({ globs, branch, by, run }) {
     '-c',
     'user.email=41898282+github-actions[bot]@users.noreply.github.com',
     'commit',
+    // Only the baselines folders, whatever else the command staged.
+    '--only',
     '-m',
     'Update the visual baselines',
     '-m',
     `Rewritten on CI by ${by}.`,
+    '--',
+    ...folders,
   ]);
   run('git', ['push', 'origin', `HEAD:refs/heads/${branch}`]);
   return true;
