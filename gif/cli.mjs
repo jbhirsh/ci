@@ -41,7 +41,7 @@ import { pathToFileURL } from 'node:url';
 import { appRoot, importFromApp } from '../lib/app.mjs';
 import { addBaseTree, build, git, serve, stopServers } from './build.mjs';
 import { checkFfmpeg, framesToGif, sideBySide } from './ffmpeg.mjs';
-import { click, drag, glide, scroll } from './moves.mjs';
+import { click, drag, glide, scroll, swipe } from './moves.mjs';
 import { defaultWidth, parseOptions, scenarioName } from './options.mjs';
 import {
   gitIn,
@@ -69,6 +69,7 @@ import { main as videosMain } from './videos.mjs';
  * @property {typeof click} click
  * @property {typeof drag} drag
  * @property {typeof scroll} scroll
+ * @property {typeof swipe} swipe
  * @property {Side} side
  * @property {string} origin
  */
@@ -172,7 +173,7 @@ export async function recordSide({
     /** @type {SetupContext} */
     const ctx = { side, origin, options: options.app, root };
     /** @type {Helpers} */
-    const gif = { glide, click, drag, scroll, side, origin };
+    const gif = { glide, click, drag, scroll, swipe, side, origin };
     await setup.beforeSetup?.(page, ctx);
     await scenario.setup?.(page, gif);
     await setup.afterSetup?.(page, ctx);

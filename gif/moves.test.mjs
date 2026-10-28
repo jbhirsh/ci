@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { STEP_MS, click, drag, glide, scroll, smoothstep } from './moves.mjs';
+import { STEP_MS, click, drag, glide, scroll, smoothstep, swipe } from './moves.mjs';
 
 // The moves go by the clock, so the tests run them on a fake one: a loaded
 // machine would otherwise stretch their steps, and what they send with them.
@@ -62,7 +62,24 @@ function fakePage() {
      */
     wheel: (_dx, dy) => note('wheel', 0, dy),
   };
-  return { page: { mouse }, sent };
+  // Its CDP sessions note what they're sent too: a touch by its type and
+  // point, anything else by its method.
+  const sessions = { made: 0 };
+  /**
+   * @param {string} method
+   * @param {{ type?: string; touchPoints?: { x: number; y: number }[] }} [params]
+   */
+  const send = (method, params) =>
+    method === 'Input.dispatchTouchEvent'
+      ? note(params?.type ?? '?', params?.touchPoints?.[0]?.x, params?.touchPoints?.[0]?.y)
+      : note(method);
+  const context = () => ({
+    newCDPSession: () => {
+      sessions.made += 1;
+      return Promise.resolve({ send });
+    },
+  });
+  return { page: { mouse, context }, sent, sessions };
 }
 
 /**
@@ -172,5 +189,47 @@ describe('scroll', () => {
     expect(sent.map((s) => s.y)).toEqual([-1, -1]);
     await scroll(page, 0, 0);
     expect(sent).toHaveLength(2);
+  });
+});
+
+describe('swipe', () => {
+  it('glides to the start, touches down there, moves evenly by the clock, and lifts at the end', async () => {
+    const { page, sent } = fakePage();
+    await play(glide(page, { x: 300, y: 500 }, 0));
+    await play(swipe(page, { x: 330, y: 500 }, { x: 70, y: 500 }, 160));
+    const what = sent.map((s) => s.what);
+    const down = what.indexOf('touchStart');
+    const up = what.indexOf('touchEnd');
+    // Touch turned on, the pointer brought to the start, then a pause there.
+    expect(what.indexOf('Emulation.setTouchEmulationEnabled')).toBeLessThan(down);
+    expect(sent[down]).toMatchObject({ x: 330, y: 500 });
+    expect(sent[down - 1]).toMatchObject({ what: 'move', x: 330, y: 500 });
+    expect(sent[down].at - sent[down - 1].at).toBeGreaterThanOrEqual(150);
+    expect(up).toBe(sent.length - 1);
+    const during = sent.slice(down + 1, up);
+    expect(during.every((s) => s.what === 'touchMove' && s.y === 500)).toBe(true);
+    expect(during.length).toBeGreaterThan(5);
+    expect(during.at(-1)).toMatchObject({ x: 70 });
+    expect(during.at(-1)?.at ?? 0).toBeGreaterThanOrEqual(during[0].at + 160);
+    // An even pace, still moving at the last step (a flick), where an eased
+    // move would be crawling: every step but the last covers about as much.
+    const steps = during.slice(1).map((s, i) => (during[i].x ?? 0) - (s.x ?? 0));
+    const full = steps.slice(0, -1);
+    expect(Math.max(...full) - Math.min(...full)).toBeLessThan(2);
+    expect(full.at(-1) ?? 0).toBeGreaterThan(20);
+  });
+
+  it('turns touch on once per page, and the next move starts where it lifted', async () => {
+    const { page, sent, sessions } = fakePage();
+    await play(swipe(page, { x: 330, y: 500 }, { x: 70, y: 500 }, 100));
+    await play(swipe(page, { x: 330, y: 500 }, { x: 70, y: 500 }, 100));
+    expect(sessions.made).toBe(1);
+    expect(sent.filter((s) => s.what === 'Emulation.setTouchEmulationEnabled')).toHaveLength(1);
+    expect(sent.filter((s) => s.what === 'touchEnd')).toHaveLength(2);
+    const before = sent.length;
+    await play(glide(page, { x: 200, y: 500 }, 100));
+    expect(sent[before]).toMatchObject({ what: 'move' });
+    expect(sent[before].x).toBeLessThan(200);
+    expect(sent[before].x).toBeGreaterThanOrEqual(70);
   });
 });
