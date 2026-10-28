@@ -6,7 +6,11 @@ description: >-
   would. Dependabot can't enable auto-merge on its own PRs, so the app's
   workflow calls this once, as the PR opens (types opened and reopened:
   auto-merge survives later pushes, and a person who turns it off on one PR
-  shouldn't see it switched back on). GitHub then merges the PR only when the
+  shouldn't see it switched back on), on pull_request_target: its run sits
+  on main's commit, not the PR's, so the PRs it leaves alone don't list it
+  as a skipped check. That event's token can write even on a fork's PR,
+  which is safe only because nothing here checks out or runs the PR's code:
+  keep it that way. GitHub then merges the PR only when the
   branch rule on main is satisfied: every required check green and every
   review thread resolved. So a Claude Review finding holds the bump until
   claude-autofix (or a person) fixes and resolves it, and anything red keeps

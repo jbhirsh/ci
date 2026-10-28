@@ -7,7 +7,10 @@
 name: Dependabot Auto-Merge
 
 on:
-  pull_request:
+  # pull_request_target, not pull_request: its run sits on main's commit, so
+  # the PRs this skips don't list it as a skipped check. It checks out
+  # nothing, so its write token never meets the PR's code.
+  pull_request_target:
     branches: [main]
     # Only when the PR opens: auto-merge survives later pushes, and a person
     # who turns it off on one PR shouldn't see it switched back on.
