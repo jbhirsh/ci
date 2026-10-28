@@ -1,0 +1,39 @@
+name: Visual baselines, rewrite
+description: >-
+  Rewrites the visual regression's baselines on this Linux runner, the
+  machine they must match, and commits them to the branch the workflow ran
+  on (rewrite.mjs's header says how): for an app whose own command writes
+  them, Playwright's --update-snapshots in BoardGames and fog-and-frontier.
+  The only step of the app's by-hand visual-baselines.yml after its
+  checkout; the job needs contents write. The Actions token's push starts no
+  workflow, so push again afterwards for the PR's checks to run on the new
+  baselines.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        cache: npm
+
+    - name: Install the app's dependencies
+      shell: bash
+      run: npm ci
+
+    - name: Rewrite the baselines
+      shell: bash
+      env:
+        REWRITTEN_BY: ${{ github.workflow }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+      run: node "$GITHUB_ACTION_PATH/../rewrite.mjs"
+
+    # Playwright's, when its command failed.
+    - uses: actions/upload-artifact@v7
+      if: failure() || cancelled()
+      with:
+        name: visual-baselines-report
+        path: |
+          playwright-report/
+          test-results/
+        if-no-files-found: ignore
+        retention-days: 14
