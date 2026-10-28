@@ -27,6 +27,7 @@ after reading CLAUDE.md, however large the PR:
    and `git diff --name-status -M origin/{{base}}...HEAD`. {{skippable}} may
    be skimmed or skipped; say which in the summary. Every other file must be
    read in full.
+{{carried}}
 2. Read each other file's diff on its own, tests included:
    `git diff -M origin/{{base}}...HEAD -- <file>` (for a rename, give both
    paths). Tests, fixtures, end-to-end flows and snapshots are changed files
@@ -205,8 +206,9 @@ what was checked. Its body starts with the line
 
 - the verdict (merge blockers found or not, and how many inline comments
   you left);
-- the files you read, and any you skimmed or skipped and why (group them by
-  directory when there are many). A file seen only in `--stat`, or only in
+- the files you read, any carried over from an earlier review (above; with
+  the commit each was reviewed at), and any you skimmed or skipped and why
+  (group them by directory when there are many). A file seen only in `--stat`, or only in
   part, counts as skimmed; say "nothing skipped" only when every changed
   file other than the skippable ones above was read in full;
 - the non-blocking notes.

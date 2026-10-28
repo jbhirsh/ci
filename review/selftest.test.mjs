@@ -20,6 +20,7 @@ describe('selftest', () => {
     expect(log).toContain('guide g.md');
     expect(log).toContain('each matches a tracked file');
     expect(log).toContain('fixture transcripts are judged as expected');
+    expect(log).toContain("carry-over: the app's context hashes");
   });
 
   it('fails a skip glob that matches nothing', () => {

@@ -8,27 +8,38 @@
 //   - both prompts render with nothing left unfilled, the app's guide in
 //     them;
 //   - the coverage rules (coverage.mjs) judge the fixture transcripts in
-//     fixtures/ as they should, the app's skip globs applied.
+//     fixtures/ as they should, the app's skip globs applied;
+//   - the carry-over's context (carry.mjs) reads the app's settings and
+//     CLAUDE.md, and the fixture passes' result (result.mjs) is a finished
+//     review.
 // Prints what it checked; exits 1 on the first problem.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { currentContext } from './carry.mjs';
 import { globToRegExp, toolCalls, unreadFiles } from './coverage.mjs';
 import { renderPrompt } from './render.mjs';
+import { judge } from './result.mjs';
 import { reviewSettings } from './settings.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * @param {string} name
+ * @returns {unknown}
+ */
+function execution(name) {
+  return JSON.parse(readFileSync(path.join(HERE, 'fixtures', name), 'utf8'));
+}
+
+/**
+ * @param {string} name
  * @returns {import('./coverage.mjs').ToolCall[]}
  */
 function fixture(name) {
-  /** @type {unknown} */
-  const parsed = JSON.parse(readFileSync(path.join(HERE, 'fixtures', name), 'utf8'));
-  return toolCalls(parsed);
+  return toolCalls(execution(name));
 }
 
 /**
@@ -101,6 +112,14 @@ export function selftest(root) {
     throw new Error(`coverage: stat-only.json left "${missed}" unread, not "${expected}"`);
   }
   log.push('coverage: the fixture transcripts are judged as expected');
+
+  if (!/^[0-9a-f]{64}$/.test(currentContext({ root, base: 'main' }))) {
+    throw new Error('carry-over: no context hash');
+  }
+  if (!judge(execution('read-all.json')).finished) {
+    throw new Error('result: read-all.json is not a finished review');
+  }
+  log.push("carry-over: the app's context hashes; the fixture review finished");
   return log;
 }
 
