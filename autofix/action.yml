@@ -44,7 +44,8 @@ name: Claude autofix
 description: >-
   Fixes a bot's PR: mechanical breakage when a dependency bump fails a
   check, and the review threads Claude Review or the owner left once the
-  build is green.
+  build is green. It also turns auto-merge on for a Dependabot npm bump,
+  once (../dependabot-merge/enable.mjs).
 
 inputs:
   claude_code_oauth_token:
@@ -119,6 +120,25 @@ runs:
         else
           echo "skip=false" >> "$GITHUB_OUTPUT"
         fi
+
+    # Dependabot's npm bumps merge themselves once the branch rule is
+    # satisfied: auto-merge goes on here, the first time a check on the PR
+    # completes, rather than in a workflow on the PR, whose job would show
+    # as a skipped check on every other PR. Once per PR, and before the
+    # no-auto-fix label is read: that label stops fixes, not merging
+    # (../dependabot-merge/enable.mjs says when it acts).
+    - uses: actions/setup-node@v7
+      if: startsWith(steps.pr.outputs.branch, 'dependabot/npm_and_yarn/')
+      with:
+        node-version: 24
+
+    - name: Turn on auto-merge for a Dependabot npm bump
+      if: startsWith(steps.pr.outputs.branch, 'dependabot/npm_and_yarn/')
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        PR_NUMBER: ${{ steps.pr.outputs.number }}
+      run: node "$GITHUB_ACTION_PATH/../dependabot-merge/enable.mjs"
 
     - uses: actions/checkout@v7
       if: steps.pr.outputs.skip == 'false'

@@ -1,33 +1,32 @@
-# Turn on GitHub's auto-merge for each of Dependabot's npm PRs, as it opens:
-# this repo's own action, as the apps call it (dependabot-merge/action.yml
-# says why the ruleset on main is the gate). Those bumps touch only this
+# Turn on GitHub's auto-merge for each of Dependabot's npm PRs once its CI
+# has run: the step the apps' autofix runs, here in a workflow of its own,
+# as this repo has no autofix (dependabot-merge/action.yml says why the
+# ruleset on main is the gate). Those bumps touch only this
 # repo's dev tools, which the apps never run, and merge only once every
 # required check is green. Action bumps change what the apps run, so they
 # stay merged by hand.
 name: Dependabot Auto-Merge
 
 on:
-  # pull_request_target, not pull_request: its run sits on main's commit, so
-  # the PRs this skips don't list it as a skipped check. It checks out
-  # nothing, so its write token never meets the PR's code.
-  pull_request_target:
-    branches: [main]
-    # Only when the PR opens: auto-merge survives later pushes, and a person
-    # who turns it off on one PR shouldn't see it switched back on.
-    types: [opened, reopened]
+  # When CI finishes, not on the PR: a workflow_run run belongs to main, so
+  # PRs don't list it. A pull_request or pull_request_target job skipped by
+  # its `if:` shows as a skipped check on every PR.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
 
 permissions: {}
 
 jobs:
   auto-merge:
     name: Enable auto-merge
-    # The action checks this too; filtering here saves starting a runner.
+    # Only the runs of a Dependabot npm PR's CI; the action checks the PR
+    # itself, and turns auto-merge on once per PR, never again after that.
     if: >-
-      github.event.pull_request.user.login == 'dependabot[bot]'
-      && startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/')
+      github.event.workflow_run.event == 'pull_request'
+      && startsWith(github.event.workflow_run.head_branch, 'dependabot/npm_and_yarn/')
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Dependabot PRs get a read-only token unless the job asks for more.
     permissions:
       contents: write
       pull-requests: write
