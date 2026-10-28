@@ -116,7 +116,15 @@ describe('fromRun', () => {
         by: 'x',
         temp: temp(),
       }),
-    ).toThrow(/no finished ci.yml run on abcdef0 has ios-screenshots/);
+    ).toThrow(/no finished ci.yml run on abcdef0 has ios-screenshots: run this/);
+  });
+
+  it('says why the last download failed', () => {
+    const { root } = repo({ 'e2e/baselines/a.png': 'a' });
+    const run = runner(root, ['5'], {}, [], ['5']);
+    expect(() =>
+      fromRun({ root, s: S, run, sha: 'abc', branch: 'topic', by: 'x', temp: temp() }),
+    ).toThrow(/\(last: no artifact matches\)/);
   });
 
   it('skips a newer run without the screenshots for one with them', () => {

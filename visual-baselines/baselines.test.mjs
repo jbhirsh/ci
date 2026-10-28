@@ -49,6 +49,7 @@ describe('knownFiles, wipe and commit', () => {
     mkdirSync(path.join(root, 'e2e/a-snapshots'));
     writeFileSync(path.join(root, 'e2e/a-snapshots/new.png'), 'new');
     writeFileSync(path.join(root, 'e2e/a.spec.ts'), 'changed');
+    git('add', 'e2e/a.spec.ts');
 
     expect(commit({ globs: ['e2e/*-snapshots'], branch: 'topic', by: 'a run', run })).toBe(true);
     expect(git('log', '-1', '--format=%s%n%n%b').trim()).toBe(
@@ -59,8 +60,8 @@ describe('knownFiles, wipe and commit', () => {
       'D\te2e/a-snapshots/old.png',
       'D\te2e/gone-snapshots/x.png',
     ]);
-    // Only the baselines: the spec's change stays unstaged.
-    expect(git('status', '--porcelain').trim()).toBe('M e2e/a.spec.ts');
+    // Only the baselines: the spec's change stays out, staged or not.
+    expect(git('status', '--porcelain').trim()).toBe('M  e2e/a.spec.ts');
     expect(
       execFileSync('git', ['--git-dir', remote, 'log', '-1', '--format=%s', 'topic'], {
         encoding: 'utf8',
