@@ -1,28 +1,22 @@
 name: Dependabot auto-merge
 description: >-
-  Turns on GitHub's auto-merge for one of Dependabot's npm pull requests, as
-  a rebase merge: the one method all four repositories allow (this one allows
-  no other), and for a one-commit bump it lands the same commit a squash
-  would. Dependabot can't enable auto-merge on its own PRs, so the app's
-  workflow calls this once, as the PR opens (types opened and reopened:
-  auto-merge survives later pushes, and a person who turns it off on one PR
-  shouldn't see it switched back on), on pull_request_target: its run sits
-  on main's commit, not the PR's, so the PRs it leaves alone don't list it
-  as a skipped check. That event's token can write even on a fork's PR,
-  which is safe only because nothing here checks out or runs the PR's code:
-  keep it that way. GitHub then merges the PR only when the
-  branch rule on main is satisfied: every required check green and every
-  review thread resolved. So a Claude Review finding holds the bump until
-  claude-autofix (or a person) fixes and resolves it, and anything red keeps
-  it open. The branch rule is the gate; keep it listing every check a PR
-  runs.
+  Turns on GitHub's auto-merge for one of Dependabot's npm pull requests,
+  once, as a rebase merge: the one method all four repositories allow (this
+  one allows no other), and for a one-commit bump it lands the same commit a
+  squash would. Dependabot can't enable auto-merge on its own PRs. The apps
+  get this from their autofix workflow, which runs enable.mjs whenever a
+  check on a bot's PR completes; this action is for a repository without
+  autofix (this one), whose workflow calls it when CI completes
+  (workflow_run: a run on that event puts no check on the PR, so PRs don't
+  list a skipped "Enable auto-merge" row). GitHub then merges the PR only
+  when the branch rule on main is satisfied: every required check green and
+  every review thread resolved. The branch rule is the gate; keep it listing
+  every check a PR runs.
 
   npm only: the Actions token can't merge a PR that edits .github/workflows,
-  so bumps from the github-actions ecosystem are merged by hand. Any other PR
-  is left alone, so the app's job may call this on every PR; it filters with
-  the same condition first only to save starting a runner. The job needs
-  contents and pull-requests write (Dependabot's PRs get a read-only token
-  unless the job asks for more).
+  so bumps from the github-actions ecosystem are merged by hand. It checks
+  out nothing and runs none of the PR's code. The job needs contents and
+  pull-requests write.
 
 inputs:
   github-token:
@@ -32,12 +26,17 @@ inputs:
 runs:
   using: composite
   steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    # The run's PR from workflow_run; from a pull_request event too, for an
+    # app whose dependabot-merge.yml hasn't gone yet (its autofix does this
+    # now).
     - name: Enable auto-merge (rebase)
-      if: >-
-        github.event.pull_request.user.login == 'dependabot[bot]'
-        && startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/')
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
-        PR_URL: ${{ github.event.pull_request.html_url }}
-      run: gh pr merge --auto --rebase "$PR_URL"
+        PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || github.event.pull_request.number }}
+        HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.event.pull_request.head.ref }}
+      run: node "$GITHUB_ACTION_PATH/enable.mjs"

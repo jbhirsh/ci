@@ -23,7 +23,7 @@ map; the documentation lives with the code.
 | `audit/`              | the weekly audit (`.github/workflows/audit.yml`): knip, jscpd, lychee, the dependency graph, one tracking issue per finding                            |
 | `readme-screenshots/` | the README screenshot bot's comparison and its one PR                                                                                                  |
 | `visual-baselines/`   | visual regression's baselines: rewriting them by hand (`rewrite/` on the runner, `from-run/` from a CI run's screenshots) and comparing (`compare/`)   |
-| `dependabot-merge/`   | auto-merge for Dependabot's npm PRs                                                                                                                    |
+| `dependabot-merge/`   | auto-merge for Dependabot's npm PRs, once each: a step of `autofix/` in the apps, this repo's own workflow here                                        |
 | `gitleaks/`           | `Secret scan`                                                                                                                                          |
 | `semgrep/`            | `SAST scan`                                                                                                                                            |
 | `gif/`                | before/after PR GIFs: the web recorder for fog and BoardGames, sift's videos, publishing to `screenshots`                                              |
