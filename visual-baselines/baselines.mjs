@@ -102,7 +102,7 @@ export function commit({ globs, branch, by, run }) {
   if (folders.length === 0) return false;
   run('git', ['add', '--', ...folders]);
   try {
-    run('git', ['diff', '--cached', '--quiet']);
+    run('git', ['diff', '--cached', '--quiet', '--', ...folders]);
     return false;
   } catch {
     // Staged changes: `git diff --quiet` exits 1.
