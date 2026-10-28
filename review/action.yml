@@ -17,6 +17,15 @@
 #      pass (followup.md); a file still unread after that fails the check.
 #      It was added after a review passed sift #188 twice having seen its
 #      tests only in `--stat`.
+#   4. Carries files over between pushes (carry.mjs): a file an earlier
+#      review of the PR read, whose part of the diff has the same patch-id
+#      now, needn't be read again; the prompt lists it as already reviewed.
+#      The record lives in an Actions cache per PR, saved only by a run
+#      that read everything it had to. To force a full review, add the
+#      label `claude-review:full` to the PR (it applies from the next push).
+#
+# A pass that runs past its `--max-turns` but finishes is not a failure
+# (result.mjs says why claude-code-action calls it one); coverage decides.
 #
 # The prompts ask only for what no automated check of the apps decides:
 # each app's CI already runs lint, Prettier, the type-check and type
@@ -57,6 +66,8 @@ description: >-
   Reviews a pull request with Claude Code, checks it read every changed
   file's diff (a second pass for any it missed, failing if still unread),
   and leaves inline comments for merge blockers and one summary comment.
+  On a later push, a file whose part of the diff is unchanged since a
+  review read it is carried over rather than read again.
 
 inputs:
   claude_code_oauth_token:
@@ -89,6 +100,26 @@ runs:
       with:
         node-version: 24
 
+    # The newest record of what this PR's reviews read (carry.mjs). Not
+    # restored for a PR labelled claude-review:full: everything is read.
+    - name: Restore what earlier reviews read
+      if: ${{ !contains(github.event.pull_request.labels.*.name, 'claude-review:full') }}
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ runner.temp }}/claude-review/record.json
+        key: claude-review-pr${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: claude-review-pr${{ github.event.pull_request.number }}-
+
+    - name: Plan which files to read
+      id: plan
+      shell: bash
+      env:
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        CONFIG_REF: origin/${{ github.event.pull_request.base.ref }}
+        RECORD: ${{ runner.temp }}/claude-review/record.json
+        PLAN: ${{ runner.temp }}/claude-review/plan.json
+      run: node "$GITHUB_ACTION_PATH/carry.mjs" plan
+
     - name: Render the review prompt
       id: render
       shell: bash
@@ -97,10 +128,14 @@ runs:
         PR: ${{ github.event.pull_request.number }}
         BASE_REF: ${{ github.event.pull_request.base.ref }}
         CONFIG_REF: origin/${{ github.event.pull_request.base.ref }}
+        PLAN: ${{ runner.temp }}/claude-review/plan.json
       run: node "$GITHUB_ACTION_PATH/render.mjs" review
 
+    # continue-on-error: a pass that runs past its turn cap but finishes is
+    # failed by claude-code-action; the next step judges it (result.mjs).
     - uses: anthropics/claude-code-action@v1
       id: review
+      continue-on-error: true
       env:
         GH_TOKEN: ${{ inputs.github_token }}
       with:
@@ -125,6 +160,13 @@ runs:
           --add-dir ${{ github.action_path }}/..
           --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git fetch:*),Bash(git checkout:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git branch:*),Bash(git ls-files:*),mcp__github_inline_comment__create_inline_comment"
 
+    - name: Check the review finished
+      if: steps.review.outcome == 'failure'
+      shell: bash
+      env:
+        EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+      run: node "$GITHUB_ACTION_PATH/result.mjs" "$EXECUTION_FILE"
+
     # No execution file from a step that succeeded: claude-code-action
     # skipped, almost always because this PR edits the app's
     # claude-review.yml (header). Say so rather than pass silently.
@@ -144,6 +186,7 @@ runs:
         REPO_DIR: ${{ github.workspace }}
         BASE_REF: ${{ github.event.pull_request.base.ref }}
         SKIP: ${{ steps.render.outputs.skip }}
+        CARRIED: ${{ steps.plan.outputs.carried }}
         EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
       run: |
         set -o pipefail
@@ -161,7 +204,7 @@ runs:
             echo 'UNREAD_EOF'
           } >> "$GITHUB_OUTPUT"
         else
-          echo "The review read every changed file."
+          echo "The review read every changed file it had to."
         fi
 
     - name: Render the follow-up prompt
@@ -179,6 +222,7 @@ runs:
     - uses: anthropics/claude-code-action@v1
       id: followup
       if: steps.coverage.outputs.unread != ''
+      continue-on-error: true
       env:
         GH_TOKEN: ${{ inputs.github_token }}
       with:
@@ -190,9 +234,16 @@ runs:
         display_report: "true"
         show_full_output: "true"
         claude_args: |
-          --max-turns 100
+          --max-turns ${{ steps.render-followup.outputs.max_turns }}
           --add-dir ${{ github.action_path }}/..
           --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(git rev-parse:*),Bash(git ls-files:*),mcp__github_inline_comment__create_inline_comment"
+
+    - name: Check the follow-up finished
+      if: steps.followup.outcome == 'failure'
+      shell: bash
+      env:
+        EXECUTION_FILE: ${{ steps.followup.outputs.execution_file }}
+      run: node "$GITHUB_ACTION_PATH/result.mjs" "$EXECUTION_FILE"
 
     - name: Fail if files are still unread
       if: steps.coverage.outputs.unread != ''
@@ -201,6 +252,7 @@ runs:
         REPO_DIR: ${{ github.workspace }}
         BASE_REF: ${{ github.event.pull_request.base.ref }}
         SKIP: ${{ steps.render.outputs.skip }}
+        CARRIED: ${{ steps.plan.outputs.carried }}
         FOLLOWUP_FILE: ${{ steps.followup.outputs.execution_file }}
       run: |
         set -o pipefail
@@ -217,3 +269,21 @@ runs:
           exit 1
         fi
         echo "The follow-up read the rest."
+
+    # Reached only when every pass finished and read every file it had to,
+    # so the record claims nothing a review didn't read.
+    - name: Record what this review read
+      if: steps.review.outputs.execution_file != ''
+      shell: bash
+      env:
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        RECORD: ${{ runner.temp }}/claude-review/record.json
+        PLAN: ${{ runner.temp }}/claude-review/plan.json
+      run: node "$GITHUB_ACTION_PATH/carry.mjs" save
+
+    - name: Save what this review read
+      if: steps.review.outputs.execution_file != ''
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ runner.temp }}/claude-review/record.json
+        key: claude-review-pr${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}

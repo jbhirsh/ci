@@ -10,7 +10,9 @@
 // stdin, one per line; prints each changed file no pass read, one per line.
 // BASE_REF names the PR's base branch (default `main`), REPO_DIR the checkout
 // (default the working directory), SKIP the app's extra skippable globs, one
-// per line (`review.skip` in `.github/ci.json`, read by settings.mjs). A
+// per line (`review.skip` in `.github/ci.json`, read by settings.mjs),
+// CARRIED the files an earlier review read whose part of the diff hasn't
+// changed since, one per line (carry.mjs): those needn't be read again. A
 // missing or unreadable execution file counts as a review that read nothing.
 //
 // Strict on purpose: a call it can't be sure of reads nothing. The cost of
@@ -227,11 +229,12 @@ function readPath(call, part) {
  *
  * @param {string[]} changed
  * @param {ToolCall[]} calls
- * @param {{ repoDir: string, base?: string, skip?: string[] }} options
+ * @param {{ repoDir: string, base?: string, skip?: string[], carried?: string[] }} options
  * @returns {string[]}
  */
-export function unreadFiles(changed, calls, { repoDir, base = 'main', skip = [] }) {
-  const needed = filesToRead(changed, skip);
+export function unreadFiles(changed, calls, { repoDir, base = 'main', skip = [], carried = [] }) {
+  const done = new Set(carried);
+  const needed = filesToRead(changed, skip).filter((f) => !done.has(f));
   /** @param {boolean} part */
   const paths = (part) =>
     calls.map((c) => readPath(c, part)).filter(/** @returns {p is string} */ (p) => p !== null);
@@ -342,14 +345,17 @@ export function main(executionFiles, stdin, env, warn) {
       return [];
     }
   });
-  const skip = (env.SKIP ?? '')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+  /** @param {string | undefined} value */
+  const lines = (value) =>
+    (value ?? '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
   return unreadFiles(changed, calls, {
     repoDir: env.REPO_DIR || process.cwd(),
     base: env.BASE_REF || 'main',
-    skip,
+    skip: lines(env.SKIP),
+    carried: lines(env.CARRIED),
   });
 }
 

@@ -388,6 +388,20 @@ describe('skip globs', () => {
   });
 });
 
+describe('carried-over files', () => {
+  it('need no reading, while every other file still does', () => {
+    const calls = [bash(`git diff -M ${RANGE} -- src/a.ts`)];
+    expect(unreadFiles(changed, calls, { repoDir: REPO, carried: ['src/b.ts'] })).toEqual([
+      '__tests__/unit/a.test.ts',
+    ]);
+    expect(unreadFiles(changed, [], { repoDir: REPO, carried: ['src/b.ts', 'gone.ts'] })).toEqual([
+      'src/a.ts',
+      '__tests__/unit/a.test.ts',
+    ]);
+    expect(unreadFiles(changed, [], { repoDir: REPO, carried: changed })).toEqual([]);
+  });
+});
+
 describe('main', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'coverage-'));
   const file = (/** @type {string} */ name, /** @type {unknown} */ value) => {
@@ -429,6 +443,10 @@ describe('main', () => {
       main([broken, path.join(dir, 'missing.json')], 'a.ts\n', {}, (m) => warn.push(m)),
     ).toEqual(['a.ts']);
     expect(warn).toHaveLength(2);
+  });
+
+  it('takes the carried-over files from CARRIED', () => {
+    expect(main([], 'a.ts\nb.ts\n', { CARRIED: 'b.ts\n\n' }, () => {})).toEqual(['a.ts']);
   });
 
   it('takes the base branch from BASE_REF', () => {

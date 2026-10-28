@@ -26,5 +26,5 @@ map; the documentation lives with the code.
 | `gitleaks/`           | `Secret scan`                                                                                                                                          |
 | `semgrep/`            | `SAST scan`                                                                                                                                            |
 | `gif/`                | before/after PR GIFs: the web recorder for fog and BoardGames, sift's videos, publishing to `screenshots`                                              |
-| `review/`             | `Claude Review`: the AI review, and its check that every changed file was read                                                                         |
+| `review/`             | `Claude Review`: the AI review, its check that every changed file was read, and carrying unchanged files over between pushes                           |
 | `autofix/`            | Claude autofix on bots' PRs: CI failures and review threads, once every run on the head has finished; `check-triggers` keeps its trigger list complete |

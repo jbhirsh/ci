@@ -7,15 +7,18 @@
 //   BASE_REF       the PR's base branch (`main`)
 //   CONFIG_REF     where to read the settings from (`origin/main`); empty
 //                  reads the working tree
+//   PLAN           review only: carry.mjs's plan, naming the files carried
+//                  over from an earlier review (none when it's missing)
 //   UNREAD         followup only: the files left unread, one per line
-// Step outputs: `prompt`, and `skip` (the app's skip globs, one per line,
-// for coverage.mjs).
+// Step outputs: `prompt`, `skip` (the app's skip globs, one per line, for
+// coverage.mjs), and for the follow-up `max_turns`, its turn cap.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appRoot } from '../lib/app.mjs';
+import { readPlan } from './carry.mjs';
 import { reviewSettings } from './settings.mjs';
 import { bullets, fill } from './template.mjs';
 
@@ -29,6 +32,49 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const CI_DIR = path.resolve(HERE, '..');
 
 /** @typedef {'review' | 'followup'} Pass */
+
+/**
+ * The follow-up's `--max-turns`, from the number of files left to read: a
+ * few turns a file (its diff, the saved output of a long one, a comment)
+ * plus the summary's, between a floor and a ceiling. A fixed 100 ran out on
+ * fog-and-frontier #304. A pass that runs past it and still finishes
+ * doesn't fail the check (result.mjs); the cap only stops a runaway.
+ *
+ * @param {number} unread
+ * @returns {number}
+ */
+export function followupTurns(unread) {
+  return Math.min(300, Math.max(40, 20 + 4 * unread));
+}
+
+/**
+ * The prompt's section on files carried over from an earlier review, or ''
+ * when there are none.
+ *
+ * @param {{ file: string, sha: string }[]} carried
+ * @param {{ repo: string, base: string }} run
+ * @returns {string}
+ */
+export function carriedSection(carried, { repo, base }) {
+  if (carried.length === 0) return '';
+  const list = bullets(
+    carried.map(({ file, sha }) => `\`${file}\`, reviewed at ${sha.slice(0, 7)}`),
+    '   ',
+  );
+  return [
+    `   Already reviewed: an earlier review of this PR read these files in full,`,
+    `   and their part of the diff is unchanged since (the same \`git patch-id\``,
+    `   of \`git diff -M origin/${base}...HEAD -- <file>\`). You needn't read them`,
+    `   again and the check doesn't ask you to; open any of them for context as`,
+    `   you would code outside the diff. Their findings stand: the inline`,
+    `   comments on them are still on the PR, and the notes on them are in your`,
+    `   summary comment. Before you replace that comment, read it`,
+    `   (\`gh api repos/${repo}/issues/comments/<id> --jq .body\`) and keep its notes`,
+    `   on these files; list them in the summary as carried over, with the`,
+    `   commit each was reviewed at.`,
+    list,
+  ].join('\n');
+}
 
 /**
  * @param {Pass} pass
@@ -54,7 +100,7 @@ export function appGuide(settings) {
 /**
  * @param {Pass} pass
  * @param {import('./settings.mjs').ReviewSettings} settings
- * @param {{ repo: string, pr: string, base: string, repoDir: string, unread?: string[] }} run
+ * @param {{ repo: string, pr: string, base: string, repoDir: string, unread?: string[], carried?: { file: string, sha: string }[] }} run
  * @returns {string}
  */
 export function renderPrompt(pass, settings, run) {
@@ -71,6 +117,7 @@ export function renderPrompt(pass, settings, run) {
     skippable,
     appGuide: appGuide(settings),
     unread: bullets(run.unread ?? [], '  '),
+    carried: carriedSection(run.carried ?? [], run),
   });
 }
 
@@ -91,7 +138,7 @@ function required(name, env) {
  * @param {string | undefined} pass
  * @param {Record<string, string | undefined>} env
  * @param {string} root
- * @returns {{ prompt: string, skip: string }}
+ * @returns {{ prompt: string, skip: string, maxTurns: string }}
  */
 export function main(pass, env, root) {
   if (pass !== 'review' && pass !== 'followup') {
@@ -103,20 +150,25 @@ export function main(pass, env, root) {
     .map((line) => line.trim())
     .filter(Boolean);
   if (pass === 'followup' && unread.length === 0) throw new Error('UNREAD is empty');
+  const plan = pass === 'review' ? readPlan(env.PLAN) : null;
+  const carried = Object.entries(plan?.carried ?? {}).map(([file, { sha }]) => ({ file, sha }));
   const prompt = renderPrompt(pass, settings, {
     repo: required('REPO', env),
     pr: required('PR', env),
     base: env.BASE_REF || 'main',
     repoDir: root,
     unread,
+    carried,
   });
-  return { prompt, skip: settings.skip.join('\n') };
+  const maxTurns = pass === 'followup' ? String(followupTurns(unread.length)) : '';
+  return { prompt, skip: settings.skip.join('\n'), maxTurns };
 }
 
 /* c8 ignore start: the CLI's lines, run by action.yml */
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { prompt, skip } = main(process.argv[2], process.env, appRoot());
+  const { prompt, skip, maxTurns } = main(process.argv[2], process.env, appRoot());
   setOutput('prompt', prompt);
   setOutput('skip', skip);
+  if (maxTurns) setOutput('max_turns', maxTurns);
 }
 /* c8 ignore stop */
