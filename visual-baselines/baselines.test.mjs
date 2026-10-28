@@ -74,6 +74,10 @@ describe('knownFiles, wipe and commit', () => {
     const run = runIn(root);
     expect(commit({ globs: ['shots'], branch: 'topic', by: 'x', run })).toBe(false);
     expect(commit({ globs: ['none'], branch: 'topic', by: 'x', run })).toBe(false);
+    // Something else staged, the baselines unchanged: still nothing to commit.
+    writeFileSync(path.join(root, 'other.txt'), 'x');
+    git('add', 'other.txt');
+    expect(commit({ globs: ['shots'], branch: 'topic', by: 'x', run })).toBe(false);
     expect(git('rev-list', '--count', 'HEAD').trim()).toBe('1');
     rmSync(root, { recursive: true, force: true });
   });
