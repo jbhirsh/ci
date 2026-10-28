@@ -3,10 +3,13 @@
 // them and their part of the PR's diff is the same now.
 //
 // A file's part of the diff is identified by git's patch-id of
-// `git diff -M origin/<base>...HEAD -- <file>` (`git patch-id --stable`):
+// `git diff -M origin/<base>...HEAD -- <file>` (`git patch-id --verbatim`):
 // it ignores line numbers and blob hashes, so it survives a rebase, a
 // squash, a force-push and the base moving, none of which a diff from the
-// last reviewed commit survives (the old head is often not an ancestor). A
+// last reviewed commit survives (the old head is often not an ancestor).
+// Verbatim, not --stable, which strips whitespace: an indentation-only
+// edit to YAML or Python must be read again. Context lines count too, so
+// a base edit next to the PR's hunk means a re-read. A
 // file whose patch-id differs, or that no completed review read, is read in
 // full; that is the guarantee coverage.mjs keeps.
 //
@@ -112,7 +115,7 @@ export function changedFiles({ root, base }) {
 export function patchId(file, { root, base }) {
   const diff = git(root, ['diff', '-M', `origin/${base}...HEAD`, '--', file]);
   if (!diff) return null;
-  const id = git(root, ['patch-id', '--stable'], diff).split(' ')[0];
+  const id = git(root, ['patch-id', '--verbatim'], diff).split(' ')[0];
   return id && HEX.test(id) ? id : null;
 }
 
