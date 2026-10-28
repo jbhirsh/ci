@@ -1,6 +1,8 @@
 // The pointer moves a scenario records, at a person's pace. A scenario gets
 // them in its `gif` argument (cli.mjs), so it needs nothing from this repo
-// to type-check: glide, click, drag and scroll, each taking the page first.
+// to type-check: glide, click, drag, scroll and swipe, each taking the page
+// first. swipe is a finger's: for what listens to touch rather than the
+// mouse (a carousel, a sheet pulled down), which drag's mouse never reaches.
 //
 // They go by the clock: page.mouse.move(x, y, { steps }) sends every step in
 // a few milliseconds, and while frames are being taken each one slows, so a
@@ -53,12 +55,13 @@ const wait = (ms) => new Promise((done) => setTimeout(done, ms));
  *
  * @param {number} ms
  * @param {(progress: number) => Promise<void>} step
+ * @param {(t: number) => number} [ease]
  */
-async function overTime(ms, step) {
+async function overTime(ms, step, ease = smoothstep) {
   const start = performance.now();
   for (;;) {
     const t = ms > 0 ? (performance.now() - start) / ms : 1;
-    await step(smoothstep(t));
+    await step(ease(t));
     if (t >= 1) return;
     await wait(STEP_MS);
   }
@@ -154,4 +157,73 @@ export async function scroll(page, dy, ms = 700) {
     await page.mouse.wheel(0, target - done);
     done = target;
   });
+}
+
+/**
+ * @typedef {object} TouchSession What swipe needs of a CDP session.
+ * @property {(method: string, params?: object) => Promise<unknown>} send
+ */
+
+/**
+ * @typedef {object} TouchPage What swipe needs of a page: a page passes as is.
+ * @property {Pick<Mouse, 'move'>} mouse
+ * @property {() => { newCDPSession(page: object): Promise<TouchSession> }} context
+ */
+
+// Each page's session for touches, with touch turned on: made at its first
+// swipe, so a scenario that never swipes leaves the page as it was.
+/** @type {WeakMap<object, Promise<TouchSession>>} */
+const touchSessions = new WeakMap();
+
+/** @param {TouchPage} page */
+function touchSession(page) {
+  let session = touchSessions.get(page);
+  if (!session) {
+    session = page
+      .context()
+      .newCDPSession(page)
+      .then(async (cdp) => {
+        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+        return cdp;
+      });
+    touchSessions.set(page, session);
+  }
+  return session;
+}
+
+/**
+ * A finger's swipe from `from` to `to` over `ms`: the pointer glides to
+ * `from`, a touch goes down there, moves at an even pace by the clock (a
+ * finger still moving when it lifts, as a flick does, where an eased one
+ * would stop first), and lifts at `to`. Touches are pointer events too, so
+ * the drawn ring and trail show the swipe as they show a drag.
+ *
+ * @param {TouchPage} page
+ * @param {Target} from
+ * @param {Target} to
+ * @param {number} [ms]
+ */
+export async function swipe(page, from, to, ms = 300) {
+  const cdp = await touchSession(page);
+  const start = await glide(page, from);
+  const end = await pointOf(to);
+  await wait(150);
+  /**
+   * @param {'touchStart' | 'touchMove' | 'touchEnd'} type
+   * @param {Point} [at]
+   */
+  const touch = (type, at) =>
+    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: at ? [{ x: at.x, y: at.y }] : [] });
+  await touch('touchStart', start);
+  await overTime(
+    ms,
+    (e) =>
+      touch('touchMove', {
+        x: start.x + (end.x - start.x) * e,
+        y: start.y + (end.y - start.y) * e,
+      }).then(() => undefined),
+    (t) => Math.min(Math.max(t, 0), 1),
+  );
+  await touch('touchEnd');
+  pointers.set(page, end);
 }

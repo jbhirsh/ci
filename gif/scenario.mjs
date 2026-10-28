@@ -20,8 +20,8 @@
 //   setup?(page, gif)  before the page opens: stubs, sign-in flags
 //   ready?(page, gif)  once it's open, before recording: wait for it to
 //                settle, put the pointer where the first move starts
-//   play(page, gif)    what's recorded: gif.glide / click / drag / scroll
-//                (moves.mjs) with pauses, and page.keyboard
+//   play(page, gif)    what's recorded: gif.glide / click / drag / scroll /
+//                swipe (moves.mjs) with pauses, and page.keyboard
 // `gif` also says which build it is (gif.side, 'before' or 'after'), for a
 // scenario that plays a little differently on main.
 //
