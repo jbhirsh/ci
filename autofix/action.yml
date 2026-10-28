@@ -24,6 +24,9 @@
 #     unresolved review thread Claude Review or the owner opened, as fixup
 #     commits folded into the commits they fix (review-fix.md), and resolve
 #     those threads. One round per head, two per PR.
+# Before either, on a Dependabot npm bump, it turns auto-merge on, once
+# per PR (../dependabot-merge/enable.mjs), whatever its labels say: a run
+# here puts no check on the PR, where a workflow of its own would.
 # Nothing sleeps or polls: the completions are the clock.
 # Each fixer proves its fix before pushing with the app's own commands, the
 # steps of its CI that can run here (`autofix` in `.github/ci.json`,
@@ -126,14 +129,18 @@ runs:
     # completes, rather than in a workflow on the PR, whose job would show
     # as a skipped check on every other PR. Once per PR, and before the
     # no-auto-fix label is read: that label stops fixes, not merging
-    # (../dependabot-merge/enable.mjs says when it acts).
+    # (../dependabot-merge/enable.mjs says when it acts). A convenience, so
+    # neither step failing (auto-merge off in the repo's settings, an API
+    # error) stops the fixers below.
     - uses: actions/setup-node@v7
       if: startsWith(steps.pr.outputs.branch, 'dependabot/npm_and_yarn/')
+      continue-on-error: true
       with:
         node-version: 24
 
     - name: Turn on auto-merge for a Dependabot npm bump
       if: startsWith(steps.pr.outputs.branch, 'dependabot/npm_and_yarn/')
+      continue-on-error: true
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github_token }}
