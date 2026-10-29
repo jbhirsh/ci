@@ -1,32 +1,61 @@
 name: Job summary
 description: >-
-  Writes the job's step times and, from JUnit reports, each test's result
-  and time, slowest first, to the job summary (summary.mjs says why). The
-  job's last step, with `if: ${{ !cancelled() }}`, so it runs after a
-  failure; the job needs `actions: read` for its step times. It never fails
-  the job.
+  Writes the job's summary (its verdict and what needs attention) and its
+  report: a page with every step and test beside the job's recent runs,
+  which the shared job-reports.yml workflow publishes on the repository's
+  GitHub Pages once the run finishes, and the summary links to
+  (summary.mjs says how). The job's last step, with `if: !cancelled()`, so
+  it runs after a failure; the job needs `actions: read`, for its steps and
+  earlier runs. It never fails the job.
 
 inputs:
   job:
     description: >-
       The job's name as the run shows it (its `name:`, e.g. "E2E Tests
-      (Maestro)"), to find its steps.
+      (Maestro)", a matrix job's with its values filled in), to find its
+      steps and its earlier runs.
     required: true
   junit:
     description: >-
-      JUnit XML reports to list the tests of: paths or glob patterns, one
-      per line, relative to the workspace (a composite step doesn't take a
-      job's defaults.run.working-directory). `*` and `**` don't enter
-      dot-folders; name one outright. None by default.
+      JUnit XML reports to list the tests of: one suite and its re-runs, as
+      paths or glob patterns, one per line, relative to the workspace (a
+      composite step doesn't take a job's defaults.run.working-directory).
+      `*` and `**` don't enter dot-folders; name one outright. None by
+      default.
+    default: ""
+  noun:
+    description: What the reports' tests are called, singular ("flow", "spec").
+    default: test
+  notes:
+    description: >-
+      A JSON file the job's earlier steps wrote, an object of labels and
+      values (sift's simulator), shown in the report's Environment. None by
+      default.
+    default: ""
+  load:
+    description: >-
+      A CSV file of the machine's CPU across the job, rows of
+      `time,load,busy` (Unix seconds, the load average, % busy), charted in
+      the report. None by default.
+    default: ""
+  settle:
+    description: >-
+      The % busy a settle wait (sift's) waits under, drawn on the CPU chart.
+      None by default.
+    default: ""
+  report-base:
+    description: >-
+      Where the repository's Pages site is, for the summary's link to the
+      report. GitHub's address for it by default.
     default: ""
   github-token:
-    description: A token that can read the run's jobs (actions read).
+    description: A token that can read the run's jobs and artifacts (actions read).
     default: ${{ github.token }}
 
 runs:
   using: composite
   steps:
-    # Both steps continue on error: a summary that can't be written must
+    # Every step continues on error: a summary that can't be written must
     # never fail the job it describes.
     - uses: actions/setup-node@v7
       continue-on-error: true
@@ -35,10 +64,29 @@ runs:
         package-manager-cache: false
 
     - name: Write the job summary
+      id: summary
       continue-on-error: true
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         JOB: ${{ inputs.job }}
         JUNIT: ${{ inputs.junit }}
+        NOUN: ${{ inputs.noun }}
+        NOTES: ${{ inputs.notes }}
+        LOAD: ${{ inputs.load }}
+        SETTLE: ${{ inputs.settle }}
+        REPORT_BASE: ${{ inputs.report-base }}
       run: node "$GITHUB_ACTION_PATH/summary.mjs"
+
+    # The report page, and this run's tests for later runs to compare with
+    # (history.mjs), in one artifact. A re-run of the job replaces its first
+    # attempt's.
+    - name: Keep this run's report and tests
+      if: steps.summary.outputs.dir != ''
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ steps.summary.outputs.artifact }}
+        path: ${{ steps.summary.outputs.dir }}
+        overwrite: true
+        if-no-files-found: ignore
