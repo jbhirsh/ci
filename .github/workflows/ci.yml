@@ -31,6 +31,10 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      # The job summary reads this job's steps and earlier runs.
+      actions: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -41,11 +45,18 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
-      - run: npm run test:coverage
+      # A JUnit report too, for the job summary (below).
+      - run: npm run test:coverage -- --reporter=default --reporter=junit --outputFile.junit=reports/junit.xml
       - name: Pins (pins/check.mjs, as the apps run it)
         run: node pins/check.mjs
       - name: Lint workflows (actionlint)
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color
+      # This checkout's job-summary, so a change to it shows on its own PR.
+      - if: ${{ !cancelled() }}
+        uses: ./job-summary
+        with:
+          job: Check
+          junit: reports/junit.xml
 
   apps:
     name: Against ${{ matrix.app }}

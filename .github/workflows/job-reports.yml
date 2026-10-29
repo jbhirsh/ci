@@ -1,0 +1,44 @@
+# Publishes each CI run's job reports (job-summary) to the repository's
+# GitHub Pages, where every job summary links. An app calls it from its own
+# workflow, which runs when CI finishes:
+#
+#   name: Job reports
+#   on:
+#     workflow_run:
+#       workflows: [CI]
+#       types: [completed]
+#   permissions:
+#     contents: write
+#     actions: read
+#   jobs:
+#     publish:
+#       uses: jbhirsh/ci/.github/workflows/job-reports.yml@main
+#
+# and serves its job-reports branch on Pages (Settings, Pages: Deploy from a
+# branch, job-reports, / (root)). A fork's run isn't published: its code
+# wrote the pages, which would then be served from the repository's own
+# site. Publishes that overlap don't lose each other's reports: each pushes
+# with a lease and tries again on the branch as it found it (publish.mjs).
+# This repository runs it for its own CI too (the workflow_run trigger).
+name: Job reports
+
+on:
+  workflow_call:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    name: Publish job reports
+    if: github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: jbhirsh/ci/job-summary/publish@main
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
