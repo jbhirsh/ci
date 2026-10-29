@@ -113,6 +113,24 @@ describe('lintAction', () => {
       'a/action.yml: output out reads steps.ghost, which no step has',
     ]);
   });
+  it("refuses ${{ }} in a description, its own or an input's", () => {
+    const steps = { using: 'composite', steps: [{ shell: 'bash', run: 'true' }] };
+    expect(
+      lintAction(
+        'a/action.yml',
+        {
+          name: 'A',
+          description: 'Runs with `if: ${{ !cancelled() }}`.',
+          inputs: { x: { description: 'Defaults to ${{ github.token }}' }, y: 'odd' },
+          runs: steps,
+        },
+        always,
+      ),
+    ).toEqual([
+      'a/action.yml: description holds ${{ }}, which the runner evaluates; write it without',
+      "a/action.yml: input x's description holds ${{ }}, which the runner evaluates; write it without",
+    ]);
+  });
   it('refuses what is not a mapping, or has no steps', () => {
     expect(lintAction('a', [], always)).toEqual(['a: not a YAML mapping']);
     expect(lintAction('a', action({ runs: { using: 'composite' } }), always)).toEqual([
