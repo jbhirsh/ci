@@ -201,6 +201,8 @@ describe('report', () => {
     el(w, '#steps .sortbtn[data-k="seconds"]').click();
     expect(w.document.querySelector('#steps tbody tr')?.id).toBe('step-2');
     expect($('#step-2 .seg.bad')).not.toBeNull();
+    // A long step name is cut short on the page, whole in its tooltip.
+    expect($('#step-2 .stepname')?.getAttribute('title')).toBe('Test');
     expect(w.document.querySelectorAll('#history rect.bar')).toHaveLength(4);
     expect($('#history text')).not.toBeNull();
     expect($('#notes')?.textContent).toBe('SimulatoriPhone 17 Pro');
