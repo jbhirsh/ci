@@ -1,0 +1,44 @@
+name: Job summary
+description: >-
+  Writes the job's step times and, from JUnit reports, each test's result
+  and time, slowest first, to the job summary (summary.mjs says why). The
+  job's last step, with `if: ${{ !cancelled() }}`, so it runs after a
+  failure; the job needs `actions: read` for its step times. It never fails
+  the job.
+
+inputs:
+  job:
+    description: >-
+      The job's name as the run shows it (its `name:`, e.g. "E2E Tests
+      (Maestro)"), to find its steps.
+    required: true
+  junit:
+    description: >-
+      JUnit XML reports to list the tests of: paths or glob patterns, one
+      per line, relative to the workspace (a composite step doesn't take a
+      job's defaults.run.working-directory). `*` and `**` don't enter
+      dot-folders; name one outright. None by default.
+    default: ""
+  github-token:
+    description: A token that can read the run's jobs (actions read).
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    # Both steps continue on error: a summary that can't be written must
+    # never fail the job it describes.
+    - uses: actions/setup-node@v7
+      continue-on-error: true
+      with:
+        node-version: 24
+        package-manager-cache: false
+
+    - name: Write the job summary
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        JOB: ${{ inputs.job }}
+        JUNIT: ${{ inputs.junit }}
+      run: node "$GITHUB_ACTION_PATH/summary.mjs"
