@@ -9,7 +9,10 @@
 //                                      into this repo (CI's "Against <app>")
 //
 // An action must be composite, every `run` step must say its `shell`, and no
-// step may take `timeout-minutes` (composite steps can't). Every
+// step may take `timeout-minutes` (composite steps can't). Its descriptions
+// (its own and its inputs') may hold no `${{ }}`: the runner evaluates them
+// as it loads the action, and one it can't (`cancelled()`) fails every job
+// that uses it. Every
 // `${{ inputs.x }}` must name a declared input, every `steps.<id>` an earlier
 // step's id (an output's value, any step's), and `secrets` is out of reach
 // inside an action, so it must come in as an input. A `jbhirsh/ci/<path>`
@@ -81,6 +84,20 @@ export function lintAction(file, doc, exists) {
   const errors = [];
   for (const key of ['name', 'description']) {
     if (typeof action[key] !== 'string') errors.push(`${file}: no ${key}`);
+  }
+  const described = [
+    ['description', action.description],
+    ...Object.entries(isObject(action.inputs) ? /** @type {Doc} */ (action.inputs) : {}).map(
+      ([name, input]) => [
+        `input ${name}'s description`,
+        isObject(input) ? /** @type {Doc} */ (input).description : undefined,
+      ],
+    ),
+  ];
+  for (const [what, text] of described) {
+    if (expressions(text).length > 0) {
+      errors.push(`${file}: ${what} holds \${{ }}, which the runner evaluates; write it without`);
+    }
   }
   const runs = isObject(action.runs) ? /** @type {Doc} */ (action.runs) : {};
   if (runs.using !== 'composite') errors.push(`${file}: runs.using must be composite`);
