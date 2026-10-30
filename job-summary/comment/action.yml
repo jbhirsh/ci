@@ -13,12 +13,6 @@ inputs:
   run-id:
     description: The run whose summaries to comment (a workflow_run event's run, or this run).
     required: true
-  artifacts:
-    description: >-
-      Where the run's job-summary-* artifacts are already downloaded, when
-      this runs inside the run itself; empty fetches them from the finished
-      run with gh.
-    default: ""
   github-token:
     description: A token that can read the run's artifacts and comment on its pull request.
     default: ${{ github.token }}
@@ -40,5 +34,4 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         RUN_ID: ${{ inputs.run-id }}
-        ARTIFACTS: ${{ inputs.artifacts }}
       run: node "$GITHUB_ACTION_PATH/../comment.mjs"

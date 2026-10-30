@@ -22,12 +22,10 @@
 // can't comment (a caller that doesn't grant pull-requests: write, a
 // Dependabot or fork token) and any other API error are logged and skipped.
 //
-//   node comment.mjs   (env: RUN_ID, GITHUB_REPOSITORY, GH_TOKEN; ARTIFACTS,
-//                       the run's job-summary-* artifacts if already
-//                       downloaded, as inside the run itself)
+//   node comment.mjs   (env: RUN_ID, GITHUB_REPOSITORY, GH_TOKEN)
 
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -491,19 +489,10 @@ function realApi(method, route, body) {
 }
 
 /**
- * How the run's artifacts arrive: inside the run itself they're already
- * downloaded (ARTIFACTS, by actions/download-artifact) and are copied in;
- * after it, gh fetches them.
- *
  * @param {Record<string, string | undefined>} env
  * @returns {Download}
  */
-export const realDownload = (env) => (runId, dir) => {
-  if (env.ARTIFACTS) {
-    if (!readdirSync(env.ARTIFACTS).length) throw new Error('no artifacts');
-    cpSync(env.ARTIFACTS, dir, { recursive: true });
-    return;
-  }
+const realDownload = (env) => (runId, dir) => {
   execFileSync(
     'gh',
     [

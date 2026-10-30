@@ -219,24 +219,6 @@ describe('publish', () => {
     expect(existsSync(path.join(empty.env.REMOTE, 'refs/heads', BRANCH))).toBe(false);
   });
 
-  it('reads artifacts already downloaded inside the run, never asking gh for them', () => {
-    const s = setup({});
-    const artifacts = temp();
-    mkdirSync(path.join(artifacts, 'job-summary-check'));
-    writeFileSync(path.join(artifacts, 'job-summary-check', 'report.html'), '<p>in run</p>');
-    expect(publish({ ...s.env, ARTIFACTS: artifacts }, s.run, NOW)).toBe(
-      'Published 1 report for run 77: check.',
-    );
-    expect(s.calls.some((c) => c[0] === 'gh' && c[1] === 'run')).toBe(false);
-    expect(s.tree()).toContain('runs/77/check/index.html');
-    const empty = temp();
-    expect(publish({ ...s.env, ARTIFACTS: empty }, s.run, NOW)).toBe('Run 77 has no job reports.');
-    const missing = path.join(empty, 'nope');
-    expect(publish({ ...s.env, ARTIFACTS: missing }, s.run, NOW)).toBe(
-      'Run 77 has no job reports.',
-    );
-  });
-
   it('needs the repository and a run id', () => {
     expect(() => publish({ RUN_ID: 'x', GITHUB_REPOSITORY: 'a/b' })).toThrow(
       'GITHUB_REPOSITORY and RUN_ID are needed',
