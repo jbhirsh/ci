@@ -1,6 +1,14 @@
 // JUnit XML, read for job-summary (summary.mjs): each test's name, time,
 // result, where it is (its suite and file attributes, which source.mjs turns
-// into a path) and, for a failure, its message. Read with patterns rather than an
+// into a path) and, for a failure, its message. A test retried within one
+// report is read from Surefire's elements, which Playwright's reporter writes
+// with its `includeRetries` option (off by default; or
+// PLAYWRIGHT_JUNIT_INCLUDE_RETRIES=1): a passing test with a `<flakyFailure>`
+// or `<flakyError>` for each try that failed passed on re-run; one that failed
+// every try keeps its first try's `<failure>` or `<error>`, with a
+// `<rerunFailure>` or `<rerunError>` for each later one, and reads failed.
+// Without that option Playwright writes a retried pass as a plain pass, its
+// time every try's, and nothing here can tell. Read with patterns rather than an
 // XML library, as this repo installs nothing in the app. Comments are taken
 // out first, and CDATA sections (captured output, messages) are turned into
 // escaped text, so what they hold can't pass for elements while a failure's
@@ -107,10 +115,34 @@ const OK_STATUS = /^(|success|passed|pass|ok|warning)$/;
 const ATTRS = /((?:[^>"']|"[^"]*"|'[^']*')*?)/.source;
 
 /**
+ * A failure's first line and whole message, from its element's `message`
+ * attribute and its text.
+ *
+ * @param {string} attr the attribute, unescaped
+ * @param {string} body the text, unescaped
+ * @returns {{ message: string, detail: string }}
+ */
+function describeFailure(attr, body) {
+  const message = firstLine(attr || body);
+  // The text usually repeats the attribute ("Error: " and all), so it
+  // stands alone then; stack frames inside node_modules are left out.
+  const joined = !attr || body.includes(attr) ? body || attr : `${attr}\n${body}`;
+  const whole = joined
+    .split('\n')
+    .filter((l) => !/^\s*(❯|at)\s.*node_modules\//.test(l))
+    .join('\n')
+    .trim();
+  const detail = whole.length > DETAIL_LENGTH ? `${whole.slice(0, DETAIL_LENGTH - 1)}…` : whole;
+  return { message, detail };
+}
+
+/**
  * The tests in a JUnit report. A `<failure>` or `<error>` inside a test, or
  * a status attribute other than a success (Maestro's), is a failure, its
  * message the element's `message` attribute or else its text; `<skipped>`
- * is a skip.
+ * is a skip. A pass with a `<flakyFailure>` or `<flakyError>` inside passed
+ * on re-run, its message the first one's `message` attribute or else its
+ * `<stackTrace>`.
  *
  * @param {string} xml
  * @param {string} [file]
@@ -124,6 +156,7 @@ export function parseJunit(xml, file = '') {
   const cases = [];
   const testcase = new RegExp(`<testcase\\b${ATTRS}(\\/>|>([\\s\\S]*?)<\\/testcase\\s*>)`, 'g');
   const failure = new RegExp(`<(failure|error)\\b${ATTRS}(\\/>|>([\\s\\S]*?)<\\/\\1\\s*>)`);
+  const flaky = new RegExp(`<(flakyFailure|flakyError)\\b${ATTRS}(\\/>|>([\\s\\S]*?)<\\/\\1\\s*>)`);
   for (const m of text.matchAll(testcase)) {
     const attrs = attributes(m[1]);
     const inner = m[3] ?? '';
@@ -137,19 +170,23 @@ export function parseJunit(xml, file = '') {
     if (failed || !(OK_STATUS.test(status) || result === 'skipped')) {
       result = 'failed';
       if (failed) {
-        const attr = (attributes(failed[2]).message ?? '').trim();
-        const body = unescapeXml(failed[4] ?? '').trim();
-        message = firstLine(attr || body);
-        // The text usually repeats the attribute ("Error: " and all), so it
-        // stands alone then; stack frames inside node_modules are left out.
-        const joined = !attr || body.includes(attr) ? body || attr : `${attr}\n${body}`;
-        const whole = joined
-          .split('\n')
-          .filter((l) => !/^\s*(❯|at)\s.*node_modules\//.test(l))
-          .join('\n')
-          .trim();
-        detail = whole.length > DETAIL_LENGTH ? `${whole.slice(0, DETAIL_LENGTH - 1)}…` : whole;
+        ({ message, detail } = describeFailure(
+          (attributes(failed[2]).message ?? '').trim(),
+          unescapeXml(failed[4] ?? '').trim(),
+        ));
       }
+    }
+    const retried = result === 'passed' ? inner.match(flaky) : null;
+    if (retried) {
+      result = 'passed on re-run';
+      // Playwright writes each try's text as a <stackTrace> beside its
+      // captured output (<system-out>, <system-err>), which isn't the
+      // failure: only the stack trace is read.
+      const trace = (retried[4] ?? '').match(/<stackTrace\b[^>]*>([\s\S]*?)<\/stackTrace\s*>/);
+      ({ message, detail } = describeFailure(
+        (attributes(retried[2]).message ?? '').trim(),
+        unescapeXml(trace?.[1] ?? '').trim(),
+      ));
     }
     const seconds = Number(attrs.time);
     cases.push({

@@ -1243,7 +1243,7 @@
           );
         groups.rerun.forEach((t) =>
           att.push(
-            `<li ${goTest(t)}><span class="tag warn">Re-run</span><span>${esc(t.title)}${where(t)} passed on its second try${go}</span></li>`,
+            `<li ${goTest(t)}><span class="tag warn">Re-run</span><span>${esc(t.title)}${where(t)} passed on a re-run${go}</span></li>`,
           ),
         );
         groups.flaky.forEach((t) => {

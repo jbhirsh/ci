@@ -17,7 +17,7 @@ describe('parseJunit, for any input', () => {
         for (const c of parseJunit(xml)) {
           expect(c.name).not.toBe('');
           expect(c.seconds).toBeGreaterThanOrEqual(0);
-          expect(['passed', 'failed', 'skipped']).toContain(c.result);
+          expect(['passed', 'failed', 'skipped', 'passed on re-run']).toContain(c.result);
           expect(c.message.length).toBeLessThanOrEqual(MESSAGE_LENGTH);
         }
       }),
@@ -28,7 +28,12 @@ describe('parseJunit, for any input', () => {
     const testCase = fc.record({
       name: fc.string({ minLength: 1, maxLength: 40 }).filter((s) => s.trim() !== ''),
       seconds: fc.double({ min: 0, max: 1e5, noNaN: true }),
-      result: fc.constantFrom(/** @type {const} */ ('passed'), 'failed', 'skipped'),
+      result: fc.constantFrom(
+        /** @type {const} */ ('passed'),
+        'failed',
+        'skipped',
+        'passed on re-run',
+      ),
     });
     fc.assert(
       fc.property(fc.array(testCase, { maxLength: 8 }), (cases) => {
@@ -36,7 +41,13 @@ describe('parseJunit, for any input', () => {
           .map((c) => {
             const open = `<testcase name="${escape(c.name)}" time="${c.seconds}"`;
             if (c.result === 'passed') return `${open}/>`;
-            return `${open}>${c.result === 'failed' ? '<failure>x</failure>' : '<skipped/>'}</testcase>`;
+            const inner = {
+              failed: '<failure>x</failure>',
+              skipped: '<skipped/>',
+              'passed on re-run':
+                '<flakyFailure message="x"><stackTrace>x</stackTrace></flakyFailure>',
+            }[c.result];
+            return `${open}>${inner}</testcase>`;
           })
           .join('\n');
         expect(parseJunit(`<testsuite>${xml}</testsuite>`, 'r.xml')).toEqual(
@@ -44,8 +55,8 @@ describe('parseJunit, for any input', () => {
             ...c,
             name: c.name.trim(),
             file: 'r.xml',
-            message: c.result === 'failed' ? 'x' : '',
-            detail: c.result === 'failed' ? 'x' : '',
+            message: c.result === 'failed' || c.result === 'passed on re-run' ? 'x' : '',
+            detail: c.result === 'failed' || c.result === 'passed on re-run' ? 'x' : '',
             suite: '',
             source: '',
           })),

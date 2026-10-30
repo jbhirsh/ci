@@ -122,6 +122,123 @@ describe('parseJunit', () => {
     expect(attrOnly.detail).toBe('only this');
   });
 
+  // Trimmed from Playwright 1.64's junit reporter with includeRetries on and
+  // retries: 2: two tests that failed and then passed, one that failed every try.
+  const retried = `<testsuites tests="4" failures="1">
+<testsuite name="a.spec.mjs" tests="4" failures="1">
+<testcase name="flaky" classname="a.spec.mjs" time="0.01">
+<system-out>
+<![CDATA[try 1
+]]>
+</system-out>
+<flakyFailure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe" time="0.012">
+<stackTrace>
+<![CDATA[Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: 1
+Received: 0
+    at /w/a.spec.mjs:2:88]]>
+</stackTrace>
+<system-out>
+<![CDATA[try 0
+<failure>not mine</failure>
+[[ATTACHMENT|../test-results/a-flaky/error-context.md]]
+]]>
+</system-out>
+</flakyFailure>
+</testcase>
+<testcase name="throws then passes" classname="a.spec.mjs" time="0.004">
+<flakyError message="boom &amp; &lt;bust&gt;" type="Error" time="0.006">
+<stackTrace>
+<![CDATA[Error: boom & <bust>
+    at /w/a.spec.mjs:3:78]]>
+</stackTrace>
+</flakyError>
+<flakyError message="second" type="Error" time="0.005">
+<stackTrace>
+<![CDATA[Error: second]]>
+</stackTrace>
+</flakyError>
+</testcase>
+<testcase name="always fails" classname="a.spec.mjs" time="0.024">
+<rerunFailure message="retry's own" type="expect.toBe" time="0.008">
+<stackTrace>
+<![CDATA[Error: retry's own]]>
+</stackTrace>
+</rerunFailure>
+<rerunError message="later" type="Error" time="0.01">
+<stackTrace>
+<![CDATA[Error: later]]>
+</stackTrace>
+</rerunError>
+<failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
+<![CDATA[  a.spec.mjs:4:1 › always fails
+
+    Error: expect(received).toBe(expected) // Object.is equality]]>
+</failure>
+</testcase>
+<testcase name="fine" classname="a.spec.mjs" time="0.002">
+</testcase>
+</testsuite>
+</testsuites>`;
+
+  it("reads Playwright's retries: a pass with flaky tries passed on re-run, the first try's message", () => {
+    expect(
+      parseJunit(retried, 'pw.xml').map((c) => [c.name, c.seconds, c.result, c.message, c.detail]),
+    ).toEqual([
+      [
+        'a.spec.mjs › flaky',
+        0.01,
+        'passed on re-run',
+        'expect(received).toBe(expected) // Object.is equality',
+        'Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at /w/a.spec.mjs:2:88',
+      ],
+      [
+        'a.spec.mjs › throws then passes',
+        0.004,
+        'passed on re-run',
+        'boom & <bust>',
+        'Error: boom & <bust>\n    at /w/a.spec.mjs:3:78',
+      ],
+      [
+        'a.spec.mjs › always fails',
+        0.024,
+        'failed',
+        'expect(received).toBe(expected) // Object.is equality',
+        'a.spec.mjs:4:1 › always fails\n\n    Error: expect(received).toBe(expected) // Object.is equality',
+      ],
+      ['a.spec.mjs › fine', 0.002, 'passed', '', ''],
+    ]);
+  });
+
+  it('reads a flaky try with no stack trace from its message, never its captured output', () => {
+    expect(
+      parseJunit(
+        '<testcase name="a"><flakyFailure message="timed out" time="30"/></testcase>' +
+          '<testcase name="b"><flakyFailure><system-out>printed</system-out></flakyFailure></testcase>' +
+          '<testcase name="c"><flakyError/></testcase>',
+      ).map((c) => [c.result, c.message, c.detail]),
+    ).toEqual([
+      ['passed on re-run', 'timed out', 'timed out'],
+      ['passed on re-run', '', ''],
+      ['passed on re-run', '', ''],
+    ]);
+  });
+
+  it('lets a failure, a skip or a failing status win over a flaky try', () => {
+    expect(
+      parseJunit(
+        '<testcase name="a"><flakyFailure message="x"/><failure message="real"/></testcase>' +
+          '<testcase name="b"><skipped/><flakyFailure message="x"/></testcase>' +
+          '<testcase name="c" status="ERROR"><flakyError message="x"/></testcase>',
+      ).map((c) => [c.result, c.message]),
+    ).toEqual([
+      ['failed', 'real'],
+      ['skipped', ''],
+      ['failed', ''],
+    ]);
+  });
+
   it('trims a long message to its length', () => {
     const [c] = parseJunit(`<testcase name="t"><failure message="${'x'.repeat(500)}"/></testcase>`);
     expect(c.message).toHaveLength(MESSAGE_LENGTH);
