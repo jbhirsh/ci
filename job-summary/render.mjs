@@ -3,7 +3,9 @@
 // on the repository's GitHub Pages), where the steps, tests and history
 // are. GitHub's run page can't show more than Markdown well (no hover, no
 // scripts, nested dropdowns that don't indent), so the summary stays short
-// and the report does the rest. Written from the model (model.mjs).
+// and the report does the rest. Written from the model (model.mjs). The
+// same pieces make the job's section of the pull request's comment
+// (section, which comment.mjs puts with the other jobs').
 //
 // Text from outside (step and test names, failure messages) is escaped as
 // it's written: shown as written, with nothing that would end a line or
@@ -129,46 +131,39 @@ export function verdict(model) {
 }
 
 /**
- * The summary's Markdown.
+ * What needs attention, one Markdown list item per kind: the failed tests
+ * (or else the failed steps), those passed on a re-run, the flaky ones and
+ * what got slower. Shared by the summary and the pull request's comment
+ * (comment.mjs), so both say the same.
  *
  * @param {Model} model
- * @param {string} reportLink the run's report ('' when there's none)
- * @returns {string}
+ * @returns {string[]}
  */
-export function render(model, reportLink) {
+export function attention(model) {
   const tests = model.tests ?? [];
   const failed = tests.filter((t) => t.result === 'failed');
   const rerun = tests.filter((t) => t.result === 'passed on re-run');
   const flaky = tests.filter((t) => t.flaky);
   const failedSteps = model.steps.filter((s) => s.conclusion === 'failure');
-  const lines = [`### ${cell(model.job)}: ${verdict(model)}`, ''];
-  if (reportLink) {
-    lines.push(
-      `**[Full report](${reportLink})**: every step and ${model.noun} beside its recent runs. It's published once the workflow finishes.`,
-      '',
-    );
-  }
-  if (model.problem) lines.push(`No step times or history: ${cell(model.problem)}`, '');
-
   /** @type {string[]} */
-  const attention = [];
+  const items = [];
   for (const t of failed.slice(0, ATTENTION)) {
     const first = t.message.split('\n').find((l) => l.trim()) ?? '';
-    attention.push(
+    items.push(
       `- **Failed:** ${testName(t)} after ${duration(t.seconds)}${first ? `: ${cell(first)}` : ''}`,
     );
   }
   if (failed.length > ATTENTION) {
-    attention.push(`- …and ${failed.length - ATTENTION} more failed ${model.noun}s, in the report`);
+    items.push(`- …and ${failed.length - ATTENTION} more failed ${model.noun}s, in the report`);
   }
   if (!failed.length) {
-    for (const s of failedSteps) attention.push(`- **Failed step:** ${cell(s.name)}`);
+    for (const s of failedSteps) items.push(`- **Failed step:** ${cell(s.name)}`);
   }
   if (rerun.length) {
-    attention.push(`- **Passed on re-run:** ${capped(rerun.map(testName)).join(' · ')}`);
+    items.push(`- **Passed on re-run:** ${capped(rerun.map(testName)).join(' · ')}`);
   }
   if (flaky.length) {
-    attention.push(
+    items.push(
       `- **Flaky:** ${capped(
         flaky.map((t) => {
           const results = [...t.hist, t.result].filter(Boolean);
@@ -187,7 +182,7 @@ export function render(model, reportLink) {
       .map((t) => ({ name: testName(t), seconds: t.seconds, usual: t.usual })),
   ];
   if (slow.length) {
-    attention.push(
+    items.push(
       `- **Slower than usual:** ${capped(
         slow.map(({ name, seconds, usual }) => {
           const typical = usual ?? seconds;
@@ -196,8 +191,45 @@ export function render(model, reportLink) {
       ).join(' · ')}`,
     );
   }
-  if (attention.length) lines.push('**Needs attention**', '', ...attention, '');
+  return items;
+}
+
+/**
+ * The summary's Markdown.
+ *
+ * @param {Model} model
+ * @param {string} reportLink the run's report ('' when there's none)
+ * @returns {string}
+ */
+export function render(model, reportLink) {
+  const lines = [`### ${cell(model.job)}: ${verdict(model)}`, ''];
+  if (reportLink) {
+    lines.push(
+      `**[Full report](${reportLink})**: every step and ${model.noun} beside its recent runs. It's published once the workflow finishes.`,
+      '',
+    );
+  }
+  if (model.problem) lines.push(`No step times or history: ${cell(model.problem)}`, '');
+  const items = attention(model);
+  if (items.length) lines.push('**Needs attention**', '', ...items, '');
   return fit(lines.join('\n').trimEnd());
+}
+
+/**
+ * The job's part of the pull request's comment (comment.mjs puts each
+ * job's together): the verdict and the report on one line, then what needs
+ * attention, as in the summary but without its headings.
+ *
+ * @param {Model} model
+ * @param {string} reportLink the run's report ('' when there's none)
+ * @returns {string}
+ */
+export function section(model, reportLink) {
+  const head = [verdict(model), reportLink ? `[Full report](${reportLink})` : '']
+    .filter(Boolean)
+    .join(' · ');
+  const problem = model.problem ? [`- **No step times or history:** ${cell(model.problem)}`] : [];
+  return [`**${cell(model.job)}:** ${head}`, ...problem, ...attention(model)].join('\n');
 }
 
 /**

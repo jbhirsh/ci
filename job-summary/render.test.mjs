@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { ATTENTION, MAX_BYTES, cell, duration, fit, over, render, verdict } from './render.mjs';
+import {
+  ATTENTION,
+  MAX_BYTES,
+  attention,
+  cell,
+  duration,
+  fit,
+  over,
+  render,
+  section,
+  verdict,
+} from './render.mjs';
 
 /**
  * A test in a model.
@@ -208,6 +219,32 @@ describe('render', () => {
     const ok = model().steps.map((s) => ({ ...s, conclusion: 'success', slower: false }));
     expect(render(model({ steps: ok, tests: [mt({})] }), '')).toBe(
       '### E2E Tests (Maestro): ✅ 1 flow passed · 25m 00s · 36% slower than usual',
+    );
+  });
+});
+
+describe('section', () => {
+  it('puts the verdict and the report on one line, then what needs attention, as the summary does', () => {
+    const m = model();
+    expect(section(m, 'https://jbhirsh.github.io/sift/runs/20/e2e/')).toBe(
+      [
+        '**E2E Tests (Maestro):** ❌ 1 of 3 flows failed · 25m 00s · 36% slower than usual · [Full report](https://jbhirsh.github.io/sift/runs/20/e2e/)',
+        ...attention(m),
+      ].join('\n'),
+    );
+    expect(render(m, '')).toContain(attention(m).join('\n'));
+  });
+
+  it('leaves out a report it has no link for, and says why there is no history', () => {
+    const ok = model().steps.map((s) => ({ ...s, conclusion: 'success', slower: false }));
+    expect(section(model({ steps: ok, tests: null, run: null, job: 'A|B' }), '')).toBe(
+      '**A\\|B:** ✅ no step failed',
+    );
+    expect(section(model({ steps: ok, tests: null, problem: 'API <down>' }), '')).toBe(
+      [
+        '**E2E Tests (Maestro):** ✅ no step failed · 25m 00s · 36% slower than usual',
+        '- **No step times or history:** API &lt;down&gt;',
+      ].join('\n'),
     );
   });
 });

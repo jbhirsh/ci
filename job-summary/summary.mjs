@@ -16,7 +16,10 @@
 // (its tests and the job's time so far, which later runs read back: the
 // Actions API keeps a run's step times but not its tests) go in one folder
 // (`dir` output) that action.yml uploads as the job's artifact, for
-// job-reports.yml to put on the repository's GitHub Pages.
+// job-reports.yml to put on the repository's GitHub Pages; so does the
+// job's section of the pull request's comment (section.md, render.mjs
+// section), which job-reports.yml's comment job (comment.mjs) puts in the
+// one comment it keeps on the PR, as only it may write that comment.
 //
 // It never fails the job: action.yml's steps continue on error, a lookup
 // that doesn't work says why in the summary, and reading earlier runs stops
@@ -41,7 +44,7 @@ import { setOutput, summary } from '../lib/actions.mjs';
 import { artifactName, current, history } from './history.mjs';
 import { parseJunit, settleReruns } from './junit.mjs';
 import { buildModel, noteworthy, parts } from './model.mjs';
-import { render } from './render.mjs';
+import { render, section } from './render.mjs';
 import { pagesBase, report, reportUrl } from './report.mjs';
 import { changedFiles, locate, realGit, trackedFiles } from './source.mjs';
 import { telemetryFiles } from './telemetry.mjs';
@@ -183,6 +186,7 @@ export function parseLoad(text, start, seconds) {
  *
  * @typedef {object} Built
  * @property {string} markdown the summary
+ * @property {string} section the job's part of the pull request's comment
  * @property {string | null} record this run's record, null when there's nothing to keep
  * @property {string | null} report the report page, null without a run
  */
@@ -299,6 +303,7 @@ export function build(env, gh, io = {}) {
   const link = run && base && !fork ? reportUrl(base, run.id, artifact) : '';
   return {
     markdown: render(model, link),
+    section: section(model, link),
     record: tests || thisJob ? record(job, tests, thisJob ? jobSeconds(thisJob, now) : null) : null,
     report: run ? report(model, io.page) : null,
   };
@@ -314,9 +319,10 @@ function realGh(args) {
 }
 
 /**
- * Writes the summary, and puts this run's record and report in one folder,
- * named in the step's outputs for action.yml to upload as the job's
- * artifact. Never throws: a summary that can't be written is a warning.
+ * Writes the summary, and puts this run's record, report and comment
+ * section in one folder, named in the step's outputs for action.yml to
+ * upload as the job's artifact. Never throws: a summary that can't be
+ * written is a warning.
  *
  * @param {Record<string, string | undefined>} [env]
  * @param {Gh} [gh]
@@ -332,6 +338,7 @@ export function main(env = process.env, gh = realGh, io = {}) {
       mkdirSync(dir, { recursive: true });
       if (built.record) writeFileSync(path.join(dir, 'record.json'), built.record);
       if (built.report) writeFileSync(path.join(dir, 'report.html'), built.report);
+      writeFileSync(path.join(dir, 'section.md'), built.section);
       setOutput('dir', dir);
       setOutput('artifact', name);
     }

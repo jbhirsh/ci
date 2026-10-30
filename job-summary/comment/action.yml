@@ -1,0 +1,37 @@
+name: Comment job reports on the pull request
+description: >-
+  Keeps one comment on a finished workflow run's pull request with every
+  job's summary (each job-summary-<job> artifact's section.md): made by the
+  first run, edited in place by later ones, a run replacing only its own
+  workflow's sections (../comment.mjs says how). Run after the workflow
+  finishes, by the shared job-reports.yml workflow, one run per pull request
+  at a time. Writing the comment needs pull-requests write, and reading the
+  artifacts actions read; without them it logs a notice and skips. It never
+  fails the job.
+
+inputs:
+  run-id:
+    description: The finished run whose summaries to comment (github.event.workflow_run.id).
+    required: true
+  github-token:
+    description: A token that can read the run's artifacts and comment on its pull request.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    # Both steps continue on error: a comment that can't be written must
+    # never fail the run that publishes the reports.
+    - uses: actions/setup-node@v7
+      continue-on-error: true
+      with:
+        node-version: 24
+        package-manager-cache: false
+
+    - name: Keep the pull request's job reports comment
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        RUN_ID: ${{ inputs.run-id }}
+      run: node "$GITHUB_ACTION_PATH/../comment.mjs"
