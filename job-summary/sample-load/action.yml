@@ -1,0 +1,22 @@
+name: Job summary CPU samples
+description: >-
+  Samples the machine's CPU every 10 s for the rest of the job, which
+  job-summary, the job's last step, charts in its report when its own load
+  input is empty (../sample-load.mjs says how): a job's first step, so the
+  chart covers the whole job. It returns at once, leaving the sampler running
+  detached; the runner stops it as the job ends. Linux and macOS. Runs on
+  the runner's own Node rather than setting one up, which would change the
+  Node every later step gets. It never fails the job.
+
+runs:
+  using: composite
+  steps:
+    - name: Sample the CPU for the job summary
+      continue-on-error: true
+      shell: bash
+      run: |
+        if command -v node > /dev/null; then
+          node "$GITHUB_ACTION_PATH/../sample-load.mjs"
+        else
+          echo "::warning::job-summary/sample-load: no node on the PATH, so nothing is sampled"
+        fi

@@ -1,0 +1,35 @@
+name: Job summary note
+description: >-
+  Notes labels and values about the job for its summary's report, which
+  shows them in its Environment section (../note.mjs says how): the
+  simulator, a tool's version, how long a warm-up took. Call it as often as
+  the job has something to note; its first call also notes the runner image,
+  the cores, the memory and the Node on the PATH. job-summary, the job's last
+  step, reads them when its own notes input is empty. Runs on the runner's
+  own Node rather than setting one up, which would change the Node every
+  later step gets. It never fails the job.
+
+inputs:
+  notes:
+    description: >-
+      The notes, one `Label: value` a line: the label up to the line's first
+      colon, the value after it. A value from an earlier step's output goes
+      here as an expression; it reaches the script through the environment,
+      never a shell. A label noted again takes its new value. None by
+      default, which notes only the machine on a first call.
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Note it for the job summary
+      continue-on-error: true
+      shell: bash
+      env:
+        NOTES: ${{ inputs.notes }}
+      run: |
+        if command -v node > /dev/null; then
+          node "$GITHUB_ACTION_PATH/../note.mjs"
+        else
+          echo "::warning::job-summary/note: no node on the PATH, so nothing was noted"
+        fi
