@@ -2,8 +2,8 @@
 // summary in it: each job's verdict, its report and what needs attention
 // (render.mjs section, which summary.mjs leaves in the job's artifact as
 // section.md). job-reports.yml's comment job runs it, through
-// comment/action.yml, after each run that feeds job-reports finishes, green
-// or red. Only that job writes the comment, never the jobs themselves, so
+// comment/action.yml, at the end of each run that feeds job-reports, green
+// or red: as the run's last job, or after it finishes. Only that job writes the comment, never the jobs themselves, so
 // jobs that finish together can't overwrite each other.
 //
 // The first run makes the comment and later ones edit it in place, so it
@@ -22,10 +22,12 @@
 // can't comment (a caller that doesn't grant pull-requests: write, a
 // Dependabot or fork token) and any other API error are logged and skipped.
 //
-//   node comment.mjs   (env: RUN_ID, GITHUB_REPOSITORY, GH_TOKEN)
+//   node comment.mjs   (env: RUN_ID, GITHUB_REPOSITORY, GH_TOKEN; ARTIFACTS,
+//                       the run's job-summary-* artifacts if already
+//                       downloaded, as inside the run itself)
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -489,10 +491,19 @@ function realApi(method, route, body) {
 }
 
 /**
+ * How the run's artifacts arrive: inside the run itself they're already
+ * downloaded (ARTIFACTS, by actions/download-artifact) and are copied in;
+ * after it, gh fetches them.
+ *
  * @param {Record<string, string | undefined>} env
  * @returns {Download}
  */
-const realDownload = (env) => (runId, dir) => {
+export const realDownload = (env) => (runId, dir) => {
+  if (env.ARTIFACTS) {
+    if (!readdirSync(env.ARTIFACTS).length) throw new Error('no artifacts');
+    cpSync(env.ARTIFACTS, dir, { recursive: true });
+    return;
+  }
   execFileSync(
     'gh',
     [

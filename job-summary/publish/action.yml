@@ -3,17 +3,24 @@ description: >-
   Puts a workflow run's job reports (job-summary's report.html, in each
   job's job-summary-<job> artifact) on the repository's GitHub Pages branch,
   job-reports, at runs/<run>/<job>/, keeping the last 30 days and an index
-  (../publish.mjs says how). Run after the workflow finishes, by the shared
-  job-reports.yml workflow: the job needs contents write and actions read.
+  (../publish.mjs says how). Run by the shared job-reports.yml workflow,
+  as the run's last job or after it finishes: the job needs contents write
+  and actions read.
   The repository's Pages must serve the job-reports branch.
 
 inputs:
   run-id:
-    description: The finished run whose reports to publish (github.event.workflow_run.id).
+    description: The run whose reports to publish (a workflow_run event's run, or this run).
     required: true
   keep-days:
     description: How many days of reports to keep.
     default: "30"
+  artifacts:
+    description: >-
+      Where the run's job-summary-* artifacts are already downloaded, when
+      this runs inside the run itself; empty fetches them from the finished
+      run with gh.
+    default: ""
   github-token:
     description: A token that can read the run's artifacts and push the job-reports branch.
     default: ${{ github.token }}
@@ -31,5 +38,6 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         RUN_ID: ${{ inputs.run-id }}
+        ARTIFACTS: ${{ inputs.artifacts }}
         KEEP_DAYS: ${{ inputs.keep-days }}
       run: node "$GITHUB_ACTION_PATH/../publish.mjs"
