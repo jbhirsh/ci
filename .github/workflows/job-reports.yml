@@ -15,10 +15,12 @@
 # and serves its job-reports branch on Pages (Settings, Pages: Deploy from a
 # branch, job-reports, / (root)). As a job of the run itself, it runs from
 # the pull request's own branch, so a change to it takes effect on the pull
-# request that makes it, and the run's artifacts come straight from the run
-# (actions/download-artifact). It can also be called from a workflow_run
+# request that makes it. It can also be called from a workflow_run
 # workflow, after CI finishes, as the apps first did; there it runs from the
-# default branch and fetches the finished run's artifacts with gh.
+# default branch. Either way gh fetches the run's job-summary-* artifacts,
+# which it can while the run is still going (actions/download-artifact
+# can't stand in: a single artifact it unpacks without its folder, so its
+# job's name is lost).
 #
 # A fork's run isn't published: its code wrote the pages, which would then
 # be served from the repository's own site. Nor is Dependabot's, whose token
@@ -54,18 +56,9 @@ jobs:
       contents: write
       actions: read
     steps:
-      # Inside the run, its jobs' reports are artifacts of this same run.
-      - name: Take this run's job reports
-        if: github.event_name != 'workflow_run'
-        continue-on-error: true
-        uses: actions/download-artifact@v8
-        with:
-          pattern: job-summary-*
-          path: ${{ runner.temp }}/job-reports-artifacts
       - uses: jbhirsh/ci/job-summary/publish@main
         with:
           run-id: ${{ github.event.workflow_run.id || github.run_id }}
-          artifacts: ${{ github.event_name != 'workflow_run' && format('{0}/job-reports-artifacts', runner.temp) || '' }}
 
   # The pull request's comment (comment.mjs), after the reports it links to
   # are up. Its own job, so only it takes turns: runs for one branch write
@@ -91,14 +84,6 @@ jobs:
       group: job-reports-comment-${{ github.event.workflow_run.head_branch || github.head_ref }}
       cancel-in-progress: false
     steps:
-      - name: Take this run's job reports
-        if: github.event_name != 'workflow_run'
-        continue-on-error: true
-        uses: actions/download-artifact@v8
-        with:
-          pattern: job-summary-*
-          path: ${{ runner.temp }}/job-reports-artifacts
       - uses: jbhirsh/ci/job-summary/comment@main
         with:
           run-id: ${{ github.event.workflow_run.id || github.run_id }}
-          artifacts: ${{ github.event_name != 'workflow_run' && format('{0}/job-reports-artifacts', runner.temp) || '' }}

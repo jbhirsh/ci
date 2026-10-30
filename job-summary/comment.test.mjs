@@ -1,5 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -18,7 +17,6 @@ import {
   mergeSections,
   parseSections,
   pullRequestsOf,
-  realDownload,
   statusOf,
 } from './comment.mjs';
 
@@ -440,28 +438,6 @@ describe('main', () => {
       'Run 9 has no job reports, so no comment.',
     ]);
     log.mockRestore();
-  });
-});
-
-describe('realDownload', () => {
-  it("copies artifacts already downloaded inside the run, and has none when they're missing", () => {
-    const from = mkdtempSync(path.join(tmpdir(), 'artifacts-'));
-    const to = mkdtempSync(path.join(tmpdir(), 'copied-'));
-    try {
-      mkdirSync(path.join(from, 'job-summary-ci'));
-      writeFileSync(path.join(from, 'job-summary-ci', 'section.md'), '**ci:** ✅');
-      realDownload({ ARTIFACTS: from })('9', to);
-      expect(readFileSync(path.join(to, 'job-summary-ci', 'section.md'), 'utf8')).toBe(
-        '**ci:** ✅',
-      );
-      const empty = mkdtempSync(path.join(tmpdir(), 'empty-'));
-      expect(() => realDownload({ ARTIFACTS: empty })('9', to)).toThrow('no artifacts');
-      rmSync(empty, { recursive: true });
-      expect(() => realDownload({ ARTIFACTS: path.join(from, 'nope') })('9', to)).toThrow();
-    } finally {
-      rmSync(from, { recursive: true });
-      rmSync(to, { recursive: true });
-    }
   });
 });
 

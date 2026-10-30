@@ -15,12 +15,6 @@ inputs:
   keep-days:
     description: How many days of reports to keep.
     default: "30"
-  artifacts:
-    description: >-
-      Where the run's job-summary-* artifacts are already downloaded, when
-      this runs inside the run itself; empty fetches them from the finished
-      run with gh.
-    default: ""
   github-token:
     description: A token that can read the run's artifacts and push the job-reports branch.
     default: ${{ github.token }}
@@ -38,6 +32,5 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         RUN_ID: ${{ inputs.run-id }}
-        ARTIFACTS: ${{ inputs.artifacts }}
         KEEP_DAYS: ${{ inputs.keep-days }}
       run: node "$GITHUB_ACTION_PATH/../publish.mjs"
