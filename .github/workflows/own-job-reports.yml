@@ -1,0 +1,18 @@
+# This repository's own CI reports, published and commented on its pull
+# requests by job-reports.yml, called as the apps call it (its header), so
+# the permissions are granted here, by the caller, as theirs are.
+name: Job reports
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+  pull-requests: write
+
+jobs:
+  publish:
+    uses: ./.github/workflows/job-reports.yml

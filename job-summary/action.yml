@@ -3,8 +3,9 @@ description: >-
   Writes the job's summary (its verdict and what needs attention) and its
   report: a page with every step and test beside the job's recent runs,
   which the shared job-reports.yml workflow publishes on the repository's
-  GitHub Pages once the run finishes, and the summary links to
-  (summary.mjs says how). The job's last step, with `if: !cancelled()`, so
+  GitHub Pages once the run finishes, and the summary links to; that
+  workflow also puts every job's verdict in one comment on the pull
+  request (summary.mjs says how). The job's last step, with `if: !cancelled()`, so
   it runs after a failure; the job needs `actions: read`, for its steps and
   earlier runs. It never fails the job.
 

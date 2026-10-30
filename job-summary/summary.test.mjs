@@ -455,6 +455,22 @@ describe('main', () => {
     }
   });
 
+  it("leaves the job's comment section beside its report", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'job-summary-test-'));
+    vi.stubEnv('GITHUB_STEP_SUMMARY', path.join(dir, 'summary.md'));
+    vi.stubEnv('GITHUB_OUTPUT', path.join(dir, 'output'));
+    try {
+      main({ ...env, RUNNER_TEMP: dir }, fakeGh(), io);
+      const folder = path.join(dir, 'job-summary', 'job-summary-accessibility-audit');
+      expect(readFileSync(path.join(folder, 'section.md'), 'utf8')).toBe(
+        '**Accessibility audit:** ✅ 2 tests passed, 1 on re-run · 5m 00s · [Full report](https://jbhirsh.github.io/sift/runs/42/accessibility-audit/)\n- **Passed on re-run:** T\n- **Flaky:** T, failed 1 of its last 1 runs',
+      );
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('warns instead of failing', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     main({}, fakeGh(), io);
