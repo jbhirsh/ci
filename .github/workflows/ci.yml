@@ -45,8 +45,11 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
-      # A JUnit report too, for the job summary (below).
-      - run: npm run test:coverage -- --reporter=default --reporter=junit --outputFile.junit=reports/junit.xml
+      # A JUnit report too, for the job summary (below). Naming any
+      # reporter replaces Vitest's defaults on Actions, default and
+      # github-actions (its failures as annotations, and its own summary),
+      # so github-actions is named again.
+      - run: npm run test:coverage -- --reporter=default --reporter=github-actions --reporter=junit --outputFile.junit=reports/junit.xml
       - name: Pins (pins/check.mjs, as the apps run it)
         run: node pins/check.mjs
       - name: Lint workflows (actionlint)
