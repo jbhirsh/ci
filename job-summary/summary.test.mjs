@@ -401,6 +401,28 @@ describe('build', () => {
     expect(build({ ...env, JUNIT: '', JOB: 'Nope' }, fakeGh(), io).record).toBeNull();
   });
 
+  it('reads the notes and samples job-summary/note and sample-load left, without the inputs', () => {
+    const left = path.join('/rt', 'job-summary');
+    const withLeft = {
+      ...io,
+      read: (/** @type {string} */ f) => {
+        if (f === path.join(left, 'notes.json')) return '{"Cores": "4"}';
+        if (f === path.join(left, 'machine-cpu.csv')) return files['load.csv'];
+        return io.read(f);
+      },
+    };
+    const model = modelOf(build({ ...env, RUNNER_TEMP: '/rt' }, fakeGh(), withLeft).report);
+    expect(model.notes).toEqual([['Cores', '4']]);
+    expect(model.load).toHaveLength(2);
+    // The inputs win, and a file that isn't there is no note.
+    const given = modelOf(
+      build({ ...env, RUNNER_TEMP: '/rt', NOTES: 'notes.json' }, fakeGh(), withLeft).report,
+    );
+    expect(given.notes).toEqual([['Simulator', 'iPhone 17 Pro']]);
+    const none = modelOf(build({ ...env, RUNNER_TEMP: '/elsewhere' }, fakeGh(), withLeft).report);
+    expect(none).toMatchObject({ notes: [], load: [] });
+  });
+
   it('needs the job name', () => {
     expect(() => build({ ...env, JOB: '' }, fakeGh())).toThrow('JOB is not set');
   });

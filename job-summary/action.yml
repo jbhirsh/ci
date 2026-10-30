@@ -29,14 +29,15 @@ inputs:
   notes:
     description: >-
       A JSON file the job's earlier steps wrote, an object of labels and
-      values (sift's simulator), shown in the report's Environment. None by
-      default.
+      values (sift's simulator), shown in the report's Environment. By
+      default, what job-summary/note wrote in the job, if it ran.
     default: ""
   load:
     description: >-
       A CSV file of the machine's CPU across the job, rows of
       `time,load,busy` (Unix seconds, the load average, % busy), charted in
-      the report. None by default.
+      the report. By default, what job-summary/sample-load wrote in the job,
+      if it ran.
     default: ""
   settle:
     description: >-

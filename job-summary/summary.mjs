@@ -22,6 +22,10 @@
 // that doesn't work says why in the summary, and reading earlier runs stops
 // after HISTORY_MS, so a slow API can't hold the job past its time limit.
 //
+// A job's notes and CPU samples come from the files its steps name (NOTES,
+// LOAD: sift's own scripts write them) or else from what job-summary/note
+// and job-summary/sample-load left in RUNNER_TEMP (telemetry.mjs).
+//
 //   node summary.mjs   (env: JOB; JUNIT (patterns, one per line), NOUN,
 //                       NOTES (a JSON file), LOAD (a CSV file), SETTLE,
 //                       REPORT_BASE, all optional; GITHUB_REPOSITORY,
@@ -40,6 +44,7 @@ import { buildModel, noteworthy, parts } from './model.mjs';
 import { render } from './render.mjs';
 import { pagesBase, report, reportUrl } from './report.mjs';
 import { changedFiles, locate, realGit, trackedFiles } from './source.mjs';
+import { telemetryFiles } from './telemetry.mjs';
 import { byTest, jobSeconds, stepRows } from './trends.mjs';
 
 /** @typedef {import('./history.mjs').Gh} Gh */
@@ -205,13 +210,17 @@ export function build(env, gh, io = {}) {
       return null;
     }
   };
-  const notesText = optional(env.NOTES);
+  // Without a notes or load input, what job-summary/note and
+  // job-summary/sample-load left in RUNNER_TEMP, if they ran.
+  const left = telemetryFiles(env);
+  const notesText = optional(env.NOTES || left?.notes);
   /** @type {[string, string][]} */
-  const notes = env.NOTES
-    ? notesText === null
-      ? [['Notes', `${env.NOTES} couldn't be read`]]
-      : parseNotes(notesText)
-    : [];
+  const notes =
+    notesText !== null
+      ? parseNotes(notesText)
+      : env.NOTES
+        ? [['Notes', `${env.NOTES} couldn't be read`]]
+        : [];
   const settle = Number(env.SETTLE);
 
   let problem = '';
@@ -251,7 +260,7 @@ export function build(env, gh, io = {}) {
     : [];
   const changed = tests && run ? changedFiles(commits, git, until, clock) : [];
   const started = Date.parse(thisJob?.started_at ?? '');
-  const loadText = optional(env.LOAD);
+  const loadText = optional(env.LOAD || left?.load);
   const model = buildModel({
     repo,
     workflow: env.GITHUB_WORKFLOW ?? '',
