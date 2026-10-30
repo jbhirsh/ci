@@ -61,6 +61,19 @@ jobs:
           job: Check
           junit: reports/junit.xml
 
+  # Publishes this run's job reports and keeps the pull request's summary
+  # comment, called as the apps call it (job-reports.yml's header): the
+  # run's last job, from this checkout, so a change to it shows on its own
+  # PR. Not a required check; it never fails a run for a report.
+  reports:
+    needs: check
+    if: ${{ !cancelled() }}
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: write
+    uses: ./.github/workflows/job-reports.yml
+
   apps:
     name: Against ${{ matrix.app }}
     runs-on: ubuntu-latest

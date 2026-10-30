@@ -1,8 +1,9 @@
 // Publishes a workflow run's job reports (job-summary's report.html, one
 // per job, in the job-summary-<job> artifacts) to the repository's GitHub
 // Pages branch, `job-reports`, at runs/<run>/<job>/, where each run's
-// summary links. publish/action.yml runs it after the workflow finishes
-// (job-reports.yml), so a test job never needs write access.
+// summary links. publish/action.yml runs it at the end of the run
+// (job-reports.yml: its last job, or after it finishes), so a test job
+// never needs write access.
 //
 // The branch keeps only what Pages serves: reports from the last KEEP_DAYS
 // days, an index of them, and no history, as a branch gaining a few hundred
@@ -14,6 +15,8 @@
 // drop a run's reports.)
 //
 //   node publish.mjs   (env: RUN_ID, GITHUB_REPOSITORY, GH_TOKEN, KEEP_DAYS;
+//                       ARTIFACTS, the run's job-summary-* artifacts if
+//                       already downloaded, as inside the run itself;
 //                       REMOTE, a git remote in place of GitHub's, for tests)
 
 import { execFileSync } from 'node:child_process';
@@ -207,21 +210,27 @@ export function publish(env, run = realRun, now = Date.now()) {
   if (!repo || !/^\d+$/.test(runId)) throw new Error('GITHUB_REPOSITORY and RUN_ID are needed');
   const work = mkdtempSync(path.join(tmpdir(), 'job-reports-'));
   try {
-    const downloaded = path.join(work, 'artifacts');
-    mkdirSync(downloaded);
+    // Inside the run itself, its jobs' artifacts are already downloaded
+    // (actions/download-artifact into ARTIFACTS); after it, gh fetches them.
+    const downloaded = env.ARTIFACTS || path.join(work, 'artifacts');
     try {
-      run([
-        'gh',
-        'run',
-        'download',
-        runId,
-        '--repo',
-        repo,
-        '--pattern',
-        'job-summary-*',
-        '--dir',
-        downloaded,
-      ]);
+      if (env.ARTIFACTS) {
+        if (!readdirSync(downloaded).length) throw new Error('none');
+      } else {
+        mkdirSync(downloaded);
+        run([
+          'gh',
+          'run',
+          'download',
+          runId,
+          '--repo',
+          repo,
+          '--pattern',
+          'job-summary-*',
+          '--dir',
+          downloaded,
+        ]);
+      }
     } catch {
       return `Run ${runId} has no job reports.`;
     }
