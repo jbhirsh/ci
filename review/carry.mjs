@@ -25,9 +25,11 @@
 // compared with what git says, never run.
 //
 // The record is void (everything is read) when any of these changed since:
-// prompt.md, followup.md, the app's review settings and guide, the app's
-// CLAUDE.md on the base branch, or the base branch's name. Its `context` is
-// a hash of them all.
+// prompt.md, followup.md, the shared Claude rules the prompts point at
+// (claude-rules/CLAUDE.md, read from this checkout of jbhirsh/ci, so
+// renaming it fails the review until this follows), the
+// app's review settings and guide, the app's CLAUDE.md on the base branch,
+// or the base branch's name. Its `context` is a hash of them all.
 //
 // CLI, run from the app's checkout:
 //   `node carry.mjs plan`  reads RECORD (the restored record, if any) and
@@ -123,13 +125,13 @@ export function patchId(file, { root, base }) {
  * A hash of everything that decides what a review looks for; a record made
  * under another is void.
  *
- * @param {{ prompt: string, followup: string, settings: unknown, claudeMd: string | null, base: string }} parts
+ * @param {{ prompt: string, followup: string, rules: string, settings: unknown, claudeMd: string | null, base: string }} parts
  * @returns {string}
  */
 export function contextHash(parts) {
-  const { prompt, followup, settings, claudeMd, base } = parts;
+  const { prompt, followup, rules, settings, claudeMd, base } = parts;
   return createHash('sha256')
-    .update(JSON.stringify([RECORD_VERSION, prompt, followup, settings, claudeMd, base]))
+    .update(JSON.stringify([RECORD_VERSION, prompt, followup, rules, settings, claudeMd, base]))
     .digest('hex');
 }
 
@@ -260,7 +262,7 @@ function readOrNull(file) {
 }
 
 /**
- * The context of this run: the prompts, the app's settings and CLAUDE.md
+ * The context of this run: the prompts, the shared rules, the app's settings and CLAUDE.md
  * as the base branch holds them, and the base's name.
  *
  * @param {{ root: string, ref?: string, base: string }} where
@@ -270,6 +272,7 @@ export function currentContext({ root, ref, base }) {
   return contextHash({
     prompt: readFileSync(path.join(HERE, 'prompt.md'), 'utf8'),
     followup: readFileSync(path.join(HERE, 'followup.md'), 'utf8'),
+    rules: readFileSync(path.join(HERE, '..', 'claude-rules', 'CLAUDE.md'), 'utf8'),
     settings: reviewSettings({ root, ref }),
     claudeMd: readAppFile('CLAUDE.md', { root, ref }),
     base,
