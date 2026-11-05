@@ -1,9 +1,11 @@
 name: Visual baselines, rewrite
 description: >-
   Rewrites the visual regression's baselines on this Linux runner, the
-  machine they must match, and commits them to the branch the workflow ran
-  on (rewrite.mjs's header says how): for an app whose own command writes
-  them, Playwright's --update-snapshots in BoardGames and fog-and-frontier.
+  machine they must match, and commits to the branch the workflow ran on
+  the ones that really changed, the new ones, and the deletion of any no
+  test takes (rewrite.mjs's header says how): for an app whose own command
+  writes them, Playwright's --update-snapshots in BoardGames and
+  fog-and-frontier.
   The only step of the app's by-hand visual-baselines.yml after its
   checkout; the job needs contents write. The Actions token's push starts no
   workflow, so push again afterwards for the PR's checks to run on the new

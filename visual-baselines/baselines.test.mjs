@@ -1,8 +1,16 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { branchOf, commit, knownFiles, matchingFolders, runIn, wipe } from './baselines.mjs';
+import {
+  branchOf,
+  commit,
+  knownFiles,
+  matchingFolders,
+  restoreRewritten,
+  runIn,
+  wipe,
+} from './baselines.mjs';
 import { repo } from './test-repo.mjs';
 
 describe('matchingFolders', () => {
@@ -34,6 +42,29 @@ describe('knownFiles, wipe and commit', () => {
     mkdirSync(path.join(root, 'tmp'));
     writeFileSync(path.join(root, 'tmp/y'), '');
     expect(knownFiles(runIn(root)).sort()).toEqual(['.gitignore', 'a/x.png', 'new.txt']);
+  });
+
+  it('puts back the committed version of each baseline written again, leaving new and deleted ones', () => {
+    const { root, git } = repo({
+      'e2e/a-snapshots/noise.png': 'noise',
+      'e2e/a-snapshots/gone.png': 'gone',
+      'e2e/a-snapshots/same.png': 'same',
+      'e2e/a.spec.ts': '',
+    });
+    const run = runIn(root);
+    const at = (/** @type {string} */ f) => path.join(root, f);
+    writeFileSync(at('e2e/a-snapshots/noise.png'), 'noise, a pixel off');
+    rmSync(at('e2e/a-snapshots/gone.png'));
+    writeFileSync(at('e2e/a-snapshots/new.png'), 'new');
+    writeFileSync(at('e2e/a.spec.ts'), 'changed');
+    expect(restoreRewritten(['e2e/*-snapshots'], run)).toEqual(['e2e/a-snapshots/noise.png']);
+    expect(readFileSync(at('e2e/a-snapshots/noise.png'), 'utf8')).toBe('noise');
+    expect(git('status', '--porcelain').trimEnd().split('\n').sort()).toEqual([
+      ' D e2e/a-snapshots/gone.png',
+      ' M e2e/a.spec.ts',
+      '?? e2e/a-snapshots/new.png',
+    ]);
+    expect(restoreRewritten(['nothing'], run)).toEqual([]);
   });
 
   it('wipes the baselines folders and commits the rewrite with a body', () => {
