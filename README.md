@@ -1,32 +1,43 @@
 # ci
 
 Shared CI tooling for [fog-and-frontier](https://github.com/jbhirsh/fog-and-frontier),
-[sift](https://github.com/jbhirsh/sift) and [BoardGames](https://github.com/jbhirsh/BoardGames).
+[sift](https://github.com/jbhirsh/sift) and [BoardGames](https://github.com/jbhirsh/BoardGames):
+one place for the checks, reviews and bots all three run, so a fix or a new check lands in
+every app at once.
 
-The apps follow `main`: each app's workflow keeps its own job (so its required
-check keeps its name) and calls a composite action here at `@main`, so a change
-merged here reaches all three on their next run, with no PR in any of them.
-Every PR here is therefore tested against all three apps before it can merge
-(`.github/workflows/ci.yml`).
+## How it works
 
-Each directory is one tool; its `action.yml` and module headers say what it
-does and what it reads from the app's `.github/ci.json`. This file is only a
-map; the documentation lives with the code.
+The apps follow `main`. Each app's workflow keeps its own job, so its required check keeps its
+name, and calls a composite action here at `@main`; a change merged here reaches all three on
+their next run, with no PR in any of them. That's why every PR here is tested against all
+three apps, as their `main` stands, before it can merge. Each tool reads its settings from the
+app's `.github/ci.json`, one key per tool, so the apps share the code and keep their own
+choices.
 
-| Directory             | What                                                                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `lib/`                | what every tool shares: the app's checkout, packages and settings; Actions outputs                                                                     |
-| `mutation/`           | Stryker on the lines a PR changed, and the monthly sweep (`.github/workflows/mutation-sweep.yml`)                                                      |
-| `commits/`            | the commit-message check                                                                                                                               |
-| `pins/`               | a version pinned (package.json, overrides, Dependabot ignores, actions, images, tools) needs a reason beside it                                        |
-| `visuals/`            | `PR visuals`: a UI change needs pictures in its description                                                                                            |
-| `audit/`              | the weekly audit (`.github/workflows/audit.yml`): knip, jscpd, lychee, the dependency graph, one tracking issue per finding                            |
-| `readme-screenshots/` | the README screenshot bot's comparison and its one PR                                                                                                  |
-| `visual-baselines/`   | visual regression's baselines: rewriting them by hand (`rewrite/` on the runner, `from-run/` from a CI run's screenshots) and comparing (`compare/`)   |
-| `dependabot-merge/`   | auto-merge for Dependabot's npm PRs, once each: a step of `autofix/` in the apps, this repo's own workflow here                                        |
-| `job-summary/`        | a job's summary, its report on Pages and a PR comment (`job-reports.yml`): what failed, got slower or flaky lately; fed by `note/`, `sample-load/`     |
-| `gitleaks/`           | `Secret scan`                                                                                                                                          |
-| `semgrep/`            | `SAST scan`                                                                                                                                            |
-| `gif/`                | before/after PR GIFs: the web recorder for fog and BoardGames, sift's videos, publishing to `screenshots`                                              |
-| `review/`             | `Claude Review`: the AI review, its check that every changed file was read, and carrying unchanged files over between pushes                           |
-| `autofix/`            | Claude autofix on bots' PRs: CI failures and review threads, once every run on the head has finished; `check-triggers` keeps its trigger list complete |
+## What it gives the apps
+
+- **AI review and repair.** Claude Review reads every changed file of every PR and checks it
+  against the app's conventions (`review/`); Claude autofix fixes CI failures and review
+  threads on bots' PRs (`autofix/`). Both run on [Claude Code](https://claude.com/claude-code)
+  through `anthropics/claude-code-action`.
+- **Tests that test the tests.** Mutation testing with [StrykerJS](https://stryker-mutator.io)
+  on the lines a PR changed, and a monthly sweep of everything (`mutation/`): a test that
+  passes whatever the code does fails here.
+- **Gates no linter has.** Commit messages (`commits/`), version pins without a reason
+  (`pins/`), UI changes without pictures (`visuals/`), secrets ([gitleaks](https://gitleaks.io),
+  `gitleaks/`) and static analysis ([Semgrep](https://semgrep.dev), `semgrep/`).
+- **Pictures of every change.** Before/after GIFs for a PR (`gif/`), visual-regression
+  baselines rewritten from CI's own screenshots (`visual-baselines/`), and README screenshots
+  that refresh themselves (`readme-screenshots/`).
+- **Reports that remember.** Each job's summary, a report page on GitHub Pages and one PR
+  comment, comparing the run with recent ones to show what got slower or flaky
+  (`job-summary/`).
+- **Upkeep on autopilot.** A weekly audit of dead code, duplication and broken links that
+  keeps one issue per finding (`audit/`), Dependabot PRs that merge themselves once green
+  (`dependabot-merge/`), and the shared Claude rules every repo here follows, kept here
+  once and loaded by every Claude session, in every repo (`claude-rules/`).
+
+Everything is plain JavaScript on Node 24 with no runtime dependencies: a tool runs from the
+app's checkout and uses the app's own packages, so it tests with the versions the app ships.
+
+Working on it: `CONTRIBUTING.md`.
