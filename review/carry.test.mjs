@@ -260,6 +260,7 @@ describe('the context', () => {
   const parts = {
     prompt: 'p',
     followup: 'f',
+    rules: 'r',
     settings: { instructions: 'g.md', guide: 'G', skip: [] },
     claudeMd: '# app',
     base: 'main',
@@ -268,6 +269,7 @@ describe('the context', () => {
   it.each([
     ['the prompt', { prompt: 'p2' }],
     ['the follow-up prompt', { followup: 'f2' }],
+    ['the shared Claude rules', { rules: 'r2' }],
     ["the app's instructions", { settings: { ...parts.settings, guide: 'G2' } }],
     ["the app's CLAUDE.md", { claudeMd: '# app, edited' }],
     ['the base branch', { base: 'develop' }],

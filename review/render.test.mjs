@@ -59,6 +59,10 @@ describe('renderPrompt', () => {
     expect(prompt).toContain('Lockfiles, images and fonts may\n   be skimmed');
     expect(prompt).toContain('names no review guide');
   });
+  it('points the review at the shared Claude rules, which a file read of CLAUDE.md misses', () => {
+    expect(renderPrompt('review', none, run)).toContain('SHARED_CI/claude-rules/CLAUDE.md');
+    expect(renderPrompt('followup', none, run)).toContain(`${CI_DIR}/claude-rules/CLAUDE.md`);
+  });
   it('lists the unread files in the follow-up', () => {
     const prompt = renderPrompt('followup', none, { ...run, unread: ['a.ts', 'b c.ts'] });
     expect(prompt).toContain('diffs:\n  - a.ts\n  - b c.ts\n');
