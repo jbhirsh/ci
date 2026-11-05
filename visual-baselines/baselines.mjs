@@ -1,7 +1,9 @@
 // The baselines folders in the app's checkout (settings.mjs: `folders`), and
 // what a rewrite does with them: empties them before fresh baselines are
-// written, so one no test takes any more goes, then commits whatever changed
-// in them to the branch the rewrite ran on. The folders are found from the
+// written, so one no test takes any more goes, puts back the committed
+// version of each written again (for the app's command to compare and
+// rewrite only if it really changed), then commits whatever changed in them
+// to the branch the rewrite ran on. The folders are found from the
 // files git knows (tracked, or new and not ignored), so a folder that's gone
 // still has its deletions staged.
 
@@ -87,6 +89,24 @@ export function wipe(root, globs, run) {
   const folders = matchingFolders(knownFiles(run), globs);
   for (const folder of folders) rmSync(path.join(root, folder), { recursive: true, force: true });
   return folders;
+}
+
+/**
+ * Puts back the committed version of each baseline the working tree holds
+ * changed (written again, with other bytes), returning their paths. A new
+ * baseline, and one deleted, stay as they are.
+ *
+ * @param {string[]} globs
+ * @param {Run} run
+ */
+export function restoreRewritten(globs, run) {
+  const folders = matchingFolders(knownFiles(run), globs);
+  if (folders.length === 0) return [];
+  const rewritten = run('git', ['diff', '--name-only', '--diff-filter=M', '-z', '--', ...folders])
+    .split('\0')
+    .filter(Boolean);
+  if (rewritten.length > 0) run('git', ['checkout', 'HEAD', '--', ...rewritten]);
+  return rewritten;
 }
 
 /**
