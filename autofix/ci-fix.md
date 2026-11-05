@@ -74,8 +74,10 @@ as B or C. If you can't get everything green, don't push; comment instead.
 ## 5. Commit and push
 
 One commit, following the repo's CLAUDE.md: an imperative subject of 72
-characters or fewer, a body that explains why, and the `Co-Authored-By:`
-trailer it asks for.
+characters or fewer that names what it changes ("Fix the date tests for
+Vitest's new fake timers", never a bare "Fix tests" or "Fix lint", which
+CI's commit check fails), a body that explains why, and the
+`Co-Authored-By:` trailer it asks for.
 
 Push with `git push origin HEAD:{{branch}}`: a plain push on top of
 Dependabot's commit, never a force push, never `--no-verify`. The push goes
