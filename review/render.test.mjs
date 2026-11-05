@@ -59,6 +59,13 @@ describe('renderPrompt', () => {
     expect(prompt).toContain('Lockfiles, images and fonts may\n   be skimmed');
     expect(prompt).toContain('names no review guide');
   });
+  it("asks the review to flag commits that undo or patch the PR's earlier ones", () => {
+    const prompt = renderPrompt('review', none, run);
+    expect(prompt).toContain(
+      "git log --reverse --no-merges --format='%h %an %s' origin/main..HEAD",
+    );
+    expect(prompt).toContain('reverts or replaces what an earlier commit in the same PR added');
+  });
   it('points the review at the shared Claude rules, which a file read of CLAUDE.md misses', () => {
     expect(renderPrompt('review', none, run)).toContain('SHARED_CI/claude-rules/CLAUDE.md');
     expect(renderPrompt('followup', none, run)).toContain(`${CI_DIR}/claude-rules/CLAUDE.md`);

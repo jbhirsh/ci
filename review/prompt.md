@@ -59,8 +59,8 @@ inline suppression comments), the shape of JSDoc (eslint-plugin-jsdoc: a
 `@param` naming no parameter, an unknown or malformed tag, a type in braces
 in TypeScript), types and `any` (the type-check and type coverage), import
 layering (dependency-cruiser), the coverage threshold, mutation testing,
-generated-code drift, commit messages (jbhirsh/ci's `commits/check.mjs`;
-don't comment on them at all), secrets (gitleaks), static analysis
+generated-code drift, the wording of commit messages (jbhirsh/ci's
+`commits/check.mjs`; don't comment on it at all), secrets (gitleaks), static analysis
 (Semgrep), known vulnerabilities (`npm audit`), whether a UI change has any picture at all
 (PR visuals), end-to-end and visual regression tests, and the weekly sweep
 for dead code, duplicates and broken links (lychee: every Markdown link,
@@ -105,6 +105,21 @@ Treat violations of these as review issues and flag them inline:
 - **Scope.** The PR should do one thing. Flag unrelated refactors, or new
   abstractions the task doesn't need. Don't add error handling or fallbacks
   for scenarios that can't happen; validate only at system boundaries.
+- **A branch holds only its final design.** List the PR's commits
+  (`git log --reverse --no-merges --format='%h %an %s' origin/{{base}}..HEAD`,
+  and `git show --stat <sha>` for any that look related) and flag a commit
+  that reverts or replaces what an earlier commit in the same PR added, or
+  fixes a mistake in it: a design tried and dropped, a fix on top, a
+  revert. Each belongs folded into the commit it changes, so every commit
+  is one the PR keeps. A later commit that builds on an earlier one as its
+  own step is fine. Anchor the comment to a line of the final diff that
+  both commits touch, or to the PR's first changed line when there's none
+  (the dropped work left nothing, or only binary files), and name both
+  commits. Bots' commits are exempt, as committing on top is how they work:
+  any commit by `github-actions[bot]` or `claude[bot]` (visual baselines,
+  autofix), and every commit of a bot's PR, one whose author is
+  `dependabot[bot]` or whose head branch starts with `dependabot/` or
+  `bot/`.
 - **Scripts that commit** (workflows, bots) stage files by name, never
   `git add -A` or `git add .`.
 - DO NOT flag floating GitHub Action version tags (e.g. `@v7`, `@v1`, a
