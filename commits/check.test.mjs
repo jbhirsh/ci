@@ -57,14 +57,75 @@ describe('problems', () => {
     ]);
   });
 
-  it.each(['fixup! Fix', 'squash! Fix', 'amend! Fix', 'WIP', 'wip: more', 'Oops.', 'oops'])(
-    'asks to squash "%s"',
-    (subject) => {
-      expect(problems(commit(`${subject}\n\nBody.`))).toContain(
-        'squash this into the commit it patches.',
-      );
-    },
-  );
+  it.each([
+    'fixup! Fix',
+    'squash! Fix',
+    'amend! Fix',
+    'WIP',
+    'wip: more',
+    'Oops.',
+    'oops',
+    'Address review',
+    'Addressed review comments',
+    'Apply suggestions from code review',
+    'Respond to PR feedback',
+    'Review feedback',
+    'Code review fixes',
+    'PR comments',
+    'Address Claude Review comments',
+    'Addressing review comments',
+    'Address review nits',
+    'Fixes from review',
+    'Apply suggestion from @jbhirsh',
+  ])('asks to squash "%s"', (subject) => {
+    expect(problems(commit(`${subject}\n\nBody.`))).toContain(
+      'squash this into the commit it patches.',
+    );
+  });
+
+  it.each([
+    'Fix typo',
+    'fix typos.',
+    'Fix lint',
+    'Fixed lint errors',
+    'Fix formatting',
+    'Fix the tests',
+    'Fix CI',
+    'Fixes build',
+    'Fix types',
+    'Fix type errors',
+    'Fix typecheck',
+    'Fix lint warnings',
+    'Fix spelling',
+    'Fix prettier',
+  ])('asks "%s" to say what it changes, since it may be a PR\'s only commit', (subject) => {
+    expect(problems(commit(`${subject}\n\nBody.`))).toEqual([
+      'say what it changes, or squash it into the commit it patches.',
+    ]);
+  });
+
+  it.each([
+    'Fix typo in the README',
+    'Fix the lint rule for Tailwind classes',
+    'Fix tests that read the real clock',
+    'Review the queue before accepting suggestions',
+    'Add a review step to the CI job',
+    'Format dates in the user locale',
+    'Address the cache miss on cold start',
+    'Handle comments in the parser',
+    'Handle feedback form submissions',
+    'Resolve comments on the trip page',
+    'Respond to feedback form errors',
+    'Address the review queue',
+    'Review feedback form',
+    'Fix CI: pin node',
+    'Fix tests for Node 24',
+    'Fix types in the score pads',
+    'Apply the review queue changes',
+    'Address review comments in the parser docs',
+  ])('passes "%s", which names its change', (subject) => {
+    expect(problems(commit(`${subject}\n\nBody.`))).toEqual([]);
+  });
 
   it('leaves subjects that only start like one', () => {
     expect(problems(commit('Wipe the cache\n\nBody.'))).toEqual([]);

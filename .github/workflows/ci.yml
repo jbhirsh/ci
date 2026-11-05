@@ -1,9 +1,10 @@
 # Every change here reaches all three apps on their next run, with no PR in
 # any of them (they call these tools at @main). So a PR here has to pass two
 # gates before it merges:
-#   - Check: this repo's own lint (with lint/actions.mjs over every
-#     action.yml, which actionlint never reads), formatting, types, tests
-#     (80% lines per file) and actionlint over its workflows.
+#   - Check: this repo's own commit messages (commits/, as the apps run
+#     it), lint (with lint/actions.mjs over every action.yml, which
+#     actionlint never reads), formatting, types, tests (80% lines per
+#     file) and actionlint over its workflows.
 #   - Against <app>: the app's calls into this repo checked against what
 #     they call, and each tool's self-test (`<tool>/selftest.mjs`) run
 #     against fog-and-frontier, sift and BoardGames as their `main` stands,
@@ -35,8 +36,13 @@ jobs:
       contents: read
       # The job summary reads this job's steps and earlier runs.
       actions: read
+      # The commit-message check reads the PR's commits.
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
+      - name: Commit messages (commits/, as the apps run it)
+        if: github.event_name == 'pull_request'
+        uses: ./commits
       - uses: actions/setup-node@v7
         with:
           node-version: 24

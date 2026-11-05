@@ -1,7 +1,7 @@
 name: Commit messages
 description: >-
   Fails a pull request when one of its commits breaks a commit-message rule
-  (subject length, a body, no fixup or merge commits). The rules and why are
+  (subject length, a body, no fixup, review-reply or merge commits). The rules and why are
   in check.mjs's header. Runs as a step of the app's CI job, before or after
   its checkout: it reads the commits from the API, so a shallow checkout is
   enough.

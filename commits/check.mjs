@@ -1,13 +1,18 @@
-// Fails a PR when one of its commits breaks a commit-message rule the apps
-// share (each app's CLAUDE.md, "Commit hygiene") that a script can judge:
+// Fails a PR when one of its commits breaks a commit-message rule every repo
+// here shares (claude-rules/CLAUDE.md, "Commits") that a script can judge:
 //   - the subject is at most 72 characters;
 //   - a blank line and a body follow the subject (trailers alone don't
 //     count as a body);
 //   - no fixup!/squash!/amend! commits or "wip"/"oops" subjects, which
-//     belong squashed into the commit they patch;
+//     belong squashed into the commit they patch; nor a subject answering
+//     review ("Address review", "Apply suggestions from code review",
+//     "Review feedback"), nor a bare patch-up that names nothing it
+//     changes ("Fix typo", "Fix lint", "Fix tests", "Fix CI"). A subject
+//     that names its change ("Fix typo in the README") passes: it can be a
+//     PR's whole point;
 //   - no merge commits: history is linear (rebase, not merge).
-// Whether the subject is imperative and the body explains why stays with
-// Claude Review, as does a typo fix that should have been squashed.
+// Whether the subject is imperative and the body explains why is left to
+// the author (claude-rules/CLAUDE.md, "Commits"): no script can judge it.
 // Dependabot's commits are exempt (their format is Dependabot's);
 // claude-autofix's commits are checked like any other.
 //
@@ -29,6 +34,17 @@ import { pathToFileURL } from 'node:url';
  */
 
 const SQUASH_ME = /^((fixup|squash|amend)!|(wip|oops)([^a-z]|$))/i;
+/**
+ * A subject that is only a reply to review, as a whole subject ("Address
+ * review", "Apply suggestions from code review", "Review feedback"): the
+ * change belongs in the commit reviewed. Anchored at both ends, so a subject
+ * that goes on to name something ("Respond to feedback form errors") passes.
+ */
+const REVIEW_REPLY =
+  /^((address(es|ed|ing)?|appl(y|ies|ied|ying)|respond(s|ed|ing)? to) (the |all )?((code|pr|claude|copilot) )?(review|feedback|suggestions?|comments?|nits?)( (feedback|comments?|suggestions?|nits?))?( from (code )?review)?|appl(y|ied) suggestions? from @\S+|fix(es)? from (code )?review|((code|pr|claude|copilot) )?review (feedback|comments|fixes|changes|nits)|pr (feedback|comments))\.?$/i;
+/** A patch-up that is the whole subject: "Fix typo", "Fix lint", "Fixed tests." */
+const BARE_PATCH_UP =
+  /^(fix(es|ed)?|correct(s|ed)?)( (a|the|some|more))? (typos?|spelling|lint(ing)?( errors| warnings)?|warnings|format(ting)?|prettier|types?|type errors|typecheck|tests?|ci|build)\.?$/i;
 const TRAILER = /^[A-Za-z][A-Za-z-]*: /;
 const KNOWN_TRAILER = /^(co-authored-by|signed-off-by|claude-session): /;
 
@@ -71,7 +87,11 @@ export function problems(commit) {
   // Characters, not UTF-16 units: an emoji is one.
   const length = [...subject].length;
   if (length > 72) found.push(`subject is ${length} characters; the limit is 72.`);
-  if (SQUASH_ME.test(subject)) found.push('squash this into the commit it patches.');
+  if (SQUASH_ME.test(subject) || REVIEW_REPLY.test(subject)) {
+    found.push('squash this into the commit it patches.');
+  } else if (BARE_PATCH_UP.test(subject)) {
+    found.push('say what it changes, or squash it into the commit it patches.');
+  }
   if (second !== '') found.push('the subject needs a blank line after it.');
   if (body(commit.message) === '') {
     found.push('no body. Add one explaining why the change is needed.');
