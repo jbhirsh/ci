@@ -13,14 +13,20 @@ Every new feature request, in this order:
    Acceptance criteria, linking related issues.
 2. **Plan.** Add the implementation plan to the issue: the approach and why, the files and
    modules it touches, new settings and their defaults, what it could break and how that's
-   avoided, and the tests.
-3. **Plan review.** Spawn a reviewer agent on the plan, briefed with the issue and these
-   rules but not your reasoning, so its read is independent. Fix what it finds, and note in
-   the issue what changed.
+   avoided, and the tests. For a change anyone will see (a new or changed screen, page, or
+   state of one), the plan adds mockups of each screen and state it touches, linked from the
+   issue. Mock up phone size first where the app is phone first, then each wider size it
+   looks different at, in both themes where the app has two. Make them from the app's own
+   styles and components, so they show what will ship rather than a sketch: a throwaway
+   build of the screen in a scratch worktree, never committed, screenshotted and hosted
+   where the app hosts its PR pictures.
+3. **Plan review.** Spawn a reviewer agent on the plan, briefed with the issue (its mockups
+   too) and these rules but not your reasoning, so its read is independent. Fix what it
+   finds, and note in the issue what changed.
 4. **Approval.** Show the user the reviewed plan (what the review changed, and the issue's
-   link) and wait for their approval before writing code.
-5. **Implement** against the approved plan. If the plan changes, update the issue and tell
-   the user.
+   link) with its mockups, and wait for their approval of both before writing code.
+5. **Implement** against the approved plan. If the plan or its mockups change, update the
+   issue and tell the user.
 
 Bug fixes and chores skip the ticket and the plan. Every PR still gets the review below.
 
