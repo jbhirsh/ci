@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -193,6 +194,7 @@ describe('parseVideoArgs', () => {
       ),
     ).toEqual({ pr: 42, repo: 'a-b/c.d', sideBySide: true, width: 300, fps: 12, noBefore: false });
     expect(parseVideoArgs(['7', '--no-before'], defaults).noBefore).toBe(true);
+    expect(parseVideoArgs(['7', '--out', 'pr-gif'], defaults).out).toBe('pr-gif');
   });
 
   it.each([
@@ -205,6 +207,8 @@ describe('parseVideoArgs', () => {
     [['1', '--repo', 'no slash'], '--repo needs owner/name'],
     [['1', '--repo', 'a/b; rm -rf /'], '--repo needs owner/name'],
     [['1', '--side-by-side', '--no-before'], '--side-by-side needs a before'],
+    [['1', '--out'], '--out needs a folder'],
+    [['1', '--out', '--no-before'], '--out needs a folder'],
   ])('turns away %j', (argv, why) => {
     expect(() => parseVideoArgs(argv, defaults)).toThrow(why);
   });
@@ -248,6 +252,23 @@ describe('main', () => {
     expect(table).toContain(
       '| new-sheet | (none) | <img src="https://raw.githubusercontent.com/jbhirsh/sift/cafe/7/new-sheet-after.gif" width="260"> |',
     );
+  });
+
+  it('leaves the GIFs in --out, one folder a scenario, and publishes nothing', async () => {
+    const out = path.join(mkdtempSync(path.join(tmpdir(), 'videos-out-')), 'pr-gif');
+    await main(['7', '--side-by-side', '--out', out], { root: '/app', settings });
+    expect(world.asked.some(([c]) => c === 'publish')).toBe(false);
+    expect(asked('curl')).toEqual([]);
+    expect(stdout).not.toHaveBeenCalled();
+    expect(readdirSync(out).sort()).toEqual(['new-sheet', 'swipe']);
+    expect(readdirSync(path.join(out, 'swipe')).sort()).toEqual([
+      'swipe-after.gif',
+      'swipe-before.gif',
+      'swipe-side-by-side.gif',
+    ]);
+    expect(readdirSync(path.join(out, 'new-sheet'))).toEqual(['new-sheet-after.gif']);
+    expect(readFileSync(path.join(out, 'swipe', 'swipe-after.gif'), 'utf8')).toBe('GIF89a');
+    expect(logged()).toContain(`GIFs for 2 scenario(s) left in ${out}/, nothing published`);
   });
 
   it('skips the before for a new screen, asks again without run details, warns of a link that fails', async () => {

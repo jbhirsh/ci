@@ -1,0 +1,49 @@
+name: PR GIFs, attach
+description: >-
+  Attaches the GIFs the record job left in the run's pr-gif artifact to the
+  PR: each scenario's table goes into its description between markers,
+  and gh uploads each GIF and links it there, labelled "GIF:" for PR
+  visuals; then each link is checked until it answers (gif/workflow.mjs's
+  header says how). The attach job of pr-gif.yml. It runs none of the PR's
+  code, so it alone holds the token.
+
+inputs:
+  pr:
+    description: The PR's number.
+    required: true
+  token:
+    description: >-
+      A person's token that may attach files and edit the PR, such as the
+      apps' BOT_PR_TOKEN (fine-grained: Contents and Pull requests read and
+      write on the app). GitHub refuses the Actions token for attachments.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - uses: actions/download-artifact@v8
+      with:
+        name: pr-gif
+        path: pr-gif
+
+    # `--attach` came in gh 2.99 (lib/gh.mjs). The runner's image installs
+    # gh from GitHub's own apt source, so an image whose gh lags upgrades
+    # from there, signed, rather than from a download.
+    - name: A gh that can attach
+      shell: bash
+      run: |
+        node "$GITHUB_ACTION_PATH/../workflow.mjs" gh || {
+          sudo apt-get update -q && sudo apt-get install -y -q --only-upgrade gh
+          node "$GITHUB_ACTION_PATH/../workflow.mjs" gh
+        }
+
+    - name: Attach the GIFs to the PR
+      shell: bash
+      env:
+        PR: ${{ inputs.pr }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: node "$GITHUB_ACTION_PATH/../workflow.mjs" attach
