@@ -24,10 +24,14 @@
 #     unresolved review thread Claude Review or the owner opened, as fixup
 #     commits folded into the commits they fix (review-fix.md), and resolve
 #     those threads. One round per head, two per PR.
+# A fixer whose Claude step crashed before taking a turn (a timeout setting
+# it up) is tried once more in the same job, after a wait; one that ran and
+# failed isn't, but says so on the PR (crash.mjs).
 # Before either, on a Dependabot npm bump, it turns auto-merge on, once
 # per PR (../dependabot-merge/enable.mjs), whatever its labels say: a run
 # here puts no check on the PR, where a workflow of its own would.
-# Nothing sleeps or polls: the completions are the clock.
+# Nothing polls: the completions are the clock. The one wait is before a
+# crashed fixer's retry, when no completion is left to wake a later run.
 # Each fixer proves its fix before pushing with the app's own commands, the
 # steps of its CI that can run here (`autofix` in `.github/ci.json`,
 # settings.mjs and commands.mjs), read from the default branch. A person's
@@ -265,7 +269,10 @@ runs:
       run: node "$GITHUB_ACTION_PATH/render.mjs" ci-fix
 
     - uses: anthropics/claude-code-action@v1
+      id: ci-fix
       if: steps.ci.outputs.fix == 'true'
+      # A failure is read by the steps below (crash.mjs), which fail the job.
+      continue-on-error: true
       with:
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
@@ -276,6 +283,49 @@ runs:
         claude_args: |
           --max-turns 80
           --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
+
+    # The marker went up before Claude started, so a fixer that dies before
+    # doing anything (a timeout setting the step up) would spend the head's
+    # one attempt with nothing to show and nothing left to wake another run.
+    # crash.mjs tells that apart from a fixer that ran and failed: only a
+    # crash is tried again, once, after a wait; a run that failed was the
+    # attempt. A push before the failure starts new runs on the new head.
+    - name: Decide whether to retry the CI fixer
+      id: ci-retry
+      if: steps.ci-fix.outcome == 'failure'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        PR: ${{ steps.pr.outputs.number }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        EXECUTION_FILE: ${{ steps.ci-fix.outputs.execution_file }}
+      run: node "$GITHUB_ACTION_PATH/crash.mjs" retry
+
+    - uses: anthropics/claude-code-action@v1
+      id: ci-fix-again
+      if: steps.ci-retry.outputs.retry == 'true'
+      continue-on-error: true
+      with:
+        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        allowed_bots: "dependabot[bot],claude[bot]"
+        prompt: ${{ steps.ci-prompt.outputs.prompt }}
+        claude_args: |
+          --max-turns 80
+          --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
+
+    # The last try failed without pushing: say so on the PR, and fail the
+    # job, which continue-on-error above would otherwise hide (crash.mjs).
+    - name: Report the CI fixer's failure
+      if: steps.ci-retry.outputs.report == 'true' || steps.ci-fix-again.outcome == 'failure'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        PR: ${{ steps.pr.outputs.number }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        EXECUTION_FILE: ${{ steps.ci-fix-again.outputs.execution_file || steps.ci-fix.outputs.execution_file }}
+      run: node "$GITHUB_ACTION_PATH/crash.mjs" report ci
 
     - name: Count unresolved threads
       # Runs on any listed workflow's completion and decides from the PR's
@@ -369,7 +419,10 @@ runs:
       run: node "$GITHUB_ACTION_PATH/render.mjs" review-fix
 
     - uses: anthropics/claude-code-action@v1
+      id: review-fix
       if: steps.threads.outputs.count != '' && steps.threads.outputs.count != '0'
+      # A failure is read by the steps below (crash.mjs), which fail the job.
+      continue-on-error: true
       with:
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
@@ -382,3 +435,40 @@ runs:
         claude_args: |
           --max-turns 80
           --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
+
+    # As for the CI fixer above: a crash is tried once more, a run that
+    # failed was the round, and the last failure is said on the PR.
+    - name: Decide whether to retry the review fixer
+      id: review-retry
+      if: steps.review-fix.outcome == 'failure'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        PR: ${{ steps.pr.outputs.number }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        EXECUTION_FILE: ${{ steps.review-fix.outputs.execution_file }}
+      run: node "$GITHUB_ACTION_PATH/crash.mjs" retry
+
+    - uses: anthropics/claude-code-action@v1
+      id: review-fix-again
+      if: steps.review-retry.outputs.retry == 'true'
+      continue-on-error: true
+      with:
+        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        allowed_bots: "dependabot[bot],claude[bot]"
+        prompt: ${{ steps.review-prompt.outputs.prompt }}
+        claude_args: |
+          --max-turns 80
+          --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
+
+    - name: Report the review fixer's failure
+      if: steps.review-retry.outputs.report == 'true' || steps.review-fix-again.outcome == 'failure'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        PR: ${{ steps.pr.outputs.number }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        EXECUTION_FILE: ${{ steps.review-fix-again.outputs.execution_file || steps.review-fix.outputs.execution_file }}
+      run: node "$GITHUB_ACTION_PATH/crash.mjs" report review
