@@ -23,8 +23,8 @@ choices.
 - **Tests that test the tests.** Mutation testing with [StrykerJS](https://stryker-mutator.io)
   on the lines a PR changed, and a monthly sweep of everything (`mutation/`): a test that
   passes whatever the code does fails here.
-- **Gates no linter has.** Commit messages (`commits/`), version pins without a reason
-  (`pins/`), UI changes without pictures (`visuals/`), secrets ([gitleaks](https://gitleaks.io),
+- **Gates no linter has.** Commit messages (`commits/`), version pins and type-coverage
+  ignores without a reason (`pins/`), UI changes without pictures (`visuals/`), secrets ([gitleaks](https://gitleaks.io),
   `gitleaks/`) and static analysis ([Semgrep](https://semgrep.dev), `semgrep/`).
 - **Pictures of every change.** Before/after GIFs for a PR (`gif/`), visual-regression
   baselines rewritten from CI's own screenshots (`visual-baselines/`), and README screenshots

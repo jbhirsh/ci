@@ -36,6 +36,15 @@
 //     place for a reason.
 // A reason is a few words saying why: a comment that only labels the
 // version (`# v2.9.0`, as Dependabot writes beside a commit) isn't one.
+//
+// A path type-coverage is told to ignore is held the same way: its types
+// stop counting toward the 100%, quietly, for as long as the glob stays.
+// The globs come from package.json: `typeCoverage.ignoreFiles`, and each
+// `--ignore-files <glob>` given to type-coverage in a script. Each needs a
+// reason in a top-level `"//typeCoverage"` list, one string per glob,
+// `"<glob>: <reason>"`, naming the glob exactly as the config writes it. An
+// entry for a glob nothing ignores any more fails too, so a reason doesn't
+// outlive what it explained.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -232,6 +241,154 @@ export function packageFindings(text, exempt = new Set()) {
       file: 'package.json',
       line: lineOfKey(text, name, from),
       message: `the override of ${name} has no reason: say why, and when to delete it, in "//overrides".`,
+    });
+  }
+  return findings;
+}
+
+/** @typedef {{ text: string, op: boolean }} Word a shell word, or (`op`) what ends a command */
+
+/**
+ * The words of a script as the shell splits them, quotes taken off:
+ * `'…'` literal, `"…"` with `\` escaping `"`, `\`, `$` and a backquote, and a
+ * bare `\` escaping the next character. `&&`, `||`, `|`, `;`, `&` and a
+ * newline come back as operators. Nothing is expanded.
+ *
+ * @param {string} script
+ * @returns {Word[]}
+ */
+function shellWords(script) {
+  /** @type {Word[]} */
+  const words = [];
+  let text = '';
+  let inWord = false;
+  const end = () => {
+    if (inWord) words.push({ text, op: false });
+    text = '';
+    inWord = false;
+  };
+  for (let i = 0; i < script.length; i += 1) {
+    const c = script[i] ?? '';
+    if (c === "'") {
+      const close = script.indexOf("'", i + 1);
+      const stop = close === -1 ? script.length : close;
+      text += script.slice(i + 1, stop);
+      inWord = true;
+      i = stop;
+    } else if (c === '"') {
+      inWord = true;
+      for (i += 1; i < script.length && script[i] !== '"'; i += 1) {
+        const next = script[i + 1] ?? '';
+        if (script[i] === '\\' && /["\\$`]/.test(next)) {
+          text += next;
+          i += 1;
+        } else text += script[i];
+      }
+    } else if (c === '\\') {
+      text += script[i + 1] ?? '';
+      inWord = true;
+      i += 1;
+    } else if (/[;&|\n]/.test(c)) {
+      end();
+      words.push({ text: c, op: true });
+      if ((c === '&' || c === '|') && script[i + 1] === c) i += 1;
+    } else if (/\s/.test(c)) {
+      end();
+    } else {
+      text += c;
+      inWord = true;
+    }
+  }
+  end();
+  return words;
+}
+
+/** A word that runs type-coverage: its bin, by name or path, maybe `@version`. */
+const TYPE_COVERAGE = /(?:^|\/)type-coverage(?:@[^/]*)?$/;
+
+/**
+ * The globs a script tells type-coverage to ignore: each `--ignore-files
+ * <glob>` (or `--ignore-files=<glob>`) in a command that runs it.
+ *
+ * @param {string} script
+ * @returns {string[]}
+ */
+export function ignoreFilesArgs(script) {
+  /** @type {string[]} */
+  const globs = [];
+  /** @type {string[][]} */
+  const commands = [[]];
+  for (const word of shellWords(script)) {
+    if (word.op) commands.push([]);
+    else commands.at(-1)?.push(word.text);
+  }
+  for (const words of commands) {
+    if (!words.some((word) => TYPE_COVERAGE.test(word))) continue;
+    for (let i = 0; i < words.length; i += 1) {
+      const word = words[i] ?? '';
+      if (word.startsWith('--ignore-files=')) {
+        globs.push(word.slice('--ignore-files='.length));
+      } else if (word === '--ignore-files') {
+        // The next word is the glob, and is consumed with it; an option
+        // there (`--ignore-files --strict`) names no glob.
+        const value = words[i + 1];
+        if (value !== undefined && !value.startsWith('--')) globs.push(value);
+        i += 1;
+      }
+    }
+  }
+  return globs;
+}
+
+/**
+ * The type-coverage ignores in package.json with no reason in
+ * `"//typeCoverage"`, and the reasons there for globs nothing ignores.
+ *
+ * @param {string} text the file
+ * @returns {Finding[]}
+ */
+export function typeCoverageFindings(text) {
+  const pkg = record(JSON.parse(text));
+  /** @type {Map<string, { line: number, where: string }>} */
+  const ignored = new Map();
+  const config = text.indexOf('"typeCoverage"');
+  for (const glob of notes(record(pkg.typeCoverage).ignoreFiles)) {
+    if (!ignored.has(glob)) {
+      ignored.set(glob, {
+        line: lineOfKey(text, 'ignoreFiles', config),
+        where: 'typeCoverage.ignoreFiles',
+      });
+    }
+  }
+  const scripts = text.indexOf('"scripts"');
+  for (const [name, script] of Object.entries(record(pkg.scripts))) {
+    if (typeof script !== 'string') continue;
+    for (const glob of ignoreFilesArgs(script)) {
+      if (!ignored.has(glob)) {
+        ignored.set(glob, { line: lineOfKey(text, name, scripts), where: `the ${name} script` });
+      }
+    }
+  }
+  const entries = notes(pkg['//typeCoverage']);
+  /** @type {Finding[]} */
+  const findings = [];
+  for (const [glob, { line, where }] of ignored) {
+    const reasons = entries.filter((entry) => entry.startsWith(`${glob}: `));
+    if (reasons.some((entry) => isReason(entry.slice(glob.length + 1)))) continue;
+    findings.push({
+      file: 'package.json',
+      line,
+      message: `type-coverage ignores ${glob} (${where}) with no reason: add "${glob}: <why its types needn't count>" to the "//typeCoverage" list.`,
+    });
+  }
+  const noteLine = lineOfKey(text, '//typeCoverage');
+  for (const entry of entries) {
+    if ([...ignored.keys()].some((glob) => entry.startsWith(`${glob}: `))) continue;
+    const named = entry.split(': ')[0] ?? entry;
+    findings.push({
+      file: 'package.json',
+      line: noteLine,
+      message: `"//typeCoverage" gives a reason for ${named}, which type-coverage doesn't ignore: delete it, or name the glob exactly as the config writes it.`,
     });
   }
   return findings;
@@ -451,6 +608,7 @@ export function findings(root) {
   if (existsSync(path.join(root, 'package.json'))) {
     const text = read('package.json');
     found.push(...packageFindings(text, expoManaged(root, record(JSON.parse(text)))));
+    found.push(...typeCoverageFindings(text));
   }
   for (const rel of ['.github/dependabot.yml', '.github/dependabot.yaml']) {
     if (existsSync(path.join(root, rel))) found.push(...dependabotFindings(read(rel), rel));
@@ -488,8 +646,8 @@ export function main(
   }
   log(
     found.length === 0
-      ? 'pins: nothing is pinned without a reason.'
-      : `pins: ${found.length} pinned without a reason (pins/check.mjs says what counts).`,
+      ? 'pins: nothing is pinned or ignored without a reason.'
+      : `pins: ${found.length} pinned or ignored without a reason (pins/check.mjs says what counts).`,
   );
   return found.length === 0 ? 0 : 1;
 }
