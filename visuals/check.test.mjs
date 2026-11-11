@@ -1,8 +1,20 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ADVICE, checkPrVisuals, report, settings, visibleText } from './check.mjs';
+import { settings as baselineSettings } from '../visual-baselines/settings.mjs';
+import {
+  DEFAULT_ADVICE,
+  SCENARIO_ADVICE,
+  baselinesShown,
+  checkPrVisuals,
+  loadBaselineSettings,
+  readEntries,
+  report,
+  settings,
+  visibleText,
+} from './check.mjs';
+import { goldenText } from './golden.mjs';
 
 // The three apps' settings, as their .github/ci.json give them.
 const FOG = settings({ ui: ['src/**/*.{tsx,css}'], notUi: ['**/*.test.tsx', 'src/test/**'] });
@@ -273,5 +285,163 @@ describe('the settings an app keeps', () => {
     );
     const { appConfig } = await import('../lib/app.mjs');
     expect(settings(appConfig('visuals', root)).ui).toEqual(['app/**']);
+  });
+});
+
+describe('with no fromBaselines', () => {
+  it("prints today's lines, byte for byte", () => {
+    const golden = readFileSync(new URL('./check.golden.txt', import.meta.url), 'utf8');
+    expect(goldenText()).toBe(golden);
+  });
+
+  it('refuses a setting that is not true or false', () => {
+    expect(() => settings({ fromBaselines: 'yes' })).toThrow(
+      'visuals.fromBaselines must be true or false',
+    );
+    expect(settings({ fromBaselines: false })).toEqual(settings({}));
+  });
+});
+
+describe('with fromBaselines', () => {
+  const s = settings({ fromBaselines: true });
+  const parsed = baselineSettings({
+    folders: ['e2e/*-snapshots'],
+    columns: [
+      { label: 'Phone', file: '{state}-visual-phone-webkit-linux.png' },
+      { label: 'Desktop', file: '{state}-visual-webkit-linux.png' },
+    ],
+  });
+  const baselines = { ...parsed, columns: parsed.columns ?? [] };
+  const files = ['src/components/SignInPage.tsx'];
+  /**
+   * The verdict for a UI change with these changed baselines and description.
+   *
+   * @param {import('../lib/baselines.mjs').FileEntry[]} changed
+   * @param {string} [body]
+   * @param {string} [state]
+   */
+  const verdict = (changed, body = '', state = 'open') =>
+    checkPrVisuals({
+      files,
+      body,
+      state,
+      baselines: baselinesShown(changed, baselines),
+      settings: s,
+    });
+  const phone = 'e2e/visual-phone.spec.ts-snapshots/sign-in-light-visual-phone-webkit-linux.png';
+
+  it('passes a UI change whose changed baselines land in a column', () => {
+    expect(verdict([{ filename: phone, status: 'modified' }])).toEqual({
+      ok: true,
+      reason: 'changed baselines show it',
+    });
+    expect(verdict([{ filename: phone, status: 'added' }]).ok).toBe(true);
+  });
+
+  it('passes one whose only changed baseline was renamed into a column', () => {
+    const renamed = { filename: phone, status: 'renamed', previous_filename: `${phone}.old.png` };
+    expect(verdict([renamed]).ok).toBe(true);
+  });
+
+  it('fails one whose only changed baselines are deleted or in no column', () => {
+    expect(verdict([{ filename: phone, status: 'removed' }]).ok).toBe(false);
+    expect(
+      verdict([
+        {
+          filename: 'e2e/visual-full.spec.ts-snapshots/sign-in-light-visual-firefox-linux.png',
+          status: 'modified',
+        },
+      ]).ok,
+    ).toBe(false);
+  });
+
+  it.each([
+    ['a labelled GIF', '![GIF: the sheet opening](https://github.com/user-attachments/assets/1)'],
+    ['a GIF the gif tool attached', '![GIF: sign-in after](https://example.com/a.gif)'],
+    ['a reason no test draws it', "![No test draws: Google's sign-in page](https://x/a.png)"],
+    ['a labelled <img>', '<img alt="GIF: drag" src="https://x/a.gif" width="300">'],
+    [
+      "a labelled <img>, alt after src, in '",
+      "<img src='https://x/a.png' alt='No test draws: mail'>",
+    ],
+    [
+      'a bare uploaded video on its own line',
+      'After:\nhttps://github.com/user-attachments/assets/0f1e\n',
+    ],
+    ['an HTML video', '<video src="https://example.com/a.mp4"></video>'],
+    [
+      'an unlabelled GIF on the branch',
+      '<img src="https://raw.example/x/a-after.gif" width="300">',
+    ],
+    ['an unlabelled Markdown GIF', '![after](https://example.com/a.GIF?raw=true)'],
+  ])('passes a picture that says why no baseline shows it: %s', (_, body) => {
+    expect(verdict([], body)).toEqual({
+      ok: true,
+      reason: 'description shows what no baseline can',
+    });
+  });
+
+  it.each([
+    ['an unlabelled still', '![after](https://example.com/a.png)'],
+    ['an unlabelled <img>', '<img src="https://x/a.png" width="300">'],
+    ['a still whose alt names a GIF', '<img alt="a.gif" src="https://x/a.png">'],
+    ['a reason with nothing after it', '![No test draws:](https://x/a.png)'],
+    ['an <img> labelled but with no src', '<img alt="GIF: x">'],
+    ['an uploaded link inside a sentence', 'See https://github.com/user-attachments/assets/1 here'],
+    ['a labelled GIF in a comment', '<!-- ![GIF: x](https://x/a.gif) -->'],
+  ])('fails %s', (_, body) => {
+    expect(verdict([], body).ok).toBe(false);
+  });
+
+  it('still passes the ticked box, Dependabot and a PR with no UI', () => {
+    expect(verdict([], '- [x] No visible UI change').ok).toBe(true);
+    expect(checkPrVisuals({ files, body: '', author: 'dependabot[bot]', settings: s }).ok).toBe(
+      true,
+    );
+    expect(checkPrVisuals({ files: ['README.md'], body: '', settings: s }).ok).toBe(true);
+  });
+
+  it('passes a closed PR, which it was never meant to judge', () => {
+    expect(verdict([], '', 'closed')).toEqual({ ok: true, reason: 'closed PR' });
+    // Without the setting a closed PR is judged as before.
+    expect(checkPrVisuals({ files, body: '', state: 'closed', settings: settings({}) }).ok).toBe(
+      false,
+    );
+  });
+
+  it('tells the author to add a scenario when it fails', () => {
+    const { code, message } = report(`${files[0]}\n`, {
+      body: '',
+      baselines: { shown: 0 },
+      settings: s,
+    });
+    expect(code).toBe(1);
+    expect(message.split('\n').slice(-2)).toEqual([DEFAULT_ADVICE, SCENARIO_ADVICE]);
+  });
+
+  it('reads the files API entries action.yml writes, one a line', () => {
+    expect(
+      readEntries(
+        '{"filename":"a.png","status":"renamed","previous_filename":"b.png"}\n\n{"filename":"c","status":"added","previous_filename":null}\n',
+      ),
+    ).toEqual([
+      { filename: 'a.png', status: 'renamed', previous_filename: 'b.png' },
+      { filename: 'c', status: 'added', previous_filename: null },
+    ]);
+  });
+
+  it('needs the app to pair its baselines', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'visuals-'));
+    mkdirSync(path.join(root, '.github'));
+    const write = (/** @type {unknown} */ config) =>
+      writeFileSync(path.join(root, '.github', 'ci.json'), JSON.stringify(config));
+    write({ 'visual-baselines': { folders: ['shots'] } });
+    expect(() => loadBaselineSettings(root)).toThrow(
+      'visuals.fromBaselines needs visual-baselines.columns',
+    );
+    write({
+      'visual-baselines': { folders: ['shots'], columns: [{ label: 'A', file: '{state}.png' }] },
+    });
+    expect(loadBaselineSettings(root).columns).toEqual([{ label: 'A', file: ['{state}.png'] }]);
   });
 });

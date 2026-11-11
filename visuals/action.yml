@@ -7,11 +7,21 @@ description: >-
   ready_for_review: it re-runs on description edits, so adding the pictures
   turns it green without a new push. The job needs contents and
   pull-requests read. No path filter on the trigger: the check passes a PR
-  with no UI files on its own, so it can be a required check.
+  with no UI files on its own, so it can be a required check. With the
+  app's `visuals.fromBaselines` on, it also keeps a comment on the PR with
+  the before/after table of the visual baselines the PR changed
+  (comment.mjs), which needs pull-requests write; without it, the table is
+  skipped with a notice and the check is unchanged. Give the job a
+  concurrency group per PR, so two runs can't both post the table.
 
 inputs:
   github-token:
-    description: A token that can read the pull request's files.
+    description: >-
+      A token that can read the pull request's files, and comment on it for
+      the before/after table (pull-requests write) when the app's
+      `visuals.fromBaselines` is on. Leave it the Actions token there: the
+      table is found again by its author, github-actions[bot], so another
+      account's token would post a new one on every run.
     default: ${{ github.token }}
 
 runs:
@@ -26,16 +36,42 @@ runs:
       with:
         node-version: 24
 
-    - name: Check the description shows UI changes
+    # The files API pages through large PRs, where `gh pr diff` gives up.
+    # Each entry keeps its status and a rename's old path, which the table
+    # and the baselines rule read; one JSON object a line.
+    - name: List the PR's changed files
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         PR: ${{ github.event.pull_request.number }}
+      run: |
+        gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
+          --jq '.[] | {filename, status, previous_filename} | tojson' \
+          > "$RUNNER_TEMP/pr-visuals-files.jsonl"
+
+    # Before the check, so the table is there when the check fails. A
+    # closed PR gets none: rewriting old descriptions runs this workflow.
+    # It never fails the job, and prints nothing without fromBaselines.
+    - name: Keep the before/after table comment
+      if: github.event.pull_request.state != 'closed'
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR: ${{ github.event.pull_request.number }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_FILES: ${{ runner.temp }}/pr-visuals-files.jsonl
+      run: node "$GITHUB_ACTION_PATH/comment.mjs"
+
+    - name: Check the description shows UI changes
+      shell: bash
+      env:
         # Passed through the environment, never interpolated into the script.
         PR_BODY: ${{ github.event.pull_request.body }}
         PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        PR_STATE: ${{ github.event.pull_request.state }}
+        PR_FILES: ${{ runner.temp }}/pr-visuals-files.jsonl
       run: |
         set -o pipefail
-        # The files API pages through large PRs, where `gh pr diff` gives up.
-        gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' \
-          | node "$GITHUB_ACTION_PATH/check.mjs"
+        jq -r .filename "$PR_FILES" | node "$GITHUB_ACTION_PATH/check.mjs"

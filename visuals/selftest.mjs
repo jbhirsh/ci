@@ -5,15 +5,21 @@
 //     can't quietly switch the check off;
 //   - the app's PR template (.github/pull_request_template.md), untouched,
 //     fails a UI change, since its example pictures sit in a comment, and
-//     passes it once "No visible UI change" is ticked.
+//     passes it once "No visible UI change" is ticked;
+//   - with `visuals.fromBaselines` on: the app's `visual-baselines.columns`
+//     pair its baselines, and the untouched template still fails a UI
+//     change, which then passes with a changed baseline in a column, a
+//     `GIF:` image or a bare video link, and still fails with an unlabelled
+//     still or a changed baseline no column takes.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
-import { checkPrVisuals, settings } from './check.mjs';
+import { changedBaselines, columnOf, pairBaselines } from '../lib/baselines.mjs';
 import { matchesAny, pick } from '../lib/match.mjs';
+import { baselinesShown, checkPrVisuals, loadBaselineSettings, settings } from './check.mjs';
 
 export const TEMPLATE = '.github/pull_request_template.md';
 
@@ -47,7 +53,59 @@ export function selftest(root) {
   if (!checkPrVisuals({ files, body: ticked, settings: s }).ok) {
     throw new Error(`${TEMPLATE} still fails once "No visible UI change" is ticked`);
   }
-  return [...lines, `visuals: ${TEMPLATE} fails untouched and passes ticked.`];
+  lines.push(`visuals: ${TEMPLATE} fails untouched and passes ticked.`);
+  if (s.fromBaselines) lines.push(fromBaselines(root, tracked, template, files, s));
+  return lines;
+}
+
+/**
+ * The fromBaselines cases, against the app's own baselines and template.
+ *
+ * @param {string} root
+ * @param {string[]} tracked
+ * @param {string} template
+ * @param {string[]} files a UI file
+ * @param {import('./check.mjs').Settings} s
+ */
+function fromBaselines(root, tracked, template, files, s) {
+  const baselines = loadBaselineSettings(root);
+  const { columns } = baselines;
+  const all = changedBaselines(
+    tracked.map((filename) => ({ filename, status: 'modified' })),
+    baselines,
+  );
+  const inColumn = pairBaselines(all, columns).rows[0];
+  if (!inColumn) throw new Error('visual-baselines.columns pairs no tracked baseline');
+  const shot = /** @type {string} */ (Object.values(inColumn.cells)[0].after);
+  /**
+   * @param {string} body
+   * @param {import('../lib/baselines.mjs').FileEntry[]} changed
+   */
+  const ok = (body, changed = []) =>
+    checkPrVisuals({ files, body, baselines: baselinesShown(changed, baselines), settings: s }).ok;
+  /** @type {[string, boolean, string, import('../lib/baselines.mjs').FileEntry[]?][]} */
+  const cases = [
+    ['the untouched template', false, template],
+    [`a change to ${shot}`, true, template, [{ filename: shot, status: 'modified' }]],
+    ['a GIF: image', true, `${template}\n![GIF: the flow](https://example.com/a.gif)\n`],
+    ['a bare video link', true, `${template}\nhttps://github.com/user-attachments/assets/1\n`],
+    ['an unlabelled still', false, `${template}\n![after](https://example.com/a.png)\n`],
+  ];
+  const stray = `${all[0].folder}/pr-visuals-selftest-no-column.png`;
+  if (!columnOf(path.posix.basename(stray), columns)) {
+    cases.push([
+      'a baseline in no column',
+      false,
+      template,
+      [{ filename: stray, status: 'modified' }],
+    ]);
+  }
+  for (const [what, want, body, changed] of cases) {
+    if (ok(body, changed) !== want) {
+      throw new Error(`with fromBaselines, ${what} ${want ? 'fails' : 'passes'} a UI change`);
+    }
+  }
+  return `visuals: with fromBaselines, ${cases.length} cases hold (${shot} in a column passes).`;
 }
 
 /**
