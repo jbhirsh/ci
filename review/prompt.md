@@ -139,11 +139,16 @@ changes how something on screen moves or responds (a transition or
 animation, drag, swipe or other gesture handling, a sheet, modal, dialog,
 dropdown or row opening, closing or collapsing, scroll behavior, or a
 multi-step flow) and the description has no GIF or video (an image ending
-in `.gif`, a `<video>`, or a `github.com/user-attachments/assets/` link),
-leave an inline comment on the main changed line asking for before/after
-GIFs. Still screenshots are enough for changes to how things look. The
-review doesn't re-run when the description is edited, so whoever adds the
-GIFs resolves that thread.
+in `.gif` or whose alt text starts `GIF:`, a `<video>`, or a
+`github.com/user-attachments/assets/` link), leave an inline comment on the
+main changed line asking for before/after GIFs. Still screenshots are enough
+for changes to how things look. The review doesn't re-run when the
+description is edited, so whoever adds the GIFs resolves that thread. Where
+the app's `.github/ci.json` sets `visuals.fromBaselines`, its changed visual
+baselines are its stills, and an attached still must say why no visual test
+can draw it, in alt text starting `No test draws:`; if the reason doesn't
+hold (the state is one of the app's own screens, which a visual scenario
+could show), ask for the scenario instead.
 
 ## Beyond the diff
 
