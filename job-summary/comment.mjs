@@ -29,16 +29,12 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { MAX_CHARS, findComment as findMarked, ghApi, statusOf } from '../lib/comment.mjs';
 import { artifactName } from './history.mjs';
 import { cell } from './render.mjs';
 import { pagesBase } from './report.mjs';
 
-/**
- * A call to GitHub's REST API: the parsed answer, or a throw whose
- * message or `status` carries the HTTP status.
- *
- * @typedef {(method: string, route: string, body?: Record<string, unknown>) => unknown} Api
- */
+/** @typedef {import('../lib/comment.mjs').Api} Api */
 /**
  * Downloads a run's job-summary-* artifacts into a folder, throwing when
  * there are none.
@@ -75,20 +71,12 @@ import { pagesBase } from './report.mjs';
 
 /** The marker the comment starts with, to find it again. */
 export const MARKER = '<!-- job-reports -->';
-/**
- * Who posts it: the workflow's token. Anyone can write the marker, so a
- * comment is this one only if this account wrote it too.
- */
-export const AUTHOR = 'github-actions[bot]';
+// Who posts it (lib/comment.mjs), the most it may hold, how many pages are
+// read looking for it, and the status of a failed call: shared with visuals'
+// table.
+export { AUTHOR, MAX_CHARS, PAGES, statusOf } from '../lib/comment.mjs';
 /** Where a section ends. */
 export const END = '<!-- job-reports:end -->';
-/**
- * The most the comment may hold. GitHub refuses a body over 65,536
- * characters; this leaves room for counting them differently.
- */
-export const MAX_CHARS = 65_000;
-/** How many pages of a pull request's comments are read looking for it. */
-export const PAGES = 30;
 
 const SECTION =
   /^<!-- job-reports:section workflow=(\S*) job=(\S*) sha=(\S*) -->\n([\s\S]*?)\n<!-- job-reports:end -->$/gm;
@@ -251,21 +239,6 @@ export function composeComment(repo, head, sections, by) {
 }
 
 /**
- * The status of a failed API call: its own, or the one gh's message names.
- *
- * @param {unknown} error
- * @returns {number | null}
- */
-export function statusOf(error) {
-  if (typeof error !== 'object' || error === null) return null;
-  const e = /** @type {{ status?: unknown, message?: unknown, stderr?: unknown }} */ (error);
-  if (typeof e.status === 'number' && e.status >= 100) return e.status;
-  const text = `${String(e.message ?? '')}\n${String(e.stderr ?? '')}`;
-  const m = /HTTP (\d{3})/.exec(text);
-  return m ? Number(m[1]) : null;
-}
-
-/**
  * The first line of what went wrong, for a log.
  *
  * @param {unknown} error
@@ -371,21 +344,7 @@ export function pullRequestsOf(api, repo, run) {
  * @returns {{ id: number, body: string } | null}
  */
 export function findComment(api, repo, pr) {
-  for (let page = 1; page <= PAGES; page++) {
-    const comments = /** @type {unknown} */ (
-      api('GET', `repos/${repo}/issues/${pr}/comments?per_page=100&page=${page}`)
-    );
-    if (!Array.isArray(comments)) return null;
-    for (const c of comments) {
-      const comment =
-        /** @type {{ id: number, body?: string | null, user?: { login?: string } | null }} */ (c);
-      if (comment.user?.login === AUTHOR && comment.body?.startsWith(MARKER)) {
-        return { id: comment.id, body: comment.body };
-      }
-    }
-    if (comments.length < 100) return null;
-  }
-  return null;
+  return findMarked(api, repo, pr, MARKER);
 }
 
 /**
@@ -477,17 +436,6 @@ export function keepComments(env, api, download) {
   }
 }
 
-/** @type {Api} */
-function realApi(method, route, body) {
-  const out = execFileSync('gh', ['api', '-X', method, route, ...(body ? ['--input', '-'] : [])], {
-    input: body ? JSON.stringify(body) : undefined,
-    encoding: 'utf8',
-    stdio: ['pipe', 'pipe', 'pipe'],
-    timeout: 30_000,
-  });
-  return out.trim() ? JSON.parse(out) : null;
-}
-
 /**
  * @param {Record<string, string | undefined>} env
  * @returns {Download}
@@ -517,7 +465,7 @@ const realDownload = (env) => (runId, dir) => {
  * @param {Api} [api]
  * @param {Download} [download]
  */
-export function main(env = process.env, api = realApi, download = realDownload(env)) {
+export function main(env = process.env, api = ghApi, download = realDownload(env)) {
   try {
     for (const line of keepComments(env, api, download)) console.log(line);
   } catch (error) {
