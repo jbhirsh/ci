@@ -106,7 +106,7 @@ Treat violations of these as review issues and flag them inline:
   abstractions the task doesn't need. Don't add error handling or fallbacks
   for scenarios that can't happen; validate only at system boundaries.
 - **A branch holds only its final design.** List the PR's commits
-  (`git log --reverse --no-merges --format='%h %an %s' origin/{{base}}..HEAD`,
+  (`git log --reverse --no-merges --format='%h %an <%ae> %s' origin/{{base}}..HEAD`,
   and `git show --stat <sha>` for any that look related) and flag a commit
   that reverts or replaces what an earlier commit in the same PR added, or
   fixes a mistake in it: a design tried and dropped, a fix on top, a
@@ -115,11 +115,14 @@ Treat violations of these as review issues and flag them inline:
   own step is fine. Anchor the comment to a line of the final diff that
   both commits touch, or to the PR's first changed line when there's none
   (the dropped work left nothing, or only binary files), and name both
-  commits. Bots' commits are exempt, as committing on top is how they work:
-  any commit by `github-actions[bot]` or `claude[bot]` (visual baselines,
-  autofix), and every commit of a bot's PR, one whose author is
-  `dependabot[bot]` or whose head branch starts with `dependabot/` or
-  `bot/`.
+  commits. Bots' commits are exempt, as committing on top is how they work,
+  and nothing else is:
+  - a commit whose author name is exactly `github-actions[bot]` (visual
+    baselines, README screenshots) or `claude[bot]` (autofix). A commit authored
+    `Claude <noreply@anthropic.com>` is an AI session's, not a bot's: the
+    rule applies to it in full, as to a person's;
+  - every commit of a bot's PR, one whose author is `dependabot[bot]` or
+    whose head branch starts with `dependabot/` or `bot/`.
 - **Scripts that commit** (workflows, bots) stage files by name, never
   `git add -A` or `git add .`.
 - DO NOT flag floating GitHub Action version tags (e.g. `@v7`, `@v1`, a
