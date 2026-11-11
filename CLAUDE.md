@@ -14,9 +14,13 @@ Changing and testing a tool against an app is in `CONTRIBUTING.md`.
   no app uses it.
 - **Explain a setting where it's read.** Each `action.yml`'s descriptions and each workflow's
   comments say what it does and why.
-- **No runtime dependencies.** Scripts run from an app's checkout with nothing installed from
-  this repo: Node's built-ins, plus what the app installs (through `importFromApp` in
-  `lib/app.mjs`). `devDependencies` are for this repo's tests and type-checking only.
+- **Runtime dependencies only for a library no app runs.** Scripts run from an app's checkout:
+  a package the app runs itself (Prettier, Playwright, knip, Vite, jscpd) comes from the app,
+  through `importFromApp` in `lib/app.mjs`; a library only this repo's code imports (pixelmatch,
+  pngjs) is this repo's `dependencies`, installed by the action that needs it from this repo's
+  lockfile. A bump of one reaches all three apps without passing any app's CI, only this
+  repo's tests and the self-tests against each app's checkout, so review it as a change to all
+  three. `devDependencies` are for this repo's tests and type-checking only.
 - **Plain JavaScript (`.mjs`), typed in JSDoc**, checked by TypeScript (`checkJs`, strict): it
   runs on Node 24 from any path, with no build or type stripping.
 - **One composite action per job.** An app's job keeps its `name:` (its required check) and

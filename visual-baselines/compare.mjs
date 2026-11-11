@@ -18,7 +18,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { summary } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
-import { appPixels, diff } from '../lib/pixels.mjs';
+import { diff, PIXELS } from '../lib/pixels.mjs';
 import { shots } from './from-run.mjs';
 import { isShotName, settings, singleFolder } from './settings.mjs';
 
@@ -104,7 +104,7 @@ export async function main(argv, root = appRoot()) {
     baselines: path.join(root, singleFolder(s)),
     out: path.resolve(out),
     ratio: s.ratio,
-    pixels: await appPixels(root),
+    pixels: PIXELS,
   });
   const text = report(result, s.ratio);
   if (text) summary(text);

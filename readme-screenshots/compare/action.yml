@@ -3,10 +3,9 @@ description: >-
   Compares freshly taken README screenshots with the README's (compare.mjs's
   header says how) and hands the ones that changed to the publishing job as
   the `readme-screenshots` artifact. The last step of the app's capture job,
-  which installed the app's dependencies (pixelmatch and pngjs come from
-  them) and wrote the fresh shots, named as the README names them, to one
-  folder. The capture job holds a read-only token: the job that publishes
-  runs no npm.
+  which wrote the fresh shots, named as the README names them, to one
+  folder; it installs pixelmatch and pngjs itself, from this repo. The
+  capture job holds a read-only token: the job that publishes runs no npm.
 
 inputs:
   fresh:
@@ -24,6 +23,12 @@ runs:
     - uses: actions/setup-node@v7
       with:
         node-version: 24
+
+    # pixelmatch and pngjs, from this repo's lockfile into the action's own
+    # checkout (lib/pixels.mjs): nothing in the app's workspace changes.
+    - name: Install the comparison's packages
+      shell: bash
+      run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
 
     - name: Compare the screenshots
       id: compare

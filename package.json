@@ -17,6 +17,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.6",
+    "@types/pngjs": "^6.0.5",
     "@vitest/coverage-v8": "^5.1.0",
     "eslint": "^10.14.0",
     "eslint-plugin-jsdoc": "^65.4.4",
@@ -28,5 +29,9 @@
     "typescript": "^7.0.2",
     "vitest": "^5.0.5",
     "yaml": "^2.9.1"
+  },
+  "dependencies": {
+    "pixelmatch": "^8.0.0",
+    "pngjs": "^7.0.0"
   }
 }

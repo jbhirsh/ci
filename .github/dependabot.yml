@@ -1,5 +1,6 @@
-# This repo's dev tools and actions, on the apps' Monday 06:00 UTC slot. The
-# apps' own Dependabot bumps the packages these tools import from them.
+# This repo's packages and actions, on the apps' Monday 06:00 UTC slot: its
+# dev tools, and the two libraries the compare actions install (`tools`).
+# The apps' own Dependabot bumps the packages these tools import from them.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -9,7 +10,14 @@ updates:
       day: monday
       time: "06:00"
     groups:
+      # The libraries the actions install at run time (pixelmatch, pngjs):
+      # a bump reaches all three apps at once, without passing any app's CI,
+      # so it comes as its own PR, reviewed as a change to all three.
+      tools:
+        dependency-type: production
+        patterns: ["*"]
       dev:
+        dependency-type: development
         patterns: ["*"]
   - package-ecosystem: github-actions
     # The workflows and every tool's action.yml (a tool's sub-actions sit one

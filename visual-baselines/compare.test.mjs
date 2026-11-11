@@ -2,9 +2,9 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { appPixels } from '../lib/pixels.mjs';
+import { PIXELS as pixels } from '../lib/pixels.mjs';
+import { testPng } from '../lib/test-pixels.mjs';
 import { compare, main, report } from './compare.mjs';
-import { fakePng, withPixels } from './test-repo.mjs';
 
 beforeEach(() => {
   vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -16,9 +16,9 @@ afterEach(() => {
 const temp = () => mkdtempSync(path.join(tmpdir(), 'compare-'));
 
 /**
- * A folder holding these fake PNGs.
+ * A folder holding these PNGs.
  *
- * @param {Record<string, string>} files
+ * @param {Record<string, string | Buffer>} files
  */
 function folder(files) {
   const dir = temp();
@@ -26,12 +26,10 @@ function folder(files) {
   return dir;
 }
 
-describe('compare', async () => {
-  const pixels = await appPixels(withPixels(temp()));
-
+describe('compare', () => {
   it('passes screenshots that match their baselines', () => {
     const out = temp();
-    const shots = { 'a.png': fakePng(), 'b.png': fakePng(4, 4) };
+    const shots = { 'a.png': testPng(), 'b.png': testPng(4, 4) };
     expect(
       compare({ fresh: folder(shots), baselines: folder(shots), out, ratio: 0, pixels }),
     ).toEqual({ changed: [], added: [], missing: [] });
@@ -42,11 +40,11 @@ describe('compare', async () => {
     const out = temp();
     const result = compare({
       fresh: folder({
-        'a.png': fakePng(10, 10, 5),
-        'b.png': fakePng(10, 20),
-        'new.png': fakePng(),
+        'a.png': testPng(10, 10, 5),
+        'b.png': testPng(10, 20),
+        'new.png': testPng(),
       }),
-      baselines: folder({ 'a.png': fakePng(), 'b.png': fakePng(), 'gone.png': fakePng() }),
+      baselines: folder({ 'a.png': testPng(), 'b.png': testPng(), 'gone.png': testPng() }),
       out,
       ratio: 0,
       pixels,
@@ -69,8 +67,8 @@ describe('compare', async () => {
 
   it('lets through a difference within the ratio', () => {
     const result = compare({
-      fresh: folder({ 'a.png': fakePng(10, 10, 5) }),
-      baselines: folder({ 'a.png': fakePng() }),
+      fresh: folder({ 'a.png': testPng(10, 10, 5) }),
+      baselines: folder({ 'a.png': testPng() }),
       out: temp(),
       ratio: 0.05,
       pixels,
@@ -124,22 +122,22 @@ describe('report', () => {
 describe('main', () => {
   /** An app whose baselines folder holds a.png. */
   function app(/** @type {Record<string, unknown>} */ config) {
-    const root = withPixels(temp());
+    const root = temp();
     mkdirSync(path.join(root, '.github'));
     writeFileSync(
       path.join(root, '.github/ci.json'),
       JSON.stringify({ 'visual-baselines': config }),
     );
     mkdirSync(path.join(root, 'shots'));
-    writeFileSync(path.join(root, 'shots/a.png'), fakePng());
+    writeFileSync(path.join(root, 'shots/a.png'), testPng());
     return root;
   }
 
   it('compares with the folder the settings name and reports', async () => {
     const root = app({ folders: ['shots'], artifact: { workflow: 'ci.yml', name: 'x' } });
     const out = path.join(temp(), 'out');
-    expect((await main([folder({ 'a.png': fakePng() }), out], root)).text).toBe('');
-    const changed = await main([folder({ 'a.png': fakePng(10, 10, 1) }), out], root);
+    expect((await main([folder({ 'a.png': testPng() }), out], root)).text).toBe('');
+    const changed = await main([folder({ 'a.png': testPng(10, 10, 1) }), out], root);
     expect(changed.text).toContain('`a.png` changed');
     expect(existsSync(path.join(out, 'a.diff.png'))).toBe(true);
   });
