@@ -64,6 +64,45 @@ describe('selftest', () => {
     ).rejects.toThrow(/no .github\/workflows\/ci.yml/);
   });
 
+  it('logs how the baselines pair under columns', async () => {
+    const root = app(
+      {
+        folders: ['e2e/*-snapshots'],
+        command: 'x',
+        columns: [
+          { label: 'Phone', file: '{state}-phone.png' },
+          { label: 'Desktop', file: '{state}-desktop.png' },
+        ],
+      },
+      {
+        'e2e/p-snapshots/home-phone.png': testPng(),
+        'e2e/p-snapshots/menu-phone.png': testPng(),
+        'e2e/d-snapshots/home-desktop.png': testPng(),
+        'e2e/d-snapshots/home-firefox.png': testPng(),
+      },
+    );
+    expect((await selftest(root))[1]).toBe(
+      'visual-baselines: 2 states in Phone / Desktop, 1 with every column.',
+    );
+  });
+
+  it('refuses a column that picks no tracked baseline', async () => {
+    const root = app(
+      {
+        folders: ['shots'],
+        command: 'x',
+        columns: [
+          { label: 'Light', file: 'light-{state}.png' },
+          { label: 'Dark', file: ['dark-{state}.png', 'night-{state}.png'] },
+        ],
+      },
+      { 'shots/light-a.png': testPng() },
+    );
+    await expect(selftest(root)).rejects.toThrow(
+      /columns: Dark picks no tracked baseline \(dark-\{state\}.png or night-\{state\}.png\)/,
+    );
+  });
+
   it("refuses a baseline pngjs can't read", async () => {
     const root = app(
       { folders: ['shots'], artifact: { workflow: 'ci.yml', name: 'x' } },

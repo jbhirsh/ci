@@ -59,6 +59,53 @@ describe('settings', () => {
   });
 });
 
+describe('settings: columns', () => {
+  it('reads columns, a single pattern as a list of one', () => {
+    const s = settings({
+      folders: ['a'],
+      columns: [
+        { label: 'Phone', file: ['{state}-mobile-mobile-linux.png', '{state}-mobile-linux.png'] },
+        { label: 'Desktop', file: '{state}-desktop-linux.png', width: 300 },
+      ],
+    });
+    expect(s.columns).toEqual([
+      { label: 'Phone', file: ['{state}-mobile-mobile-linux.png', '{state}-mobile-linux.png'] },
+      { label: 'Desktop', file: ['{state}-desktop-linux.png'], width: 300 },
+    ]);
+  });
+
+  it('leaves them out by default', () => {
+    expect(settings({ folders: ['a'] }).columns).toBeUndefined();
+  });
+
+  it.each([
+    [[], /must list/],
+    ['Phone', /must list/],
+    [[null], /must list/],
+    [[{ label: 'P', file: 'x.png' }], /holding \{state\} once/],
+    [[{ label: 'P', file: '{state}-{state}.png' }], /holding \{state\} once/],
+    [[{ label: 'P', file: 'a/{state}.png' }], /holding \{state\} once/],
+    [[{ label: 'P', file: '{state}.jpg' }], /holding \{state\} once/],
+    [[{ label: 'P', file: [] }], /holding \{state\} once/],
+    [[{ label: 'P', file: [1] }], /holding \{state\} once/],
+    [[{ label: 'A|B', file: '{state}.png' }], /labels must be text/],
+    [[{ label: ' P', file: '{state}.png' }], /labels must be text/],
+    [[{ label: 3, file: '{state}.png' }], /labels must be text/],
+    [[{ label: 'P', file: '{state}.png', width: 0 }], /width must be a whole number/],
+    [[{ label: 'P', file: '{state}.png', width: 2.5 }], /width must be a whole number/],
+    [[{ label: 'P', file: '{state}.png', device: 'phone' }], /unknown key: device/],
+    [
+      [
+        { label: 'P', file: '{state}.png' },
+        { label: 'P', file: 'x-{state}.png' },
+      ],
+      /repeats the label P/,
+    ],
+  ])('refuses %j', (columns, message) => {
+    expect(() => settings({ folders: ['a'], columns })).toThrow(message);
+  });
+});
+
 describe('singleFolder', () => {
   it('returns the one literal folder', () => {
     expect(singleFolder(settings({ folders: ['e2e/screenshots/baselines'] }))).toBe(

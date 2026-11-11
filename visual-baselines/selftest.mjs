@@ -4,6 +4,9 @@
 //   - the app's `visual-baselines` settings parse (an app without them is
 //     told so, not failed: it doesn't use the shared parts yet);
 //   - its `folders` match folders git tracks, holding PNGs;
+//   - with `columns` set: each column picks at least one tracked baseline, so
+//     a renamed project can't quietly empty the PR's table, and how many
+//     states pair is logged (not a failure: a phone suite may cover fewer);
 //   - it says how a rewrite gets fresh baselines: a `command`, or an
 //     `artifact` from one of its workflows;
 //   - for a comparison (an `artifact` app): `folders` names one folder, and
@@ -13,6 +16,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
+import { changedBaselines, pairBaselines } from '../lib/baselines.mjs';
 import { readPng } from '../lib/pixels.mjs';
 import { knownFiles, matchingFolders, runIn } from './baselines.mjs';
 import { shots } from './from-run.mjs';
@@ -35,6 +39,7 @@ export async function selftest(root) {
   }
   const count = tracked.filter((file) => folders.some((f) => file.startsWith(`${f}/`))).length;
   const lines = [`visual-baselines: ${count} baselines in ${folders.join(', ')}.`];
+  if (s.columns) lines.push(pairing(tracked, s.folders, s.columns));
   if (!s.command && !s.artifact) {
     throw new Error(
       '.github/ci.json: visual-baselines needs a command or an artifact to rewrite them',
@@ -53,6 +58,31 @@ export async function selftest(root) {
     `visual-baselines: rewritten from ${workflow}'s ${name}; compared with up to ${Number((s.ratio * 100).toFixed(4))}% of pixels differing.`,
   );
   return lines;
+}
+
+/**
+ * How the tracked baselines pair under `columns`, as a log line; throws when
+ * a column picks none.
+ *
+ * @param {string[]} tracked the tracked PNGs
+ * @param {string[]} folders
+ * @param {import('../lib/baselines.mjs').Column[]} columns
+ */
+export function pairing(tracked, folders, columns) {
+  const all = changedBaselines(
+    tracked.map((filename) => ({ filename, status: 'added' })),
+    { folders },
+  );
+  const { rows } = pairBaselines(all, columns);
+  const empty = columns.filter((c) => !rows.some((row) => row.cells[c.label]));
+  if (empty.length > 0) {
+    throw new Error(
+      `visual-baselines.columns: ${empty.map((c) => c.label).join(', ')} picks no tracked baseline (${empty.map((c) => c.file.join(' or ')).join('; ')})`,
+    );
+  }
+  const states = new Set(rows.map((row) => row.state)).size;
+  const whole = rows.filter((row) => columns.every((c) => row.cells[c.label])).length;
+  return `visual-baselines: ${states} states in ${columns.map((c) => c.label).join(' / ')}, ${whole} with every column.`;
 }
 
 /** @param {string[]} argv */
