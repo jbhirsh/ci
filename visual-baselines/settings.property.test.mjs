@@ -24,6 +24,10 @@ describe('settings, for any JSON', () => {
         }
         expect(s.ratio >= 0 && s.ratio < 1).toBe(true);
         if (s.artifact) expect(s.artifact.workflow).toMatch(/\.ya?ml$/);
+        for (const column of s.columns ?? []) {
+          expect(column.file.length).toBeGreaterThan(0);
+          for (const file of column.file) expect(file.split('{state}')).toHaveLength(2);
+        }
       }),
     );
   });

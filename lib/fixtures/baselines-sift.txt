@@ -1,0 +1,14 @@
+e2e/screenshots/baselines/dark-01-setup.png
+e2e/screenshots/baselines/dark-02-sort-sheet.png
+e2e/screenshots/baselines/dark-03-sift.png
+e2e/screenshots/baselines/dark-04-sift-undo.png
+e2e/screenshots/baselines/dark-05-decisions.png
+e2e/screenshots/baselines/dark-06-settings.png
+e2e/screenshots/baselines/dark-07-done.png
+e2e/screenshots/baselines/light-01-setup.png
+e2e/screenshots/baselines/light-02-sort-sheet.png
+e2e/screenshots/baselines/light-03-sift.png
+e2e/screenshots/baselines/light-04-sift-undo.png
+e2e/screenshots/baselines/light-05-decisions.png
+e2e/screenshots/baselines/light-06-settings.png
+e2e/screenshots/baselines/light-07-done.png

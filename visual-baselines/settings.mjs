@@ -15,6 +15,15 @@
 //   ratio     the share of a screenshot's pixels that may differ before
 //             compare/ calls it changed (default 0: any pixel pixelmatch
 //             counts); for an app whose screens hold something that moves
+//   columns   how the baselines a PR changes pair up, for visuals' before/after
+//             table and Claude Review's look at them (lib/baselines.mjs
+//             says how): a list of { label, file, width? }, each column's
+//             `file` a basename holding {state} once, or an ordered list of
+//             them, the first that matches winning; `width` the pixels its
+//             pictures show at in the table. BoardGames: Phone
+//             `{state}-visual-phone-webkit-linux.png` and Desktop
+//             `{state}-visual-webkit-linux.png`. None by default: nothing
+//             pairs, and the tools that read it do as they did without it.
 //
 // An app sets `command` or `artifact`, whichever its rewrite action reads.
 
@@ -24,6 +33,7 @@
  * @property {string | undefined} command
  * @property {{ workflow: string, name: string } | undefined} artifact
  * @property {number} ratio
+ * @property {import('../lib/baselines.mjs').Column[] | undefined} columns
  */
 
 /**
@@ -47,6 +57,63 @@ function text(value, name) {
     throw new Error(`.github/ci.json: visual-baselines.${name} must be text`);
   }
   return value;
+}
+
+/**
+ * The `columns` setting, checked: undefined when absent.
+ *
+ * @param {unknown} value
+ * @returns {import('../lib/baselines.mjs').Column[] | undefined}
+ */
+function columns(value) {
+  if (value === undefined) return undefined;
+  const fail = (/** @type {string} */ why) => {
+    throw new Error(`.github/ci.json: visual-baselines.columns ${why}`);
+  };
+  if (!Array.isArray(value) || value.length === 0) fail('must list { label, file } columns');
+  /** @type {import('../lib/baselines.mjs').Column[]} */
+  const out = [];
+  for (const raw of /** @type {unknown[]} */ (value)) {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      fail('must list { label, file } columns');
+    }
+    const c = /** @type {Record<string, unknown>} */ (raw);
+    const unknown = Object.keys(c).filter((k) => !['label', 'file', 'width'].includes(k));
+    if (unknown.length > 0) fail(`has an unknown key: ${unknown.join(', ')}`);
+    // A label heads a Markdown table's column.
+    if (
+      typeof c.label !== 'string' ||
+      !/^[^|\n\r<>`]+$/.test(c.label) ||
+      c.label.trim() !== c.label
+    ) {
+      fail('labels must be text, with no | < > ` or line break');
+    }
+    const label = /** @type {string} */ (c.label);
+    if (out.some((o) => o.label === label)) fail(`repeats the label ${label}`);
+    const files = typeof c.file === 'string' ? [c.file] : c.file;
+    if (
+      !Array.isArray(files) ||
+      files.length === 0 ||
+      !files.every(
+        (f) =>
+          typeof f === 'string' &&
+          f.split('{state}').length === 2 &&
+          !f.includes('/') &&
+          f.toLowerCase().endsWith('.png'),
+      )
+    ) {
+      fail(`${label}'s file must be a .png basename holding {state} once, or a list of them`);
+    }
+    if (c.width !== undefined && !(Number.isInteger(c.width) && Number(c.width) > 0)) {
+      fail(`${label}'s width must be a whole number of pixels`);
+    }
+    out.push({
+      label,
+      file: /** @type {string[]} */ (files),
+      ...(c.width === undefined ? {} : { width: /** @type {number} */ (c.width) }),
+    });
+  }
+  return out;
 }
 
 /**
@@ -91,6 +158,7 @@ export function settings(config) {
     command: text(config.command, 'command'),
     artifact,
     ratio,
+    columns: columns(config.columns),
   };
 }
 
