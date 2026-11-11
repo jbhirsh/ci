@@ -1,9 +1,10 @@
 // Self-test of the pins check against an app's checkout:
 // `node pins/selftest.mjs <app dir>`. It reads everything the check reads
-// (package.json, Expo's list when the app uses Expo, Dependabot, every
-// workflow and action.yml), so a file it can't take fails here before it
-// fails the app's CI. The pins main holds are printed, not judged: the app's
-// own CI step is what fails on them.
+// (package.json and its type-coverage ignores, Expo's list when the app
+// uses Expo, Dependabot, every workflow and action.yml), so a file it can't
+// take fails here before it fails the app's CI. The pins and ignores main
+// holds are printed, not judged: the app's own CI step is what fails on
+// them.
 
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -19,7 +20,7 @@ import { findings } from './check.mjs';
 export function selftest(root) {
   const found = findings(root);
   return [
-    `pins: ${found.length} pinned without a reason.`,
+    `pins: ${found.length} pinned or ignored without a reason.`,
     ...found.map(({ file, line, message }) => `  ${file}:${line}: ${message}`),
   ];
 }

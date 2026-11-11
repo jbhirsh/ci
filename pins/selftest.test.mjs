@@ -15,7 +15,7 @@ function app(/** @type {Record<string, unknown>} */ pkg) {
 describe('selftest', () => {
   it('prints the pins without judging them', () => {
     expect(selftest(app({ dependencies: { a: '1.2.3' } }))).toEqual([
-      'pins: 1 pinned without a reason.',
+      'pins: 1 pinned or ignored without a reason.',
       '  package.json:3: a 1.2.3 holds it below its next major: use ^1.2.3, or say why in "//pins".',
     ]);
   });
@@ -26,7 +26,7 @@ describe('cli', () => {
     /** @type {string[]} */
     const out = [];
     expect(cli([app({})], (l) => out.push(l))).toBe(0);
-    expect(out).toEqual(['pins: 0 pinned without a reason.']);
+    expect(out).toEqual(['pins: 0 pinned or ignored without a reason.']);
   });
 
   it("fails when a file can't be read", () => {
