@@ -1,0 +1,30 @@
+## no UI files (exit 0)
+PR visuals: ok (no UI files changed).
+
+## Dependabot (exit 0)
+PR visuals: ok (Dependabot's PR).
+
+## ticked (exit 0)
+PR visuals: ok (marked "No visible UI change").
+
+## an image (exit 0)
+PR visuals: ok (description shows the change).
+
+## a bare video (exit 0)
+PR visuals: ok (description shows the change).
+
+## a closed PR, no pictures (exit 1)
+::error::This PR changes the UI but its description shows none of it.
+Changed UI files:
+  src/App.tsx
+  src/index.css
+Add before/after screenshots to the description (a GIF when the change affects motion or interaction), or tick "No visible UI change" in the template. Editing the description re-runs this check.
+
+## an unlabelled still (exit 0)
+PR visuals: ok (description shows the change).
+
+## custom advice (exit 1)
+::error::This PR changes the UI but its description shows none of it.
+Changed UI files:
+  src/a.tsx
+Take shots.
