@@ -3,7 +3,8 @@
 ## Setup
 
 Node 24, then `npm ci`. Nothing here is installed into the apps: they run these tools from
-their own checkout, with their own dependencies.
+their own checkout, with their own dependencies, and the compare actions install this repo's
+two runtime libraries into their own copy of it.
 
 ## Changing a tool
 

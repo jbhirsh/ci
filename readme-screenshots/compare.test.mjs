@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { appPixels, compare, diffRatio, main, shouldReplace } from './compare.mjs';
+import { fakePixels as pixels, fakePng as png, testPng } from '../lib/test-pixels.mjs';
+import { compare, diffRatio, main, shouldReplace } from './compare.mjs';
 
 // Outputs print instead of reaching the real job's, should these run in Actions.
 beforeEach(() => {
@@ -10,32 +11,6 @@ beforeEach(() => {
   vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
   return () => vi.restoreAllMocks();
 });
-
-/**
- * Fake pixels: a "PNG" is JSON `{w, h, px}`, and `match` counts the
- * positions where the two pixel lists differ.
- *
- * @type {import('./compare.mjs').Pixels}
- */
-const pixels = {
-  read: (png) => {
-    const { w, h, px } = JSON.parse(png.toString());
-    return { width: w, height: h, data: Uint8Array.from(px) };
-  },
-  write: (image) =>
-    Buffer.from(JSON.stringify({ w: image.width, h: image.height, px: [...image.data] })),
-  match: (a, b) => a.reduce((n, v, i) => n + (v === b[i] ? 0 : 1), 0),
-};
-
-/** A fake PNG `width`×`height`, its first `marked` pixels set. */
-const png = (width = 10, height = 10, marked = 0) =>
-  Buffer.from(
-    JSON.stringify({
-      w: width,
-      h: height,
-      px: Array.from({ length: width * height }, (_, i) => (i < marked ? 1 : 0)),
-    }),
-  );
 
 const temp = () => mkdtempSync(path.join(tmpdir(), 'shots-'));
 
@@ -89,47 +64,20 @@ describe('compare', () => {
   });
 });
 
-/** A fake app whose node_modules hold stand-ins for pixelmatch and pngjs. */
-function fakeApp() {
-  const root = temp();
-  writeFileSync(path.join(root, 'package.json'), '{}');
-  const pkg = (/** @type {string} */ name, /** @type {string} */ code) => {
-    mkdirSync(path.join(root, 'node_modules', name), { recursive: true });
-    writeFileSync(
-      path.join(root, 'node_modules', name, 'package.json'),
-      JSON.stringify({ name, type: 'module', main: 'index.js' }),
-    );
-    writeFileSync(path.join(root, 'node_modules', name, 'index.js'), code);
-  };
-  pkg(
-    'pngjs',
-    'export const PNG = { sync: { read: (b) => { const { w, h, px } = JSON.parse(b.toString()); return { width: w, height: h, data: Uint8Array.from(px) }; } } };',
-  );
-  pkg('pixelmatch', 'export default (a, b) => a.reduce((n, v, i) => n + (v === b[i] ? 0 : 1), 0);');
-  return root;
-}
-
-describe('appPixels', () => {
-  it("compares with the app's pixelmatch and pngjs", async () => {
-    const real = await appPixels(fakeApp());
-    expect(diffRatio(png(), png(10, 10, 10), real)).toBe(0.1);
-  });
-});
-
 describe('main', () => {
   it("compares with the app's screenshots folder and lists the replacements", async () => {
-    const root = fakeApp();
+    const root = temp();
     mkdirSync(path.join(root, '.github'));
     writeFileSync(path.join(root, '.github', 'ci.json'), '{"readme-screenshots":{"dir":"img"}}');
     mkdirSync(path.join(root, 'img'));
-    writeFileSync(path.join(root, 'img', 'a.png'), png());
+    writeFileSync(path.join(root, 'img', 'a.png'), testPng());
     const fresh = temp();
-    writeFileSync(path.join(fresh, 'a.png'), png(10, 10, 50));
+    writeFileSync(path.join(fresh, 'a.png'), testPng(10, 10, 50));
     const out = path.join(temp(), 'out');
     expect(await main([fresh, out], root)).toEqual(['a.png']);
   });
 
   it('needs both folders', async () => {
-    await expect(main(['x'], fakeApp())).rejects.toThrow('usage');
+    await expect(main(['x'], temp())).rejects.toThrow('usage');
   });
 });

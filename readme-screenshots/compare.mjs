@@ -9,20 +9,17 @@
 // Lists the replacements on stderr and sets the `changed` output to
 // them (space-separated). The README's folder itself is left alone: the job
 // holding the token writes them there (publish.mjs). Pixels are compared
-// as lib/pixels.mjs says, so the app lists pixelmatch and pngjs among its
-// devDependencies.
+// as lib/pixels.mjs says, with this repo's pixelmatch and pngjs.
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
-import { appPixels, diff } from '../lib/pixels.mjs';
+import { diff, PIXELS } from '../lib/pixels.mjs';
 import { CHANGED_RATIO, isShotName, settings } from './settings.mjs';
 
 /** @typedef {import('../lib/pixels.mjs').Pixels} Pixels */
-
-export { appPixels };
 
 /**
  * The share of pixels that differ between two PNGs, or 1 when their sizes
@@ -85,7 +82,7 @@ export async function main(argv, root = appRoot()) {
     fresh: path.resolve(fresh),
     docs: path.join(root, dir),
     out: path.resolve(out),
-    pixels: await appPixels(root),
+    pixels: PIXELS,
   });
   setOutput('changed', replaced.join(' '));
   return replaced;

@@ -4,8 +4,9 @@ description: >-
   on any that changed, is new or wasn't taken (compare.mjs's header says
   how), uploading each as taken and its diff as the `visual-diffs`
   artifact. For an app whose screenshots come from somewhere that doesn't
-  compare them itself (sift's iOS Simulator shots). Run after the app's
-  dependencies are installed: pixelmatch and pngjs come from them.
+  compare them itself (sift's iOS Simulator shots). It installs pixelmatch
+  and pngjs itself, from this repo, so the app needn't install anything
+  for it.
 
 inputs:
   fresh:
@@ -18,6 +19,12 @@ runs:
     - uses: actions/setup-node@v7
       with:
         node-version: 24
+
+    # pixelmatch and pngjs, from this repo's lockfile into the action's own
+    # checkout (lib/pixels.mjs): nothing in the app's workspace changes.
+    - name: Install the comparison's packages
+      shell: bash
+      run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
 
     - name: Compare with the baselines
       shell: bash

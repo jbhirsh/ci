@@ -37,7 +37,9 @@ choices.
   (`dependabot-merge/`), and the shared Claude rules every repo here follows, kept here
   once and loaded by every Claude session, in every repo (`claude-rules/`).
 
-Everything is plain JavaScript on Node 24 with no runtime dependencies: a tool runs from the
-app's checkout and uses the app's own packages, so it tests with the versions the app ships.
+Everything is plain JavaScript on Node 24: a tool runs from the app's checkout and uses the
+app's own packages, so it tests with the versions the app ships. The one exception is the
+screenshot comparison's pixelmatch and pngjs, which no app runs itself: they are this repo's
+only runtime dependencies, installed by the actions that compare.
 
 Working on it: `CONTRIBUTING.md`.

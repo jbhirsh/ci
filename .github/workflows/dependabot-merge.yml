@@ -4,7 +4,9 @@
 # ruleset on main is the gate). Those bumps touch only this
 # repo's dev tools, which the apps never run, and merge only once every
 # required check is green. Action bumps change what the apps run, so they
-# stay merged by hand.
+# stay merged by hand, as do bumps of the libraries the compare actions
+# install (pixelmatch, pngjs: Dependabot's `tools` group, or one of them on
+# its own): those reach all three apps without passing their CI.
 name: Dependabot Auto-Merge
 
 on:
@@ -20,11 +22,15 @@ permissions: {}
 jobs:
   auto-merge:
     name: Enable auto-merge
-    # Only the runs of a Dependabot npm PR's CI; the action checks the PR
-    # itself, and turns auto-merge on once per PR, never again after that.
+    # Only the runs of a Dependabot npm PR's CI, not the runtime libraries'
+    # (above); the action checks the PR itself, and turns auto-merge on once
+    # per PR, never again after that.
     if: >-
       github.event.workflow_run.event == 'pull_request'
       && startsWith(github.event.workflow_run.head_branch, 'dependabot/npm_and_yarn/')
+      && !startsWith(github.event.workflow_run.head_branch, 'dependabot/npm_and_yarn/tools-')
+      && !startsWith(github.event.workflow_run.head_branch, 'dependabot/npm_and_yarn/pixelmatch-')
+      && !startsWith(github.event.workflow_run.head_branch, 'dependabot/npm_and_yarn/pngjs-')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

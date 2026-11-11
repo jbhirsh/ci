@@ -110,11 +110,11 @@ jobs:
       # no install scripts, which the self-tests don't need.
       - run: npm ci --ignore-scripts
         working-directory: app
-      # This repo's dev tools, for the action lint's YAML parser.
-      - run: npm ci --ignore-scripts
+      # This repo's runtime libraries only (pixelmatch, pngjs), as the
+      # compare actions install them, so a tool that needs a dev package
+      # fails its self-test here rather than in the apps.
+      - run: npm ci --omit=dev --ignore-scripts
         working-directory: ci
-      - name: The app's calls into this repo fit what they call
-        run: node ci/lint/actions.mjs --app app
       - name: Self-tests
         run: |
           shopt -s nullglob
@@ -125,3 +125,10 @@ jobs:
             echo "::endgroup::"
           done
           exit $status
+      # The rest of this repo's packages, for the action lint's YAML parser.
+      - if: ${{ !cancelled() }}
+        run: npm ci --ignore-scripts
+        working-directory: ci
+      - name: The app's calls into this repo fit what they call
+        if: ${{ !cancelled() }}
+        run: node ci/lint/actions.mjs --app app

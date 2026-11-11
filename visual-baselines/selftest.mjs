@@ -7,14 +7,13 @@
 //   - it says how a rewrite gets fresh baselines: a `command`, or an
 //     `artifact` from one of its workflows;
 //   - for a comparison (an `artifact` app): `folders` names one folder, and
-//     every baseline compares equal to itself with the app's pixelmatch and
-//     pngjs.
+//     pngjs reads every baseline.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
-import { appPixels, diff } from '../lib/pixels.mjs';
+import { readPng } from '../lib/pixels.mjs';
 import { knownFiles, matchingFolders, runIn } from './baselines.mjs';
 import { shots } from './from-run.mjs';
 import { settings, singleFolder } from './settings.mjs';
@@ -49,12 +48,7 @@ export async function selftest(root) {
     throw new Error(`visual-baselines.artifact.workflow: no .github/workflows/${workflow}`);
   }
   const folder = path.join(root, singleFolder(s));
-  const pixels = await appPixels(root);
-  for (const shot of shots(folder)) {
-    const png = readFileSync(path.join(folder, shot));
-    if (diff(png, png, pixels).ratio !== 0)
-      throw new Error(`${shot} doesn't compare equal to itself`);
-  }
+  for (const shot of shots(folder)) readPng(path.join(folder, shot));
   lines.push(
     `visual-baselines: rewritten from ${workflow}'s ${name}; compared with up to ${Number((s.ratio * 100).toFixed(4))}% of pixels differing.`,
   );

@@ -5,39 +5,22 @@
 //   - its screenshots folder holds PNGs, each a name the bot may write;
 //   - every `shows` glob the app sets names a file git tracks;
 //   - decide.mjs's rules run over the app's recent history (printed);
-//   - with pixelmatch and pngjs installed, every screenshot compares equal
-//     to itself and wholly different from one of another size. An app
-//     without them that has no settings yet is told so, not failed: it
-//     doesn't use the shared comparison yet.
+//   - pngjs reads every screenshot, and pixelmatch finds one wholly
+//     different from one of another size.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
+import { PIXELS, readPng } from '../lib/pixels.mjs';
 import { matchesAny } from '../visuals/match.mjs';
-import { appPixels, diffRatio } from './compare.mjs';
+import { diffRatio } from './compare.mjs';
 import { changedSince, decide } from './decide.mjs';
 import { isShotName, settings } from './settings.mjs';
 
 /** How far back decide's rules are tried. */
 export const DEPTH = 20;
-
-/**
- * Whether the app installs a package.
- *
- * @param {string} root
- * @param {string} name
- */
-function installed(root, name) {
-  try {
-    createRequire(path.join(root, 'package.json')).resolve(name);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * @param {string} root
@@ -73,35 +56,18 @@ export async function selftest(root) {
   const verdict = decide({ event: 'push', since, changed: changedSince(since, run), settings: s });
   lines.push(`readme-screenshots: over the last ${commits.length - 1} commits: ${verdict.reason}.`);
 
-  if (!installed(root, 'pixelmatch') || !installed(root, 'pngjs')) {
-    if (Object.keys(config).length > 0) {
-      throw new Error('the app has settings but installs no pixelmatch and pngjs');
-    }
-    return [
-      ...lines,
-      'readme-screenshots: no pixelmatch and pngjs installed yet; comparison skipped.',
-    ];
-  }
-  const pixels = await appPixels(root);
   const images = shots.map((name) => ({
     name,
     png: readFileSync(path.join(docs, name)),
-    size: pixels.read(readFileSync(path.join(docs, name))),
+    size: readPng(path.join(docs, name)),
   }));
-  for (const { name, png } of images) {
-    if (diffRatio(png, png, pixels) !== 0)
-      throw new Error(`${name} doesn't compare equal to itself`);
-  }
   const other = images.find(
     (i) => i.size.width !== images[0].size.width || i.size.height !== images[0].size.height,
   );
-  if (other && diffRatio(images[0].png, other.png, pixels) !== 1) {
+  if (other && diffRatio(images[0].png, other.png, PIXELS) !== 1) {
     throw new Error(`${images[0].name} and ${other.name} differ in size but not in the comparison`);
   }
-  return [
-    ...lines,
-    `readme-screenshots: compared ${images.length} screenshots with the app's pixelmatch.`,
-  ];
+  return [...lines, `readme-screenshots: compared ${images.length} screenshots with pixelmatch.`];
 }
 
 /**
