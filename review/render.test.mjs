@@ -62,9 +62,21 @@ describe('renderPrompt', () => {
   it("asks the review to flag commits that undo or patch the PR's earlier ones", () => {
     const prompt = renderPrompt('review', none, run);
     expect(prompt).toContain(
-      "git log --reverse --no-merges --format='%h %an %s' origin/main..HEAD",
+      "git log --reverse --no-merges --format='%h %an <%ae> %s' origin/main..HEAD",
     );
     expect(prompt).toContain('reverts or replaces what an earlier commit in the same PR added');
+  });
+  it("exempts only bots' commits, by exact author name, never an AI session's", () => {
+    const prompt = renderPrompt('review', none, run);
+    expect(prompt).toContain(
+      'a commit whose author name is exactly `github-actions[bot]` (visual\n    baselines, README screenshots) or `claude[bot]` (autofix)',
+    );
+    expect(prompt).toContain(
+      "A commit authored\n    `Claude <noreply@anthropic.com>` is an AI session's, not a bot's: the\n    rule applies to it in full",
+    );
+    expect(prompt).toContain(
+      "every commit of a bot's PR, one whose author is `dependabot[bot]` or\n    whose head branch starts with `dependabot/` or `bot/`.",
+    );
   });
   it('points the review at the shared Claude rules, which a file read of CLAUDE.md misses', () => {
     expect(renderPrompt('review', none, run)).toContain('SHARED_CI/claude-rules/CLAUDE.md');
