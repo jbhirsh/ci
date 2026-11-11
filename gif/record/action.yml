@@ -1,0 +1,89 @@
+name: PR GIFs, record
+description: >-
+  Records a PR's before/after GIFs on this runner and uploads them as the
+  run's pr-gif artifact, one folder a scenario (gif/workflow.mjs's header
+  says how). For a web app it installs the app, the browsers and ffmpeg and
+  runs cli.mjs once a scenario, building main and the checkout; for an app
+  whose CI records videos (sift) it runs videos.mjs, which waits for the
+  PR's run, starts one on main for "before" and turns the videos into GIFs.
+  The record job of pr-gif.yml, after a checkout of the PR's head; it holds
+  no secret, since it runs the PR's code.
+
+inputs:
+  pr:
+    description: The PR's number.
+    required: true
+  scenarios:
+    description: >-
+      The scenario files to record, from the app's root, separated by spaces
+      or commas. Empty for an app whose CI records its scenarios.
+    default: ""
+  side-by-side:
+    description: One labelled GIF of before and after side by side, rather than two ("true").
+    default: "false"
+  after-only:
+    description: Only "after", for a screen main doesn't have ("true").
+    default: "false"
+  github-token:
+    description: >-
+      For an app whose CI records videos: reads the PR's run and its
+      artifact, and starts the run on main (actions write). A web app's
+      recording reads nothing through it.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    # No npm cache: the PR's code runs here, in a run whose cache scope is
+    # main's, and setup-node would save what it left in ~/.npm for main's
+    # runs to restore.
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Read the app's gif settings
+      id: app
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../workflow.mjs" source
+
+    - name: Install the app's dependencies
+      if: steps.app.outputs.source == 'web'
+      shell: bash
+      run: npm ci
+
+    # The recorder's engine: Chromium today, WebKit once ci#37 lands (drop
+    # chromium here then).
+    - name: Install the browsers
+      if: steps.app.outputs.source == 'web'
+      shell: bash
+      run: npx playwright install --with-deps chromium webkit
+
+    # Joins the frames (web) or cuts the videos (ci-videos); the runner's
+    # image has no ffmpeg. Ubuntu's is built with freetype, for the
+    # side-by-side labels.
+    - name: Install ffmpeg
+      shell: bash
+      run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+
+    - name: Record the GIFs
+      shell: bash
+      env:
+        PR: ${{ inputs.pr }}
+        SCENARIOS: ${{ inputs.scenarios }}
+        SIDE_BY_SIDE: ${{ inputs.side-by-side }}
+        AFTER_ONLY: ${{ inputs.after-only }}
+        # Only videos.mjs reads through it; a web app's build and scenarios
+        # are the PR's code, which gets no token.
+        GH_TOKEN: ${{ steps.app.outputs.source == 'ci-videos' && inputs.github-token || '' }}
+        APP_ROOT: ${{ github.workspace }}
+      run: node "$GITHUB_ACTION_PATH/../workflow.mjs" record
+
+    # What did record, to look through, even when a scenario failed (the
+    # attach job then doesn't run).
+    - uses: actions/upload-artifact@v7
+      if: ${{ !cancelled() }}
+      with:
+        name: pr-gif
+        path: pr-gif/
+        if-no-files-found: warn
+        retention-days: 14

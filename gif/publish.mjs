@@ -4,6 +4,24 @@
 // by that commit's SHA so a later push to the branch can't change what an
 // old PR shows. The same for every app, whether its GIFs came from a browser
 // (cli.mjs) or from videos its CI recorded (videos.mjs).
+//
+// Or the GIFs go up as the PR's attachments, and nothing is committed: the
+// pr-gif.yml workflow's attach job (workflow.mjs) calls attachToPr, which
+// writes each scenario's table into the PR's description between
+// `<!-- pr-gif:<scenario> -->` markers (replacing an earlier one), each GIF
+// referenced by its local path (`![GIF: <scenario> after](./pr-gif/…)`), and
+// runs `gh pr edit --body-file … --attach ./pr-gif/…`. gh uploads each file
+// and rewrites the reference to it in place with the uploaded URL
+// (`https://github.com/user-attachments/assets/<id>`; tried in ci#33's
+// trial T1), so there is nothing to read back but a check that none is
+// left local. The description is read just before each edit, so an edit
+// made meanwhile by someone else is kept unless it lands in those seconds.
+// The alt text's `GIF:` is what PR visuals counts when its pictures come
+// from the visual baselines (ci#33), since the URL can't say what it
+// holds. Markdown images can't take a width, so `cellWidth` doesn't apply
+// there. Needs gh ≥ 2.99 (lib/gh.mjs), and a token that may attach: a
+// person's, such as the apps' BOT_PR_TOKEN; GitHub refuses the Actions
+// token ("attaching files requires write access to the repository").
 
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -124,6 +142,27 @@ export const BRANCH_VERCEL_JSON = '{\n  "git": { "deploymentEnabled": false }\n}
  */
 
 /**
+ * A command run in `cwd`, returning what it printed; a failure throws
+ * unless `allowFail`.
+ *
+ * @param {string} command
+ * @param {string} cwd
+ * @returns {Git}
+ */
+function commandIn(command, cwd) {
+  return (args, { env, allowFail = false } = {}) => {
+    const result = spawnSync(command, args, { cwd, encoding: 'utf8', env });
+    const out = { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
+    if (out.status !== 0 && !allowFail) {
+      throw new Error(
+        `${command} ${args[0]} failed: ${(out.stderr || out.stdout).trim().slice(-800)}`,
+      );
+    }
+    return out;
+  };
+}
+
+/**
  * Git in `root`, returning what it printed; a failure throws unless
  * `allowFail`.
  *
@@ -131,14 +170,7 @@ export const BRANCH_VERCEL_JSON = '{\n  "git": { "deploymentEnabled": false }\n}
  * @returns {Git}
  */
 export function gitIn(root) {
-  return (args, { env, allowFail = false } = {}) => {
-    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', env });
-    const out = { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
-    if (out.status !== 0 && !allowFail) {
-      throw new Error(`git ${args[0]} failed: ${(out.stderr || out.stdout).trim().slice(-800)}`);
-    }
-    return out;
-  };
+  return commandIn('git', root);
 }
 
 /**
@@ -222,4 +254,173 @@ export function publishFiles(git, files, { message, branch, push, log = console.
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
+}
+
+/** The most files one `gh pr edit --attach` takes, per gh's manual. */
+export const ATTACH_LIMIT = 50;
+
+/**
+ * The markers around a scenario's block in the PR's description.
+ *
+ * @param {string} key the scenario's name: no space, `<`, `>` or `--`, any
+ *   of which could end the HTML comment the marker is
+ */
+export function blockMarkers(key) {
+  if (!/^[^\s<>]+$/.test(key) || key.includes('--')) {
+    throw new Error(
+      `pr-gif: a scenario named ${JSON.stringify(key)} can't mark its block in a PR description; rename it`,
+    );
+  }
+  return { start: `<!-- pr-gif:${key} -->`, end: `<!-- /pr-gif:${key} -->` };
+}
+
+/**
+ * The description with the scenario's block in it: in place of an earlier
+ * one, or after the rest.
+ *
+ * @param {string} body
+ * @param {string} key
+ * @param {string} block the table, without its markers
+ */
+export function withBlock(body, key, block) {
+  const { start, end } = blockMarkers(key);
+  const marked = `${start}\n${block}\n${end}`;
+  const found = findBlock(body, key);
+  if (found) return body.slice(0, found.from) + marked + body.slice(found.to);
+  return body.trimEnd() ? `${body.trimEnd()}\n\n${marked}\n` : `${marked}\n`;
+}
+
+/**
+ * Where the scenario's block is in the description, markers included, or
+ * null: the last start that an end follows, so a marker left without its
+ * pair (an edit gone wrong) stays as it is, with what follows it.
+ *
+ * @param {string} body
+ * @param {string} key
+ * @returns {{ from: number; to: number } | null}
+ */
+export function findBlock(body, key) {
+  const { start, end } = blockMarkers(key);
+  for (let from = body.lastIndexOf(start); from !== -1; from = body.lastIndexOf(start, from - 1)) {
+    const to = body.indexOf(end, from);
+    if (to !== -1) return { from, to: to + end.length };
+    if (from === 0) break;
+  }
+  return null;
+}
+
+/**
+ * The GIFs a scenario's table shows, so the ones attached: the side-by-side
+ * GIF alone when there is one.
+ *
+ * @param {readonly Published[]} scenarios
+ * @returns {string[]}
+ */
+export function shownFiles(scenarios) {
+  return scenarios.flatMap(
+    (s) =>
+      /** @type {string[]} */ (s.sideBySide ? [s.sideBySide] : [s.before, s.after].filter(Boolean)),
+  );
+}
+
+/**
+ * One scenario's table for the description, each GIF referenced by its
+ * local path (from the directory gh runs in) for gh to upload and replace.
+ *
+ * @param {Published} scenario its GIFs' local paths
+ * @param {{ base?: string }} [options] base: what "before" was built from
+ */
+export function attachmentTable(scenario, { base = 'main' } = {}) {
+  const { name } = scenario;
+  /**
+   * @param {string | null} file
+   * @param {string} what
+   */
+  const img = (file, what) => (file ? `![GIF: ${name} ${what}](./${file})` : '(none)');
+  if (scenario.sideBySide) {
+    return [
+      '| Scenario | Before / After |',
+      '|---|---|',
+      `| ${name} | ${img(scenario.sideBySide, 'before and after')} |`,
+    ].join('\n');
+  }
+  return [
+    `| Scenario | Before (\`${base}\`) | After |`,
+    '|---|---|---|',
+    `| ${name} | ${img(scenario.before, 'before')} | ${img(scenario.after, 'after')} |`,
+  ].join('\n');
+}
+
+/**
+ * @typedef {Git} Gh Runs gh in the directory the GIFs' paths are relative to.
+ */
+
+/**
+ * gh in `cwd`, returning what it printed; a failure throws unless
+ * `allowFail`.
+ *
+ * @param {string} cwd
+ * @returns {Gh}
+ */
+export function ghIn(cwd) {
+  return commandIn('gh', cwd);
+}
+
+/**
+ * Uploads the scenarios' GIFs to the PR as attachments and puts each
+ * scenario's table in its description, at most ATTACH_LIMIT files a
+ * command. Returns the description as gh left it.
+ *
+ * @param {{ repo: string; pr: string; cwd: string; scenarios: readonly Published[]; base?: string; gh?: Gh; log?: (line: string) => void }} options
+ *   pr: its number; scenarios: each GIF as a path relative to `cwd`. gh must
+ *   be one that can attach (lib/gh.mjs's checkGh, which the attach action
+ *   runs first).
+ */
+export function attachToPr({ repo, pr, cwd, scenarios, base, gh = ghIn(cwd), log = console.log }) {
+  const files = shownFiles(scenarios);
+  const read = () =>
+    gh(['pr', 'view', pr, '--repo', repo, '--json', 'body', '--jq', '.body']).stdout.replace(
+      /\n$/,
+      '',
+    );
+  let body = read();
+  for (const s of scenarios) body = withBlock(body, s.name, attachmentTable(s, { base }));
+  const bodyFile = path.join(cwd, `.pr-gif-body-${pr}.md`);
+  try {
+    for (let i = 0; i < files.length; i += ATTACH_LIMIT) {
+      if (i > 0) body = read();
+      writeFileSync(bodyFile, body);
+      const batch = files.slice(i, i + ATTACH_LIMIT);
+      try {
+        gh([
+          'pr',
+          'edit',
+          pr,
+          '--repo',
+          repo,
+          '--body-file',
+          bodyFile,
+          ...batch.flatMap((file) => ['--attach', `./${file}`]),
+        ]);
+      } catch (error) {
+        throw new Error(
+          `pr-gif: attaching to #${pr} stopped after ${i} of ${files.length} GIFs; its description may still reference the rest locally (./…): run it again to attach them`,
+          { cause: error },
+        );
+      }
+    }
+  } finally {
+    rmSync(bodyFile, { force: true });
+  }
+  const after = read();
+  const local = files.filter((file) => after.includes(`](./${file})`));
+  if (local.length > 0) {
+    throw new Error(
+      `pr-gif: gh uploaded the GIFs but left ${local.join(', ')} referenced locally in #${pr}'s description: gh's --attach no longer rewrites references as attachToPr expects (gif/publish.mjs)`,
+    );
+  }
+  log(
+    `pr-gif: attached ${files.length} GIF${files.length === 1 ? '' : 's'} to #${pr}'s description`,
+  );
+  return after;
 }

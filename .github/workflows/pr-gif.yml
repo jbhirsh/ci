@@ -1,0 +1,113 @@
+# A PR's before/after GIFs, recorded in Actions and attached to the PR as
+# GitHub attachments (github.com/user-attachments/assets/…), so nothing goes
+# in git and no pictures branch is needed (ci#33). An app calls it from a
+# pr-gif.yml of its own, run by hand (or through the Actions API, as a
+# Claude session can) with the PR and its scenarios:
+#
+#   on:
+#     workflow_dispatch:
+#       inputs:
+#         pr: { description: The PR's number, required: true, type: number }
+#         scenarios: { description: 'Scenario files, space-separated', type: string, default: '' }
+#         side-by-side: { type: boolean, default: false }
+#         after-only: { type: boolean, default: false }
+#   permissions: {}
+#   jobs:
+#     gif:
+#       permissions:
+#         contents: read
+#         actions: write    # only an app whose CI records videos (sift)
+#       uses: jbhirsh/ci/.github/workflows/pr-gif.yml@main
+#       with:
+#         pr: ${{ inputs.pr }}
+#         scenarios: ${{ inputs.scenarios }}
+#         side-by-side: ${{ inputs.side-by-side }}
+#         after-only: ${{ inputs.after-only }}
+#       secrets:
+#         bot-token: ${{ secrets.BOT_PR_TOKEN }}
+#
+# Two jobs, so the PR's code never runs beside the token:
+#   - record (gif/record) checks out the PR's head and records each
+#     scenario, "before" from main and "after" from the head, as a run of
+#     the gif tool on the owner's machine does (cli.mjs; videos.mjs for
+#     sift, from its CI's videos), and uploads the GIFs as the pr-gif
+#     artifact, to look through. It holds only the caller's Actions token.
+#   - attach (gif/attach) writes each scenario's table into the PR's
+#     description and uploads the GIFs with BOT_PR_TOKEN, a person's
+#     fine-grained token: GitHub refuses the Actions token for attachments.
+#     Attach jobs for the same PR take turns, so none loses another's edit;
+#     GitHub keeps one waiting, so a third dispatch while one waits cancels
+#     the waiting one's attach (its GIFs stay in its artifact).
+#
+# Dispatch it only for a PR whose code you'd run: a dispatched run's caches
+# are main's, and the record job runs the PR's code there (it saves no
+# cache itself).
+#
+# Not a pull-request workflow, so no required check depends on these job
+# names. Permissions: a called workflow keeps or lowers what its caller
+# grants, and a job here asking for more fails the run at startup, so
+# record declares nothing and takes the caller's; attach needs none.
+name: PR GIFs
+
+on:
+  workflow_call:
+    inputs:
+      pr:
+        description: The PR's number.
+        required: true
+        type: number
+      scenarios:
+        description: >-
+          The scenario files to record, from the app's root, separated by
+          spaces or commas. Empty for an app whose CI records its scenarios
+          (sift), which takes every one its PR run recorded.
+        type: string
+        default: ""
+      side-by-side:
+        description: One labelled GIF of before and after side by side, rather than two.
+        type: boolean
+        default: false
+      after-only:
+        description: Only "after", for a screen main doesn't have.
+        type: boolean
+        default: false
+    secrets:
+      bot-token:
+        description: >-
+          The app's BOT_PR_TOKEN: a fine-grained token with Contents and Pull
+          requests read and write on the app, which may attach files.
+        required: true
+
+jobs:
+  record:
+    name: Record the GIFs
+    runs-on: ubuntu-latest
+    # A web app's two builds and recordings take minutes; sift's waits for
+    # its PR's CI run and a run on main, as videos.mjs allows up to 3 hours.
+    timeout-minutes: 200
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/pull/${{ inputs.pr }}/head
+          persist-credentials: false
+      - uses: jbhirsh/ci/gif/record@main
+        with:
+          pr: ${{ inputs.pr }}
+          scenarios: ${{ inputs.scenarios }}
+          side-by-side: ${{ inputs.side-by-side }}
+          after-only: ${{ inputs.after-only }}
+
+  attach:
+    name: Attach them to the PR
+    needs: record
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    concurrency:
+      group: pr-gif-attach-${{ github.repository }}-${{ inputs.pr }}
+      cancel-in-progress: false
+    steps:
+      - uses: jbhirsh/ci/gif/attach@main
+        with:
+          pr: ${{ inputs.pr }}
+          token: ${{ secrets.bot-token }}

@@ -3,7 +3,7 @@
 // each touch drawn as a ring). cli.mjs hands over to this. Needs gh (signed
 // in), git, unzip and ffmpeg.
 //
-//   node ../ci/gif/cli.mjs <pr> [--side-by-side] [--no-before] [--width <px>] [--fps <n>] [--repo owner/name]
+//   node ../ci/gif/cli.mjs <pr> [--side-by-side] [--no-before] [--width <px>] [--fps <n>] [--repo owner/name] [--out <dir>]
 //
 // What it reads from the `gif.videos` setting (settings.mjs): the workflow
 // that records (`workflow`), the artifact it uploads, one <scenario>.mp4 per
@@ -25,10 +25,22 @@
 //    step.
 // 4. Commits them to the pictures branch under <pr>/ as
 //    <scenario>-before.gif and so on (publish.mjs), and prints the table for
-//    the PR description, linked by that commit's SHA.
+//    the PR description, linked by that commit's SHA. With --out <dir>, it
+//    publishes nothing and leaves them in <dir>/<scenario>/ instead, as
+//    cli.mjs leaves a web app's in pr-gif/<scenario>/: what the pr-gif.yml
+//    workflow records for its attach job to upload (workflow.mjs).
 
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -58,6 +70,7 @@ import {
 /** @typedef {import('./settings.mjs').GifSettings} GifSettings */
 /** @typedef {import('./video.mjs').Window} Window */
 /** @typedef {import('./video.mjs').GifOptions} GifOptions */
+/** @typedef {import('./publish.mjs').Published} Published */
 
 /** How often and how long it waits on a run; tests shorten them. */
 export const timing = {
@@ -84,6 +97,7 @@ const log = (line) => process.stderr.write(`${line}\n`);
  * @property {number} width
  * @property {number} fps
  * @property {boolean} noBefore skip the "before" run: a new screen has nothing on main to compare
+ * @property {string} [out] leave the GIFs in this folder, one subfolder a scenario, rather than publish them
  */
 
 /**
@@ -120,7 +134,11 @@ export function parseVideoArgs(argv, defaults) {
     else if (arg === '--no-before') options.noBefore = true;
     else if (arg === '--width') options.width = number(arg, argv[++i]);
     else if (arg === '--fps') options.fps = number(arg, argv[++i]);
-    else if (arg === '--repo') {
+    else if (arg === '--out') {
+      const dir = argv[++i];
+      if (!dir || dir.startsWith('-')) throw new Error('--out needs a folder');
+      options.out = dir;
+    } else if (arg === '--repo') {
       const repo = argv[++i];
       if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error('--repo needs owner/name');
       options.repo = repo;
@@ -686,6 +704,17 @@ export async function main(argv, { root, settings }) {
     for (const [file, local] of files) {
       const note = sizeNote(file, statSync(local).size);
       if (note.includes('over 5 MB')) log(`  warning: ${note}`);
+    }
+    if (options.out) {
+      for (const [file, local] of files) {
+        const name = /** @type {Published} */ (
+          scenarios.find((s) => [s.before, s.after, s.sideBySide].includes(file))
+        ).name;
+        mkdirSync(path.join(options.out, name), { recursive: true });
+        copyFileSync(local, path.join(options.out, name, path.posix.basename(file)));
+      }
+      log(`GIFs for ${scenarios.length} scenario(s) left in ${options.out}/, nothing published`);
+      return;
     }
     const sha = publishFiles(gitIn(root), files, {
       message: `Add PR #${pr}'s GIFs\n\nFrom ${videos.workflow} runs ${afterDone.id}${beforeDone ? ` and ${beforeDone.id}` : ''}, made by jbhirsh/ci's gif/videos.mjs.`,
