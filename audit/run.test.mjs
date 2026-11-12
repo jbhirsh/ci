@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -5,9 +6,22 @@ import { describe, expect, it, vi } from 'vitest';
 import { TITLES, drawGraph, knipConfig, main, runJscpd, runKnip, settings } from './run.mjs';
 import { cli, selftest } from './selftest.mjs';
 
-function root(/** @type {string[]} */ files = []) {
+/**
+ * A git checkout holding these files (each `{}` unless given), staged, and a
+ * package.json with the `jscpd` script unless one is given.
+ *
+ * @param {string[] | Record<string, string>} files
+ */
+function root(files = []) {
   const dir = mkdtempSync(path.join(tmpdir(), 'audit-app-'));
-  for (const file of files) writeFileSync(path.join(dir, file), '{}');
+  const given = Array.isArray(files) ? Object.fromEntries(files.map((f) => [f, '{}'])) : files;
+  const all = { 'package.json': '{"scripts":{"jscpd":"jscpd"}}', ...given };
+  for (const [file, text] of Object.entries(all)) {
+    mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+    writeFileSync(path.join(dir, file), text);
+  }
+  execFileSync('git', ['init', '-q'], { cwd: dir });
+  execFileSync('git', ['add', '.'], { cwd: dir });
   return dir;
 }
 
@@ -66,8 +80,11 @@ describe('runKnip', () => {
 });
 
 describe('runJscpd', () => {
-  it('reads the JSON report jscpd wrote, whatever its exit code', () => {
-    const report = runJscpd('/app', (_, args) => {
+  it("runs the app's jscpd script and reads the JSON report it wrote, whatever its exit code", () => {
+    /** @type {string[][]} */
+    const calls = [];
+    const report = runJscpd(root(), (command, args) => {
+      calls.push([command, ...args]);
       writeFileSync(
         path.join(args[args.indexOf('--output') + 1], 'jscpd-report.json'),
         '{"duplicates":[]}',
@@ -75,13 +92,33 @@ describe('runJscpd', () => {
       return { status: 1, stdout: '', stderr: '' };
     });
     expect(report).toEqual({ duplicates: [] });
+    expect(calls[0].slice(0, 7)).toEqual([
+      'npm',
+      'run',
+      '--silent',
+      'jscpd',
+      '--',
+      '--reporters',
+      'json',
+    ]);
   });
 
   it('fails when jscpd wrote no report', () => {
-    expect(() => runJscpd('/app', () => ({ status: 0, stdout: '', stderr: 'nope' }))).toThrow(
+    expect(() => runJscpd(root(), () => ({ status: 0, stdout: '', stderr: 'nope' }))).toThrow(
       'jscpd wrote no report (exit 0): nope',
     );
   });
+
+  it.each([['{}'], ['{"scripts":{"jscpd":"jscpd --min-lines 3"}}']])(
+    'fails, saying what to add, when package.json is %s',
+    (pkg) => {
+      const spawn = vi.fn();
+      expect(() => runJscpd(root({ 'package.json': pkg }), spawn)).toThrow(
+        'package.json needs the script `"jscpd": "jscpd"`',
+      );
+      expect(spawn).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('main', () => {
@@ -89,7 +126,9 @@ describe('main', () => {
     const { d, out, gh } = deps();
     expect(main(['knip'], d)).toBe('Dead code (weekly audit): update (#4).');
     expect(out.summary[0]).toMatch(/^## Dead code \(weekly audit\)\n\n\[knip\]/);
-    expect(out.summary[0]).toContain('say so in `knip.jsonc`');
+    expect(out.summary[0]).toContain(
+      'make their file an `entry` in `knip.jsonc`: an ignore fails the audit',
+    );
     expect(out.outputs).toEqual([['findings', '1']]);
     expect(gh.mock.calls[1][0]).toEqual(['issue', 'edit', '4', '--body-file', '-']);
   });
@@ -209,7 +248,7 @@ describe('graph', () => {
 describe('selftest', () => {
   /** @type {import('./run.mjs').Spawn} */
   const tools = (_, args) => {
-    if (args[1] === 'jscpd') {
+    if (args.includes('jscpd')) {
       writeFileSync(path.join(args[args.indexOf('--output') + 1], 'jscpd-report.json'), '{}');
     }
     return { status: 0, stdout: '{"issues":[]}', stderr: '' };
