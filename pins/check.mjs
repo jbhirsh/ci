@@ -50,28 +50,12 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appRoot } from '../lib/app.mjs';
+import { isReason, notes } from '../lib/reason.mjs';
 
 /** @typedef {{ file: string, line: number, message: string }} Finding */
 
-/** How many words a reason needs, a version label not counting. */
-export const REASON_WORDS = 3;
-
 /** Folders never read for workflows or actions. */
 const SKIP = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', 'ios', 'android']);
-
-/**
- * Whether a comment gives a reason: a few words, not just a version label.
- *
- * @param {string} text
- */
-export function isReason(text) {
-  const words = text
-    .replace(/\b[0-9a-f]{40}\b/gi, ' ')
-    .replace(/\bv?\d+(?:\.[\w-]+)*/g, ' ')
-    .split(/[^A-Za-z]+/)
-    .filter((word) => word.length > 1);
-  return words.length >= REASON_WORDS;
-}
 
 /**
  * The version range in a dependency's spec, after any `npm:name@` alias;
@@ -130,18 +114,6 @@ export function isPinnedRange(range) {
 export function caretFor(range) {
   const version = /^[~=v\s>]*(\d+(?:\.\d+){0,2})(?:\.x)?$/.exec(range.trim());
   return version ? `^${version[1]}` : null;
-}
-
-/**
- * The notes under a `//…` key: a string or a list of strings.
- *
- * @param {unknown} value
- * @returns {string[]}
- */
-export function notes(value) {
-  if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.filter((v) => typeof v === 'string');
-  return [];
 }
 
 /** @param {string} text */
