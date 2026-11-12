@@ -1,28 +1,30 @@
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { isolateGit } from '../mutation/test-repo.mjs';
 import { TITLES, drawGraph, knipConfig, main, runJscpd, runKnip, settings } from './run.mjs';
 import { cli, selftest } from './selftest.mjs';
+import { app, cleanApps } from './test-app.mjs';
+
+/** @type {() => void} */
+let restoreGit;
+beforeEach(() => {
+  restoreGit = isolateGit();
+});
+afterEach(() => {
+  restoreGit();
+  cleanApps();
+});
 
 /**
- * A git checkout holding these files (each `{}` unless given), staged, and a
- * package.json with the `jscpd` script unless one is given.
+ * An app holding these files (each `{}` unless given), and a package.json
+ * with the `jscpd` script unless one is given.
  *
  * @param {string[] | Record<string, string>} files
  */
 function root(files = []) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'audit-app-'));
   const given = Array.isArray(files) ? Object.fromEntries(files.map((f) => [f, '{}'])) : files;
-  const all = { 'package.json': '{"scripts":{"jscpd":"jscpd"}}', ...given };
-  for (const [file, text] of Object.entries(all)) {
-    mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
-    writeFileSync(path.join(dir, file), text);
-  }
-  execFileSync('git', ['init', '-q'], { cwd: dir });
-  execFileSync('git', ['add', '.'], { cwd: dir });
-  return dir;
+  return app({ 'package.json': '{"scripts":{"jscpd":"jscpd"}}', ...given });
 }
 
 /**
@@ -131,6 +133,43 @@ describe('main', () => {
     );
     expect(out.outputs).toEqual([['findings', '1']]);
     expect(gh.mock.calls[1][0]).toEqual(['issue', 'edit', '4', '--body-file', '-']);
+  });
+
+  it('lists suppressions above the findings, counts them, syncs the issue, then fails', () => {
+    const app = root({
+      'knip.jsonc': '{\n  // why\n  "ignoreDependencies": ["x"],\n}',
+      'src/a.ts': '/** @public */\nexport const a = 1;\n',
+    });
+    const { d, out, gh } = deps({ root: app });
+    expect(() => main(['knip'], d)).toThrow(
+      /^knip\.jsonc and the code hide what the weekly audit should find\./,
+    );
+    expect(out.summary[0]).toMatch(
+      /^## Dead code \(weekly audit\)\n\n### Suppressions \(2\)\n\nknip\.jsonc and the code hide/,
+    );
+    expect(out.summary[0]).toContain('- `knip.jsonc:3` `ignoreDependencies` (`x`): delete it.');
+    expect(out.summary[0]).toContain('- `src/a.ts:1` `@public`: delete the tag.');
+    expect(out.summary[0]).toContain('### Unused exports (1)');
+    expect(out.outputs).toEqual([['findings', '3']]);
+    expect(gh.mock.calls[1][0]).toEqual(['issue', 'edit', '4', '--body-file', '-']);
+    expect(/** @type {unknown[]} */ (gh.mock.calls[1])[1]).toContain('### Suppressions (2)');
+  });
+
+  it('fails a dry run on a suppression too, leaving the issue alone', () => {
+    const { d, gh } = deps({ root: root({ 'knip.json': '{"rules":{"exports":"off"}}' }) });
+    expect(() => main(['knip', '--dry-run'], d)).toThrow(
+      '- `knip.json:1` `rules` (`exports: "off"`): delete it, so knip reports every issue type at full weight.',
+    );
+    expect(gh).not.toHaveBeenCalled();
+  });
+
+  it("syncs the issue, then fails, on a config the scan can't read", () => {
+    const { d, gh } = deps({ root: root(['knip.ts']) });
+    expect(() => main(['knip'], d)).toThrow("knip.ts can't be read without running it");
+    expect(gh.mock.calls[1][0]).toEqual(['issue', 'edit', '4', '--body-file', '-']);
+    expect(/** @type {unknown[]} */ (gh.mock.calls[1])[1]).toMatch(
+      /^### Suppressions \(1\)\n\nknip\.ts can't be read without running it/m,
+    );
   });
 
   it('leaves the issue alone on a dry run', () => {
@@ -262,6 +301,13 @@ describe('selftest', () => {
       'audit: Dead code (weekly audit): 0 found (dry run, issue left alone).',
       'audit: Duplicated code (weekly audit): 0 found (dry run, issue left alone).',
     ]);
+  });
+
+  it('runs both checks, failing with what each found', () => {
+    const app2 = root({ 'src/a.ts': '', 'knip.json': '{"ignore":["x"]}', 'package.json': '{}' });
+    expect(() => selftest(app2, tools)).toThrow(
+      /^knip: knip\.json hides what the weekly audit should find\.[^]*\njscpd: package\.json needs the script/,
+    );
   });
 
   it('fails on a graph folder that is not there', () => {

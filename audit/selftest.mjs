@@ -3,8 +3,9 @@
 // settings parse and its graph folders exist, then runs knip and jscpd as
 // the audit does, with the app's configs, and reads their reports (a dry
 // run: no issue is touched, and what they find is printed, not judged).
-// A package.json without the `jscpd` script the audit runs jscpd through
-// fails it, as it would fail the weekly run.
+// Two things fail it, as they fail the weekly run: a knip suppression in
+// the app (audit/suppressions.mjs), and a package.json without the `jscpd`
+// script the audit runs jscpd through.
 // Lychee and Graphviz aren't run: the action installs them, not the app.
 
 import { existsSync } from 'node:fs';
@@ -16,7 +17,7 @@ import { main, settings, spawn as realSpawn } from './run.mjs';
 /**
  * @param {string} root
  * @param {import('./run.mjs').Spawn} [spawn] how to run the tools
- * @returns {string[]} what to print; throws on the first problem
+ * @returns {string[]} what to print; throws on a problem (both checks', when both have one)
  */
 export function selftest(root, spawn = realSpawn) {
   const { graph } = settings(appConfig('audit', root));
@@ -25,20 +26,27 @@ export function selftest(root, spawn = realSpawn) {
     throw new Error(`audit.graph names what isn't there: ${missing.join(', ')}`);
   }
   const lines = [`audit: the graph would draw ${graph.join(', ')}.`];
+  // Both checks run, so an app with a problem in each hears of both at once.
+  const failures = [];
   for (const check of ['knip', 'jscpd']) {
-    const done = main([check, '--dry-run'], {
-      root,
-      env: {},
-      spawn,
-      gh: () => {
-        throw new Error('a dry run calls no gh');
-      },
-      summary: () => {},
-      setOutput: () => {},
-      now: new Date(),
-    });
-    lines.push(`audit: ${done}`);
+    try {
+      const done = main([check, '--dry-run'], {
+        root,
+        env: {},
+        spawn,
+        gh: () => {
+          throw new Error('a dry run calls no gh');
+        },
+        summary: () => {},
+        setOutput: () => {},
+        now: new Date(),
+      });
+      lines.push(`audit: ${done}`);
+    } catch (error) {
+      failures.push(`${check}: ${/** @type {Error} */ (error).message}`);
+    }
   }
+  if (failures.length > 0) throw new Error(failures.join('\n'));
   return lines;
 }
 

@@ -23,6 +23,8 @@ Changing and testing a tool against an app is in `CONTRIBUTING.md`.
   three. `devDependencies` are for this repo's tests and type-checking only.
 - **Plain JavaScript (`.mjs`), typed in JSDoc**, checked by TypeScript (`checkJs`, strict): it
   runs on Node 24 from any path, with no build or type stripping.
+  `npm run typecheck` runs TypeScript 7 by path, never bare `tsc`: the TypeScript 6 API the
+  audit's tests parse with (`@typescript/typescript6`) brings a `tsc` of its own.
 - **One composite action per job.** An app's job keeps its `name:` (its required check) and
   calls `jbhirsh/ci/<tool>@main`; a tool that needs several jobs (a matrix) is a reusable
   workflow in `.github/workflows/`, used only where no required check depends on its job

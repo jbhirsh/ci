@@ -120,7 +120,7 @@ export function knipFindings(report, config) {
   return {
     count,
     markdown: [
-      `[knip](https://knip.dev) found code and dependencies nothing uses. Delete them, or, if something does use them in a way knip can’t see, say so in \`${config}\`.`,
+      `[knip](https://knip.dev) found code and dependencies nothing uses. Delete them, or, if something does use them in a way knip can’t see, use them a way it reads (an import, a package script) or make their file an \`entry\` in \`${config}\`: an ignore fails the audit.`,
       ...sections,
     ].join('\n\n'),
   };

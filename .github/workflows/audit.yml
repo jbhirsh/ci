@@ -9,8 +9,10 @@
 #   - Architecture graph (dependency-cruiser): an artifact, linked from the
 #     run's summary.
 #
-# The run stays green unless a tool breaks; the issues are the alert. Not a
-# PR workflow, so no required check depends on these job names.
+# The run stays green unless a tool breaks, or a knip config or tag
+# suppresses a finding (audit/suppressions.mjs; an app's CI runs the same
+# scan on every PR, audit/suppressions/action.yml); the issues are the
+# alert. Not a PR workflow, so no required check depends on these job names.
 #
 # The caller grants the permissions (a called workflow can only narrow
 # them):

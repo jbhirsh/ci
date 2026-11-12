@@ -26,6 +26,11 @@
 // package is used. Findings never fail the run; a tool that breaks does:
 // knip exiting above 1, jscpd writing no report (or the app having no
 // `jscpd` script), lychee exiting other than 0 or 2 (2 is broken links).
+// So does a knip suppression (audit/suppressions.mjs: an `ignore*` option,
+// a loosened rule, an `@public` tag, …): the knip check lists them at the
+// top of the Dead code issue, counted with the findings, syncs the issue,
+// then fails, so a suppression the PR-time step missed still turns the run
+// red.
 // `--dry-run` leaves the issue alone, for a local run or a self-test.
 // The issue needs GH_TOKEN (issues write); the run's link comes from
 // GITHUB_SERVER_URL, GITHUB_REPOSITORY and GITHUB_RUN_ID.
@@ -39,6 +44,7 @@ import { setOutput, summary } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
 import { sync } from './issue.mjs';
 import { jscpdFindings, knipFindings, lycheeFindings } from './report.mjs';
+import { KNIP_CONFIG_LOCATIONS, suppressions, suppressionsMessage } from './suppressions.mjs';
 
 /** Each check's tracking issue. */
 export const TITLES = /** @type {const} */ ({
@@ -47,23 +53,13 @@ export const TITLES = /** @type {const} */ ({
   lychee: 'Broken links (weekly audit)',
 });
 
-/** The config files knip reads, in the order it looks for them. */
-const KNIP_CONFIGS = [
-  'knip.json',
-  'knip.jsonc',
-  '.knip.json',
-  '.knip.jsonc',
-  'knip.config.ts',
-  'knip.ts',
-];
-
 /**
  * The app's knip config file, for the findings' advice.
  *
  * @param {string} root
  */
 export function knipConfig(root) {
-  return KNIP_CONFIGS.find((name) => existsSync(path.join(root, name))) ?? 'knip’s config';
+  return KNIP_CONFIG_LOCATIONS.find((name) => existsSync(path.join(root, name))) ?? 'knip’s config';
 }
 
 /**
@@ -223,8 +219,29 @@ export function main(argv, deps = defaultDeps()) {
   }
   /** @type {import('./report.mjs').Findings} */
   let findings;
+  /** @type {string | undefined} */
+  let refused;
   if (check === 'knip') {
-    findings = knipFindings(runKnip(deps.root, deps.spawn), knipConfig(deps.root));
+    // A config the scan can't read (a knip.ts) fails the run too, and heads
+    // the issue as one suppression would, but only once the issue shows
+    // this week's findings.
+    /** @type {{ config: string, list: import('./suppressions.mjs').Suppression[] }} */
+    let hidden = { config: knipConfig(deps.root), list: [] };
+    try {
+      hidden = suppressions(deps.root);
+    } catch (error) {
+      refused = /** @type {Error} */ (error).message;
+    }
+    findings = knipFindings(runKnip(deps.root, deps.spawn), hidden.config);
+    if (hidden.list.length > 0) refused = suppressionsMessage(hidden);
+    if (refused) {
+      const count = Math.max(1, hidden.list.length);
+      const top = `### Suppressions (${count})\n\n${refused}`;
+      findings = {
+        count: findings.count + count,
+        markdown: [top, findings.markdown].filter(Boolean).join('\n\n'),
+      };
+    }
   } else if (check === 'jscpd') {
     findings = jscpdFindings(runJscpd(deps.root, deps.spawn), deps.root);
   } else if (check === 'lychee') {
@@ -250,13 +267,17 @@ export function main(argv, deps = defaultDeps()) {
   const title = TITLES[check];
   deps.summary(`## ${title}\n\n${findings.markdown || 'Nothing found.'}`);
   deps.setOutput('findings', String(findings.count));
-  if (dryRun) return `${title}: ${findings.count} found (dry run, issue left alone).`;
-  const { GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID } = deps.env;
-  const runUrl = `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}`;
-  return sync(
-    { title, findings: findings.markdown, runUrl, date: deps.now.toISOString().slice(0, 10) },
-    deps.gh,
-  );
+  let done = `${title}: ${findings.count} found (dry run, issue left alone).`;
+  if (!dryRun) {
+    const { GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID } = deps.env;
+    const runUrl = `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}`;
+    done = sync(
+      { title, findings: findings.markdown, runUrl, date: deps.now.toISOString().slice(0, 10) },
+      deps.gh,
+    );
+  }
+  if (refused) throw new Error(refused);
+  return done;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
