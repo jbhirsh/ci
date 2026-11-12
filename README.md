@@ -24,7 +24,8 @@ choices.
   on the lines a PR changed, and a monthly sweep of everything (`mutation/`): a test that
   passes whatever the code does fails here.
 - **Gates no linter has.** Commit messages (`commits/`), version pins and type-coverage
-  ignores without a reason (`pins/`), UI changes without pictures (`visuals/`), secrets ([gitleaks](https://gitleaks.io),
+  ignores without a reason (`pins/`), source files the coverage gate doesn't measure, with no
+  reason (`unmeasured/`), UI changes without pictures (`visuals/`), secrets ([gitleaks](https://gitleaks.io),
   `gitleaks/`) and static analysis ([Semgrep](https://semgrep.dev), `semgrep/`).
 - **Pictures of every change.** Before/after GIFs for a PR (`gif/`), visual-regression
   baselines rewritten from CI's own screenshots (`visual-baselines/`), and README screenshots

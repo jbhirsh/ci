@@ -1,0 +1,20 @@
+name: Unmeasured
+description: >-
+  Fails when a source file is left out of the app's coverage gate with no
+  reason: a tracked code file the coverage report doesn't hold, which
+  .github/ci.json's unmeasured.files doesn't list as "<glob>: <reason>".
+  Also when an entry lists no unmeasured file, or gives too short a reason.
+  Runs as a step of the app's coverage job, after a passing coverage run
+  that writes coverage/coverage-final.json. What counts as source, and the
+  setting, are in check.mjs's header.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Check for source files the coverage gate doesn't measure
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/check.mjs"
