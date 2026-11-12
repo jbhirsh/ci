@@ -1,5 +1,9 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { STEP_MS, click, drag, glide, scroll, smoothstep, swipe } from './moves.mjs';
+import { STEP_MS, click, drag, glide, scroll, smoothstep, swipe, touchStep } from './moves.mjs';
+
+// jsdom's, which touchStep's tests run in (the repo's lint knows Node's globals).
+const { document } = globalThis;
 
 // The moves go by the clock, so the tests run them on a fake one: a loaded
 // machine would otherwise stretch their steps, and what they send with them.
@@ -62,24 +66,16 @@ function fakePage() {
      */
     wheel: (_dx, dy) => note('wheel', 0, dy),
   };
-  // Its CDP sessions note what they're sent too: a touch by its type and
-  // point, anything else by its method.
-  const sessions = { made: 0 };
-  /**
-   * @param {string} method
-   * @param {{ type?: string; touchPoints?: { x: number; y: number }[] }} [params]
-   */
-  const send = (method, params) =>
-    method === 'Input.dispatchTouchEvent'
-      ? note(params?.type ?? '?', params?.touchPoints?.[0]?.x, params?.touchPoints?.[0]?.y)
-      : note(method);
-  const context = () => ({
-    newCDPSession: () => {
-      sessions.made += 1;
-      return Promise.resolve({ send });
-    },
-  });
-  return { page: { mouse, context }, sent, sessions };
+  // What it's asked to run in the page notes the touch step it runs: its
+  // type and point.
+  const evaluate = (
+    /** @type {(step: import('./moves.mjs').TouchStep) => void} */ fn,
+    /** @type {import('./moves.mjs').TouchStep} */ step,
+  ) => {
+    expect(fn).toBe(touchStep);
+    return note(`touch ${step.type}`, step.at.x, step.at.y);
+  };
+  return { page: { mouse, evaluate }, sent };
 }
 
 /**
@@ -198,16 +194,16 @@ describe('swipe', () => {
     await play(glide(page, { x: 300, y: 500 }, 0));
     await play(swipe(page, { x: 330, y: 500 }, { x: 70, y: 500 }, 160));
     const what = sent.map((s) => s.what);
-    const down = what.indexOf('touchStart');
-    const up = what.indexOf('touchEnd');
-    // Touch turned on, the pointer brought to the start, then a pause there.
-    expect(what.indexOf('Emulation.setTouchEmulationEnabled')).toBeLessThan(down);
+    const down = what.indexOf('touch start');
+    const up = what.indexOf('touch end');
+    // The pointer brought to the start, then a pause there.
     expect(sent[down]).toMatchObject({ x: 330, y: 500 });
     expect(sent[down - 1]).toMatchObject({ what: 'move', x: 330, y: 500 });
     expect(sent[down].at - sent[down - 1].at).toBeGreaterThanOrEqual(150);
     expect(up).toBe(sent.length - 1);
+    expect(sent[up]).toMatchObject({ x: 70, y: 500 });
     const during = sent.slice(down + 1, up);
-    expect(during.every((s) => s.what === 'touchMove' && s.y === 500)).toBe(true);
+    expect(during.every((s) => s.what === 'touch move' && s.y === 500)).toBe(true);
     expect(during.length).toBeGreaterThan(5);
     expect(during.at(-1)).toMatchObject({ x: 70 });
     expect(during.at(-1)?.at ?? 0).toBeGreaterThanOrEqual(during[0].at + 160);
@@ -219,17 +215,133 @@ describe('swipe', () => {
     expect(full.at(-1) ?? 0).toBeGreaterThan(20);
   });
 
-  it('turns touch on once per page, and the next move starts where it lifted', async () => {
-    const { page, sent, sessions } = fakePage();
+  it('starts the next move where it lifted', async () => {
+    const { page, sent } = fakePage();
     await play(swipe(page, { x: 330, y: 500 }, { x: 70, y: 500 }, 100));
     await play(swipe(page, { x: 330, y: 500 }, { x: 70, y: 500 }, 100));
-    expect(sessions.made).toBe(1);
-    expect(sent.filter((s) => s.what === 'Emulation.setTouchEmulationEnabled')).toHaveLength(1);
-    expect(sent.filter((s) => s.what === 'touchEnd')).toHaveLength(2);
+    expect(sent.filter((s) => s.what === 'touch end')).toHaveLength(2);
     const before = sent.length;
     await play(glide(page, { x: 200, y: 500 }, 100));
     expect(sent[before]).toMatchObject({ what: 'move' });
     expect(sent[before].x).toBeLessThan(200);
     expect(sent[before].x).toBeGreaterThanOrEqual(70);
+  });
+});
+
+describe('touchStep', () => {
+  // jsdom lays nothing out, so it has no elementFromPoint: each test says
+  // what is under the finger.
+  /** @type {EventTarget | null} */
+  let under = null;
+  beforeEach(() => {
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => under,
+    });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(document, 'elementFromPoint');
+  });
+
+  it('sends a touch pointer event and a touch event to where the touch started, as a phone does', () => {
+    const start = document.createElement('div');
+    const elsewhere = document.createElement('div');
+    document.body.append(start, elsewhere);
+    /** @type {{ type: string; on: string; x?: number; touches?: number; changed?: number; pointerType?: string }[]} */
+    const seen = [];
+    let prevented = false;
+    for (const type of [
+      'pointerdown',
+      'pointermove',
+      'pointerup',
+      'touchstart',
+      'touchmove',
+      'touchend',
+    ]) {
+      // On the element, as a swipe's listener is: a document's touch
+      // listeners are passive, and can't claim a move.
+      start.addEventListener(type, (event) => {
+        const e =
+          /** @type {Event & { clientX?: number; pointerType?: string; touches?: { clientX: number }[]; changedTouches?: { clientX: number; target: EventTarget }[] }} */ (
+            event
+          );
+        const touch = e.touches?.[0] ?? e.changedTouches?.[0];
+        seen.push({
+          type,
+          on: e.target === start ? 'start' : 'other',
+          x: e.clientX ?? touch?.clientX,
+          touches: e.touches?.length,
+          changed: e.changedTouches?.length,
+          pointerType: e.pointerType,
+        });
+        if (type === 'touchmove') {
+          e.preventDefault();
+          prevented = e.defaultPrevented;
+        }
+      });
+    }
+    under = start;
+    try {
+      touchStep({ type: 'start', at: { x: 330, y: 500 } });
+      // Moved over another element, the touch stays with its first.
+      under = elsewhere;
+      touchStep({ type: 'move', at: { x: 200, y: 500 } });
+      touchStep({ type: 'end', at: { x: 70, y: 500 } });
+    } finally {
+      start.remove();
+      elsewhere.remove();
+    }
+    expect(seen).toEqual([
+      {
+        type: 'pointerdown',
+        on: 'start',
+        x: 330,
+        touches: undefined,
+        changed: undefined,
+        pointerType: 'touch',
+      },
+      { type: 'touchstart', on: 'start', x: 330, touches: 1, changed: 1, pointerType: undefined },
+      {
+        type: 'pointermove',
+        on: 'start',
+        x: 200,
+        touches: undefined,
+        changed: undefined,
+        pointerType: 'touch',
+      },
+      { type: 'touchmove', on: 'start', x: 200, touches: 1, changed: 1, pointerType: undefined },
+      {
+        type: 'pointerup',
+        on: 'start',
+        x: 70,
+        touches: undefined,
+        changed: undefined,
+        pointerType: 'touch',
+      },
+      // Lifted: no touches down, the one lifted changed.
+      { type: 'touchend', on: 'start', x: 70, touches: 0, changed: 1, pointerType: undefined },
+    ]);
+    // A move can be claimed, as a swipe that stops the page scrolling does.
+    expect(prevented).toBe(true);
+  });
+
+  it('touches the page itself where nothing is under the finger, and does nothing for a touch never started', () => {
+    /** @type {string[]} */
+    const seen = [];
+    const note = (/** @type {Event} */ e) =>
+      seen.push(`${e.type} ${e.target === document.documentElement ? 'root' : 'other'}`);
+    document.addEventListener('touchstart', note);
+    document.addEventListener('touchend', note);
+    under = null;
+    try {
+      touchStep({ type: 'move', at: { x: 1, y: 1 } });
+      touchStep({ type: 'start', at: { x: 1, y: 1 } });
+      touchStep({ type: 'end', at: { x: 1, y: 1 } });
+      touchStep({ type: 'end', at: { x: 1, y: 1 } });
+    } finally {
+      document.removeEventListener('touchstart', note);
+      document.removeEventListener('touchend', note);
+    }
+    expect(seen).toEqual(['touchstart root', 'touchend root']);
   });
 });

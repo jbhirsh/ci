@@ -1,5 +1,5 @@
 // What the web recorder (record.mjs) draws over the page while recording, so
-// a GIF shows what the pointer and keyboard do. Headless Chromium draws no
+// a GIF shows what the pointer and keyboard do. A headless browser draws no
 // cursor of its own.
 //
 // It runs in the page, as an init script on every page the context opens,
@@ -72,7 +72,7 @@ const start = () => {
   // whether anything in the recorded area moved since the one before: an
   // animation or transition running there (paused ones, and ones off the
   // area, don't count), or the pointer, a key or the wheel. recordFrames
-  // reads them to tell a stall in Chrome's painting, cut from the GIF, from
+  // reads them to tell a stall in the browser's painting, cut from the GIF, from
   // a page standing still, held (timeline.mjs's timeline).
   let stirred = false;
   window.__prGifTicks = [];

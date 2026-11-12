@@ -7,14 +7,13 @@ import { OVERLAY_SCRIPT } from './overlay.mjs';
 import {
   FIRST_FRAME_MS,
   PICTURES_LOADED,
+  QUALITY,
   clockOffset,
   recordFrames,
   showPointer,
   waitForPictures,
 } from './record.mjs';
 import { frameName } from './timeline.mjs';
-
-/** @typedef {import('./record.mjs').ScreencastFrame} ScreencastFrame */
 
 // jsdom's, which this file runs in (the repo's lint knows Node's globals).
 const { document } = globalThis;
@@ -113,16 +112,34 @@ describe('clockOffset', () => {
 });
 
 /**
- * A PNG's first 24 bytes, its size in the header, and `tag` after.
+ * A JPEG's start: an APP0 segment, then a frame header of this size, and
+ * `tag` after.
  *
  * @param {number} width
  * @param {number} height
  * @param {string} [tag]
  */
-function png(width, height, tag = '') {
-  const head = Buffer.alloc(24);
-  head.writeUInt32BE(width, 16);
-  head.writeUInt32BE(height, 20);
+function jpeg(width, height, tag = '') {
+  const head = Buffer.from([
+    0xff,
+    0xd8,
+    0xff,
+    0xe0,
+    0x00,
+    0x04,
+    0x00,
+    0x00,
+    0xff,
+    0xc0,
+    0x00,
+    0x11,
+    0x08,
+    height >> 8,
+    height & 0xff,
+    width >> 8,
+    width & 0xff,
+    0x03,
+  ]);
   return Buffer.concat([head, Buffer.from(tag)]);
 }
 
@@ -137,53 +154,58 @@ describe('recordFrames', () => {
   });
 
   /**
-   * A page whose screencast sends a frame every 5 ms once started, each
-   * stamped (in seconds) as `stamps` says, and alike every `same` frames,
-   * until it's stopped; its overlay reports `ticks` and `moves`.
+   * A page whose screencast sends a JPEG every 5 ms once started, each
+   * stamped (in ms) as `stamps` says, alike every `same` frames, and of the
+   * size `size` gives in its header (none by default), until it's stopped;
+   * its overlay reports `ticks` and `moves`.
    *
-   * @param {{ stamps?: (n: number) => number | undefined; width?: number; silent?: boolean; same?: number; moves?: unknown; ticks?: unknown; evaluateFails?: boolean }} [options]
+   * @param {{ stamps?: (n: number) => number; size?: { width: number; height: number }; viewport?: { width: number; height: number }; dpr?: number; silent?: boolean; same?: number; moves?: unknown; ticks?: unknown; evaluateFails?: boolean; noScreencast?: boolean }} [options]
    */
   function fakePage({
-    stamps = () => Date.now() / 1000,
-    width = 1100,
+    stamps = () => Date.now() - 2,
+    size,
+    viewport = { width: 1100, height: 640 },
+    dpr = 1,
     silent = false,
     same = 1,
     moves = [],
     ticks = [],
     evaluateFails = false,
+    noScreencast = false,
   } = {}) {
-    /** @type {((frame: ScreencastFrame) => void) | undefined} */
-    let listener;
     /** @type {ReturnType<typeof setInterval> | undefined} */
     let sending;
     let n = 0;
     /** @type {(() => unknown)[]} */
     const loads = [];
-    const cdp = {
-      on: vi.fn(
-        (/** @type {string} */ _event, /** @type {(frame: ScreencastFrame) => void} */ fn) => {
-          listener = fn;
+    const screencast = {
+      start: vi.fn(
+        (
+          /** @type {{ onFrame: (frame: { data: Buffer; timestamp: number }) => void }} */ {
+            onFrame,
+          },
+        ) => {
+          if (!silent) {
+            sending = setInterval(() => {
+              const i = n++;
+              const tag = `frame ${Math.floor(i / same)}`;
+              const data = size ? jpeg(size.width, size.height, tag) : Buffer.from(tag);
+              onFrame({ data, timestamp: stamps(i) });
+            }, 5);
+          }
+          return Promise.resolve({});
         },
       ),
-      send: vi.fn((/** @type {string} */ method) => {
-        if (method === 'Page.startScreencast' && !silent) {
-          sending = setInterval(() => {
-            const i = n++;
-            listener?.({
-              data: png(width, 640, `frame ${Math.floor(i / same)}`).toString('base64'),
-              sessionId: i,
-              metadata: { deviceWidth: 1100, timestamp: stamps(i) },
-            });
-          }, 5);
-        }
-        if (method === 'Page.stopScreencast') clearInterval(sending);
+      stop: vi.fn(() => {
+        clearInterval(sending);
         return Promise.resolve();
       }),
-      detach: vi.fn(() => Promise.resolve()),
     };
     const page = {
-      context: () => ({ newCDPSession: vi.fn(() => Promise.resolve(cdp)) }),
+      screencast: noScreencast ? undefined : screencast,
+      viewportSize: () => viewport,
       evaluate: vi.fn((/** @type {string} */ script) => {
+        if (script === 'devicePixelRatio') return Promise.resolve(dpr);
         if (evaluateFails) return Promise.reject(new Error('page closed'));
         if (script.includes('__prGifTicks ||')) return Promise.resolve(ticks);
         if (script.includes('__prGifMoves ||')) return Promise.resolve(moves);
@@ -192,23 +214,22 @@ describe('recordFrames', () => {
       on: vi.fn((/** @type {string} */ _event, /** @type {() => unknown} */ fn) => loads.push(fn)),
       off: vi.fn(),
     };
-    return { page, cdp, sent: () => n, loads };
+    return { page, screencast, sent: () => n, loads };
   }
   /**
    * @param {string} dir
    * @param {number} i
    */
-  const frameText = (dir, i) =>
-    readFileSync(path.join(dir, frameName(i)))
-      .subarray(24)
-      .toString();
+  const frameText = (dir, i) => readFileSync(path.join(dir, frameName(i))).toString();
 
   it('keeps the frames painted until stopped, thinned, with their timeline and crop', async () => {
     const dir = path.join(temp(), 'frames');
     // Whatever was there goes.
     mkdirSync(dir, { recursive: true });
-    writeFileSync(path.join(dir, 'stale.png'), 'old');
-    const { page, cdp, sent, loads } = fakePage({ stamps: (n) => 1_700_000_000 + n * 0.1 });
+    writeFileSync(path.join(dir, 'stale.jpg'), 'old');
+    const { page, screencast, sent, loads } = fakePage({
+      stamps: (n) => 1_700_000_000_000 + n * 100,
+    });
     const clip = { x: 0, y: 80, width: 900, height: 400 };
     const stop = await recordFrames(as(page), clip, dir);
     // The clip is set on the page now, and again on each page it loads.
@@ -224,7 +245,8 @@ describe('recordFrames', () => {
     const files = readdirSync(dir).sort();
     expect(files).toContain('frames.ffconcat');
     expect(files).toContain('crop.txt');
-    expect(files).not.toContain('stale.png');
+    expect(files).not.toContain('stale.jpg');
+    expect(files).toContain(frameName(0));
     expect(frameText(dir, 0)).toBe('frame 0');
     expect(readFileSync(path.join(dir, 'crop.txt'), 'utf8')).toBe('crop=900:400:0:80');
     const list = readFileSync(path.join(dir, 'frames.ffconcat'), 'utf8');
@@ -233,14 +255,12 @@ describe('recordFrames', () => {
         `ffconcat version 1.0\nfile '${frameName(0)}'\noption framerate 100\nduration 0.100\n`,
       ),
     ).toBe(true);
-    // Every frame as PNG, each acknowledged so the next comes.
-    expect(cdp.send.mock.calls[0]).toEqual([
-      'Page.startScreencast',
-      { format: 'png', everyNthFrame: 1 },
-    ]);
-    const acks = cdp.send.mock.calls.filter(([method]) => method === 'Page.screencastFrameAck');
-    expect(acks).toHaveLength(recording.sent);
-    expect(cdp.detach).toHaveBeenCalledTimes(1);
+    // The whole viewport at its density, at a set quality: without a size,
+    // Playwright would fit frames to 800 px and drop the density.
+    expect(screencast.start).toHaveBeenCalledWith(
+      expect.objectContaining({ size: { width: 1100, height: 640 }, quality: QUALITY }),
+    );
+    expect(screencast.stop).toHaveBeenCalledTimes(1);
     expect(page.off).toHaveBeenCalledWith('domcontentloaded', loads[0]);
     expect(page.evaluate).toHaveBeenCalledWith('delete window.__prGifClip');
   });
@@ -248,7 +268,7 @@ describe('recordFrames', () => {
   it('merges frames alike into one, and thins a fast stream to the frame rate asked', async () => {
     const dir = temp();
     // A frame every 5 ms by its stamp, every 4 alike.
-    const { page } = fakePage({ stamps: (n) => 1_700_000_000 + n * 0.005, same: 4 });
+    const { page } = fakePage({ stamps: (n) => 1_700_000_000_000 + n * 5, same: 4 });
     const stop = await recordFrames(as(page), { x: 0, y: 0, width: 10, height: 10 }, dir, {
       fps: 50,
     });
@@ -257,29 +277,55 @@ describe('recordFrames', () => {
     expect(stills).toBeLessThan(sent / 3);
   });
 
-  it('crops in the frames’ pixels when they’re drawn at a higher density', async () => {
+  it('asks for frames at the page’s density, and crops in their pixels', async () => {
     const dir = temp();
-    const { page } = fakePage({ width: 2200 });
-    const stop = await recordFrames(as(page), { x: 0, y: 80, width: 1100, height: 560 }, dir);
+    const { page, screencast } = fakePage({ viewport: { width: 402, height: 874 }, dpr: 2 });
+    const stop = await recordFrames(as(page), { x: 0, y: 80, width: 402, height: 400 }, dir);
+    expect(screencast.start).toHaveBeenCalledWith(
+      expect.objectContaining({ size: { width: 804, height: 1748 } }),
+    );
     await vi.advanceTimersByTimeAsync(20);
     await stop();
-    expect(readFileSync(path.join(dir, 'crop.txt'), 'utf8')).toBe('crop=2200:1120:0:160');
+    expect(readFileSync(path.join(dir, 'crop.txt'), 'utf8')).toBe('crop=804:800:0:160');
   });
 
-  it('goes by when frames arrive if they aren’t stamped, or stamped on another clock', async () => {
-    for (const stamps of [() => undefined, (/** @type {number} */ n) => 5 + n * 0.02]) {
-      const dir = temp();
-      const { page } = fakePage({ stamps });
-      const stop = await recordFrames(as(page), { x: 0, y: 0, width: 10, height: 10 }, dir);
-      await vi.advanceTimersByTimeAsync(60);
-      const { stills, seconds } = await stop();
-      expect(stills).toBeGreaterThan(0);
-      expect(seconds).toBeLessThan(5);
-      const durations = [
-        ...readFileSync(path.join(dir, 'frames.ffconcat'), 'utf8').matchAll(/duration ([\d.]+)/g),
-      ].map((m) => Number(m[1]));
-      for (const d of durations) expect(d).toBeLessThan(2);
-    }
+  it('asks for whole even pixels, as Playwright rounds them, and crops by that', async () => {
+    const dir = temp();
+    const { page, screencast } = fakePage({ viewport: { width: 401, height: 301 } });
+    const stop = await recordFrames(as(page), { x: 0, y: 0, width: 401, height: 301 }, dir);
+    expect(screencast.start).toHaveBeenCalledWith(
+      expect.objectContaining({ size: { width: 400, height: 300 } }),
+    );
+    await vi.advanceTimersByTimeAsync(20);
+    await stop();
+    expect(readFileSync(path.join(dir, 'crop.txt'), 'utf8')).toBe('crop=400:300:0:0');
+  });
+
+  it('crops by the size frames came at, when that isn’t the size asked for', async () => {
+    const dir = temp();
+    const { page } = fakePage({
+      size: { width: 402, height: 874 },
+      viewport: { width: 402, height: 874 },
+      dpr: 2,
+    });
+    const stop = await recordFrames(as(page), { x: 0, y: 80, width: 402, height: 400 }, dir);
+    await vi.advanceTimersByTimeAsync(20);
+    await stop();
+    expect(readFileSync(path.join(dir, 'crop.txt'), 'utf8')).toBe('crop=402:400:0:80');
+  });
+
+  it('goes by when frames arrive if they’re stamped on another clock', async () => {
+    const dir = temp();
+    const { page } = fakePage({ stamps: (n) => 5000 + n * 20 });
+    const stop = await recordFrames(as(page), { x: 0, y: 0, width: 10, height: 10 }, dir);
+    await vi.advanceTimersByTimeAsync(60);
+    const { stills, seconds } = await stop();
+    expect(stills).toBeGreaterThan(0);
+    expect(seconds).toBeLessThan(5);
+    const durations = [
+      ...readFileSync(path.join(dir, 'frames.ffconcat'), 'utf8').matchAll(/duration ([\d.]+)/g),
+    ].map((m) => Number(m[1]));
+    for (const d of durations) expect(d).toBeLessThan(2);
   });
 
   it('warns when the pointer rested outside the clip, from the moves the overlay kept', async () => {
@@ -308,13 +354,19 @@ describe('recordFrames', () => {
     expect(rests).toEqual([]);
   });
 
+  it("says what to update when the app's Playwright has no page.screencast", async () => {
+    const { page } = fakePage({ noScreencast: true });
+    await expect(
+      recordFrames(as(page), { x: 0, y: 0, width: 10, height: 10 }, temp()),
+    ).rejects.toThrow("which the app's Playwright lacks: update it");
+  });
+
   it('gives up on a screencast that sends nothing, still stopping it', async () => {
-    const { page, cdp } = fakePage({ silent: true });
+    const { page, screencast } = fakePage({ silent: true });
     const stop = await recordFrames(as(page), { x: 0, y: 0, width: 10, height: 10 }, temp());
     const failed = expect(stop()).rejects.toThrow('recordFrames: no frame came in 5 s');
     await vi.advanceTimersByTimeAsync(FIRST_FRAME_MS);
     await failed;
-    expect(cdp.send).toHaveBeenLastCalledWith('Page.stopScreencast');
-    expect(cdp.detach).toHaveBeenCalled();
+    expect(screencast.stop).toHaveBeenCalled();
   });
 });

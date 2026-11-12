@@ -196,9 +196,9 @@ afterEach(() => {
 describe('main, for a web app', () => {
   it('builds both, records the scenario against each around the setup module, and publishes', async () => {
     const { launch } = fakeBrowser();
-    fakes.playwright = { chromium: { launch } };
+    fakes.playwright = { webkit: { launch } };
     const root = app({ setup: 'setup.mjs', build: { mode: 'test' }, cellWidth: 420 });
-    await main(['flow.mjs', '--dir', '263', '--fixtures', '--chromium', '/opt/chrome'], {});
+    await main(['flow.mjs', '--dir', '263', '--fixtures']);
     const side = (/** @type {string} */ name) => [
       expect.stringMatching(
         /^context \{"viewport":\{"width":402,"height":874\},"deviceScaleFactor":1,"colorScheme":"light","reducedMotion":"no-preference","serviceWorkers":"block"\}$/,
@@ -223,7 +223,7 @@ describe('main, for a web app', () => {
       'base origin/main',
       'build test',
       'build test',
-      'launch {"executablePath":"/opt/chrome","handleSIGINT":false,"handleSIGTERM":false}',
+      'launch {"handleSIGINT":false,"handleSIGTERM":false}',
       'serve',
       ...side('before'),
       'serve',
@@ -264,9 +264,9 @@ describe('main, for a web app', () => {
 
   it('records only "after" for new UI, writing locally without --dir', async () => {
     const { launch } = fakeBrowser();
-    fakes.playwright = { chromium: { launch } };
+    fakes.playwright = { webkit: { launch } };
     app({});
-    await main(['flow.mjs', '--after-only', '--width', '300', '--keep'], {});
+    await main(['flow.mjs', '--after-only', '--width', '300', '--keep']);
     expect(calls).not.toContain('base origin/main');
     expect(calls.filter((c) => c.startsWith('build'))).toEqual(['build undefined']);
     expect(calls).toContain('gif frames-after flow-after.gif 300');
@@ -279,7 +279,7 @@ describe('main, for a web app', () => {
 
   it("joins the two side by side, at twice the window's width, a scenario's own window and clip", async () => {
     const { launch } = fakeBrowser({ width: 1100, height: 640 });
-    fakes.playwright = { chromium: { launch } };
+    fakes.playwright = { webkit: { launch } };
     app(
       { scale: 2 },
       {
@@ -291,7 +291,7 @@ describe('main, for a web app', () => {
         };`,
       },
     );
-    await main(['wide.mjs', '--side-by-side', '--dir', '9', '--no-push'], {});
+    await main(['wide.mjs', '--side-by-side', '--dir', '9', '--no-push']);
     expect(calls).toContain('ffmpeg true');
     expect(calls).toContain('side wide-side-by-side.gif 1000');
     expect(calls).toContain('record {"x":0,"y":80,"width":1100,"height":100}');
@@ -309,19 +309,22 @@ describe('main, for a web app', () => {
         'bad.mjs': 'export default { before() {} };',
       },
     );
-    await expect(main(['old.mjs'], {})).rejects.toThrow(
+    await expect(main(['old.mjs'])).rejects.toThrow(
       'pr-gif: old.mjs: unknown key "run"; play(page, gif) is missing',
     );
     app({ setup: 'bad.mjs' }, { 'bad.mjs': 'export default { before() {} };' });
-    await expect(main(['flow.mjs'], {})).rejects.toThrow('pr-gif: bad.mjs: unknown key "before"');
+    await expect(main(['flow.mjs'])).rejects.toThrow('pr-gif: bad.mjs: unknown key "before"');
     expect(calls.some((c) => c.startsWith('build'))).toBe(false);
   });
 
-  it('cleans up after a failure, and passes it on', async () => {
+  it('cleans up after a failure, and passes it on, saying how to install WebKit', async () => {
     const launch = vi.fn(() => Promise.reject(new Error('no browser')));
-    fakes.playwright = { chromium: { launch } };
+    fakes.playwright = { webkit: { launch } };
     app({});
-    await expect(main(['flow.mjs'], {})).rejects.toThrow('no browser');
+    await expect(main(['flow.mjs'])).rejects.toMatchObject({
+      message: expect.stringContaining('npx playwright install --with-deps webkit'),
+      cause: new Error('no browser'),
+    });
     expect(calls.at(-1)).toMatch(/^git worktree remove --force /);
   });
 });
@@ -329,7 +332,7 @@ describe('main, for a web app', () => {
 describe('main, for an app whose CI records videos', () => {
   it('hands over to videos.mjs', async () => {
     app({ source: 'ci-videos' });
-    await main(['189', '--side-by-side'], {});
+    await main(['189', '--side-by-side']);
     expect(calls).toEqual(['videos 189 --side-by-side']);
   });
 });
@@ -337,11 +340,11 @@ describe('main, for an app whose CI records videos', () => {
 describe('appPlaywright', () => {
   it("takes Playwright Test's exports from its CommonJS default, or else playwright's own", async () => {
     const { launch } = fakeBrowser();
-    const test = Object.assign(() => {}, { chromium: { launch } });
+    const test = Object.assign(() => {}, { webkit: { launch } });
     fakes.playwright = test;
-    expect((await appPlaywright('/app')).chromium.launch).toBe(launch);
+    expect((await appPlaywright('/app')).webkit.launch).toBe(launch);
     fakes.playwrightFails = '@playwright/test';
-    fakes.playwright = { chromium: { launch } };
-    expect((await appPlaywright('/app')).chromium.launch).toBe(launch);
+    fakes.playwright = { webkit: { launch } };
+    expect((await appPlaywright('/app')).webkit.launch).toBe(launch);
   });
 });

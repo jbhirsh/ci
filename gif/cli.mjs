@@ -7,8 +7,11 @@
 // twice, from --base (origin/main, in a temporary worktree sharing the
 // checkout's node_modules) and from the working tree, uncommitted changes
 // included (build.mjs). Each build is served with `vite preview`, and the
-// scenario (scenario.mjs) is played against it in Chromium, from the app's
-// own Playwright, with the pointer and key presses drawn in (overlay.mjs),
+// scenario (scenario.mjs) is played against it in WebKit, Safari's engine,
+// from the app's own Playwright (installed with `npx playwright install
+// --with-deps webkit`, which on Linux adds the system libraries it needs,
+// in a Claude cloud session too, where only Chromium comes installed),
+// with the pointer and key presses drawn in (overlay.mjs),
 // each frame shown for as long as it was on screen (record.mjs, ffmpeg.mjs).
 // The GIFs land in pr-gif/<name>/ in the checkout: <name>-before.gif and
 // <name>-after.gif, or <name>-side-by-side.gif. With --dir <PR>, they're
@@ -137,7 +140,7 @@ export async function appPlaywright(root) {
   // Test's is a function, `test`, carrying the rest).
   const { default: cjs } = /** @type {{ default?: unknown }} */ (module);
   return /** @type {typeof import('playwright')} */ (
-    (typeof cjs === 'object' || typeof cjs === 'function') && cjs !== null && 'chromium' in cjs
+    (typeof cjs === 'object' || typeof cjs === 'function') && cjs !== null && 'webkit' in cjs
       ? cjs
       : module
   );
@@ -203,16 +206,15 @@ export async function recordSide({
 
 /**
  * @param {readonly string[]} argv
- * @param {Record<string, string | undefined>} [env]
  */
-export async function main(argv, env = process.env) {
+export async function main(argv) {
   const root = appRoot();
   const settings = loadSettings(root);
   if (settings.source === 'ci-videos') return videosMain(argv, { root, settings });
   const setup = /** @type {Setup} */ (
     settings.setup ? await loadChecked(settings.setup, root, setupProblems) : {}
   );
-  const options = parseOptions(argv, { settings, env, appOptions: setup.options });
+  const options = parseOptions(argv, { settings, appOptions: setup.options });
   checkFfmpeg(options.sideBySide);
   const scenario = /** @type {Scenario} */ (
     await loadChecked(options.scenario, root, scenarioProblems)
@@ -274,14 +276,18 @@ export async function main(argv, env = process.env) {
       build({ root, cwd: tree, outDir: dist, mode: options.mode, settings: settings.build });
     }
 
-    const { chromium } = await appPlaywright(root);
+    const { webkit } = await appPlaywright(root);
     // Ctrl-C is this script's to handle: Playwright's own would close the
-    // browser under the cleanup above.
-    browser = await chromium.launch({
-      executablePath: options.chromium,
-      handleSIGINT: false,
-      handleSIGTERM: false,
-    });
+    // browser under the cleanup above. Playwright's own WebKit, always: a
+    // machine's PLAYWRIGHT_CHROMIUM_EXECUTABLE is no use to it.
+    browser = await webkit
+      .launch({ handleSIGINT: false, handleSIGTERM: false })
+      .catch((/** @type {unknown} */ error) => {
+        throw new Error(
+          "pr-gif: WebKit didn't start. Install it with: npx playwright install --with-deps webkit",
+          { cause: error },
+        );
+      });
     for (const { side, dist } of sides) {
       const origin = await serve({ root, outDir: dist, host: settings.host, servers });
       console.log(`pr-gif: recording ${side} at ${origin}`);
