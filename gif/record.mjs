@@ -1,10 +1,24 @@
 // Recording a page for a GIF, with the pointer and keys drawn in
-// (overlay.mjs). Frames come from Chrome's screencast, which sends one for
-// each repaint without holding the page up, stamped with when it was
-// painted: motion comes out at 15-25 frames a second where screenshots
-// managed 2-5, and a still page costs nothing. Playwright's own video
-// recorder needs an ffmpeg build of its own; the system ffmpeg joins these
-// (ffmpeg.mjs).
+// (overlay.mjs), in WebKit (cli.mjs). Frames come from Playwright's
+// screencast, which sends one for each repaint without holding the page up,
+// stamped with when it was painted: motion comes out at 15-25 frames a
+// second where screenshots managed 2-5, and a still page costs nothing.
+// Playwright's own video recorder needs an ffmpeg build of its own; the
+// system ffmpeg joins these frames (ffmpeg.mjs). What the screencast does
+// that this file makes up for:
+//   - it sends JPEGs, saved as .jpg, at QUALITY;
+//   - unless given a size it fits frames to 800 px and ignores the device
+//     scale factor, so it's asked for the page's viewport times its
+//     devicePixelRatio (whole even pixels, as Playwright rounds them); the
+//     frames' density is still read from the first one's size, so the crop
+//     fits what came;
+//   - it stamps frames in wall-clock ms. Playwright moves WebKit's paint
+//     times onto Date.now() as of the first frame's arrival, so they run
+//     that frame's encoding and delivery (tens of ms) behind the overlay's
+//     ticks: a stall can be cut a little early or late, which no clock here
+//     can correct;
+//   - WebKit drops the fps asked for and sends a frame per repaint, so the
+//     thinner below caps it.
 
 import { createHash } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -15,7 +29,7 @@ import {
   concatList,
   cropFilter,
   frameName,
-  pngSize,
+  jpegSize,
   restsOutside,
   thinner,
   timeline,
@@ -29,30 +43,28 @@ import {
 /** @typedef {import('./timeline.mjs').Tick} Tick */
 
 /**
- * @typedef {object} ScreencastFrame A frame of Chrome's screencast (Page.screencastFrame).
- * @property {string} data the PNG, base64
- * @property {number} sessionId
- * @property {{ deviceWidth: number; timestamp?: number }} metadata deviceWidth: the viewport's width in CSS pixels; timestamp: when it was painted, in seconds
+ * @typedef {object} ScreencastFrame A frame of Playwright's page.screencast.
+ * @property {Buffer} data the JPEG
+ * @property {number} timestamp when it was painted, in ms since the epoch
  */
 
 /**
- * @typedef {{
- *   on(event: 'Page.screencastFrame', listener: (frame: ScreencastFrame) => void): unknown;
- *   send(method: 'Page.startScreencast' | 'Page.stopScreencast' | 'Page.screencastFrameAck', params?: object): Promise<unknown>;
- *   detach(): Promise<void>;
- * }} Screencast What recordFrames needs of a CDP session.
+ * @typedef {object} Screencast What recordFrames needs of Playwright's page.screencast.
+ * @property {(options: { onFrame: (frame: ScreencastFrame) => void; size: { width: number; height: number }; quality: number }) => Promise<unknown>} start
+ * @property {() => Promise<void>} stop
  */
 
 /**
  * @typedef {object} Recordable What recordFrames needs of a Playwright page: a page passes as is.
- * @property {() => { newCDPSession(page: never): Promise<Screencast> }} context
+ * @property {Screencast | undefined} screencast undefined in a Playwright before it had one
+ * @property {() => { width: number; height: number } | null} viewportSize
  * @property {(script: string) => Promise<unknown>} evaluate
  * @property {(event: 'domcontentloaded', listener: () => unknown) => unknown} on
  * @property {(event: 'domcontentloaded', listener: () => unknown) => unknown} off
  */
 
 /**
- * @typedef {object} Recording What a recording took: the frames Chrome sent, the GIF frames they made, how long it ran, and where the pointer rested out of shot.
+ * @typedef {object} Recording What a recording took: the frames the browser sent, the GIF frames they made, how long it ran, and where the pointer rested out of shot.
  * @property {number} sent
  * @property {number} stills
  * @property {number} seconds
@@ -61,6 +73,13 @@ import {
 
 /** How long recordFrames waits for the screencast's first frame. */
 export const FIRST_FRAME_MS = 5000;
+
+/**
+ * The JPEG quality frames are taken at: Playwright's own default, named
+ * here so a change to it can't change the GIFs. The GIF's 256 colours lose
+ * far more than q90's artefacts do.
+ */
+export const QUALITY = 90;
 
 /**
  * Draws the pointer and key presses on every page `context` opens after
@@ -104,7 +123,7 @@ export const PICTURES_LOADED = `[...document.images].every((img) => {
 
 /**
  * The page's clock to ours, from the first frame: the screencast stamps
- * frames in seconds since the epoch, which the overlay's ticks share; if a
+ * frames on the epoch's clock, which the overlay's ticks share; if a
  * browser ever stamps them otherwise (over 10 s off), frames are placed by
  * the offset to when the first one arrived instead.
  *
@@ -136,55 +155,61 @@ export function clockOffset(stampMs, now) {
  * @returns {Promise<() => Promise<Recording>>}
  */
 export async function recordFrames(page, clip, dir, { fps = 15, holds = HOLDS } = {}) {
+  const { screencast } = page;
+  if (!screencast) {
+    throw new Error(
+      "pr-gif records with page.screencast, which the app's Playwright lacks: update it",
+    );
+  }
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
-  // The page itself, which the structural type can't say without naming
-  // Playwright's own.
-  const cdp = await page
-    .context()
-    .newCDPSession(/** @type {never} */ (/** @type {unknown} */ (page)));
   const start = Date.now();
   /** @type {Shot[]} */
   const shots = [];
-  /** @type {ReturnType<typeof thinner<{ at: number; png: Buffer }>>} */
+  /** @type {ReturnType<typeof thinner<{ at: number; image: Buffer }>>} */
   const thin = thinner(1000 / fps);
   let sent = 0;
-  let scale = 1;
   /** @type {number | null} */
   let offset = null;
   /** @type {() => void} */
   let first = () => {};
   /** @type {Promise<void>} */
   const firstFrame = new Promise((done) => (first = done));
-  /** @param {{ at: number; png: Buffer } | null} frame */
+  /** @param {{ at: number; image: Buffer } | null} frame */
   const keep = (frame) => {
     if (!frame) return;
     const file = frameName(shots.length);
-    writeFileSync(path.join(dir, file), frame.png);
-    shots.push({ file, at: frame.at, hash: createHash('sha1').update(frame.png).digest('hex') });
+    writeFileSync(path.join(dir, file), frame.image);
+    shots.push({ file, at: frame.at, hash: createHash('sha1').update(frame.image).digest('hex') });
   };
-  cdp.on('Page.screencastFrame', ({ data, metadata, sessionId }) => {
-    const png = Buffer.from(data, 'base64');
+  // cli.mjs opens every page with a viewport.
+  const viewport = /** @type {{ width: number; height: number }} */ (page.viewportSize());
+  const density = Number(await page.evaluate('devicePixelRatio'));
+  // Playwright rounds the size down to even pixels, so it's asked for what
+  // it would round to.
+  /** @param {number} n */
+  const even = (n) => Math.floor(n * density) & ~1;
+  const size = { width: even(viewport.width), height: even(viewport.height) };
+  // What was asked for, until the first frame says what came: crop.txt has
+  // to cut the frames as they are.
+  /** @type {{ width: number; height: number }} */
+  let frame = size;
+  /** @param {ScreencastFrame} frame */
+  const onFrame = ({ data, timestamp }) => {
     const now = Date.now();
-    if (sent === 0) scale = pngSize(png).width / metadata.deviceWidth;
+    if (sent === 0) frame = jpegSize(data) ?? size;
     sent++;
-    let at = now;
-    if (metadata.timestamp !== undefined) {
-      offset ??= clockOffset(metadata.timestamp * 1000, now);
-      at = metadata.timestamp * 1000 + offset;
-    }
-    keep(thin.push({ at, png }));
+    offset ??= clockOffset(timestamp, now);
+    keep(thin.push({ at: timestamp + offset, image: data }));
     first();
-    // Unacknowledged, it sends no more.
-    cdp.send('Page.screencastFrameAck', { sessionId }).catch(() => {});
-  });
+  };
   // For the key labels, which keep inside what is recorded, and the ticks,
   // which watch it: set again on each page a scenario loads.
   const setClip = () =>
     page.evaluate(`window.__prGifClip = ${JSON.stringify(clip)}`).catch(() => {});
   page.on('domcontentloaded', setClip);
   await setClip();
-  await cdp.send('Page.startScreencast', { format: 'png', everyNthFrame: 1 });
+  await screencast.start({ onFrame, size, quality: QUALITY });
   return async () => {
     try {
       await Promise.race([
@@ -197,8 +222,7 @@ export async function recordFrames(page, clip, dir, { fps = 15, holds = HOLDS } 
         ),
       ]);
     } finally {
-      await cdp.send('Page.stopScreencast').catch(() => {});
-      await cdp.detach().catch(() => {});
+      await screencast.stop().catch(() => {});
       page.off('domcontentloaded', setClip);
     }
     const end = Date.now();
@@ -209,7 +233,7 @@ export async function recordFrames(page, clip, dir, { fps = 15, holds = HOLDS } 
     );
     const stills = timeline(shots, end, holds, { ticks, frame: 1000 / fps });
     writeFileSync(path.join(dir, 'frames.ffconcat'), concatList(stills));
-    writeFileSync(path.join(dir, 'crop.txt'), cropFilter(clip, scale));
+    writeFileSync(path.join(dir, 'crop.txt'), cropFilter(clip, frame, viewport));
     const moves = /** @type {Move[]} */ (
       (await page.evaluate('window.__prGifMoves || []').catch(() => [])) ?? []
     );

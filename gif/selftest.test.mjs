@@ -6,12 +6,17 @@ import { selftest } from './selftest.mjs';
 
 /**
  * An app with these files (its .github/ci.json among them, if given), and a
- * stand-in Playwright unless `playwright` is false.
+ * stand-in Playwright of release `version` unless `playwright` is false.
  *
  * @param {Record<string, string>} files
  * @param {string | false} [playwright]
+ * @param {string} [version]
  */
-function app(files, playwright = 'module.exports = { chromium: { launch() {} } };') {
+function app(
+  files,
+  playwright = 'module.exports = { webkit: { launch() {} } };',
+  version = '1.64.1',
+) {
   const root = mkdtempSync(path.join(tmpdir(), 'gif-selftest-'));
   writeFileSync(path.join(root, 'package.json'), '{"type": "module"}');
   for (const [file, text] of Object.entries(files)) {
@@ -26,6 +31,12 @@ function app(files, playwright = 'module.exports = { chromium: { launch() {} } }
       '{"name": "@playwright/test", "main": "index.cjs"}',
     );
     writeFileSync(path.join(dir, 'index.cjs'), playwright);
+    const core = path.join(root, 'node_modules', 'playwright-core');
+    mkdirSync(core, { recursive: true });
+    writeFileSync(
+      path.join(core, 'package.json'),
+      JSON.stringify({ name: 'playwright-core', version }),
+    );
   }
   return root;
 }
@@ -56,8 +67,17 @@ describe('selftest', () => {
       'gif: setup module gif-setup.mjs loads',
       `gif: ${path.join('scenarios', 'helper.mjs')} is a helper (no default export)`,
       'gif: 1 scenario(s) in scenarios load',
-      "gif: the app's Playwright resolves",
+      "gif: the app's Playwright 1.64.1 resolves, with WebKit and page.screencast",
     ]);
+  });
+
+  it("names a Playwright from before page.screencast's frames", async () => {
+    const root = app({ '.github/ci.json': ciJson({ fps: 10 }) }, undefined, '1.63.9');
+    expect(await selftest(root, () => {})).toEqual([
+      "the app's Playwright 1.63.9 predates page.screencast's frames: update it to 1.64 or later",
+    ]);
+    const newer = app({ '.github/ci.json': ciJson({ fps: 10 }) }, undefined, '2.0.0');
+    expect(await selftest(newer, () => {})).toEqual([]);
   });
 
   it('passes an app whose CI records videos, with nothing to load', async () => {
@@ -81,7 +101,7 @@ describe('selftest', () => {
       expect.stringMatching(/^scenarios[\\/]broken\.mjs: cannot load$/),
       expect.stringMatching(/^scenarios[\\/]old\.mjs: unknown key "run"$/),
       expect.stringMatching(/^scenarios[\\/]old\.mjs: play\(page, gif\) is missing$/),
-      "the app's Playwright has no chromium.launch",
+      "the app's Playwright has no webkit.launch",
     ]);
   });
 

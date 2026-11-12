@@ -3,6 +3,10 @@
 // to type-check: glide, click, drag, scroll and swipe, each taking the page
 // first. swipe is a finger's: for what listens to touch rather than the
 // mouse (a carousel, a sheet pulled down), which drag's mouse never reaches.
+// It dispatches touches in the page (touchStep), so it needs no touch
+// emulation from the browser, but they're the page's own events, not the
+// browser's: what listens for them moves, while what the browser itself
+// does with a finger (scrolling, the click after a tap) doesn't happen.
 //
 // They go by the clock: page.mouse.move(x, y, { steps }) sends every step in
 // a few milliseconds, and while frames are being taken each one slows, so a
@@ -160,43 +164,87 @@ export async function scroll(page, dy, ms = 700) {
 }
 
 /**
- * @typedef {object} TouchSession What swipe needs of a CDP session.
- * @property {(method: string, params?: object) => Promise<unknown>} send
+ * @typedef {object} TouchStep One step of a finger's touch, as touchStep takes it.
+ * @property {'start' | 'move' | 'end'} type
+ * @property {Point} at where the finger is, in CSS pixels from the viewport's top left
  */
 
 /**
  * @typedef {object} TouchPage What swipe needs of a page: a page passes as is.
  * @property {Pick<Mouse, 'move'>} mouse
- * @property {() => { newCDPSession(page: object): Promise<TouchSession> }} context
+ * @property {(fn: (step: TouchStep) => void, step: TouchStep) => Promise<unknown>} evaluate
  */
 
-// Each page's session for touches, with touch turned on: made at its first
-// swipe, so a scenario that never swipes leaves the page as it was.
-/** @type {WeakMap<object, Promise<TouchSession>>} */
-const touchSessions = new WeakMap();
-
-/** @param {TouchPage} page */
-function touchSession(page) {
-  let session = touchSessions.get(page);
-  if (!session) {
-    session = page
-      .context()
-      .newCDPSession(page)
-      .then(async (cdp) => {
-        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
-        return cdp;
-      });
-    touchSessions.set(page, session);
+/**
+ * One step of a finger's touch, dispatched in the page (it runs there, so it
+ * uses nothing from this module): a touch pointer event, then a touch event,
+ * as a phone's browser sends them, both to the element the touch started on,
+ * as touches stay with it. The touch event is a plain event carrying its
+ * touches, since a desktop browser (WebKit on Linux among them) has no Touch
+ * constructor; what a page reads of one (`touches`, `changedTouches`, each
+ * point's `clientX`/`clientY` and `target`, `preventDefault` on a cancelable
+ * move) it has. The pointer event draws the ring and trail (overlay.mjs).
+ *
+ * @param {TouchStep} step
+ */
+export function touchStep({ type, at }) {
+  // The page's own, named off globalThis, as this module is also Node's.
+  const { document, PointerEvent } = globalThis;
+  const held = /** @type {{ __prGifTouch?: EventTarget }} */ (/** @type {unknown} */ (globalThis));
+  if (type === 'start') {
+    held.__prGifTouch = document.elementFromPoint(at.x, at.y) ?? document.documentElement;
   }
-  return session;
+  const target = held.__prGifTouch;
+  if (!target) return;
+  const pointer = { start: 'pointerdown', move: 'pointermove', end: 'pointerup' }[type];
+  target.dispatchEvent(
+    new PointerEvent(pointer, {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      // Not 1, the mouse's.
+      pointerId: 2,
+      pointerType: 'touch',
+      isPrimary: true,
+      clientX: at.x,
+      clientY: at.y,
+      button: type === 'move' ? -1 : 0,
+      buttons: type === 'end' ? 0 : 1,
+      pressure: type === 'end' ? 0 : 0.5,
+    }),
+  );
+  const point = {
+    identifier: 0,
+    target,
+    clientX: at.x,
+    clientY: at.y,
+    pageX: at.x + globalThis.scrollX,
+    pageY: at.y + globalThis.scrollY,
+    screenX: at.x,
+    screenY: at.y,
+    radiusX: 1,
+    radiusY: 1,
+    rotationAngle: 0,
+    force: 1,
+  };
+  const event = new Event(`touch${type}`, { bubbles: true, cancelable: true, composed: true });
+  const down = type === 'end' ? [] : [point];
+  Object.defineProperties(event, {
+    touches: { value: down },
+    targetTouches: { value: down },
+    changedTouches: { value: [point] },
+  });
+  target.dispatchEvent(event);
+  if (type === 'end') delete held.__prGifTouch;
 }
 
 /**
  * A finger's swipe from `from` to `to` over `ms`: the pointer glides to
  * `from`, a touch goes down there, moves at an even pace by the clock (a
  * finger still moving when it lifts, as a flick does, where an eased one
- * would stop first), and lifts at `to`. Touches are pointer events too, so
- * the drawn ring and trail show the swipe as they show a drag.
+ * would stop first), and lifts at `to`. Each step is a touch pointer event
+ * and a touch event in the page (touchStep), so what listens to either
+ * moves, and the drawn ring and trail show the swipe as they show a drag.
  *
  * @param {TouchPage} page
  * @param {Target} from
@@ -204,26 +252,24 @@ function touchSession(page) {
  * @param {number} [ms]
  */
 export async function swipe(page, from, to, ms = 300) {
-  const cdp = await touchSession(page);
   const start = await glide(page, from);
   const end = await pointOf(to);
   await wait(150);
   /**
-   * @param {'touchStart' | 'touchMove' | 'touchEnd'} type
-   * @param {Point} [at]
+   * @param {TouchStep['type']} type
+   * @param {Point} at
    */
-  const touch = (type, at) =>
-    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: at ? [{ x: at.x, y: at.y }] : [] });
-  await touch('touchStart', start);
+  const touch = (type, at) => page.evaluate(touchStep, { type, at });
+  await touch('start', start);
   await overTime(
     ms,
     (e) =>
-      touch('touchMove', {
+      touch('move', {
         x: start.x + (end.x - start.x) * e,
         y: start.y + (end.y - start.y) * e,
       }).then(() => undefined),
     (t) => Math.min(Math.max(t, 0), 1),
   );
-  await touch('touchEnd');
+  await touch('end', end);
   pointers.set(page, end);
 }

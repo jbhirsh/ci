@@ -17,9 +17,6 @@
 //   --fps <n>             the most frames a second kept (the gif.fps setting)
 //   --scale <n>           device pixels per CSS pixel (the gif.scale setting)
 //   --mode <mode>         the Vite build mode (the gif.build.mode setting)
-//   --chromium <path>     a Chromium to use (or PR_GIF_CHROMIUM, or
-//                         PLAYWRIGHT_CHROMIUM_EXECUTABLE), if Playwright's own
-//                         isn't installed
 //   --branch <name>       the pictures branch (the gif.branch setting)
 //   --repo <owner/name>   for the links (from the origin remote)
 //   --keep                keep the work directory (builds, frames) to look at
@@ -42,7 +39,6 @@ import { parseArgs } from 'node:util';
  * @property {number} fps
  * @property {number} scale
  * @property {string | undefined} mode
- * @property {string | undefined} chromium
  * @property {string} branch
  * @property {string | undefined} repo
  * @property {boolean} keep
@@ -51,7 +47,7 @@ import { parseArgs } from 'node:util';
 
 export const USAGE =
   'usage: gif <scenario> [--dir <PR>] [--no-push] [--base origin/main] [--after-only | --side-by-side] ' +
-  '[--width <px>] [--fps <n>] [--scale <n>] [--mode <mode>] [--chromium <path>] [--branch <name>] ' +
+  '[--width <px>] [--fps <n>] [--scale <n>] [--mode <mode>] [--branch <name>] ' +
   '[--repo owner/name] [--keep]';
 
 /** @type {OptionSpecs} */
@@ -65,7 +61,6 @@ const OWN = {
   fps: { type: 'string' },
   scale: { type: 'string' },
   mode: { type: 'string' },
-  chromium: { type: 'string' },
   branch: { type: 'string' },
   repo: { type: 'string' },
   keep: { type: 'boolean' },
@@ -89,10 +84,10 @@ function positive(flag, value, fallback) {
  * named like the recorder's own is refused, as it would shadow it.
  *
  * @param {readonly string[]} argv
- * @param {{ settings: GifSettings; env?: Record<string, string | undefined>; appOptions?: OptionSpecs }} context
+ * @param {{ settings: GifSettings; appOptions?: OptionSpecs }} context
  * @returns {Options}
  */
-export function parseOptions(argv, { settings, env = {}, appOptions = {} }) {
+export function parseOptions(argv, { settings, appOptions = {} }) {
   const clash = Object.keys(appOptions).filter((name) => name in OWN);
   if (clash.length > 0)
     throw new Error(`the setup module's --${clash[0]} clashes with the recorder's own`);
@@ -146,8 +141,6 @@ export function parseOptions(argv, { settings, env = {}, appOptions = {} }) {
     fps: /** @type {number} */ (positive('--fps', values.fps, settings.fps)),
     scale: /** @type {number} */ (positive('--scale', values.scale, settings.scale)),
     mode: str('mode') ?? settings.build.mode,
-    chromium:
-      str('chromium') || env.PR_GIF_CHROMIUM || env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
     branch: str('branch') ?? settings.branch,
     repo,
     keep: values.keep === true,

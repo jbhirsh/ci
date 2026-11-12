@@ -5,8 +5,8 @@ import {
   concatList,
   cropFilter,
   frameName,
+  jpegSize,
   keyLabel,
-  pngSize,
   restsOutside,
   scaledHeight,
   stillTime,
@@ -150,9 +150,9 @@ describe("timeline, with the page's ticks", () => {
 
 describe('frameName', () => {
   it('numbers frames to four digits', () => {
-    expect(frameName(0)).toBe('f0000.png');
-    expect(frameName(42)).toBe('f0042.png');
-    expect(frameName(1234)).toBe('f1234.png');
+    expect(frameName(0)).toBe('f0000.jpg');
+    expect(frameName(42)).toBe('f0042.jpg');
+    expect(frameName(1234)).toBe('f1234.jpg');
   });
 });
 
@@ -218,20 +218,54 @@ describe('thinner', () => {
   });
 });
 
-describe('pngSize', () => {
-  it('reads the width and height from the header, from a slice too', () => {
-    const png = new Uint8Array(26);
-    const view = new DataView(png.buffer);
-    view.setUint32(18, 900);
-    view.setUint32(22, 560);
-    expect(pngSize(png.subarray(2))).toEqual({ width: 900, height: 560 });
+describe('jpegSize', () => {
+  it('reads the frame header, past the segments before it, from a slice too', () => {
+    const jpeg = Uint8Array.from([
+      0, 0xff, 0xd8, 0xff, 0xe0, 0x00, 0x06, 0xff, 0xc0, 0x00, 0x00, 0xff, 0xff, 0xc2, 0x00, 0x11,
+      0x08, 0x06, 0xd4, 0x03, 0x24, 0x03,
+    ]);
+    // The APP0 segment's bytes look like a header; its length skips them.
+    expect(jpegSize(jpeg.subarray(1))).toEqual({ width: 804, height: 1748 });
+  });
+
+  it('finds none in what is not a JPEG, or has no header before the image data', () => {
+    expect(jpegSize(Uint8Array.from([0x89, 0x50, 0x4e, 0x47]))).toBeNull();
+    expect(jpegSize(Uint8Array.from([0xff, 0xd8, 0xff, 0xda, 0x00, 0x08]))).toBeNull();
+    expect(jpegSize(Uint8Array.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08]))).toBeNull();
+    expect(jpegSize(new Uint8Array(0))).toBeNull();
   });
 });
 
 describe('cropFilter', () => {
-  it('cuts the clip from a frame at the given scale, in whole pixels', () => {
-    expect(cropFilter({ x: 0, y: 133.4, width: 900, height: 254.6 }, 1)).toBe('crop=900:255:0:133');
-    expect(cropFilter({ x: 10, y: 20, width: 300, height: 200 }, 2)).toBe('crop=600:400:20:40');
+  it("cuts the clip from a frame at the frame's scale, in whole pixels", () => {
+    const viewport = { width: 1100, height: 640 };
+    expect(cropFilter({ x: 0, y: 133.4, width: 900, height: 254.6 }, viewport, viewport)).toBe(
+      'crop=900:255:0:133',
+    );
+    expect(
+      cropFilter(
+        { x: 10, y: 20, width: 300, height: 200 },
+        { width: 2200, height: 1280 },
+        viewport,
+      ),
+    ).toBe('crop=600:400:20:40');
+  });
+
+  it('scales each axis on its own, when rounding to even pixels cut one more than the other', () => {
+    // 400 x 874 at 1.25 is 500 x 1092.5, sent as 500 x 1092.
+    const viewport = { width: 400, height: 874 };
+    expect(cropFilter({ x: 0, y: 0, ...viewport }, { width: 500, height: 1092 }, viewport)).toBe(
+      'crop=500:1092:0:0',
+    );
+  });
+
+  it('never reaches past the frame, however the clip rounds', () => {
+    const viewport = { width: 100, height: 100 };
+    const frame = { width: 150, height: 150 };
+    // 33.4 and 66.7 at 1.5 round to 50 and 100: one past the edge.
+    expect(cropFilter({ x: 33.4, y: 33.4, width: 66.7, height: 66.7 }, frame, viewport)).toBe(
+      'crop=100:100:50:50',
+    );
   });
 });
 

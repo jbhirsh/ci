@@ -11,16 +11,42 @@
 //   - each module in its scenarios folder, if it names one, loads and
 //     exports a scenario of the shape cli.mjs plays (a module there with no
 //     default export is a helper the scenarios share, and is passed over);
-//   - and the app's Playwright, which cli.mjs records with, resolves.
+//   - and the app's Playwright, which cli.mjs records with, resolves, with
+//     a WebKit to launch (not started: no browser is installed here), and
+//     is a release with page.screencast, which record.mjs takes frames from
+//     (SCREENCAST_SINCE).
+// A web app's recordings also need WebKit itself, which this can't check:
+// `npx playwright install --with-deps webkit` installs it (in a Claude
+// cloud session too, where only Chromium comes installed).
 // Prints what it checked; exits non-zero, naming each problem, on any.
 
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
 import { appPlaywright } from './cli.mjs';
 import { loadModule, scenarioFiles, scenarioProblems, setupProblems } from './scenario.mjs';
 import { parseSettings } from './settings.mjs';
+
+/**
+ * The first Playwright release recordFrames is known to work with: its
+ * page.screencast sends frames (onFrame, size, quality).
+ */
+const SCREENCAST_SINCE = [1, 64];
+
+/**
+ * The app's Playwright release, from playwright-core's package.json (which
+ * both `@playwright/test` and `playwright` install).
+ *
+ * @param {string} root
+ * @returns {number[]}
+ */
+function playwrightVersion(root) {
+  const require = createRequire(path.join(root, 'package.json'));
+  const { version } = /** @type {{ version: string }} */ (require('playwright-core/package.json'));
+  return version.split('.').map(Number);
+}
 
 /**
  * The problems found in the app at `root`, saying what it checked to `log`.
@@ -84,10 +110,21 @@ export async function selftest(root, log = console.log) {
     }
   }
   try {
-    const { chromium } = await appPlaywright(root);
-    if (typeof chromium?.launch !== 'function')
-      problems.push("the app's Playwright has no chromium.launch");
-    else log("gif: the app's Playwright resolves");
+    const { webkit } = await appPlaywright(root);
+    const version = playwrightVersion(root);
+    const [major, minor] = version;
+    const [needMajor, needMinor] = SCREENCAST_SINCE;
+    if (typeof webkit?.launch !== 'function') {
+      problems.push("the app's Playwright has no webkit.launch");
+    } else if (major < needMajor || (major === needMajor && minor < needMinor)) {
+      problems.push(
+        `the app's Playwright ${version.join('.')} predates page.screencast's frames: update it to ${SCREENCAST_SINCE.join('.')} or later`,
+      );
+    } else {
+      log(
+        `gif: the app's Playwright ${version.join('.')} resolves, with WebKit and page.screencast`,
+      );
+    }
   } catch (error) {
     problems.push(`Playwright: ${error instanceof Error ? error.message : error}`);
   }

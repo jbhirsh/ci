@@ -88,7 +88,7 @@ export function stillTime(ticks, from, to) {
  * The GIF's frames from the recording, each shown until the next was
  * painted, so the clip plays at the speed the page moved however unevenly
  * the frames came.
- *   - Stalls are cut. Chrome sometimes paints nothing for a quarter-second
+ *   - Stalls are cut. A browser sometimes paints nothing for a quarter-second
  *     on a busy machine while things are still moving, and the GIF would
  *     freeze there and then jump. A frame lasting over twice `frame` (the
  *     usual gap between frames kept) shows only for the time the page's
@@ -132,13 +132,14 @@ export function timeline(shots, end, holds = HOLDS, { ticks = [], frame = 1000 /
 
 /**
  * Thins a stream of frames to about one per `gap` ms, deciding on each as
- * the next arrives. Chrome's screencast sends one per repaint, up to 60 a
- * second: more than a GIF needs, and each kept frame costs its size. A
- * frame is kept if it came at least `gap` after the last one kept, or if it
- * stayed on screen at least `gap` (the next came that much later, or none
- * did): so the frame a movement settles on is never dropped, however soon
- * after the one before it came. push() takes each frame as it arrives and
- * returns the one before it if that one is kept; flush() returns the last.
+ * the next arrives. The screencast (WebKit's, through Playwright, which
+ * drops the fps it's given) sends one per repaint, up to 60 a second: more
+ * than a GIF needs, and each kept frame costs its size. A frame is kept if
+ * it came at least `gap` after the last one kept, or if it stayed on screen
+ * at least `gap` (the next came that much later, or none did): so the frame
+ * a movement settles on is never dropped, however soon after the one before
+ * it came. push() takes each frame as it arrives and returns the one before
+ * it if that one is kept; flush() returns the last.
  * Now and then the screencast sends a frame painted no later than the one
  * before it; shown after it, the GIF would flick back, so it is dropped.
  *
@@ -173,12 +174,13 @@ export function thinner(gap = 40) {
 }
 
 /**
- * A kept frame's file name: f0000.png, f0001.png, …
+ * A kept frame's file name: f0000.jpg, f0001.jpg, … (the screencast's
+ * JPEGs).
  *
  * @param {number} n
  */
 export function frameName(n) {
-  return `f${String(n).padStart(4, '0')}.png`;
+  return `f${String(n).padStart(4, '0')}.jpg`;
 }
 
 /**
@@ -203,26 +205,63 @@ export function concatList(stills) {
 }
 
 /**
- * A PNG's size in pixels, from its header.
+ * A JPEG's size in pixels, from its first frame header (SOF), or null for
+ * bytes that hold none. Segments are skipped by their lengths, so a
+ * thumbnail's or a comment's bytes can't be read as the header.
  *
- * @param {Uint8Array} png
+ * @param {Uint8Array} jpeg
+ * @returns {{ width: number; height: number } | null}
  */
-export function pngSize(png) {
-  const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
-  return { width: view.getUint32(16), height: view.getUint32(20) };
+export function jpegSize(jpeg) {
+  const view = new DataView(jpeg.buffer, jpeg.byteOffset, jpeg.byteLength);
+  if (jpeg.length < 2 || view.getUint16(0) !== 0xffd8) return null;
+  let at = 2;
+  while (at + 4 <= jpeg.length) {
+    if (jpeg[at] !== 0xff) return null;
+    const marker = jpeg[at + 1];
+    // Fill bytes before a marker.
+    if (marker === 0xff) {
+      at += 1;
+      continue;
+    }
+    // Markers with no length: TEM, the restart markers; the image data
+    // starts after SOS, where no header can come.
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      at += 2;
+      continue;
+    }
+    if (marker === 0xda || marker === 0xd9) return null;
+    const length = view.getUint16(at + 2);
+    if (length < 2) return null;
+    // SOF0-SOF15, but for DHT (c4), JPG (c8) and DAC (cc).
+    const frame = marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker);
+    if (frame) {
+      if (at + 9 > jpeg.length || length < 7) return null;
+      return { width: view.getUint16(at + 7), height: view.getUint16(at + 5) };
+    }
+    at += 2 + length;
+  }
+  return null;
 }
 
 /**
- * The ffmpeg crop that cuts `clip` (CSS pixels) from a frame of the whole
- * viewport `scale` times its size (the device scale factor), whole pixels.
+ * The ffmpeg crop that cuts `clip` (CSS pixels) from a `frame` of the whole
+ * `viewport` (pixels: the device scale factor times the viewport, rounded),
+ * in whole pixels, each axis by its own scale and never past the frame's
+ * edge, which ffmpeg refuses.
  *
  * @param {Clip} clip
- * @param {number} scale
+ * @param {{ width: number; height: number }} frame
+ * @param {{ width: number; height: number }} viewport
  */
-export function cropFilter(clip, scale) {
-  /** @param {number} n */
-  const px = (n) => Math.round(n * scale);
-  return `crop=${px(clip.width)}:${px(clip.height)}:${px(clip.x)}:${px(clip.y)}`;
+export function cropFilter(clip, frame, viewport) {
+  const sx = frame.width / viewport.width;
+  const sy = frame.height / viewport.height;
+  const x = Math.round(clip.x * sx);
+  const y = Math.round(clip.y * sy);
+  const width = Math.min(Math.round(clip.width * sx), frame.width - x);
+  const height = Math.min(Math.round(clip.height * sy), frame.height - y);
+  return `crop=${width}:${height}:${x}:${y}`;
 }
 
 /**

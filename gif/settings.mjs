@@ -2,11 +2,14 @@
 // (lib/app.mjs's appConfig). Every setting has a default, so an app without
 // the key gets a web recorder with these defaults.
 //
-//   source     "web" (default): the app is a web app, recorded in Chromium
-//              against local production builds of main and the working tree
-//              (cli.mjs). "ci-videos": the app's CI records its scenarios as
-//              videos, turned into GIFs here (videos.mjs, which reads
-//              `videos` below).
+//   source     "web" (default): the app is a web app, recorded in WebKit,
+//              Safari's engine, against local production builds of main and
+//              the working tree (cli.mjs). WebKit is installed once with
+//              `npx playwright install --with-deps webkit`, in a Claude
+//              cloud session too, where only Chromium comes installed.
+//              "ci-videos": the app's CI records its scenarios as videos,
+//              turned into GIFs here (videos.mjs, which reads `videos`
+//              below).
 //   setup      the app's setup module, from its root (none by default): what
 //              every recording of the app needs around a scenario, such as
 //              stubbing its API or reading production's data (see cli.mjs's

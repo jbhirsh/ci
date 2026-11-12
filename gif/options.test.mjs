@@ -18,7 +18,6 @@ describe('parseOptions', () => {
       fps: 15,
       scale: 1,
       mode: undefined,
-      chromium: undefined,
       branch: 'screenshots',
       repo: undefined,
       keep: false,
@@ -51,8 +50,6 @@ describe('parseOptions', () => {
           '1.5',
           '--mode',
           'production',
-          '--chromium',
-          '/opt/chrome',
           '--branch',
           'pics',
           '--repo',
@@ -73,7 +70,6 @@ describe('parseOptions', () => {
       fps: 20,
       scale: 1.5,
       mode: 'production',
-      chromium: '/opt/chrome',
       branch: 'pics',
       repo: 'jbhirsh/fog-and-frontier',
       keep: true,
@@ -82,23 +78,10 @@ describe('parseOptions', () => {
     expect(parseOptions(['a.ts', '--after-only'], { settings }).afterOnly).toBe(true);
   });
 
-  it('takes a Chromium from PR_GIF_CHROMIUM or PLAYWRIGHT_CHROMIUM_EXECUTABLE, which --chromium overrides', () => {
-    expect(
-      parseOptions(['a.ts'], { settings, env: { PR_GIF_CHROMIUM: '/env/chrome' } }).chromium,
-    ).toBe('/env/chrome');
-    expect(
-      parseOptions(['a.ts'], { settings, env: { PLAYWRIGHT_CHROMIUM_EXECUTABLE: '/pw/chrome' } })
-        .chromium,
-    ).toBe('/pw/chrome');
-    expect(
-      parseOptions(['a.ts'], { settings, env: { PR_GIF_CHROMIUM: '' } }).chromium,
-    ).toBeUndefined();
-    expect(
-      parseOptions(['a.ts', '--chromium', '/flag/chrome'], {
-        settings,
-        env: { PR_GIF_CHROMIUM: '/env/chrome' },
-      }).chromium,
-    ).toBe('/flag/chrome');
+  it('takes no Chromium: the recorder is always WebKit', () => {
+    expect(() => parseOptions(['a.ts', '--chromium', '/opt/chrome'], { settings })).toThrow(
+      "Unknown option '--chromium'",
+    );
   });
 
   it("takes the setup module's own options, with their defaults", () => {
