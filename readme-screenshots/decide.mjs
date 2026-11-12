@@ -16,7 +16,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
-import { pick } from '../visuals/match.mjs';
+import { pick } from '../lib/match.mjs';
 import { settings } from './settings.mjs';
 
 /**

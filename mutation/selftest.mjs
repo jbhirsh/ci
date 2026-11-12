@@ -15,6 +15,7 @@
 
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { matches } from '../lib/match.mjs';
 import { readText } from './report.mjs';
 import { gitIn, inMutateScope, scopeFor } from './scope.mjs';
 import { readSettings, readStrykerConfig, wiringGlobs } from './settings.mjs';
@@ -70,7 +71,7 @@ export async function selftest(root, log = console.log) {
     return s.perFileThreshold === null ? 'off' : `${s.perFileThreshold}%`;
   });
   for (const glob of wiringGlobs(s)) {
-    if (!tracked.some((file) => path.matchesGlob(file, glob))) {
+    if (!tracked.some((file) => matches(file, glob))) {
       log(`warn  wiring glob ${glob} matches no tracked file`);
     }
   }

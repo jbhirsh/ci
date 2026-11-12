@@ -47,6 +47,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appRoot, importFromApp } from '../lib/app.mjs';
+import { matches } from '../lib/match.mjs';
 import { readSettings, readStrykerConfig, wiringGlobs } from './settings.mjs';
 
 /** @typedef {import('./report.mjs').LineRange} LineRange */
@@ -61,7 +62,7 @@ export function inMutateScope(file, patterns) {
   let selected = false;
   for (const pattern of patterns) {
     const negated = pattern.startsWith('!');
-    if (path.matchesGlob(file, negated ? pattern.slice(1) : pattern)) selected = !negated;
+    if (matches(file, negated ? pattern.slice(1) : pattern)) selected = !negated;
   }
   return selected;
 }
@@ -73,7 +74,7 @@ export function inMutateScope(file, patterns) {
  * @param {string[]} globs
  */
 export function wiringChanged(files, globs) {
-  return files.some((file) => globs.some((glob) => path.matchesGlob(file, glob)));
+  return files.some((file) => globs.some((glob) => matches(file, glob)));
 }
 
 const TEST_FILE = /\.test\.[cm]?[jt]sx?$/;

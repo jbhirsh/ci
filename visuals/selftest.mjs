@@ -13,7 +13,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
 import { checkPrVisuals, settings } from './check.mjs';
-import { matchesAny, pick } from './match.mjs';
+import { matchesAny, pick } from '../lib/match.mjs';
 
 export const TEMPLATE = '.github/pull_request_template.md';
 

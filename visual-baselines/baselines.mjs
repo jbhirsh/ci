@@ -10,7 +10,7 @@
 import { execFileSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import path from 'node:path';
-import { matchesAny } from '../visuals/match.mjs';
+import { matchesAny } from '../lib/match.mjs';
 
 /** @typedef {(command: string, args: string[]) => string} Run */
 

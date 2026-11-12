@@ -13,7 +13,7 @@
 // there to add pictures, so the required check would hold it forever.
 //
 // Settings, `visuals` in the app's .github/ci.json:
-//   ui      globs of the files that change how the app looks (visuals/match.mjs
+//   ui      globs of the files that change how the app looks (lib/match.mjs
 //           says how they match); default DEFAULT_UI
 //   notUi   globs among those that draw nothing (tests, providers, entry
 //           points); default DEFAULT_NOT_UI
@@ -25,7 +25,7 @@
 import { pathToFileURL } from 'node:url';
 import { readAll } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
-import { globList, pick } from './match.mjs';
+import { globList, pick } from '../lib/match.mjs';
 
 export const DEFAULT_UI = ['src/**/*.{tsx,css}'];
 export const DEFAULT_NOT_UI = ['**/*.test.*', '**/__tests__/**', 'src/test/**'];

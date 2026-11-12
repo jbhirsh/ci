@@ -72,7 +72,9 @@ const SAVED_TO = /saved to:?\s*(\S+)/i;
 
 /**
  * A glob (`*` within a folder, `**` across folders) as a regular expression
- * over a whole repo-relative path.
+ * over a whole repo-relative path. It matches inside dot folders (`**` covers
+ * `.github/`), which lib/match.mjs doesn't, so an app's review `skip` globs
+ * keep their meaning: that's why review has its own.
  *
  * @param {string} glob
  * @returns {RegExp}
