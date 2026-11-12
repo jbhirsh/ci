@@ -14,7 +14,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
 import { PIXELS, readPng } from '../lib/pixels.mjs';
-import { matchesAny } from '../visuals/match.mjs';
+import { matchesAny } from '../lib/match.mjs';
 import { diffRatio } from './compare.mjs';
 import { changedSince, decide } from './decide.mjs';
 import { isShotName, settings } from './settings.mjs';

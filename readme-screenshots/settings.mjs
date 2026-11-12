@@ -11,7 +11,7 @@
 //   source   how they were taken, for the bot PR's description and commit
 //            ("a local production build reading production's catalog")
 
-import { globList } from '../visuals/match.mjs';
+import { globList } from '../lib/match.mjs';
 
 export const BRANCH = 'bot/readme-screenshots';
 export const DEFAULT_DIR = 'docs/screenshots';
