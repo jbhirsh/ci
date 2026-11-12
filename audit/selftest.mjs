@@ -3,6 +3,8 @@
 // settings parse and its graph folders exist, then runs knip and jscpd as
 // the audit does, with the app's configs, and reads their reports (a dry
 // run: no issue is touched, and what they find is printed, not judged).
+// A package.json without the `jscpd` script the audit runs jscpd through
+// fails it, as it would fail the weekly run.
 // Lychee and Graphviz aren't run: the action installs them, not the app.
 
 import { existsSync } from 'node:fs';

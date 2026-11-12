@@ -20,9 +20,12 @@
 // .jscpd.json, .lycheeignore: what each looks at stays the app's choice) and
 // its installed version, turns the report into findings (audit/report.mjs),
 // writes them to the job summary, sets the `findings` output to their count,
-// and keeps the category's tracking issue (audit/issue.mjs). Findings never
-// fail the run; a tool that breaks does: knip exiting above 1, jscpd writing
-// no report, lychee exiting other than 0 or 2 (2 is broken links).
+// and keeps the category's tracking issue (audit/issue.mjs). jscpd runs as
+// the app's `jscpd` package script, which must be bare `jscpd` (its settings
+// are .jscpd.json): the command anyone runs locally, and what tells knip the
+// package is used. Findings never fail the run; a tool that breaks does:
+// knip exiting above 1, jscpd writing no report (or the app having no
+// `jscpd` script), lychee exiting other than 0 or 2 (2 is broken links).
 // `--dry-run` leaves the issue alone, for a local run or a self-test.
 // The issue needs GH_TOKEN (issues write); the run's link comes from
 // GITHUB_SERVER_URL, GITHUB_REPOSITORY and GITHUB_RUN_ID.
@@ -114,20 +117,28 @@ export function runKnip(root, run) {
 }
 
 /**
- * Runs jscpd with the app's .jscpd.json, but its JSON report written where
- * this reads it, and returns the report. Some apps' configs exit non-zero on
- * clones, so it's the missing report that says jscpd broke.
+ * Runs the app's `jscpd` script (its .jscpd.json), its JSON report written
+ * where this reads it, and returns the report. Some apps' configs exit
+ * non-zero on clones, so it's the missing report that says jscpd broke.
  *
  * @param {string} root
  * @param {Spawn} run
  * @returns {unknown}
  */
 export function runJscpd(root, run) {
+  /** @type {unknown} */
+  const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const scripts = /** @type {{ scripts?: Record<string, unknown> }} */ (pkg).scripts;
+  if (scripts?.jscpd !== 'jscpd') {
+    throw new Error(
+      'package.json needs the script `"jscpd": "jscpd"`: the audit runs jscpd through it (its settings stay in .jscpd.json)',
+    );
+  }
   const out = mkdtempSync(path.join(tmpdir(), 'jscpd-'));
   try {
     const result = run(
-      'npx',
-      ['--no-install', 'jscpd', '--reporters', 'json', '--output', out, '--silent'],
+      'npm',
+      ['run', '--silent', 'jscpd', '--', '--reporters', 'json', '--output', out, '--silent'],
       root,
     );
     const file = path.join(out, 'jscpd-report.json');
