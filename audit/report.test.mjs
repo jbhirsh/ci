@@ -54,7 +54,9 @@ describe('knipFindings', () => {
     // Without a line, just the file.
     expect(markdown).toContain('### Unlisted dependencies (1)\n\n- `expo-system-ui` in `app.json`');
     expect(markdown.startsWith('[knip](https://knip.dev) found')).toBe(true);
-    expect(markdown).toContain('say so in `knip.jsonc`');
+    expect(markdown).toContain(
+      'make their file an `entry` in `knip.jsonc`: an ignore fails the audit',
+    );
   });
 
   it('reports a duplicate export or a cycle, a list of items, as one finding', () => {
@@ -131,7 +133,7 @@ describe('knipFindings', () => {
         'k',
       ).markdown,
     ).toBe(
-      '[knip](https://knip.dev) found code and dependencies nothing uses. Delete them, or, if something does use them in a way knip can’t see, say so in `k`.\n\n### Unused exports (1)\n\n- `y` in `?`',
+      '[knip](https://knip.dev) found code and dependencies nothing uses. Delete them, or, if something does use them in a way knip can’t see, use them a way it reads (an import, a package script) or make their file an `entry` in `k`: an ignore fails the audit.\n\n### Unused exports (1)\n\n- `y` in `?`',
     );
   });
 });

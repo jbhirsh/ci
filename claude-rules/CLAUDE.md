@@ -66,8 +66,8 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
   bugs.
 - **Fix weekly-audit findings rather than suppressing them**, where the repo runs the weekly
   audit. knip and jscpd are expected to report nothing: an unused export goes, a real
-  duplicate becomes a shared helper, and a deliberate exception says why beside its ignore
-  entry or marker.
+  duplicate becomes a shared helper, and a deliberate jscpd exception says why beside its
+  ignore entry or marker.
 
 ## Tests
 

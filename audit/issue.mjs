@@ -5,8 +5,9 @@
 // closed one is reopened, so the category's history stays in one place. A
 // clean sweep closes it as completed, with a comment saying so. Issues are
 // found by exact title among those labelled `weekly-audit`, so renaming a
-// category opens a new issue. The run itself stays green whatever it finds:
-// the issue is the alert.
+// category opens a new issue. The issue is the alert: the run stays green
+// whatever it finds, except that audit/run.mjs fails the knip check, once
+// the issue is synced, on a suppression (audit/suppressions.mjs).
 //
 // `gh` does the work (audit/run.mjs hands it in), so GH_TOKEN needs issues
 // write.
