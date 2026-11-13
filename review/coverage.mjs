@@ -12,8 +12,9 @@
 // (default the working directory), SKIP the app's extra skippable globs, one
 // per line (`review.skip` in `.github/ci.json`, read by settings.mjs),
 // CARRIED the files an earlier review read whose part of the diff hasn't
-// changed since, one per line (carry.mjs): those needn't be read again. A
-// missing or unreadable execution file counts as a review that read nothing.
+// changed since, one per line (carry.mjs): those needn't be read again;
+// REMOVED the files the PR deletes, one per line (below). A missing or
+// unreadable execution file counts as a review that read nothing.
 //
 // Strict on purpose: a call it can't be sure of reads nothing. The cost of
 // a wrong "unread" is a second pass that reads the file again; the cost of
@@ -27,6 +28,18 @@
 //   - Read of the file itself, whole (no offset or limit).
 // A cut-off output's saved file counts once a Read opened it, in parts or
 // whole: a diff too long for one Read must be read in parts.
+// A file the PR deletes is covered by any of those, or by a listing of the
+// PR's diff that shows it deleted, by its whole path: `git diff` with the
+// same range and `--name-status` or `--summary` (no path, or one holding the
+// file), run in the checkout itself. Its old contents are gone from what the
+// PR leaves, so reading them whole only spent turns (four of the six files
+// BoardGames #307's check failed on were deleted ones); the prompt still has
+// the review look at why a test was deleted. Other flags are allowed only
+// from a short list that can't leave a deleted file out: renames,
+// `-z`, colour, a `--diff-filter` holding `D` (and no `d`). Not `--stat`,
+// `--numstat` or `--name-only`, which don't say the file went (and `--stat`
+// shortens long paths), nor `-S`, `-G`, `--relative` or `-R`, which drop
+// or flip files.
 // The command may start with `cd <dir> &&` and is otherwise one plain
 // command: no pipe, redirect, chain, substitution or second line, so a
 // grep pattern or a heredoc that mentions `git diff` reads nothing.
@@ -56,6 +69,11 @@ const NO_DIFF_FLAGS = new Set([
   '--exit-code',
 ]);
 const NO_DIFF_PREFIXES = ['--stat=', '--dirstat=', '--output=', '--format=', '--pretty=', '-U0'];
+/** Flags that print a deleted file as deleted, by its whole path. */
+const LISTING_FLAGS = new Set(['--name-status', '--summary']);
+/** The only other flags a listing may have: none leaves a deleted file out. */
+const LISTING_ALLOWED =
+  /^(-M\d*%?|-C\d*%?|--find-renames(=\d+%?)?|--find-copies(=\d+%?)?|--no-renames|-z|--no-color|--color=never|--no-ext-diff|--diff-filter=[^d]*D[^d]*)$/;
 /** Shell syntax that makes a command more than one plain command. */
 const COMPOUND = /[|;&<>`\n]/;
 /** The header Claude Code puts on output it cut to a preview. */
@@ -188,6 +206,20 @@ function filesReadBy(words, files, base) {
       .map((w) => w.slice('HEAD:'.length));
     return files.filter((f) => shown.includes(f));
   }
+  return inPrDiff(revisions, paths, files, base);
+}
+
+/**
+ * Which of the files a `git diff` with these revisions and paths covers:
+ * none unless the range is the PR's own.
+ *
+ * @param {string[]} revisions
+ * @param {string[]} paths
+ * @param {string[]} files
+ * @param {string} base
+ * @returns {string[]}
+ */
+function inPrDiff(revisions, paths, files, base) {
   // The PR's diff and nothing else: origin/<base> to HEAD, three dots or
   // two, or the two ends given apart.
   const range = revisions.join(' ');
@@ -199,6 +231,44 @@ function filesReadBy(words, files, base) {
   return files.filter((f) =>
     named.some((p) => p === '' || p === '.' || f === p || f.startsWith(`${p}/`)),
   );
+}
+
+/**
+ * Which of the deleted files one call listed with their status or size (a
+ * `git diff --name-status` of the PR and the like): none for any other call.
+ *
+ * @param {string[]} words
+ * @param {string[]} removed
+ * @param {string} base
+ * @returns {string[]}
+ */
+function filesListedBy(words, removed, base) {
+  const [tool, sub, ...rest] = words;
+  if (tool !== 'git' || sub !== 'diff') return [];
+  const dashes = rest.indexOf('--');
+  const args = dashes === -1 ? rest : rest.slice(0, dashes);
+  const paths = dashes === -1 ? [] : rest.slice(dashes + 1);
+  const flags = args.filter((w) => w.startsWith('-'));
+  if (!flags.some((w) => LISTING_FLAGS.has(w))) return [];
+  if (!flags.every((w) => LISTING_FLAGS.has(w) || LISTING_ALLOWED.test(w))) return [];
+  const revisions = args.filter((w) => !w.startsWith('-'));
+  return inPrDiff(revisions, paths, removed, base);
+}
+
+/**
+ * Whether a command runs in the checkout: no leading `cd`, or one to the
+ * checkout's own path. A `cd` elsewhere would read its paths from there,
+ * or another repository's diff.
+ *
+ * @param {string} command
+ * @param {string} repoDir
+ * @returns {boolean}
+ */
+function inCheckout(command, repoDir) {
+  const cd = /^\s*cd\s+("[^"]*"|'[^']*'|\S+)\s*&&/.exec(command);
+  if (!cd) return true;
+  const dir = cd[1].replace(/^(["'])(.*)\1$/, '$2').replace(/\/+$/, '');
+  return dir === repoDir.replace(/\/+$/, '');
 }
 
 /**
@@ -231,12 +301,19 @@ function readPath(call, part) {
  *
  * @param {string[]} changed
  * @param {ToolCall[]} calls
- * @param {{ repoDir: string, base?: string, skip?: string[], carried?: string[] }} options
+ * @param {{ repoDir: string, base?: string, skip?: string[], carried?: string[], removed?: string[] }} options
+ *   removed: the changed files the PR deletes, which a listing covers
  * @returns {string[]}
  */
-export function unreadFiles(changed, calls, { repoDir, base = 'main', skip = [], carried = [] }) {
+export function unreadFiles(
+  changed,
+  calls,
+  { repoDir, base = 'main', skip = [], carried = [], removed = [] },
+) {
   const done = new Set(carried);
   const needed = filesToRead(changed, skip).filter((f) => !done.has(f));
+  const gone = new Set(removed);
+  const deleted = needed.filter((f) => gone.has(f));
   /** @param {boolean} part */
   const paths = (part) =>
     calls.map((c) => readPath(c, part)).filter(/** @returns {p is string} */ (p) => p !== null);
@@ -252,7 +329,11 @@ export function unreadFiles(changed, calls, { repoDir, base = 'main', skip = [],
       if (!saved || !opened.has(saved)) continue;
     }
     const words = plainWords(call.input.command);
-    if (words) for (const file of filesReadBy(words, needed, base)) read.add(file);
+    if (!words) continue;
+    for (const file of filesReadBy(words, needed, base)) read.add(file);
+    if (inCheckout(call.input.command, repoDir)) {
+      for (const file of filesListedBy(words, deleted, base)) read.add(file);
+    }
   }
   return needed.filter((f) => !read.has(f));
 }
@@ -358,6 +439,7 @@ export function main(executionFiles, stdin, env, warn) {
     base: env.BASE_REF || 'main',
     skip: lines(env.SKIP),
     carried: lines(env.CARRIED),
+    removed: lines(env.REMOVED),
   });
 }
 

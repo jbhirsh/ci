@@ -13,10 +13,11 @@
 #      merge blocker and one summary comment saying what it read.
 #   3. Checks the review read every changed file's diff (coverage.mjs, from
 #      the review's own tool calls), lockfiles, images, fonts and the app's
-#      `review.skip` globs aside. A file it never read goes back to a second
-#      pass (followup.md); a file still unread after that fails the check.
-#      It was added after a review passed sift #188 twice having seen its
-#      tests only in `--stat`.
+#      `review.skip` globs aside. A file the PR deletes needs only a listing
+#      of the diff showing it deleted (`--name-status`; coverage.mjs). A
+#      file it never read goes back to a second pass (followup.md); a file
+#      still unread after that fails the check. It was added after a review
+#      passed sift #188 twice having seen its tests only in `--stat`.
 #   4. Carries files over between pushes (carry.mjs): a file an earlier
 #      review of the PR read, whose part of the diff has the same patch-id
 #      now, needn't be read again; the prompt lists it as already reviewed.
@@ -197,6 +198,8 @@ runs:
         BASE_REF: ${{ github.event.pull_request.base.ref }}
         SKIP: ${{ steps.render.outputs.skip }}
         CARRIED: ${{ steps.plan.outputs.carried }}
+        # The files the PR deletes (carry.mjs), which a listing covers.
+        REMOVED: ${{ steps.plan.outputs.removed }}
         EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
       run: |
         set -o pipefail
@@ -263,6 +266,8 @@ runs:
         BASE_REF: ${{ github.event.pull_request.base.ref }}
         SKIP: ${{ steps.render.outputs.skip }}
         CARRIED: ${{ steps.plan.outputs.carried }}
+        # The files the PR deletes (carry.mjs), which a listing covers.
+        REMOVED: ${{ steps.plan.outputs.removed }}
         FOLLOWUP_FILE: ${{ steps.followup.outputs.execution_file }}
       run: |
         set -o pipefail

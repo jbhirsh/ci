@@ -11,7 +11,12 @@
 // edit to YAML or Python must be read again. Context lines count too, so
 // a base edit next to the PR's hunk means a re-read. A
 // file whose patch-id differs, or that no completed review read, is read in
-// full; that is the guarantee coverage.mjs keeps.
+// full; that is the guarantee coverage.mjs keeps. A file the PR deletes is
+// left out of the plan: a listing of the PR's diff covers it in every pass
+// (coverage.mjs), so there is nothing to carry, and the prompt's "read in
+// full" would be untrue of it. The plan step hands them to coverage.mjs
+// (output `removed`); if it fails, none are named, and every deleted file
+// must be read like any other.
 //
 // The record of what was read is a small JSON file kept in an Actions cache,
 // one entry per review, keyed by PR number (action.yml): restore takes the
@@ -34,9 +39,10 @@
 // CLI, run from the app's checkout:
 //   `node carry.mjs plan`  reads RECORD (the restored record, if any) and
 //     writes PLAN: the files to read with their patch-ids, and the ones
-//     carried over with the commit each was read at. Step output `carried`:
-//     those files, one per line (coverage.mjs's CARRIED); they also go in
-//     the job summary.
+//     carried over with the commit each was read at. Step outputs
+//     `carried`, those files, and `removed`, the files the PR deletes, one
+//     per line (coverage.mjs's CARRIED and REMOVED); the job summary names
+//     the carried ones and counts the deleted.
 //   `node carry.mjs save`  writes RECORD from PLAN, once the review has read
 //     every file the plan left to it (action.yml runs it only then).
 // Both take RECORD and PLAN (the two files' paths); plan also BASE_REF
@@ -95,13 +101,15 @@ function git(root, args, input) {
 }
 
 /**
- * The PR's changed files, as action.yml lists them for coverage.mjs.
+ * The PR's changed files, as action.yml lists them for coverage.mjs, or with
+ * `deleted` only those it deletes (renames found, so a moved file isn't one).
  *
- * @param {{ root: string, base: string }} where
+ * @param {{ root: string, base: string, deleted?: boolean }} where
  * @returns {string[]}
  */
-export function changedFiles({ root, base }) {
-  return git(root, ['diff', '--name-only', '-z', '-M', `origin/${base}...HEAD`])
+export function changedFiles({ root, base, deleted = false }) {
+  const filter = deleted ? ['--diff-filter=D'] : [];
+  return git(root, ['diff', '--name-only', '-z', '-M', ...filter, `origin/${base}...HEAD`])
     .split('\0')
     .filter(Boolean);
 }
@@ -280,18 +288,21 @@ export function currentContext({ root, ref, base }) {
 }
 
 /**
- * The job summary's note on what was carried over.
+ * The job summary's note on what was carried over, and how many deleted
+ * files a listing covers.
  *
  * @param {Plan} p
+ * @param {number} [deleted]
  * @returns {string}
  */
-export function summaryNote(p) {
+export function summaryNote(p, deleted = 0) {
   const carried = Object.entries(p.carried);
   const total = Object.keys(p.patchIds).length;
-  if (carried.length === 0) return `Claude Review: all ${total} changed file(s) to be read.`;
+  const gone = deleted > 0 ? ` (and ${deleted} deleted, which a listing of the diff covers)` : '';
+  if (carried.length === 0) return `Claude Review: all ${total} changed file(s) to be read${gone}.`;
   const lines = carried.map(([file, e]) => `- \`${file}\`, read at ${e.sha.slice(0, 7)}`);
   return [
-    `Claude Review: ${carried.length} of ${total} changed file(s) carried over from earlier reviews (same patch-id), ${total - carried.length} to read:`,
+    `Claude Review: ${carried.length} of ${total} changed file(s) carried over from earlier reviews (same patch-id), ${total - carried.length} to read${gone}:`,
     '',
     ...lines,
   ].join('\n');
@@ -303,8 +314,9 @@ export function summaryNote(p) {
  * @param {string | undefined} command
  * @param {Record<string, string | undefined>} env
  * @param {string} root
- * @returns {{ note: string, carried: string[] }} the job summary's note, and
- *   the files carried over (for coverage.mjs's CARRIED)
+ * @returns {{ note: string, carried: string[], removed: string[] }} the job
+ *   summary's note, the files carried over and the files the PR deletes
+ *   (for coverage.mjs's CARRIED and REMOVED)
  */
 export function main(command, env, root) {
   const recordFile = env.RECORD;
@@ -314,13 +326,15 @@ export function main(command, env, root) {
     const base = env.BASE_REF || 'main';
     const ref = env.CONFIG_REF || undefined;
     const { skip } = reviewSettings({ root, ref });
-    const files = filesToRead(changedFiles({ root, base }), skip);
+    const removed = filesToRead(changedFiles({ root, base, deleted: true }), skip);
+    const gone = new Set(removed);
+    const files = filesToRead(changedFiles({ root, base }), skip).filter((f) => !gone.has(f));
     const ids = Object.fromEntries(files.map((f) => [f, patchId(f, { root, base })]));
     const context = currentContext({ root, ref, base });
     const p = plan(ids, parseRecord(readOrNull(recordFile)), context);
     mkdirSync(path.dirname(planFile), { recursive: true });
     writeFileSync(planFile, JSON.stringify(p));
-    return { note: summaryNote(p), carried: Object.keys(p.carried) };
+    return { note: summaryNote(p, removed.length), carried: Object.keys(p.carried), removed };
   }
   if (command === 'save') {
     const p = readPlan(planFile);
@@ -330,15 +344,18 @@ export function main(command, env, root) {
     }
     mkdirSync(path.dirname(recordFile), { recursive: true });
     writeFileSync(recordFile, JSON.stringify(nextRecord(p, head)));
-    return { note: '', carried: [] };
+    return { note: '', carried: [], removed: [] };
   }
   throw new Error('usage: carry.mjs plan|save');
 }
 
 /* c8 ignore start: the CLI's lines, run by action.yml */
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { note, carried } = main(process.argv[2], process.env, appRoot());
+  const { note, carried, removed } = main(process.argv[2], process.env, appRoot());
   if (note) summary(note);
-  if (process.argv[2] === 'plan') setOutput('carried', carried.join('\n'));
+  if (process.argv[2] === 'plan') {
+    setOutput('carried', carried.join('\n'));
+    setOutput('removed', removed.join('\n'));
+  }
 }
 /* c8 ignore stop */

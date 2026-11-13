@@ -28,20 +28,27 @@ after reading CLAUDE.md, however large the PR:
 
 1. See what changed and how much: `git diff --stat -M origin/{{base}}...HEAD`
    and `git diff --name-status -M origin/{{base}}...HEAD`. {{skippable}} may
-   be skimmed or skipped; say which in the summary. Every other file must be
-   read in full.
+   be skimmed or skipped; say which in the summary. A file the PR deletes
+   (`D` in `--name-status`) is covered by that line: what it held is gone,
+   so its old contents needn't be read whole. Still look at each deleted
+   test, fixture, end-to-end flow or snapshot: did the code it tested go
+   too, or move with its tests, or is that code still here and now
+   untested (a test deleted to get a failure through)? Open its diff, or
+   Grep for what it tested, whenever the rest of the PR doesn't settle it.
+   Every other file must be read in full.
 {{carried}}
 2. Read each other file's diff on its own, tests included:
    `git diff -M origin/{{base}}...HEAD -- <file>` (for a rename, give both
    paths). Tests, fixtures, end-to-end flows and snapshots are changed files
    like any other, and a changed or removed assertion is where a weakened
-   test hides. Seeing a file only in `--stat` is not reading it. Don't ask
-   for several files in one command: large output is cut to a preview. A
-   check counts what you read from your own tool calls, and only a plain
-   command counts: no loop, variable, pipe or `&&` chain (a leading
-   `cd <dir> &&` is fine); a file it can't see you read comes back to you in
-   a second pass. To save turns, send several of these single-file diffs as
-   parallel tool calls in one message; each gets its own output limit.
+   test hides. Seeing a file only in `--stat` is not reading it (a deleted
+   file's `--name-status` line aside). Don't ask for several files in one
+   command: large output is cut to a preview. A check counts what you read
+   from your own tool calls, and only a plain command counts: no loop,
+   variable, pipe or `&&` chain (a leading `cd <dir> &&` is fine); a file it
+   can't see you read comes back to you in a second pass. To save turns,
+   send several of these single-file diffs as parallel tool calls in one
+   message; each gets its own output limit.
 3. If a result comes back as "Output too large" with a path to the full
    output, open that path with the Read tool (use offset/limit for long
    ones) and read the rest before moving on. A preview is not the diff.
@@ -229,9 +236,12 @@ what was checked. Its body starts with the line
   you left);
 - the files you read, any carried over from an earlier review (above; with
   the commit each was reviewed at), and any you skimmed or skipped and why
-  (group them by directory when there are many). A file seen only in `--stat`, or only in
-  part, counts as skimmed; say "nothing skipped" only when every changed
-  file other than the skippable ones above was read in full;
+  (group them by directory when there are many), and the files the PR
+  deletes, saying of each deleted test what it covered and why it could go.
+  A file seen only in `--stat`, or only in part, counts as skimmed (a
+  deleted one seen in `--name-status` aside); say "nothing skipped" only
+  when every changed file other than the skippable and deleted ones above
+  was read in full;
 - the non-blocking notes.
 
 Keep a single summary per PR, updated on each push. Find yours (posted as
