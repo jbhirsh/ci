@@ -1,3 +1,5 @@
+import { writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cli, selftest } from './selftest.mjs';
 import { testPng } from '../lib/test-pixels.mjs';
@@ -20,6 +22,35 @@ function app(config, files) {
 }
 
 describe('selftest', () => {
+  it("checks verify against the app's job, and the app's Vercel ignore script", async () => {
+    const root = app(
+      {
+        folders: ['shots'],
+        command: 'make shots',
+        verify: { check: 'E2E', command: 'npm run test:e2e' },
+      },
+      {
+        'shots/a.png': testPng(),
+        '.github/workflows/e2e.yml':
+          'jobs:\n  e2e:\n    name: E2E\n    steps:\n      - run: npm run test:e2e\n',
+        'scripts/vercel-ignore.mjs': 'process.exit(1);\n',
+      },
+    );
+    await expect(selftest(root)).rejects.toThrow(/vercel-ignore\.mjs answers wrongly/);
+    writeFileSync(
+      path.join(root, 'scripts/vercel-ignore.mjs'),
+      "import { execFileSync } from 'node:child_process';\n" +
+        "const [a, c] = execFileSync('git', ['log', '-1', '--format=%an|%cn'], { encoding: 'utf8' }).trim().split('|');\n" +
+        "process.exit(process.env.VERCEL_ENV === 'preview' && c === 'github-actions[bot]' && a !== c ? 0 : 1);\n",
+    );
+    expect(await selftest(root)).toEqual([
+      'visual-baselines: 1 baselines in shots.',
+      'visual-baselines: rewritten by `make shots`.',
+      "visual-baselines: verify runs E2E's `npm run test:e2e` (e2e.yml).",
+      'visual-baselines: scripts/vercel-ignore.mjs answers all 5 cases.',
+    ]);
+  });
+
   it('passes an app without settings, saying so', async () => {
     expect(await selftest(app(undefined, { 'a.txt': '' }))).toEqual([
       'visual-baselines: no settings; the app uses no shared visual regression yet.',

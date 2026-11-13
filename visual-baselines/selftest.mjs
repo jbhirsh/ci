@@ -10,7 +10,12 @@
 //   - it says how a rewrite gets fresh baselines: a `command`, or an
 //     `artifact` from one of its workflows;
 //   - for a comparison (an `artifact` app): `folders` names one folder, and
-//     pngjs reads every baseline.
+//     pngjs reads every baseline;
+//   - with `verify` set: its command is what its check's job runs
+//     (verify-check.mjs);
+//   - with a scripts/vercel-ignore.mjs in the app, whatever its settings: it
+//     skips the baselines bot's amend on a preview and builds everything
+//     else (vercel-ignore.mjs's cases).
 
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -21,12 +26,26 @@ import { readPng } from '../lib/pixels.mjs';
 import { knownFiles, matchingFolders, runIn } from './baselines.mjs';
 import { shots } from './from-run.mjs';
 import { settings, singleFolder } from './settings.mjs';
+import { checkVerify } from './verify-check.mjs';
+import { checkIgnore } from './vercel-ignore.mjs';
 
 /**
  * @param {string} root
  * @returns {Promise<string[]>} what to print; throws on the first problem
  */
 export async function selftest(root) {
+  const ignore = checkIgnore(root);
+  const lines = await baselines(root);
+  return ignore ? [...lines, ignore] : lines;
+}
+
+/**
+ * The checks of the app's `visual-baselines` settings.
+ *
+ * @param {string} root
+ * @returns {Promise<string[]>}
+ */
+async function baselines(root) {
   const config = appConfig('visual-baselines', root);
   if (Object.keys(config).length === 0) {
     return ['visual-baselines: no settings; the app uses no shared visual regression yet.'];
@@ -46,6 +65,7 @@ export async function selftest(root) {
     );
   }
   if (s.command) lines.push(`visual-baselines: rewritten by \`${s.command}\`.`);
+  if (s.verify) lines.push(checkVerify(root, s.verify));
   if (!s.artifact) return lines;
 
   const { workflow, name } = s.artifact;
