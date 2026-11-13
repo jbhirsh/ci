@@ -147,10 +147,16 @@ runs:
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
         # claude-code-action refuses to run for a bot actor unless it's
         # listed ("Workflow initiated by non-human actor"). Dependabot's
-        # bumps are reviewed, and claude[bot] pushes autofix's commits;
-        # without it the review fails on them and, being required, blocks
-        # the PR. Just these two, never "*".
-        allowed_bots: "dependabot[bot],claude[bot]"
+        # bumps are reviewed, claude[bot] pushes autofix's commits, and
+        # github-actions[bot] (the Actions token) pushes the commits an app's
+        # own workflows make on a PR's branch: visual-baselines.yml's new
+        # baselines, run by hand by someone with write access. Its push's
+        # runs wait for a maintainer to approve them, then run as that bot.
+        # Without one of them the review fails on its push and, being
+        # required, blocks the PR (BoardGames#308's baselines commit did).
+        # Just these three, never "*". The same list is on the follow-up
+        # pass below.
+        allowed_bots: "dependabot[bot],claude[bot],github-actions[bot]"
         prompt: ${{ steps.render.outputs.prompt }}
         classify_inline_comments: "true"
         display_report: "true"
@@ -232,7 +238,7 @@ runs:
       with:
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
-        allowed_bots: "dependabot[bot],claude[bot]"
+        allowed_bots: "dependabot[bot],claude[bot],github-actions[bot]"
         prompt: ${{ steps.render-followup.outputs.prompt }}
         classify_inline_comments: "true"
         display_report: "true"

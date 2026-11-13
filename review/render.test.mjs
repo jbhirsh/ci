@@ -1,7 +1,6 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import {
   CI_DIR,
@@ -34,6 +33,17 @@ describe('the templates', () => {
     for (const pass of /** @type {const} */ (['review', 'followup'])) {
       for (const name of placeholders(template(pass))) expect(given).toContain(name);
     }
+  });
+});
+
+describe('action.yml', () => {
+  it("runs both passes for the bots that push to a PR's branch, and no others", () => {
+    const action = readFileSync(path.join(CI_DIR, 'review', 'action.yml'), 'utf8');
+    const lists = [...action.matchAll(/^\s*allowed_bots: "([^"]*)"$/gm)].map((m) => m[1]);
+    expect(lists).toEqual([
+      'dependabot[bot],claude[bot],github-actions[bot]',
+      'dependabot[bot],claude[bot],github-actions[bot]',
+    ]);
   });
 });
 
