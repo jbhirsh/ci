@@ -1,0 +1,60 @@
+name: PR GIFs, which scenarios changed
+description: >-
+  The first job of pr-gif.yml. On pull_request, after a checkout of the PR's
+  head with its history, it lists the GIF scenarios the PR's whole diff
+  adds or changes (from its merge base with the base: every push re-records
+  them all), as the outputs the record job reads; a run by hand passes its
+  inputs through, to record. It runs none of the PR's code: git, and the
+  app's .github/ci.json read as data (gif/workflow.mjs's header says how).
+
+inputs:
+  pr:
+    description: The PR's number, on a run by hand; read from the event on pull_request.
+    default: ""
+  scenarios:
+    description: On a run by hand, the scenario files to record, separated by spaces or commas.
+    default: ""
+  side-by-side:
+    description: On a run by hand, one labelled GIF of before and after ("true").
+    default: "false"
+  after-only:
+    description: On a run by hand, only "after" ("true").
+    default: "false"
+
+outputs:
+  pr:
+    description: The PR's number.
+    value: ${{ steps.changed.outputs.pr }}
+  scenarios:
+    description: The scenario files to record, separated by spaces.
+    value: ${{ steps.changed.outputs.scenarios }}
+  head:
+    description: On pull_request, the commit recorded; empty on a run by hand.
+    value: ${{ steps.changed.outputs.head }}
+  automatic:
+    description: '"true" on pull_request, "false" on a run by hand.'
+    value: ${{ steps.changed.outputs.automatic }}
+  record:
+    description: '"true" when there is anything to record.'
+    value: ${{ steps.changed.outputs.record }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Which scenarios changed
+      id: changed
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr }}
+        SCENARIOS: ${{ inputs.scenarios }}
+        SIDE_BY_SIDE: ${{ inputs.side-by-side }}
+        AFTER_ONLY: ${{ inputs.after-only }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        APP_ROOT: ${{ github.workspace }}
+      run: node "$GITHUB_ACTION_PATH/../workflow.mjs" changed

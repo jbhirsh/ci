@@ -1,0 +1,58 @@
+name: PR GIFs, check the run
+description: >-
+  The first job of pr-gif-attach.yml, on workflow_run, after a checkout of
+  the default branch (for the app's .github/ci.json), never of the PR. It
+  reads the finished run from the event and the PR through the API, with
+  the Actions token only, and decides whether the GIFs may be attached:
+  a pull_request run that ended success or failure, not a fork's, for the
+  PR's current head; and which scenarios the PR's whole diff changes. It
+  sets the PR GIFs commit status a recording starts with (pending), or a
+  fork's PR gets (gif/workflow.mjs's header says how).
+
+inputs:
+  github-token:
+    description: >-
+      Reads the PR and its files (pull-requests read) and sets the PR GIFs
+      status on its head (statuses write). Never BOT_PR_TOKEN.
+    default: ${{ github.token }}
+
+outputs:
+  go:
+    description: '"true" when the attach job runs: to attach, or only to drop old GIFs.'
+    value: ${{ steps.check.outputs.go }}
+  record:
+    description: '"true" when the PR changes a scenario, so there are GIFs to make or attach.'
+    value: ${{ steps.check.outputs.record }}
+  report:
+    description: '"true" when the Report job finishes the PR GIFs status this set pending.'
+    value: ${{ steps.check.outputs.report }}
+  pr:
+    description: The PR's number, when the attach job runs.
+    value: ${{ steps.check.outputs.pr }}
+  head:
+    description: The commit the run recorded, which must still be the PR's head.
+    value: ${{ steps.check.outputs.head }}
+  scenarios:
+    description: The names of the scenarios the PR changes, comma-separated.
+    value: ${{ steps.check.outputs.scenarios }}
+  artifact-run:
+    description: The run holding a web app's pr-gif artifact; empty for one made in this run (sift).
+    value: ${{ steps.check.outputs.artifact-run }}
+  run-url:
+    description: The run a failed recording is linked to.
+    value: ${{ steps.check.outputs.run-url }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Check the run
+      id: check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        APP_ROOT: ${{ github.workspace }}
+      run: node "$GITHUB_ACTION_PATH/../workflow.mjs" check
