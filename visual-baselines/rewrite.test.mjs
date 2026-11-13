@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -5,6 +6,7 @@ import { runIn } from './baselines.mjs';
 import { main, rewrite } from './rewrite.mjs';
 import { settings } from './settings.mjs';
 import { repo } from './test-repo.mjs';
+import { VERIFY, apiRun, fake } from './test-github.mjs';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -126,6 +128,51 @@ describe('rewrite', () => {
     expect(committed).toBe(false);
     expect(runs).toBe(1);
     expect(git('status', '--porcelain')).toBe('');
+  });
+
+  it('with verify, amends the head commit and carries its checks over, or pushes nothing', () => {
+    for (const passes of [true, false]) {
+      const { root, git, remote } = repo({ 'shots/a.png': 'old' });
+      const a = git('rev-parse', 'HEAD').trim();
+      const f = fake({
+        results: (sha) =>
+          sha === a ? { runs: [apiRun(1, 'Unit', 'success'), apiRun(2, 'Lint', 'success')] } : {},
+      });
+      /** @type {string[]} */
+      const commands = [];
+      const go = () =>
+        rewrite({
+          root,
+          s: settings({ folders: ['shots'], command: 'make shots', verify: VERIFY }),
+          run: runIn(root),
+          shell: (command) => {
+            commands.push(command);
+            if (command === VERIFY.command && !passes) throw new Error('exit 1');
+            mkdirSync(path.join(root, 'shots'), { recursive: true });
+            writeFileSync(path.join(root, 'shots/a.png'), 'new');
+          },
+          branch: 'topic',
+          by: 'a test',
+          github: () => f.github,
+        });
+      const remoteHead = () =>
+        execFileSync('git', ['--git-dir', remote, 'rev-parse', 'topic'], {
+          encoding: 'utf8',
+        }).trim();
+      if (passes) {
+        expect(go()).toBe(true);
+        expect(remoteHead()).toBe(git('rev-parse', 'HEAD').trim());
+        expect(git('rev-list', '--count', 'HEAD').trim()).toBe('1');
+        expect(f.posted().map((c) => c.body?.name)).toEqual(['E2E', 'Unit', 'Lint']);
+      } else {
+        expect(go).toThrow(/E2E failed on \w{7} with the new baselines/);
+        expect(remoteHead()).toBe(a);
+        expect(f.posted()).toEqual([]);
+      }
+      // Written again differently, so the command runs twice (rewrite's
+      // header), then the check once.
+      expect(commands).toEqual(['make shots', 'make shots', VERIFY.command]);
+    }
   });
 
   it('needs a command', () => {

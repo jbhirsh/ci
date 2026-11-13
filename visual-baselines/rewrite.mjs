@@ -13,30 +13,61 @@
 // fail the comparison the app's tests make, and the commit holds the
 // screenshots that really moved, new ones, and the ones no test takes gone.
 //
+// With `verify` set, the rewrite is all-or-nothing instead: it waits for
+// the head commit's checks, adds the baselines to that commit and carries
+// its results over (carry.mjs). Without it, it adds a commit, as before.
+//
 //   node rewrite.mjs        (from the app's checkout, on the branch)
 
 import { execSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { appConfig, appRoot } from '../lib/app.mjs';
-import { branchOf, commit, restoreRewritten, runIn, wipe } from './baselines.mjs';
+import { branchOf, commit, push, report, restoreRewritten, runIn, wipe } from './baselines.mjs';
+import { amendAndCarry, gitHubFromEnv } from './carry.mjs';
 import { settings } from './settings.mjs';
 
 /**
  * @param {{ root: string, s: import('./settings.mjs').Settings,
  *   run: import('./baselines.mjs').Run, shell: (command: string) => void,
- *   branch: string, by: string }} options
- * @returns {boolean} whether anything was committed
+ *   branch: string, by: string, github?: () => import('./carry.mjs').GitHub }} options
+ *   `github`: the API side, read only with `verify`
+ * @returns {boolean} whether anything was pushed
  */
-export function rewrite({ root, s, run, shell, branch, by }) {
-  if (!s.command) {
+export function rewrite({
+  root,
+  s,
+  run,
+  shell,
+  branch,
+  by,
+  github = () => gitHubFromEnv(process.env),
+}) {
+  const { command, verify } = s;
+  if (!command) {
     throw new Error('.github/ci.json: visual-baselines.command is needed to rewrite the baselines');
   }
-  wipe(root, s.folders, run);
-  shell(s.command);
-  // Only a baseline written again differently can be noise; the command's
-  // own comparison decides which of those really changed.
-  if (restoreRewritten(s.folders, run).length > 0) shell(s.command);
-  return commit({ globs: s.folders, branch, by, run });
+  const write = () => {
+    wipe(root, s.folders, run);
+    shell(command);
+    // Only a baseline written again differently can be noise; the command's
+    // own comparison decides which of those really changed.
+    if (restoreRewritten(s.folders, run).length > 0) shell(command);
+  };
+  if (verify) {
+    return amendAndCarry({
+      verify,
+      globs: s.folders,
+      branch,
+      run,
+      check: () => shell(verify.command),
+      write,
+      github: github(),
+    });
+  }
+  write();
+  if (!commit({ globs: s.folders, by, run })) return false;
+  push({ branch, run });
+  return true;
 }
 
 /** @param {string} [root] */
@@ -53,5 +84,5 @@ export function main(root = appRoot()) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  console.log(main() ? 'Committed the new baselines.' : 'The baselines are already up to date.');
+  process.exitCode = report(main);
 }

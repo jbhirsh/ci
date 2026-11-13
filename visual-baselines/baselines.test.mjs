@@ -1,12 +1,16 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   branchOf,
+  BOT,
   commit,
   knownFiles,
   matchingFolders,
+  push,
+  report,
   restoreRewritten,
   runIn,
   wipe,
@@ -82,7 +86,13 @@ describe('knownFiles, wipe and commit', () => {
     writeFileSync(path.join(root, 'e2e/a.spec.ts'), 'changed');
     git('add', 'e2e/a.spec.ts');
 
-    expect(commit({ globs: ['e2e/*-snapshots'], branch: 'topic', by: 'a run', run })).toBe(true);
+    expect(commit({ globs: ['e2e/*-snapshots'], by: 'a run', run })).toBe(true);
+    // Committed, not yet pushed: push() does that.
+    expect(
+      execFileSync('git', ['--git-dir', remote, 'log', '-1', '--format=%s', 'topic'], {
+        encoding: 'utf8',
+      }).trim(),
+    ).toBe('first');
     expect(git('log', '-1', '--format=%s%n%n%b').trim()).toBe(
       'Update the visual baselines\n\nRewritten on CI by a run.',
     );
@@ -93,6 +103,7 @@ describe('knownFiles, wipe and commit', () => {
     ]);
     // Only the baselines: the spec's change stays out, staged or not.
     expect(git('status', '--porcelain').trim()).toBe('M  e2e/a.spec.ts');
+    push({ branch: 'topic', run });
     expect(
       execFileSync('git', ['--git-dir', remote, 'log', '-1', '--format=%s', 'topic'], {
         encoding: 'utf8',
@@ -103,14 +114,101 @@ describe('knownFiles, wipe and commit', () => {
   it('commits nothing when the baselines are unchanged or there are none', () => {
     const { root, git } = repo({ 'shots/a.png': 'a' });
     const run = runIn(root);
-    expect(commit({ globs: ['shots'], branch: 'topic', by: 'x', run })).toBe(false);
-    expect(commit({ globs: ['none'], branch: 'topic', by: 'x', run })).toBe(false);
+    expect(commit({ globs: ['shots'], by: 'x', run })).toBe(false);
+    expect(commit({ globs: ['none'], by: 'x', run })).toBe(false);
     // Something else staged, the baselines unchanged: still nothing to commit.
     writeFileSync(path.join(root, 'other.txt'), 'x');
     git('add', 'other.txt');
-    expect(commit({ globs: ['shots'], branch: 'topic', by: 'x', run })).toBe(false);
+    expect(commit({ globs: ['shots'], by: 'x', run })).toBe(false);
     expect(git('rev-list', '--count', 'HEAD').trim()).toBe('1');
     rmSync(root, { recursive: true, force: true });
+  });
+});
+
+describe('commit, amending, and push with a lease', () => {
+  /** @param {string} remote */
+  const remoteLog = (remote) =>
+    execFileSync('git', ['--git-dir', remote, 'log', '--format=%H %an|%cn %s', 'topic'], {
+      encoding: 'utf8',
+    }).trim();
+
+  it('adds the baselines to the head commit, keeping its message and author', () => {
+    const { root, git } = repo({ 'shots/a.png': 'old', 'src/x.ts': '' });
+    const run = runIn(root);
+    const a = git('rev-parse', 'HEAD').trim();
+    const message = git('log', '-1', '--format=%B').trim();
+    writeFileSync(path.join(root, 'shots/a.png'), 'new');
+    writeFileSync(path.join(root, 'src/x.ts'), 'not a baseline');
+    expect(commit({ globs: ['shots'], by: 'ignored', run, amend: true })).toBe(true);
+    expect(git('rev-list', '--count', 'HEAD').trim()).toBe('1');
+    expect(git('log', '-1', '--format=%B').trim()).toBe(message);
+    expect(git('log', '-1', '--format=%an <%ae>|%cn <%ce>').trim()).toBe(
+      `a <a@b.c>|${BOT.name} <${BOT.email}>`,
+    );
+    expect(git('diff', '--name-only', a, 'HEAD').trim()).toBe('shots/a.png');
+    expect(git('status', '--porcelain').trim()).toBe('M src/x.ts');
+  });
+
+  it('force-pushes the amended commit only while the branch is where it was', () => {
+    const { root, remote, git } = repo({ 'shots/a.png': 'old' });
+    const run = runIn(root);
+    const a = git('rev-parse', 'HEAD').trim();
+    writeFileSync(path.join(root, 'shots/a.png'), 'new');
+    commit({ globs: ['shots'], by: '', run, amend: true });
+    push({ branch: 'topic', run, lease: a });
+    const amended = git('rev-parse', 'HEAD').trim();
+    expect(remoteLog(remote)).toBe(`${amended} a|${BOT.name} first`);
+
+    // Someone pushes; a second amend's lease on the old head is refused.
+    const other = path.join(mkdtempSync(path.join(tmpdir(), 'other-')), 'clone');
+    execFileSync('git', ['clone', '-q', '-b', 'topic', remote, other]);
+    writeFileSync(path.join(other, 'more.txt'), 'x');
+    execFileSync('git', ['-C', other, 'add', 'more.txt']);
+    execFileSync('git', [
+      '-C',
+      other,
+      '-c',
+      'user.name=b',
+      '-c',
+      'user.email=b@c.d',
+      'commit',
+      '-qm',
+      'more',
+    ]);
+    execFileSync('git', ['-C', other, 'push', '-q', 'origin', 'topic']);
+    const theirs = execFileSync('git', ['-C', other, 'rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+    }).trim();
+    writeFileSync(path.join(root, 'shots/a.png'), 'newer');
+    commit({ globs: ['shots'], by: '', run, amend: true });
+    expect(() => push({ branch: 'topic', run, lease: amended })).toThrow();
+    expect(remoteLog(remote).split('\n')[0]).toBe(`${theirs} b|b more`);
+  });
+});
+
+describe('report', () => {
+  it('prints what the rewrite did, or its refusal as an error, with the exit code', () => {
+    /** @type {string[]} */
+    const lines = [];
+    const log = (/** @type {string} */ line) => lines.push(line);
+    expect(report(() => true, log)).toBe(0);
+    expect(report(() => false, log)).toBe(0);
+    expect(
+      report(() => {
+        throw new Error('no');
+      }, log),
+    ).toBe(1);
+    expect(
+      report(() => {
+        throw 'text';
+      }, log),
+    ).toBe(1);
+    expect(lines).toEqual([
+      'Pushed the new baselines.',
+      'The baselines are already up to date.',
+      '::error::no',
+      '::error::text',
+    ]);
   });
 });
 
