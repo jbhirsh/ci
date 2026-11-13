@@ -277,6 +277,38 @@ describe('main, for a web app', () => {
     );
   });
 
+  it('goes on with "after" alone when "before" fails and may, and only then', async () => {
+    const { launch } = fakeBrowser();
+    fakes.playwright = { webkit: { launch } };
+    app({});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const build = await import('./build.mjs');
+    vi.mocked(build.build).mockImplementationOnce(() => {
+      throw new Error('main has no such screen');
+    });
+    await main(['flow.mjs', '--before-may-fail']);
+    expect(calls).toContain('gif frames-after flow-after.gif 402');
+    expect(calls.some((c) => c.includes('flow-before.gif'))).toBe(false);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"before" failed (main has no such'));
+
+    // Played, not built: the scenario stops on main's app.
+    calls.length = 0;
+    const record = await import('./record.mjs');
+    vi.mocked(record.recordFrames).mockImplementationOnce(() =>
+      Promise.reject(new Error('no button')),
+    );
+    await main(['flow.mjs', '--before-may-fail']);
+    expect(calls.filter((c) => c.startsWith('gif '))).toEqual([
+      'gif frames-after flow-after.gif 402',
+    ]);
+
+    calls.length = 0;
+    vi.mocked(record.recordFrames).mockImplementationOnce(() =>
+      Promise.reject(new Error('no button')),
+    );
+    await expect(main(['flow.mjs'])).rejects.toThrow('no button');
+  });
+
   it("joins the two side by side, at twice the window's width, a scenario's own window and clip", async () => {
     const { launch } = fakeBrowser({ width: 1100, height: 640 });
     fakes.playwright = { webkit: { launch } };

@@ -9,6 +9,10 @@
 //   --base <ref>          what "before" is built from (origin/main); a
 //                         remote's ref is fetched first
 //   --after-only          only "after", for UI that's new: nothing before
+//   --before-may-fail     if "before" can't be built or played (a scenario for
+//                         a screen main doesn't have), keep "after" alone
+//                         rather than fail: what an automatic recording does
+//                         (pr-gif.yml), which can't know beforehand
 //   --side-by-side        one GIF of the two side by side, labelled, rather
 //                         than two
 //   --width <px>          each GIF's width, over the scenario's (or the
@@ -34,6 +38,7 @@ import { parseArgs } from 'node:util';
  * @property {boolean} push
  * @property {string} base
  * @property {boolean} afterOnly
+ * @property {boolean} beforeMayFail
  * @property {boolean} sideBySide
  * @property {number | undefined} width
  * @property {number} fps
@@ -46,7 +51,7 @@ import { parseArgs } from 'node:util';
  */
 
 export const USAGE =
-  'usage: gif <scenario> [--dir <PR>] [--no-push] [--base origin/main] [--after-only | --side-by-side] ' +
+  'usage: gif <scenario> [--dir <PR>] [--no-push] [--base origin/main] [--after-only | --side-by-side | --before-may-fail] ' +
   '[--width <px>] [--fps <n>] [--scale <n>] [--mode <mode>] [--branch <name>] ' +
   '[--repo owner/name] [--keep]';
 
@@ -56,6 +61,7 @@ const OWN = {
   'no-push': { type: 'boolean' },
   base: { type: 'string' },
   'after-only': { type: 'boolean' },
+  'before-may-fail': { type: 'boolean' },
   'side-by-side': { type: 'boolean' },
   width: { type: 'string' },
   fps: { type: 'string' },
@@ -121,6 +127,10 @@ export function parseOptions(argv, { settings, appOptions = {} }) {
   const afterOnly = values['after-only'] === true;
   const sideBySide = values['side-by-side'] === true;
   if (afterOnly && sideBySide) throw new Error('--side-by-side needs a before: drop --after-only');
+  const beforeMayFail = values['before-may-fail'] === true;
+  if (beforeMayFail && (afterOnly || sideBySide)) {
+    throw new Error('--before-may-fail is for a separate before and after: drop the other');
+  }
   if (values['no-push'] === true && dir === undefined) {
     throw new Error('--no-push is for publishing: give --dir too');
   }
@@ -136,6 +146,7 @@ export function parseOptions(argv, { settings, appOptions = {} }) {
     push: values['no-push'] !== true,
     base: str('base') ?? 'origin/main',
     afterOnly,
+    beforeMayFail,
     sideBySide,
     width: positive('--width', values.width, undefined),
     fps: /** @type {number} */ (positive('--fps', values.fps, settings.fps)),
