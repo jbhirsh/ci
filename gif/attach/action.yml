@@ -4,8 +4,9 @@ description: >-
   PR: each scenario's table goes into its description between markers,
   and gh uploads each GIF and links it there, labelled "GIF:" for PR
   visuals; then each link is checked until it answers (gif/workflow.mjs's
-  header says how). The attach job of pr-gif.yml. It runs none of the PR's
-  code, so it alone holds the token.
+  header says how). The attach job of pr-gif.yml (a run by hand) and of
+  pr-gif-attach.yml (automatic, on workflow_run). It runs none of the PR's
+  code and checks nothing out, so it alone holds the token.
 
 inputs:
   pr:
@@ -17,6 +18,41 @@ inputs:
       apps' BOT_PR_TOKEN (fine-grained: Contents and Pull requests read and
       write on the app). GitHub refuses the Actions token for attachments.
     required: true
+  automatic:
+    description: >-
+      "true" for pr-gif-attach.yml: the artifact's pr-gif.json must be this
+      PR's at head-sha; what recorded is attached, the failed scenarios'
+      earlier blocks are marked not updated, and the automatic blocks of
+      scenarios the PR no longer changes are dropped. "false" (a run by
+      hand) attaches every scenario in this run's artifact.
+    default: "false"
+  record:
+    description: >-
+      Automatic only: "true" when the PR changes a scenario, so there is an
+      artifact to read; "false" only drops old blocks.
+    default: "true"
+  run-id:
+    description: >-
+      Automatic only: the run whose pr-gif artifact to read (a web app's
+      recording). Empty: this run's (sift's, made in this run).
+    default: ""
+  head-sha:
+    description: >-
+      Automatic only: the commit check read as the PR's head. Nothing is
+      edited once the PR's head is another.
+    default: ""
+  scenarios:
+    description: >-
+      Automatic only: the names of the scenarios the PR changes, marked not
+      updated when the recording left no pr-gif.json.
+    default: ""
+  run-url:
+    description: >-
+      Automatic only: the recording's run, linked from a "Not updated" note.
+    default: ""
+  github-token:
+    description: Reads another run's artifact (actions read). Never the token above.
+    default: ${{ github.token }}
 
 runs:
   using: composite
@@ -26,9 +62,29 @@ runs:
         node-version: 24
 
     - uses: actions/download-artifact@v8
+      if: inputs.automatic != 'true'
       with:
         name: pr-gif
         path: pr-gif
+
+    # An automatic run's recording may have left no artifact (a build that
+    # failed first): workflow.mjs then marks its scenarios not updated.
+    - uses: actions/download-artifact@v8
+      if: inputs.automatic == 'true' && inputs.record == 'true' && inputs.run-id == ''
+      continue-on-error: true
+      with:
+        name: pr-gif
+        path: pr-gif
+
+    - uses: actions/download-artifact@v8
+      if: inputs.automatic == 'true' && inputs.record == 'true' && inputs.run-id != ''
+      continue-on-error: true
+      with:
+        name: pr-gif
+        path: pr-gif
+        run-id: ${{ inputs.run-id }}
+        repository: ${{ github.repository }}
+        github-token: ${{ inputs.github-token }}
 
     # `--attach` came in gh 2.99 (lib/gh.mjs). The runner's image installs
     # gh from GitHub's own apt source, so an image whose gh lags upgrades
@@ -46,4 +102,9 @@ runs:
       env:
         PR: ${{ inputs.pr }}
         GH_TOKEN: ${{ inputs.token }}
+        AUTOMATIC: ${{ inputs.automatic }}
+        RECORD: ${{ inputs.record }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        SCENARIOS: ${{ inputs.scenarios }}
+        RUN_URL: ${{ inputs.run-url }}
       run: node "$GITHUB_ACTION_PATH/../workflow.mjs" attach

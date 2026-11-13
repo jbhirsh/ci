@@ -27,7 +27,8 @@ choices.
   ignores without a reason (`pins/`), source files the coverage gate doesn't measure, with no
   reason (`unmeasured/`), UI changes without pictures (`visuals/`), secrets ([gitleaks](https://gitleaks.io),
   `gitleaks/`) and static analysis ([Semgrep](https://semgrep.dev), `semgrep/`).
-- **Pictures of every change.** Before/after GIFs for a PR (`gif/`), visual-regression
+- **Pictures of every change.** Before/after GIFs for a PR, recorded and attached to its
+  description on their own whenever a push changes a GIF scenario (`gif/`), visual-regression
   baselines rewritten from CI's own screenshots (`visual-baselines/`), and README screenshots
   that refresh themselves (`readme-screenshots/`).
 - **Reports that remember.** Each job's summary, a report page on GitHub Pages and one PR

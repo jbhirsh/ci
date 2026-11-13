@@ -1,10 +1,13 @@
 # A PR's before/after GIFs, recorded in Actions and attached to the PR as
 # GitHub attachments (github.com/user-attachments/assets/…), so nothing goes
 # in git and no pictures branch is needed (ci#33). An app calls it from a
-# pr-gif.yml of its own, run by hand (or through the Actions API, as a
-# Claude session can) with the PR and its scenarios:
+# pr-gif.yml of its own: on each push to a PR, to record the GIF scenarios
+# the PR adds or changes (ci#49), and by hand (or through the Actions API,
+# as a Claude session can) for any scenario, side by side or after only:
 #
 #   on:
+#     pull_request:
+#       types: [opened, synchronize, reopened]
 #     workflow_dispatch:
 #       inputs:
 #         pr: { description: The PR's number, required: true, type: number }
@@ -19,48 +22,69 @@
 #         actions: write    # only an app whose CI records videos (sift)
 #       uses: jbhirsh/ci/.github/workflows/pr-gif.yml@main
 #       with:
-#         pr: ${{ inputs.pr }}
+#         pr: ${{ inputs.pr || 0 }}
 #         scenarios: ${{ inputs.scenarios }}
-#         side-by-side: ${{ inputs.side-by-side }}
-#         after-only: ${{ inputs.after-only }}
+#         side-by-side: ${{ inputs.side-by-side == true }}
+#         after-only: ${{ inputs.after-only == true }}
 #       secrets:
-#         bot-token: ${{ secrets.BOT_PR_TOKEN }}
+#         # Never on pull_request: that run is the PR's code.
+#         bot-token: ${{ github.event_name == 'workflow_dispatch' && secrets.BOT_PR_TOKEN || '' }}
 #
-# Two jobs, so the PR's code never runs beside the token:
+# with a pr-gif-attach.yml beside it, which attaches what the pull_request
+# runs record (that workflow's header). An app whose CI records its
+# scenarios (sift) keeps this dispatch-only: its CI's run is the recording.
+# An app with only the workflow_dispatch trigger runs exactly what it ran
+# before ci#49, the "Recorded at" line aside.
+#
+# Three jobs, so the PR's code never runs beside the token:
+#   - changed (gif/changed): on pull_request, the scenario files the PR's
+#     whole diff adds or changes (gif.scenarios, from its merge base: every
+#     push records them all again); by hand, the inputs passed through. It
+#     runs on both, so the manual path never waits on a pull_request-only
+#     output.
 #   - record (gif/record) checks out the PR's head and records each
 #     scenario, "before" from main and "after" from the head, as a run of
 #     the gif tool on the owner's machine does (cli.mjs; videos.mjs for
-#     sift, from its CI's videos), and uploads the GIFs as the pr-gif
-#     artifact, to look through. It holds only the caller's Actions token.
-#   - attach (gif/attach) writes each scenario's table into the PR's
-#     description and uploads the GIFs with BOT_PR_TOKEN, a person's
-#     fine-grained token: GitHub refuses the Actions token for attachments.
-#     Attach jobs for the same PR take turns, so none loses another's edit;
-#     GitHub keeps one waiting, so a third dispatch while one waits cancels
-#     the waiting one's attach (its GIFs stay in its artifact).
+#     sift, from its CI's videos), and uploads the GIFs and pr-gif.json as
+#     the pr-gif artifact. It holds only the caller's Actions token. On
+#     pull_request, a newer push's recording cancels an older one's, whose
+#     cancelled run pr-gif-attach.yml ignores; runs by hand are never
+#     cancelled.
+#   - attach (gif/attach), by hand only, writes each scenario's table into
+#     the PR's description and uploads the GIFs with BOT_PR_TOKEN, a
+#     person's fine-grained token: GitHub refuses the Actions token for
+#     attachments. On pull_request, pr-gif-attach.yml attaches instead, from
+#     main's workflow file. Attach jobs for the same PR (either workflow's)
+#     take turns, so none loses another's edit; GitHub keeps one waiting, so
+#     a third while one waits cancels the waiting one's attach (its GIFs
+#     stay in its artifact).
 #
 # Dispatch it only for a PR whose code you'd run: a dispatched run's caches
 # are main's, and the record job runs the PR's code there (it saves no
-# cache itself).
+# cache itself). A pull_request run's are the PR's own.
 #
-# Not a pull-request workflow, so no required check depends on these job
-# names. Permissions: a called workflow keeps or lowers what its caller
-# grants, and a job here asking for more fails the run at startup, so
-# record declares nothing and takes the caller's; attach needs none.
+# No required check depends on these job names, and there is no
+# trigger-level paths filter: on a PR that changes no scenario, changed
+# passes in seconds and record is skipped. Permissions: a called workflow
+# keeps or lowers what its caller grants, and a job here asking for more
+# fails the run at startup, so changed and record declare nothing and take
+# the caller's; attach needs none.
 name: PR GIFs
 
 on:
   workflow_call:
     inputs:
       pr:
-        description: The PR's number.
-        required: true
+        description: >-
+          The PR's number, by hand. On pull_request it's the event's, so the
+          caller's empty input (0) is ignored.
         type: number
+        default: 0
       scenarios:
         description: >-
-          The scenario files to record, from the app's root, separated by
-          spaces or commas. Empty for an app whose CI records its scenarios
-          (sift), which takes every one its PR run recorded.
+          By hand, the scenario files to record, from the app's root,
+          separated by spaces or commas. Empty for an app whose CI records
+          its scenarios (sift), which takes every one its PR run recorded.
         type: string
         default: ""
       side-by-side:
@@ -74,40 +98,79 @@ on:
     secrets:
       bot-token:
         description: >-
-          The app's BOT_PR_TOKEN: a fine-grained token with Contents and Pull
-          requests read and write on the app, which may attach files.
-        required: true
+          The app's BOT_PR_TOKEN, by hand only: a fine-grained token with
+          Contents and Pull requests read and write on the app, which may
+          attach files. Never passed on pull_request, whose run is the PR's
+          code.
+        required: false
 
 jobs:
-  record:
-    name: Record the GIFs
+  changed:
+    name: Which scenarios changed
     runs-on: ubuntu-latest
-    # A web app's two builds and recordings take minutes; sift's waits for
-    # its PR's CI run and a run on main, as videos.mjs allows up to 3 hours.
-    timeout-minutes: 200
+    timeout-minutes: 10
+    outputs:
+      pr: ${{ steps.changed.outputs.pr }}
+      scenarios: ${{ steps.changed.outputs.scenarios }}
+      head: ${{ steps.changed.outputs.head }}
+      automatic: ${{ steps.changed.outputs.automatic }}
+      record: ${{ steps.changed.outputs.record }}
     steps:
+      # The PR's head with its history, for the merge base; no file
+      # contents but .github's (the app's ci.json), and none of it run.
       - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
         with:
-          ref: refs/pull/${{ inputs.pr }}/head
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+          sparse-checkout: .github
           persist-credentials: false
-      - uses: jbhirsh/ci/gif/record@main
+      - id: changed
+        uses: jbhirsh/ci/gif/changed@main
         with:
           pr: ${{ inputs.pr }}
           scenarios: ${{ inputs.scenarios }}
           side-by-side: ${{ inputs.side-by-side }}
           after-only: ${{ inputs.after-only }}
 
+  record:
+    name: Record the GIFs
+    needs: changed
+    if: needs.changed.outputs.record == 'true'
+    runs-on: ubuntu-latest
+    # A web app's two builds and recordings take minutes; sift's waits for
+    # its PR's CI run and a run on main, as videos.mjs allows up to 3 hours.
+    timeout-minutes: 200
+    concurrency:
+      group: ${{ github.event_name == 'pull_request' && format('pr-gif-record-{0}-{1}', github.repository, needs.changed.outputs.pr) || format('pr-gif-record-{0}', github.run_id) }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || format('refs/pull/{0}/head', needs.changed.outputs.pr) }}
+          persist-credentials: false
+      - uses: jbhirsh/ci/gif/record@main
+        with:
+          pr: ${{ needs.changed.outputs.pr }}
+          scenarios: ${{ needs.changed.outputs.scenarios }}
+          side-by-side: ${{ inputs.side-by-side }}
+          after-only: ${{ inputs.after-only }}
+          automatic: ${{ needs.changed.outputs.automatic }}
+          head: ${{ needs.changed.outputs.head }}
+
   attach:
     name: Attach them to the PR
-    needs: record
+    needs: [changed, record]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions: {}
     concurrency:
-      group: pr-gif-attach-${{ github.repository }}-${{ inputs.pr }}
+      group: pr-gif-attach-${{ github.repository }}-${{ needs.changed.outputs.pr }}
       cancel-in-progress: false
     steps:
       - uses: jbhirsh/ci/gif/attach@main
         with:
-          pr: ${{ inputs.pr }}
+          pr: ${{ needs.changed.outputs.pr }}
           token: ${{ secrets.bot-token }}

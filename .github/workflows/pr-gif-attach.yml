@@ -1,0 +1,177 @@
+# Attaches the GIFs a PR's own run recorded (ci#49), from a run GitHub
+# starts on workflow_run: always from the default branch's copy of the
+# caller, which a PR can't change, and in a run of its own, so the token
+# that may attach (BOT_PR_TOKEN) is never in a run holding the PR's code.
+# An app calls it from a pr-gif-attach.yml of its own, woken by the
+# workflow whose pull_request run records: "PR GIFs" (pr-gif.yml) for a web
+# app, its CI ("CI") for an app whose CI records videos (sift):
+#
+#   on:
+#     workflow_run:
+#       workflows: [PR GIFs]    # sift: [CI]
+#       types: [completed]
+#   permissions: {}
+#   jobs:
+#     gif:
+#       permissions:
+#         contents: read
+#         actions: write        # sift: starts the "before" run on main; else read
+#         pull-requests: read
+#         statuses: write
+#       uses: jbhirsh/ci/.github/workflows/pr-gif-attach.yml@main
+#       secrets:
+#         bot-token: ${{ secrets.BOT_PR_TOKEN }}
+#
+# Four jobs:
+#   - check (gif/check) checks out the default branch only (the app's
+#     settings) and reads the finished run and its PR through the API, with
+#     the Actions token: a pull_request run that ended success or failure
+#     (cancelled ones were overtaken by a newer push), not a fork's, whose
+#     PR is open with that run's commit still its head; and which scenarios
+#     the PR's whole diff changes. It sets the PR GIFs commit status
+#     pending (a workflow_run run doesn't show on the PR otherwise), or for
+#     a fork's PR says it wasn't attached. Nothing later runs for a fork:
+#     not the token, and not sift's run on main with the fork's flows.
+#   - make (gif/record), sift only: the GIFs from the videos the CI run
+#     recorded ("after") and from a gifs-only run it starts on main
+#     ("before", at the same commit's flows), for the changed scenarios
+#     only, uploaded as this run's pr-gif artifact. It runs ci's videos.mjs
+#     and ffmpeg, none of the PR's code, and holds the Actions token
+#     (actions write), never BOT_PR_TOKEN. A newer push's cancels it; the
+#     run it started on main finishes unused. That run plays the PR's flows
+#     in main's cache scope, as a run by hand does, so it's started only for
+#     a branch of this repository: whoever can push one can already run
+#     code here. Never for a fork's.
+#   - attach (gif/attach), with BOT_PR_TOKEN and no checkout: reads the
+#     pr-gif artifact as data (gif/workflow.mjs), checks it is this PR's at
+#     the commit checked, attaches what recorded, marks the failed
+#     scenarios' earlier blocks "Not updated", drops the automatic blocks of
+#     scenarios the PR no longer changes (also on a PR that changes none,
+#     with no recording), and edits nothing once the PR's head has moved.
+#     It takes turns with the other attach jobs for the PR, a run by hand's
+#     included.
+#   - report sets the PR GIFs status check started: success, or failure
+#     with this run's link.
+#
+# Not a pull-request workflow, so no required check or autofix trigger
+# depends on it, and its status is in no branch rule. Permissions: each job
+# asks only for what it uses, within what the caller grants (asking for
+# more fails the run at startup, even for a job that would be skipped);
+# make takes the caller's, as it asks more of sift's than of a web app's.
+name: PR GIFs attach
+
+on:
+  workflow_call:
+    secrets:
+      bot-token:
+        description: >-
+          The app's BOT_PR_TOKEN: a fine-grained token with Contents and Pull
+          requests read and write on the app, which may attach files.
+        required: true
+
+jobs:
+  check:
+    name: Check the run
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      statuses: write
+    outputs:
+      go: ${{ steps.check.outputs.go }}
+      record: ${{ steps.check.outputs.record }}
+      report: ${{ steps.check.outputs.report }}
+      pr: ${{ steps.check.outputs.pr }}
+      head: ${{ steps.check.outputs.head }}
+      scenarios: ${{ steps.check.outputs.scenarios }}
+      artifact-run: ${{ steps.check.outputs.artifact-run }}
+      run-url: ${{ steps.check.outputs.run-url }}
+    steps:
+      # The default branch, for .github/ci.json: never the PR's code.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - id: check
+        uses: jbhirsh/ci/gif/check@main
+
+  make:
+    name: Make the GIFs
+    needs: check
+    if: needs.check.outputs.go == 'true' && needs.check.outputs.record == 'true' && needs.check.outputs.artifact-run == ''
+    runs-on: ubuntu-latest
+    # Waits on the gifs-only run it starts on main, which videos.mjs allows
+    # up to 3 hours.
+    timeout-minutes: 200
+    # The caller's grant, which is sift's (actions write, to start the run on
+    # main): asking here for more than a web app's caller grants would fail
+    # its runs at startup, though this job never runs for it.
+    concurrency:
+      group: pr-gif-make-${{ github.repository }}-${{ needs.check.outputs.pr }}
+      cancel-in-progress: true
+    steps:
+      # The default branch: videos.mjs reads its settings and origin. The
+      # PR's flows are played on the app's CI, never here.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: jbhirsh/ci/gif/record@main
+        with:
+          pr: ${{ needs.check.outputs.pr }}
+          scenarios: ${{ needs.check.outputs.scenarios }}
+          automatic: "true"
+          head: ${{ needs.check.outputs.head }}
+          after-run: ${{ github.event.workflow_run.id }}
+
+  attach:
+    name: Attach them to the PR
+    needs: [check, make]
+    # After make, or without it (a web app's, or a PR that changes no
+    # scenario): a make that failed still leaves its scenarios to mark.
+    if: always() && needs.check.outputs.go == 'true' && needs.make.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+    concurrency:
+      group: pr-gif-attach-${{ github.repository }}-${{ needs.check.outputs.pr }}
+      cancel-in-progress: false
+    steps:
+      - uses: jbhirsh/ci/gif/attach@main
+        with:
+          pr: ${{ needs.check.outputs.pr }}
+          token: ${{ secrets.bot-token }}
+          automatic: "true"
+          record: ${{ needs.check.outputs.record }}
+          run-id: ${{ needs.check.outputs.artifact-run }}
+          head-sha: ${{ needs.check.outputs.head }}
+          scenarios: ${{ needs.check.outputs.scenarios }}
+          run-url: ${{ needs.check.outputs.run-url }}
+
+  report:
+    name: Report
+    needs: [check, make, attach]
+    if: always() && needs.check.outputs.report == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - name: Set the PR GIFs status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD: ${{ needs.check.outputs.head }}
+          ATTACHED: ${{ needs.attach.result }}
+          URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$ATTACHED" = success ]; then
+            state=success description="The GIFs are in the PR's description"
+          else
+            state=failure description="Recording or attaching failed: see the run"
+          fi
+          gh api -X POST "repos/$REPO/statuses/$HEAD" -f state="$state" \
+            -f context="PR GIFs" -f description="$description" -f target_url="$URL"

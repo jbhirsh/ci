@@ -7,7 +7,9 @@ description: >-
   whose CI records videos (sift) it runs videos.mjs, which waits for the
   PR's run, starts one on main for "before" and turns the videos into GIFs.
   The record job of pr-gif.yml, after a checkout of the PR's head; it holds
-  no secret, since it runs the PR's code.
+  no secret, since it runs the PR's code. Also pr-gif-attach.yml's "Make
+  the GIFs" job for sift, after a checkout of the default branch: there it
+  runs only videos.mjs, on the videos the PR's CI run recorded.
 
 inputs:
   pr:
@@ -24,6 +26,23 @@ inputs:
   after-only:
     description: Only "after", for a screen main doesn't have ("true").
     default: "false"
+  automatic:
+    description: >-
+      "true" for a recording that started on its own (ci#49): "before" may
+      fail (a new screen), what records is attached and the rest marked not
+      updated. "false", a run by hand, keeps all or nothing.
+    default: "false"
+  head:
+    description: >-
+      The commit the scenarios are recorded at, for the manifest (and, for
+      an app whose CI records videos, the commit both runs play). Empty: the
+      checkout's.
+    default: ""
+  after-run:
+    description: >-
+      For an app whose CI records videos, automatic only: the CI run whose
+      videos are "after" (scenarios then names the ones to keep).
+    default: ""
   github-token:
     description: >-
       For an app whose CI records videos: reads the PR's run and its
@@ -72,14 +91,18 @@ runs:
         SCENARIOS: ${{ inputs.scenarios }}
         SIDE_BY_SIDE: ${{ inputs.side-by-side }}
         AFTER_ONLY: ${{ inputs.after-only }}
+        AUTOMATIC: ${{ inputs.automatic }}
+        HEAD_SHA: ${{ inputs.head }}
+        AFTER_RUN: ${{ inputs.after-run }}
         # Only videos.mjs reads through it; a web app's build and scenarios
         # are the PR's code, which gets no token.
         GH_TOKEN: ${{ steps.app.outputs.source == 'ci-videos' && inputs.github-token || '' }}
         APP_ROOT: ${{ github.workspace }}
       run: node "$GITHUB_ACTION_PATH/../workflow.mjs" record
 
-    # What did record, to look through, even when a scenario failed (the
-    # attach job then doesn't run).
+    # What did record, and pr-gif.json saying so, even when a scenario
+    # failed: a run by hand's attach job then doesn't run; an automatic
+    # one's attaches what recorded.
     - uses: actions/upload-artifact@v7
       if: ${{ !cancelled() }}
       with:
