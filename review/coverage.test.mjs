@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  commandLine,
   filesToRead,
   globToRegExp,
   main,
-  plainWords,
   toolCalls,
   unreadFiles,
 } from './coverage.mjs';
@@ -67,7 +67,13 @@ describe('filesToRead', () => {
   });
 });
 
-describe('plainWords', () => {
+describe('commandLine', () => {
+  /** A line's one command's words, or null. */
+  const plainWords = (/** @type {string} */ command) => {
+    const line = commandLine(command);
+    return line?.alone && line.commands.length === 1 ? line.commands[0] : null;
+  };
+
   it('splits a plain command, honouring quotes, and drops a leading cd', () => {
     expect(plainWords(`cd ${REPO} && git diff -M ${RANGE} -- "docs/my file.md" 'b c'`)).toEqual([
       'git',
@@ -81,14 +87,13 @@ describe('plainWords', () => {
     expect(plainWords('  git   diff\t-- a  ')).toEqual(['git', 'diff', '--', 'a']);
     expect(plainWords('cd "/a b" && git diff')).toEqual(['git', 'diff']);
     expect(plainWords("git diff -- ''")).toEqual(['git', 'diff', '--', '']);
+    expect(commandLine('cd "/a b" && git diff')?.cd).toBe('/a b');
   });
 
-  it('turns away anything more than one plain command', () => {
+  it('turns away a line that is more than plain commands', () => {
     for (const command of [
-      'git diff -- a | head',
       'git diff -- a > /tmp/x',
       'git diff -- a; ls',
-      'git diff -- a && git diff -- b',
       'git diff -- a || true',
       'git diff -- a &',
       'git diff -- $f',
@@ -100,12 +105,63 @@ describe('plainWords', () => {
       'git diff -- "unclosed',
       'ls && cd x && git diff',
     ]) {
-      expect(plainWords(command)).toBeNull();
+      expect(commandLine(command), command).toBeNull();
     }
+    // A piped command runs, but never counts.
+    expect(commandLine('git diff -- a | head')).toEqual({ cd: null, commands: [], alone: false });
   });
 
   it('keeps $ inside single quotes, which the shell leaves alone', () => {
     expect(plainWords("git log --format='%h $x'")).toEqual(['git', 'log', '--format=%h $x']);
+  });
+
+  it('gives each unpiped command of an && chain, and the leading cd apart', () => {
+    expect(commandLine(`cd "${REPO}" && git diff --stat ${RANGE} | tail -60 && git log`)).toEqual({
+      cd: REPO,
+      commands: [['git', 'log']],
+      alone: false,
+    });
+    expect(commandLine(`git diff -- 'a && b' && cat x`)).toEqual({
+      cd: null,
+      commands: [
+        ['git', 'diff', '--', 'a && b'],
+        ['cat', 'x'],
+      ],
+      alone: false,
+    });
+    expect(commandLine('gh pr diff 3 | head')).toEqual({ cd: null, commands: [], alone: false });
+    // One command needn't be read-only: nothing comes after it.
+    expect(commandLine('git checkout x')).toEqual({
+      cd: null,
+      commands: [['git', 'checkout', 'x']],
+      alone: true,
+    });
+  });
+
+  it('turns away other syntax, a cd past the first, and a chain with a command that changes things', () => {
+    for (const command of [
+      'git diff -- a; git diff',
+      'git diff -- a || git diff',
+      'git diff -- a & git diff',
+      'git diff -- a &&& git diff',
+      'git diff -- a && ',
+      'git diff | | cat',
+      '(git diff) && git log',
+      'git diff > /tmp/x && cat /tmp/x',
+      `git diff --name-status ${RANGE} # -- src/a.ts`,
+      'cd x',
+      'git diff && cd /elsewhere && git diff',
+      `git checkout HEAD~3 && git diff --name-status ${RANGE}`,
+      `git fetch origin && git diff ${RANGE}`,
+      `git diff ${RANGE} | sort -o .git/HEAD && git diff ${RANGE}`,
+      `git diff --output=.git/HEAD ${RANGE} && git diff ${RANGE}`,
+      `git -C ../other diff ${RANGE} && git diff ${RANGE}`,
+      `gh pr checkout 3 && git diff ${RANGE}`,
+      `FOO=1 && git diff ${RANGE}`,
+      `git diff ${RANGE} | tee x && git diff ${RANGE}`,
+    ]) {
+      expect(commandLine(command), command).toBeNull();
+    }
   });
 });
 
@@ -170,6 +226,9 @@ describe('unreadFiles', () => {
       '--dirstat',
       '--dirstat=files',
       '--compact-summary',
+      '--stat-count=1',
+      '--stat-width=100',
+      '--dirstat-by-file',
       '--exit-code',
       '--quiet',
       '-s',
@@ -195,6 +254,25 @@ describe('unreadFiles', () => {
     expect(readBy(bash(`git diff ${RANGE} -- src/a.ts | wc -l`))).toEqual([]);
     expect(readBy(bash(`git diff ${RANGE} -- src/a.ts | head -50`))).toEqual([]);
     expect(readBy(bash(`echo git diff ${RANGE}`))).toEqual([]);
+  });
+
+  it('counts each plain command of an && chain, never a piped one', () => {
+    expect(readBy(bash(`git diff ${RANGE} -- src/a.ts && git diff ${RANGE} -- src/b.ts`))).toEqual([
+      'src/a.ts',
+      'src/b.ts',
+    ]);
+    expect(
+      readBy(
+        bash(`cd ${REPO} && git diff --stat ${RANGE} | tail -60 && git diff ${RANGE} -- src/`),
+      ),
+    ).toEqual(['src/a.ts', 'src/b.ts']);
+    expect(readBy(bash(`git diff ${RANGE} | head -100 && git log -1`))).toEqual([]);
+    expect(readBy(bash(`git stash && git diff ${RANGE}`))).toEqual([]);
+  });
+
+  it('counts nothing run after a cd out of the checkout', () => {
+    expect(readBy(bash(`cd /other/clone && git diff ${RANGE} -- src/a.ts`))).toEqual([]);
+    expect(readBy(bash(`cd ${REPO}/ && git diff ${RANGE} -- src/a.ts`))).toEqual(['src/a.ts']);
   });
 
   it('reads nothing from a call that failed or never ran', () => {
@@ -429,6 +507,73 @@ describe('deleted files', () => {
       'src/old.test.ts',
     ]);
     expect(covered(bash(`git diff --summary ${RANGE} -- src/`))).toEqual(removed);
+    // --name-status wins over --stat: git prints the status lines.
+    expect(covered(bash(`git diff --name-status --stat ${RANGE}`))).toEqual(removed);
+  });
+
+  it('are covered by a stat of the PR whose output shows them by their whole path', () => {
+    const stat = [
+      ' src/a.ts        |  2 +-',
+      ' src/gone.ts     | 50 ------',
+      ' src/old.test.ts | 12 --',
+      ' 3 files changed, 1 insertion(+), 63 deletions(-)',
+    ].join('\n');
+    expect(covered(bash(`git diff --stat -M ${RANGE}`, stat))).toEqual(removed);
+    expect(
+      covered(bash(`git diff ${RANGE} --stat -- src/gone.ts`, ' src/gone.ts | 50 ---')),
+    ).toEqual(['src/gone.ts']);
+    const numstat = '1\t1\tsrc/a.ts\n0\t50\tsrc/gone.ts\n0\t12\tsrc/old.test.ts';
+    expect(covered(bash(`git diff --numstat ${RANGE}`, numstat))).toEqual(removed);
+    expect(covered(bash(`git diff --stat --summary ${RANGE}`, stat))).toEqual(removed);
+    // The output's first line may come back with its leading space trimmed.
+    expect(
+      covered(bash(`git diff --stat ${RANGE} -- src/gone.ts`, 'src/gone.ts | 50 ---')),
+    ).toEqual(['src/gone.ts']);
+  });
+
+  it("aren't covered by a stat that doesn't show their whole path, or isn't the PR's", () => {
+    // --stat shortens a long path; that line could be any file.
+    const short = ' .../gone.ts | 50 ---\n .../old.test.ts | 12 --';
+    expect(covered(bash(`git diff --stat ${RANGE}`, short))).toEqual([]);
+    // The path in the output from a stat that names only another file.
+    const both = ' src/gone.ts | 50 ---\n src/old.test.ts | 12 --';
+    expect(covered(bash(`git diff --stat ${RANGE} -- src/gone.ts`, both))).toEqual(['src/gone.ts']);
+    for (const command of [
+      'git diff --stat HEAD~1 HEAD',
+      `git diff --stat=200 ${RANGE}`,
+      `git diff --stat-count=1 ${RANGE}`,
+      `git diff --shortstat ${RANGE}`,
+      `git diff --stat ${RANGE} | tail -60`,
+      `cd api && git diff --stat ${RANGE}`,
+      `git diff --numstat -R ${RANGE}`,
+    ]) {
+      expect(covered(bash(command, both)), command).toEqual([]);
+    }
+    // A numstat line is tab-separated: a stat line isn't one.
+    expect(covered(bash(`git diff --numstat ${RANGE}`, both))).toEqual([]);
+    // Another command's output could hold the line: a diff's context, a cut stat.
+    for (const command of [
+      `git diff ${RANGE} -- src/a.ts && git diff --stat ${RANGE}`,
+      `git diff --stat=300 ${RANGE} | tail -60 && git diff --stat ${RANGE}`,
+      `git diff --stat ${RANGE} && cat notes.txt`,
+    ]) {
+      expect(covered(bash(command, both)), command).toEqual(
+        command.includes('-- src/a.ts') ? ['src/a.ts'] : [],
+      );
+    }
+    // A stat cut to a preview counts for nothing, even once its saved file is opened.
+    const cut = `Output too large (80KB). Full output saved to: /tmp/s.txt\n\n${both}`;
+    expect(covered(bash(`git diff --stat ${RANGE}`, cut), read('/tmp/s.txt'))).toEqual([]);
+  });
+
+  it('are covered by a listing inside an && chain, but not one cut by a pipe', () => {
+    const cut = ' src/gone.ts | 50 ---';
+    expect(
+      covered(bash(`git diff --stat ${RANGE} | tail -60 && git diff --name-status ${RANGE}`, cut)),
+    ).toEqual(removed);
+    expect(covered(bash(`git diff --name-status ${RANGE} | tail -1`))).toEqual([]);
+    expect(covered(bash(`git diff --stat ${RANGE} | tail -60 && git log -1`, cut))).toEqual([]);
+    expect(covered(bash(`cd api && git diff --name-status ${RANGE} && git log`))).toEqual([]);
   });
 
   it('are still covered by a full read of their diff', () => {
@@ -438,12 +583,12 @@ describe('deleted files', () => {
   it("aren't covered by a listing that may leave them out, shorten or flip them, or isn't the PR's", () => {
     for (const command of [
       `git diff --name-only ${RANGE}`,
+      // With no stat line in their output.
       `git diff --stat ${RANGE}`,
       `git diff --numstat ${RANGE}`,
       `git diff --compact-summary ${RANGE}`,
       `git diff --dirstat ${RANGE}`,
       `git diff --shortstat ${RANGE}`,
-      `git diff --name-status --stat ${RANGE}`,
       `git diff --name-status --diff-filter=M ${RANGE}`,
       `git diff --name-status --diff-filter=d ${RANGE}`,
       `git diff --name-status --diff-filter=Dd ${RANGE}`,
@@ -502,6 +647,26 @@ describe('deleted files', () => {
     ];
     expect(unreadFiles(pr, calls, { repoDir: REPO })).toEqual(pr.slice(0, 4));
     expect(unreadFiles(pr, calls, { repoDir: REPO, removed: pr.slice(0, 4) })).toEqual([]);
+  });
+
+  it("cover BoardGames #307's src/data/wishlist.ts, listed after a cut --stat or by its own --stat", () => {
+    const pr = ['src/data/wishlist.ts', 'src/context/GamesContext.tsx'];
+    const options = { repoDir: REPO, removed: ['src/data/wishlist.ts'] };
+    const read = bash(`git diff -M ${RANGE} -- src/context/GamesContext.tsx`);
+    // The review's own calls; the first's --stat half was cut by `tail -60`.
+    const chain = bash(
+      `git diff --stat -M ${RANGE} | tail -60 && git diff --name-status -M ${RANGE}`,
+      ' src/context/GamesContext.tsx | 4 +-\nM\tsrc/context/GamesContext.tsx\nD\tsrc/data/wishlist.ts',
+    );
+    const own = bash(
+      `git diff -M ${RANGE} --stat -- src/data/wishlist.ts`,
+      ' src/data/wishlist.ts | 785 ----------\n 1 file changed, 785 deletions(-)',
+    );
+    expect(unreadFiles(pr, [read], options)).toEqual(['src/data/wishlist.ts']);
+    expect(unreadFiles(pr, [read, chain], options)).toEqual([]);
+    expect(unreadFiles(pr, [read, own], options)).toEqual([]);
+    // Neither reads the file a PR keeps.
+    expect(unreadFiles(pr, [chain, own], options)).toEqual(['src/context/GamesContext.tsx']);
   });
 });
 

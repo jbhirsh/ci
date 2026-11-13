@@ -34,15 +34,30 @@
 // file), run in the checkout itself. Its old contents are gone from what the
 // PR leaves, so reading them whole only spent turns (four of the six files
 // BoardGames #307's check failed on were deleted ones); the prompt still has
-// the review look at why a test was deleted. Other flags are allowed only
-// from a short list that can't leave a deleted file out: renames,
-// `-z`, colour, a `--diff-filter` holding `D` (and no `d`). Not `--stat`,
-// `--numstat` or `--name-only`, which don't say the file went (and `--stat`
-// shortens long paths), nor `-S`, `-G`, `--relative` or `-R`, which drop
-// or flip files.
-// The command may start with `cd <dir> &&` and is otherwise one plain
-// command: no pipe, redirect, chain, substitution or second line, so a
-// grep pattern or a heredoc that mentions `git diff` reads nothing.
+// the review look at why a test was deleted. A `--stat` or `--numstat` of
+// the same kind covers it too, but only as the line's one command and where
+// its output holds the file's stat line by its whole path: a stat line shows
+// the deletion's size, yet `--stat` shortens a long path (`.../x.ts`), which
+// could be any file, and another command's output could hold such a line.
+// A stat cut to a preview counts for nothing, its saved file opened or not.
+// Other flags are allowed only from a short list that can't leave a deleted
+// file out: renames, `-z`, colour, a `--diff-filter` holding `D` (and no
+// `d`). Not `--name-only`, which doesn't say the file went, `--shortstat`,
+// which names no file, nor `-S`, `-G`, `--relative` or `-R`, which drop or
+// flip files.
+// A command line is plain commands joined by `&&`, after an optional
+// leading `cd <dir>` to the checkout (a `cd` elsewhere reads nothing); each
+// command is judged alone, as if run by itself.
+// Nothing else: no `;`, `||`, redirect, substitution, subshell, comment or
+// second line, so a grep pattern or a heredoc that mentions `git diff`
+// reads nothing. A pipe is allowed only into a reader such as `tail`, and
+// a piped command counts for nothing, since `| tail -60` can cut a file
+// out. Once a line holds more than one command, every command in it must
+// be one that changes nothing a later one prints (`git diff`, `git log`,
+// `cat`, `tail` and the like: READ_ONLY): a `git checkout` or second `cd`
+// would make the next `git diff` another diff, so that line reads nothing.
+// BoardGames #307 failed on a deleted file whose `--name-status` line came
+// after `git diff --stat ... | tail -60 &&`, when any chain read nothing.
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -68,14 +83,30 @@ const NO_DIFF_FLAGS = new Set([
   '--compact-summary',
   '--exit-code',
 ]);
-const NO_DIFF_PREFIXES = ['--stat=', '--dirstat=', '--output=', '--format=', '--pretty=', '-U0'];
+/** Prefixes of such flags: `--stat-count=1` and `--dirstat-by-file` too. */
+const NO_DIFF_PREFIXES = ['--stat', '--dirstat', '--output=', '--format=', '--pretty=', '-U0'];
 /** Flags that print a deleted file as deleted, by its whole path. */
 const LISTING_FLAGS = new Set(['--name-status', '--summary']);
+/**
+ * Flags that print a file's size of change, a deletion's included: they
+ * cover it only where the output shows its whole path (`--stat` shortens).
+ */
+const STAT_FLAGS = new Set(['--stat', '--numstat']);
 /** The only other flags a listing may have: none leaves a deleted file out. */
 const LISTING_ALLOWED =
   /^(-M\d*%?|-C\d*%?|--find-renames(=\d+%?)?|--find-copies(=\d+%?)?|--no-renames|-z|--no-color|--color=never|--no-ext-diff|--diff-filter=[^d]*D[^d]*)$/;
-/** Shell syntax that makes a command more than one plain command. */
-const COMPOUND = /[|;&<>`\n]/;
+/** Shell syntax no command line here may hold, outside quotes. */
+const COMPOUND = /[;<>`\n()]/;
+/**
+ * Commands that change nothing a later command in the line prints, so a
+ * line of several may hold them: `git <sub>` by its subcommand, `gh pr
+ * <sub>`, or the tool alone. Not `sort` or `uniq`, which can write a file.
+ */
+const READ_ONLY = {
+  git: new Set(['diff', 'show', 'log', 'status', 'ls-files', 'merge-base', 'rev-parse', 'blame']),
+  gh: new Set(['pr diff', 'pr view']),
+  tools: new Set(['cat', 'head', 'tail', 'wc', 'grep', 'ls', 'echo', 'nl', 'cut', 'true']),
+};
 /** The header Claude Code puts on output it cut to a preview. */
 const CUT_OFF = /^\s*(<persisted-output>|Output too large)/i;
 const SAVED_TO = /saved to:?\s*(\S+)/i;
@@ -131,21 +162,58 @@ export function filesToRead(changed, skip = []) {
 }
 
 /**
- * A plain command's words, quotes honoured, or null when it is more than
- * one plain command. A leading `cd <dir> &&` is allowed and dropped.
+ * @typedef {object} CommandLine
+ * @property {string | null} cd The leading `cd`'s directory, if any.
+ * @property {string[][]} commands The words of each command the line runs
+ *   alone (not in a pipe), in order: the ones that may count as reads.
+ * @property {boolean} alone The line runs one command (after its `cd`).
+ */
+
+/**
+ * A command line's commands, quotes honoured: plain commands joined by `&&`,
+ * after an optional leading `cd <dir>`, a command possibly piped into
+ * another. Null for anything else, or for a line of several commands of
+ * which one could change what a later one prints (READ_ONLY).
  *
  * @param {string} command
- * @returns {string[] | null}
+ * @returns {CommandLine | null}
  */
-export function plainWords(command) {
-  const body = command.trim().replace(/^cd\s+("[^"]*"|'[^']*'|\S+)\s*&&\s*/, '');
-  /** @type {string[]} */
-  const words = [];
+export function commandLine(command) {
+  const line = parseLine(command);
+  if (!line) return null;
+  const all = line.parts.flat();
+  if (all.length > 1 && !all.every(readOnly)) return null;
+  const commands = line.parts.filter((stages) => stages.length === 1).map((stages) => stages[0]);
+  return { cd: line.cd, commands, alone: all.length === 1 };
+}
+
+/**
+ * A command line's `&&` parts, each a list of pipe stages, each a list of
+ * words, after its leading `cd <dir>` (its directory apart): null for any
+ * other shell syntax, or a `cd` anywhere else.
+ *
+ * @param {string} command
+ * @returns {{ cd: string | null, parts: string[][][] } | null}
+ */
+function parseLine(command) {
+  /** @type {string[][][]} */
+  const parts = [[[]]];
   let word = '';
   /** @type {'"' | "'" | null} */
   let quote = null;
   let inWord = false;
-  for (const ch of body) {
+  const chars = [...command.trim()];
+  const stage = () => {
+    const stages = parts[parts.length - 1];
+    return stages[stages.length - 1];
+  };
+  const endWord = () => {
+    if (inWord) stage().push(word);
+    word = '';
+    inWord = false;
+  };
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
     if (quote) {
       // A variable or substitution, even in double quotes: can't judge it.
       if (quote === '"' && (ch === '$' || ch === '`')) return null;
@@ -155,10 +223,20 @@ export function plainWords(command) {
       quote = ch;
       inWord = true;
     } else if (/\s/.test(ch) && ch !== '\n') {
-      if (inWord) words.push(word);
-      word = '';
-      inWord = false;
-    } else if (COMPOUND.test(ch) || ch === '$') {
+      endWord();
+    } else if (ch === '&') {
+      // `&&` only: a lone `&` runs something in the background.
+      if (chars[i + 1] !== '&') return null;
+      i++;
+      endWord();
+      parts.push([[]]);
+    } else if (ch === '|') {
+      // A pipe, not `||`, which runs its right side only when the left failed.
+      if (chars[i + 1] === '|') return null;
+      endWord();
+      parts[parts.length - 1].push([]);
+    } else if (COMPOUND.test(ch) || ch === '$' || (ch === '#' && !inWord)) {
+      // `#` starting a word starts a comment: the shell drops the rest.
       return null;
     } else {
       word += ch;
@@ -166,8 +244,30 @@ export function plainWords(command) {
     }
   }
   if (quote) return null;
-  if (inWord) words.push(word);
-  return words;
+  endWord();
+  if (parts.some((stages) => stages.some((words) => words.length === 0))) return null;
+  // A leading `cd <dir>` alone; a `cd` anywhere else moves later commands.
+  const first = parts[0];
+  const cd =
+    first.length === 1 && first[0][0] === 'cd' && first[0].length === 2 ? first[0][1] : null;
+  const rest = cd === null ? parts : parts.slice(1);
+  if (rest.length === 0 || rest.flat().some((words) => words[0] === 'cd')) return null;
+  return { cd, parts: rest };
+}
+
+/**
+ * Whether a command changes nothing a later command in its line prints.
+ *
+ * @param {string[]} words
+ * @returns {boolean}
+ */
+function readOnly([tool, sub, next, ...rest]) {
+  if (tool === 'git') {
+    // `--output=<file>` writes a file, which could be one of git's own.
+    return READ_ONLY.git.has(sub) && ![next, ...rest].some((w) => w?.startsWith('--output'));
+  }
+  if (tool === 'gh') return READ_ONLY.gh.has(`${sub} ${next}`);
+  return READ_ONLY.tools.has(tool);
 }
 
 /**
@@ -234,41 +334,62 @@ function inPrDiff(revisions, paths, files, base) {
 }
 
 /**
- * Which of the deleted files one call listed with their status or size (a
- * `git diff --name-status` of the PR and the like): none for any other call.
+ * Which of the deleted files one command listed with their status or size
+ * (a `git diff --name-status` of the PR and the like): none for any other
+ * command. A `--stat` or `--numstat` lists only the files whose stat line
+ * the call's output holds by their whole path.
  *
  * @param {string[]} words
  * @param {string[]} removed
  * @param {string} base
+ * @param {string | null} output The call's output, when this command is
+ *   all it ran: null when other commands' output is mixed in.
  * @returns {string[]}
  */
-function filesListedBy(words, removed, base) {
+function filesListedBy(words, removed, base, output) {
   const [tool, sub, ...rest] = words;
   if (tool !== 'git' || sub !== 'diff') return [];
   const dashes = rest.indexOf('--');
   const args = dashes === -1 ? rest : rest.slice(0, dashes);
   const paths = dashes === -1 ? [] : rest.slice(dashes + 1);
   const flags = args.filter((w) => w.startsWith('-'));
-  if (!flags.some((w) => LISTING_FLAGS.has(w))) return [];
-  if (!flags.every((w) => LISTING_FLAGS.has(w) || LISTING_ALLOWED.test(w))) return [];
+  const listed = (/** @type {string} */ w) => LISTING_FLAGS.has(w) || STAT_FLAGS.has(w);
+  if (!flags.some(listed)) return [];
+  if (!flags.every((w) => listed(w) || LISTING_ALLOWED.test(w))) return [];
   const revisions = args.filter((w) => !w.startsWith('-'));
-  return inPrDiff(revisions, paths, removed, base);
+  const files = inPrDiff(revisions, paths, removed, base);
+  if (flags.some((w) => LISTING_FLAGS.has(w))) return files;
+  return output === null ? [] : files.filter((f) => statLine(f, flags).test(output));
 }
 
 /**
- * Whether a command runs in the checkout: no leading `cd`, or one to the
- * checkout's own path. A `cd` elsewhere would read its paths from there,
- * or another repository's diff.
+ * A file's line in `--stat` (`<path> | <n> ---`) or `--numstat`
+ * (`<added>\t<deleted>\t<path>`) output, by its whole path.
  *
- * @param {string} command
+ * @param {string} file
+ * @param {string[]} flags
+ * @returns {RegExp}
+ */
+function statLine(file, flags) {
+  const path = escapeRegExp(file);
+  // The leading space may be trimmed off the output's first line.
+  const stat = `^ ?${path} +\\| `;
+  const numstat = `^(\\d+|-)\\t(\\d+|-)\\t${path}$`;
+  const shapes = [flags.includes('--stat') && stat, flags.includes('--numstat') && numstat];
+  return new RegExp(shapes.filter(Boolean).join('|'), 'm');
+}
+
+/**
+ * Whether a command line runs in the checkout: no leading `cd`, or one to
+ * the checkout's own path. A `cd` elsewhere would read its paths from
+ * there, or another repository's diff, so its line reads nothing.
+ *
+ * @param {string | null} cd The line's leading `cd` directory, quotes gone.
  * @param {string} repoDir
  * @returns {boolean}
  */
-function inCheckout(command, repoDir) {
-  const cd = /^\s*cd\s+("[^"]*"|'[^']*'|\S+)\s*&&/.exec(command);
-  if (!cd) return true;
-  const dir = cd[1].replace(/^(["'])(.*)\1$/, '$2').replace(/\/+$/, '');
-  return dir === repoDir.replace(/\/+$/, '');
+function inCheckout(cd, repoDir) {
+  return cd === null || cd.replace(/\/+$/, '') === repoDir.replace(/\/+$/, '');
 }
 
 /**
@@ -323,16 +444,19 @@ export function unreadFiles(
   for (const call of calls) {
     if (call.name !== 'Bash' || call.failed || typeof call.input.command !== 'string') continue;
     const result = call.result ?? '';
-    if (CUT_OFF.test(result)) {
+    const cut = CUT_OFF.test(result);
+    if (cut) {
       // The saved path is in the header, not anywhere in the diff.
       const saved = SAVED_TO.exec(result.slice(0, 400))?.[1];
       if (!saved || !opened.has(saved)) continue;
     }
-    const words = plainWords(call.input.command);
-    if (!words) continue;
-    for (const file of filesReadBy(words, needed, base)) read.add(file);
-    if (inCheckout(call.input.command, repoDir)) {
-      for (const file of filesListedBy(words, deleted, base)) read.add(file);
+    const line = commandLine(call.input.command);
+    if (!line || !inCheckout(line.cd, repoDir)) continue;
+    // A stat line counts only from a whole output that is one command's.
+    const output = !cut && line.alone ? result : null;
+    for (const words of line.commands) {
+      for (const file of filesReadBy(words, needed, base)) read.add(file);
+      for (const file of filesListedBy(words, deleted, base, output)) read.add(file);
     }
   }
   return needed.filter((f) => !read.has(f));

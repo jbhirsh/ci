@@ -14,7 +14,9 @@
 #   3. Checks the review read every changed file's diff (coverage.mjs, from
 #      the review's own tool calls), lockfiles, images, fonts and the app's
 #      `review.skip` globs aside. A file the PR deletes needs only a listing
-#      of the diff showing it deleted (`--name-status`; coverage.mjs). A
+#      of the diff showing it deleted (`--name-status` or `--summary`, even
+#      inside an `&&` chain, or a lone `--stat`/`--numstat` showing its
+#      whole path; coverage.mjs). A
 #      file it never read goes back to a second pass (followup.md); a file
 #      still unread after that fails the check. It was added after a review
 #      passed sift #188 twice having seen its tests only in `--stat`.
