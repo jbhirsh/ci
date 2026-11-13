@@ -13,6 +13,7 @@ describe('parseOptions', () => {
       push: true,
       base: 'origin/main',
       afterOnly: false,
+      beforeMayFail: false,
       sideBySide: false,
       width: undefined,
       fps: 15,
@@ -65,6 +66,7 @@ describe('parseOptions', () => {
       push: false,
       base: 'origin/release',
       afterOnly: false,
+      beforeMayFail: false,
       sideBySide: true,
       width: 900,
       fps: 20,
@@ -76,6 +78,12 @@ describe('parseOptions', () => {
       app: {},
     });
     expect(parseOptions(['a.ts', '--after-only'], { settings }).afterOnly).toBe(true);
+    expect(parseOptions(['a.ts', '--before-may-fail'], { settings }).beforeMayFail).toBe(true);
+    for (const other of ['--after-only', '--side-by-side']) {
+      expect(() => parseOptions(['a.ts', '--before-may-fail', other], { settings })).toThrow(
+        '--before-may-fail is for a separate before and after',
+      );
+    }
   });
 
   it('takes no Chromium: the recorder is always WebKit', () => {

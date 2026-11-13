@@ -30,6 +30,11 @@
 //   opens; scenario.ready; the pictures in view load; setup.check; recording
 //   starts; scenario.play; recording stops; setup.check again.
 //
+// With --before-may-fail, a "before" that can't be built or played (a new
+// scenario for a screen main doesn't have) leaves "after" alone rather than
+// failing the run: the automatic recording's way (pr-gif.yml), which can't
+// tell such a scenario beforehand.
+//
 // Look through the GIFs before publishing: a few frames, the start,
 // mid-action and the end. Ctrl-C stops the servers, removes the worktrees and
 // the work directory before exiting.
@@ -272,8 +277,29 @@ export async function main(argv) {
       sides.push({ side: 'before', dist: path.join(work, 'dist-before'), tree });
     }
     sides.push({ side: 'after', dist: path.join(work, 'dist-after'), tree: root });
-    for (const { dist, tree } of sides) {
-      build({ root, cwd: tree, outDir: dist, mode: options.mode, settings: settings.build });
+    /**
+     * Passes on a side's failure, unless it's "before" and --before-may-fail
+     * says to go on with "after" alone.
+     *
+     * @param {Side} side
+     * @param {unknown} error
+     */
+    const failed = (side, error) => {
+      if (stopping || side !== 'before' || !options.beforeMayFail) throw error;
+      console.warn(
+        `pr-gif: "before" failed (${error instanceof Error ? error.message : error}); "after" alone, as for a screen main doesn't have`,
+      );
+      sides.splice(
+        sides.findIndex((s) => s.side === 'before'),
+        1,
+      );
+    };
+    for (const { side, dist, tree } of [...sides]) {
+      try {
+        build({ root, cwd: tree, outDir: dist, mode: options.mode, settings: settings.build });
+      } catch (error) {
+        failed(side, error);
+      }
     }
 
     const { webkit } = await appPlaywright(root);
@@ -288,12 +314,27 @@ export async function main(argv) {
           { cause: error },
         );
       });
-    for (const { side, dist } of sides) {
-      const origin = await serve({ root, outDir: dist, host: settings.host, servers });
-      console.log(`pr-gif: recording ${side} at ${origin}`);
-      const frames = path.join(work, `frames-${side}`);
-      await recordSide({ browser, scenario, setup, side, origin, frames, options, settings, root });
-      await stopServers(servers);
+    for (const { side, dist } of [...sides]) {
+      try {
+        const origin = await serve({ root, outDir: dist, host: settings.host, servers });
+        console.log(`pr-gif: recording ${side} at ${origin}`);
+        const frames = path.join(work, `frames-${side}`);
+        await recordSide({
+          browser,
+          scenario,
+          setup,
+          side,
+          origin,
+          frames,
+          options,
+          settings,
+          root,
+        });
+      } catch (error) {
+        failed(side, error);
+      } finally {
+        await stopServers(servers);
+      }
     }
 
     const viewportWidth = (scenario.viewport ?? settings.viewport).width;
@@ -327,7 +368,7 @@ export async function main(argv) {
     if (options.dir) {
       const dir = options.dir;
       const head = git(root, 'rev-parse', '--short', 'HEAD');
-      const from = options.afterOnly ? head : `${options.base} and ${head}`;
+      const from = sides.some((s) => s.side === 'before') ? `${options.base} and ${head}` : head;
       const sha = publishFiles(
         gitIn(root),
         made.map((file) => /** @type {const} */ ([`${dir}/${file}`, path.join(out, file)])),
