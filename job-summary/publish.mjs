@@ -6,7 +6,8 @@
 // never needs write access.
 //
 // The branch keeps only what Pages serves: reports from the last KEEP_DAYS
-// days, an index of them, and no history, as a branch gaining a few hundred
+// days, an index of them, a vercel.json that keeps Vercel from deploying the
+// branch (VERCEL_JSON), and no history, as a branch gaining a few hundred
 // kilobytes a run would otherwise keep every report forever. So each
 // publish is one commit with no parent, pushed with a lease on the commit it
 // replaced: a report published meanwhile is read in and kept on the next
@@ -37,6 +38,14 @@ import { KEEP_DAYS } from './report.mjs';
 
 /** The branch Pages serves. */
 export const BRANCH = 'job-reports';
+/**
+ * Written at the branch's root so Vercel, which reads vercel.json from the
+ * pushed commit, builds no deploy of it. An app whose repository is linked
+ * to Vercel otherwise deploys every publish as a preview: about 40% of the
+ * free plan's 100 deploys a day, which ran out on 2026-11-13 and held every
+ * PR's required Vercel check.
+ */
+export const VERCEL_JSON = `${JSON.stringify({ git: { deploymentEnabled: false } }, null, 2)}\n`;
 /** How many times a push is tried when another publish got there first. */
 export const TRIES = 6;
 
@@ -265,6 +274,7 @@ export function publish(env, run = realRun, now = Date.now()) {
       prune(site, days, now);
       writeFileSync(path.join(site, 'index.html'), indexPage(repo, runsIn(site)));
       writeFileSync(path.join(site, '.nojekyll'), '');
+      writeFileSync(path.join(site, 'vercel.json'), VERCEL_JSON);
       git(['add', '--all', '.']);
       const tree = git(['write-tree']).trim();
       const commit = git([
