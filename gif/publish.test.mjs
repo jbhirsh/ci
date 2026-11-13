@@ -8,8 +8,10 @@ import {
   ATTACH_LIMIT,
   BRANCH_VERCEL_JSON,
   GIF_WARN_BYTES,
+  HeadMovedError,
   attachToPr,
   attachmentTable,
+  blockKeys,
   blockMarkers,
   ghIn,
   gifNames,
@@ -18,8 +20,13 @@ import {
   publishFiles,
   rawUrl,
   repoFromRemote,
+  isAutomatic,
+  recordedLine,
   sizeNote,
+  staleNote,
+  staleText,
   withBlock,
+  withoutBlock,
 } from './publish.mjs';
 
 describe('repoFromRemote', () => {
@@ -345,7 +352,7 @@ describe('publishing to attachments', () => {
    * manual says: each local reference to an attached file becomes its URL.
    *
    * @param {string} body
-   * @param {{ keepLocal?: boolean }} [opts]
+   * @param {{ keepLocal?: boolean; head?: string }} [opts]
    */
   function fakeGh(body, opts = {}) {
     /** @type {string[][]} */
@@ -353,7 +360,10 @@ describe('publishing to attachments', () => {
     /** @type {import('./publish.mjs').Gh} */
     const gh = (args) => {
       calls.push(args);
-      if (args[1] === 'view') return { status: 0, stdout: `${body}\n`, stderr: '' };
+      if (args[1] === 'view') {
+        const stdout = `${JSON.stringify({ body, headRefOid: opts.head ?? 'a'.repeat(40) })}\n`;
+        return { status: 0, stdout, stderr: '' };
+      }
       let next = readFileSync(args[args.indexOf('--body-file') + 1], 'utf8');
       args.forEach((arg, i) => {
         if (args[i - 1] !== '--attach' || opts.keepLocal) return;
@@ -385,9 +395,7 @@ describe('publishing to attachments', () => {
       '--repo',
       'o/r',
       '--json',
-      'body',
-      '--jq',
-      '.body',
+      'body,headRefOid',
     ]);
     expect(fake.calls[1]).toEqual([
       'pr',
@@ -476,6 +484,84 @@ describe('publishing to attachments', () => {
     );
   });
 
+  it('stops before any edit once the head has moved past the one given', () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), 'pr-gif-attach-'));
+    const fake = fakeGh('', { head: 'b'.repeat(40) });
+    expect(() =>
+      attachToPr({
+        repo: 'o/r',
+        pr: '4',
+        cwd,
+        scenarios: [pair],
+        gh: fake.gh,
+        headSha: 'a'.repeat(40),
+      }),
+    ).toThrow(HeadMovedError);
+    expect(fake.calls.map((c) => c[1])).toEqual(['view']);
+    // The same head goes on.
+    const same = fakeGh('', { head: 'a'.repeat(40) });
+    attachToPr({
+      repo: 'o/r',
+      pr: '4',
+      cwd,
+      scenarios: [pair],
+      gh: same.gh,
+      headSha: 'a'.repeat(40),
+      log: () => {},
+    });
+    expect(same.calls.map((c) => c[1])).toEqual(['view', 'edit', 'view']);
+  });
+
+  it('attaches the rest once its first edit is in, though the head moves meanwhile', () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), 'pr-gif-attach-'));
+    const opts = { head: 'a'.repeat(40) };
+    const fake = fakeGh('', opts);
+    const scenarios = Array.from({ length: ATTACH_LIMIT }, (_, i) => ({
+      name: `s${i}`,
+      before: `s${i}-before.gif`,
+      after: `s${i}-after.gif`,
+      sideBySide: null,
+    }));
+    /** @type {import('./publish.mjs').Gh} */
+    const gh = (args, options) => {
+      const out = fake.gh(args, options);
+      if (args[1] === 'edit') opts.head = 'b'.repeat(40);
+      return out;
+    };
+    attachToPr({
+      repo: 'o/r',
+      pr: '3',
+      cwd,
+      scenarios,
+      gh,
+      headSha: 'a'.repeat(40),
+      log: () => {},
+    });
+    expect(fake.calls.filter((c) => c[1] === 'edit')).toHaveLength(2);
+    expect(fake.body()).not.toContain('](./');
+  });
+
+  it('edits once with nothing to attach when the change says so, and not at all when not', () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), 'pr-gif-attach-'));
+    const old = withBlock('Intro', 'gone', 'Recorded automatically at `abc1234`.');
+    const fake = fakeGh(old);
+    /** @type {string[]} */
+    const logs = [];
+    const log = (/** @type {string} */ l) => logs.push(l);
+    const change = (/** @type {string} */ b) => withoutBlock(b, 'gone');
+    expect(attachToPr({ repo: 'o/r', pr: '4', cwd, scenarios: [], gh: fake.gh, change, log })).toBe(
+      'Intro',
+    );
+    expect(fake.calls.map((c) => c[1])).toEqual(['view', 'edit', 'view']);
+    expect(fake.calls[1].includes('--attach')).toBe(false);
+    attachToPr({ repo: 'o/r', pr: '4', cwd, scenarios: [], gh: fake.gh, change, log });
+    expect(fake.calls.map((c) => c[1])).toEqual(['view', 'edit', 'view', 'view']);
+    expect(logs).toEqual([
+      "pr-gif: updated #4's description",
+      "pr-gif: #4's description needs no change",
+    ]);
+  });
+
   it('runs gh in the given directory', () => {
     // A fake gh first on PATH: it prints where it ran, and fails on "fail".
     const bin = mkdtempSync(path.join(tmpdir(), 'pr-gif-bin-'));
@@ -496,5 +582,54 @@ describe('publishing to attachments', () => {
     } finally {
       process.env.PATH = saved;
     }
+  });
+});
+
+describe('the blocks around the tables', () => {
+  const auto = `${recordedLine('a'.repeat(40), { automatic: true })}\n\n| table |`;
+  const manual = `${recordedLine('b'.repeat(40))}\n\n| table |`;
+
+  it('says the commit, how it was recorded, and a before main could not play', () => {
+    expect(recordedLine('abcdef0123')).toBe('Recorded at `abcdef0`.');
+    expect(recordedLine('abcdef0123', { automatic: true, noBefore: true })).toBe(
+      "Recorded automatically at `abcdef0`. No before: main couldn't play this scenario.",
+    );
+  });
+
+  it('drops a block and the blank line before it, keeping the rest', () => {
+    const body = withBlock(withBlock('Intro', 'a', auto), 'b', manual);
+    expect(withoutBlock(body, 'a')).toBe(withBlock('Intro', 'b', manual));
+    expect(withoutBlock(withoutBlock(body, 'a'), 'b')).toBe('Intro');
+    expect(withoutBlock('Intro', 'a')).toBe('Intro');
+    expect(withoutBlock(withBlock('', 'a', auto), 'a')).toBe('');
+  });
+
+  it('lists the blocks, and tells an automatic one from one attached by hand', () => {
+    const body = withBlock(withBlock('<!-- pr-gif:x-->', 'a', auto), 'b', manual);
+    expect(blockKeys(body)).toEqual(['a', 'b']);
+    expect(blockKeys('<!-- pr-gif:a -->\nno end')).toEqual([]);
+    expect(blockKeys('<!-- pr-gif:a--b -->\n<!-- /pr-gif:a--b -->')).toEqual([]);
+    expect(isAutomatic(body, 'a')).toBe(true);
+    expect(isAutomatic(body, 'b')).toBe(false);
+    expect(isAutomatic(body, 'c')).toBe(false);
+    expect(isAutomatic(withBlock('', 'a', '| Recorded automatically at `abc1234`. |'), 'a')).toBe(
+      false,
+    );
+  });
+
+  it('marks a block not updated, once, replaces the note, and takes it off', () => {
+    const body = withBlock('Intro', 'a', auto);
+    const note = staleText('c'.repeat(40), 'https://github.com/o/r/actions/runs/9');
+    expect(note).toBe(
+      '**Not updated for `ccccccc`: recording failed ([run](https://github.com/o/r/actions/runs/9)).**',
+    );
+    const marked = staleNote(body, 'a', note);
+    expect(marked).toContain(`<!-- pr-gif:a -->\n${note} Recorded automatically at \`aaaaaaa\`.`);
+    expect(staleNote(marked, 'a', note)).toBe(marked);
+    expect(isAutomatic(marked, 'a')).toBe(true);
+    const other = staleText('d'.repeat(40), 'u');
+    expect(staleNote(marked, 'a', other)).toBe(staleNote(body, 'a', other));
+    expect(staleNote(marked, 'a', null)).toBe(body);
+    expect(staleNote('Intro', 'a', note)).toBe('Intro');
   });
 });

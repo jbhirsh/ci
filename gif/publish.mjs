@@ -22,6 +22,17 @@
 // there. Needs gh ≥ 2.99 (lib/gh.mjs), and a token that may attach: a
 // person's, such as the apps' BOT_PR_TOKEN; GitHub refuses the Actions
 // token ("attaching files requires write access to the repository").
+//
+// Each block starts with the commit its GIFs were recorded at ("Recorded at
+// `abc1234`.", "Recorded automatically at …" for pr-gif-attach.yml's), so an
+// old one shows it. Only an automatic block is ever dropped (withoutBlock),
+// once the PR no longer changes its scenario, or marked "Not updated for
+// `<sha>`: …" (staleNote) when a later recording of it failed; a block
+// attached by hand is never dropped or marked, though a later recording of
+// its scenario replaces it, as any recording does. With `headSha`,
+// attachToPr stops before its first edit once the PR's head has moved past
+// it (HeadMovedError), so a run for an older push never overwrites a newer
+// one's GIFs; once it has edited, it attaches the rest whatever the head.
 
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -310,6 +321,104 @@ export function findBlock(body, key) {
 }
 
 /**
+ * The description without the scenario's block, nor the blank line that
+ * kept it apart from what came before; unchanged when it has none.
+ *
+ * @param {string} body
+ * @param {string} key
+ */
+export function withoutBlock(body, key) {
+  const found = findBlock(body, key);
+  if (!found) return body;
+  const head = body.slice(0, found.from).trimEnd();
+  const tail = body.slice(found.to).replace(/^\n+/, '');
+  return head && tail ? `${head}\n\n${tail}` : head || tail;
+}
+
+/**
+ * The names of every scenario block in the description, in order.
+ *
+ * @param {string} body
+ */
+export function blockKeys(body) {
+  const keys = [...body.matchAll(/<!-- pr-gif:([^\s<>]+) -->/g)].map((m) => m[1]);
+  return [...new Set(keys)].filter((key) => {
+    try {
+      return findBlock(body, key) !== null;
+    } catch {
+      // A name no marker of ours could hold (`--`): someone else's comment.
+      return false;
+    }
+  });
+}
+
+/** A "Not updated" note at the start of a block's first line. */
+const STALE = /^\*\*Not updated for [^\n]*?\.\*\* /;
+
+/**
+ * Whether the scenario's block was attached automatically
+ * (pr-gif-attach.yml), so it may be dropped or marked: one attached by
+ * hand never is.
+ *
+ * @param {string} body
+ * @param {string} key
+ */
+export function isAutomatic(body, key) {
+  const found = findBlock(body, key);
+  if (!found) return false;
+  const { start } = blockMarkers(key);
+  const line = body
+    .slice(found.from + start.length)
+    .replace(/^\n/, '')
+    .split('\n')[0]
+    .replace(STALE, '');
+  return /^Recorded automatically at `[0-9a-f]{7,40}`\./.test(line);
+}
+
+/**
+ * The description with the scenario's block marked "Not updated" by `note`,
+ * in place of any earlier note, or with its note taken off when `note` is
+ * null; unchanged when it has no such block.
+ *
+ * @param {string} body
+ * @param {string} key
+ * @param {string | null} note one line, as staleText writes it
+ */
+export function staleNote(body, key, note) {
+  const found = findBlock(body, key);
+  if (!found) return body;
+  const { start } = blockMarkers(key);
+  const at = found.from + start.length + (body[found.from + start.length] === '\n' ? 1 : 0);
+  const rest = body.slice(at, found.to).replace(STALE, '');
+  return body.slice(0, at) + (note ? `${note} ` : '') + rest + body.slice(found.to);
+}
+
+/**
+ * The note for a block whose scenario's later recording failed.
+ *
+ * @param {string} sha the commit that recording was for
+ * @param {string} runUrl the run that failed
+ */
+export function staleText(sha, runUrl) {
+  return `**Not updated for \`${sha.slice(0, 7)}\`: recording failed ([run](${runUrl})).**`;
+}
+
+/**
+ * The line a block starts with: the commit its GIFs were recorded at.
+ *
+ * @param {string} sha
+ * @param {{ automatic?: boolean; noBefore?: boolean }} [options]
+ *   automatic: pr-gif-attach.yml's; noBefore: an automatic recording whose
+ *   "before" couldn't be played (cli.mjs's --before-may-fail)
+ */
+export function recordedLine(sha, { automatic = false, noBefore = false } = {}) {
+  return (
+    `Recorded ${automatic ? 'automatically ' : ''}at \`${sha.slice(0, 7)}\`.` +
+    (noBefore ? " No before: main couldn't play this scenario." : '')
+  );
+}
+
+/**
  * The GIFs a scenario's table shows, so the ones attached: the side-by-side
  * GIF alone when there is one.
  *
@@ -366,29 +475,65 @@ export function ghIn(cwd) {
   return commandIn('gh', cwd);
 }
 
+/** The PR's head moved past the commit the GIFs were recorded for. */
+export class HeadMovedError extends Error {}
+
 /**
  * Uploads the scenarios' GIFs to the PR as attachments and puts each
  * scenario's table in its description, at most ATTACH_LIMIT files a
  * command. Returns the description as gh left it.
  *
- * @param {{ repo: string; pr: string; cwd: string; scenarios: readonly Published[]; base?: string; gh?: Gh; log?: (line: string) => void }} options
+ * `change` makes the new description from the one read just before the
+ * first edit: by default each scenario's table put in (withBlock). When
+ * there is nothing to attach, the description is edited once if it
+ * changed, and not at all if not. With `headSha`, the read before the
+ * first edit also reads the PR's head, and a head other than it stops the
+ * run (HeadMovedError) before anything is edited.
+ *
+ * @param {{ repo: string; pr: string; cwd: string; scenarios: readonly Published[]; base?: string; gh?: Gh; log?: (line: string) => void; headSha?: string; change?: (body: string) => string }} options
  *   pr: its number; scenarios: each GIF as a path relative to `cwd`. gh must
  *   be one that can attach (lib/gh.mjs's checkGh, which the attach action
  *   runs first).
  */
-export function attachToPr({ repo, pr, cwd, scenarios, base, gh = ghIn(cwd), log = console.log }) {
+export function attachToPr({
+  repo,
+  pr,
+  cwd,
+  scenarios,
+  base,
+  gh = ghIn(cwd),
+  log = console.log,
+  headSha,
+  change = (body) =>
+    scenarios.reduce((b, s) => withBlock(b, s.name, attachmentTable(s, { base })), body),
+}) {
   const files = shownFiles(scenarios);
-  const read = () =>
-    gh(['pr', 'view', pr, '--repo', repo, '--json', 'body', '--jq', '.body']).stdout.replace(
-      /\n$/,
-      '',
+  const view = () =>
+    /** @type {{ body: string; headRefOid: string }} */ (
+      JSON.parse(gh(['pr', 'view', pr, '--repo', repo, '--json', 'body,headRefOid']).stdout)
     );
-  let body = read();
-  for (const s of scenarios) body = withBlock(body, s.name, attachmentTable(s, { base }));
+  const read = () => {
+    const { body, headRefOid } = view();
+    if (headSha && headRefOid !== headSha) {
+      throw new HeadMovedError(
+        `pr-gif: #${pr}'s head moved on to ${headRefOid.slice(0, 7)} from ${headSha.slice(0, 7)}, which these GIFs are for: that push's own run attaches its GIFs`,
+      );
+    }
+    return body;
+  };
+  const was = read();
+  let body = change(was);
+  if (files.length === 0 && body === was) {
+    log(`pr-gif: #${pr}'s description needs no change`);
+    return was;
+  }
   const bodyFile = path.join(cwd, `.pr-gif-body-${pr}.md`);
   try {
-    for (let i = 0; i < files.length; i += ATTACH_LIMIT) {
-      if (i > 0) body = read();
+    // One edit at least: a change with nothing to attach (a block dropped).
+    for (let i = 0; i < Math.max(files.length, 1); i += ATTACH_LIMIT) {
+      // Once the first edit is in, the rest must follow, or its local
+      // references would stay: no head check.
+      if (i > 0) body = view().body;
       writeFileSync(bodyFile, body);
       const batch = files.slice(i, i + ATTACH_LIMIT);
       try {
@@ -412,7 +557,8 @@ export function attachToPr({ repo, pr, cwd, scenarios, base, gh = ghIn(cwd), log
   } finally {
     rmSync(bodyFile, { force: true });
   }
-  const after = read();
+  // The edits are made: a push since doesn't matter to this read.
+  const after = view().body;
   const local = files.filter((file) => after.includes(`](./${file})`));
   if (local.length > 0) {
     throw new Error(
@@ -420,7 +566,9 @@ export function attachToPr({ repo, pr, cwd, scenarios, base, gh = ghIn(cwd), log
     );
   }
   log(
-    `pr-gif: attached ${files.length} GIF${files.length === 1 ? '' : 's'} to #${pr}'s description`,
+    files.length > 0
+      ? `pr-gif: attached ${files.length} GIF${files.length === 1 ? '' : 's'} to #${pr}'s description`
+      : `pr-gif: updated #${pr}'s description`,
   );
   return after;
 }
