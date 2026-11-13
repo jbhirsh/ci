@@ -6,6 +6,8 @@
 // each app's main with only `npm ci --ignore-scripts` done there):
 //   - its `gif` settings parse (an app without the key is checked against
 //     the defaults, and nothing more is asked of it);
+//   - for an app whose CI records videos (sift), only that its scenarios
+//     folder, if it names one, is there and holds a Maestro flow;
 //   - a web app's setup module, if it names one, loads through the app's
 //     own Vite and exports the shape cli.mjs calls (scenario.mjs);
 //   - each module in its scenarios folder, if it names one, loads and
@@ -73,7 +75,20 @@ export async function selftest(root, log = console.log) {
     return problems;
   }
   log(`gif: settings parse (source ${settings.source})`);
-  if (settings.source === 'ci-videos') return problems;
+  if (settings.source === 'ci-videos') {
+    // Its flows run on the app's CI, not here: only that the folder the
+    // automatic GIFs watch (pr-gif-attach.yml) is there and holds one.
+    if (settings.scenarios) {
+      if (!existsSync(path.join(root, settings.scenarios))) {
+        problems.push(`gif.scenarios: no folder ${settings.scenarios}`);
+      } else {
+        const flows = scenarioFiles(settings.scenarios, root, 'ci-videos');
+        if (flows.length === 0) problems.push(`gif.scenarios: no flow in ${settings.scenarios}`);
+        else log(`gif: ${flows.length} flow(s) in ${settings.scenarios}`);
+      }
+    }
+    return problems;
+  }
 
   if (settings.setup) {
     try {

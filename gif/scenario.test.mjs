@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { loadModule, scenarioFiles, scenarioProblems, setupProblems } from './scenario.mjs';
+import {
+  isScenarioFile,
+  loadModule,
+  scenarioFiles,
+  scenarioProblems,
+  setupProblems,
+} from './scenario.mjs';
 
 /**
  * An app with these files, and, if `vite` is given, a Vite whose
@@ -168,5 +174,33 @@ describe('scenarioFiles', () => {
       path.join('scripts/gif-scenarios', 'a.mjs'),
       path.join('scripts/gif-scenarios', 'b.ts'),
     ]);
+  });
+
+  it("lists an app's .yaml Maestro flows when its CI records videos, not .yml or the subflows' folder", () => {
+    const root = app({
+      'e2e/gifs/b.yml': '',
+      'e2e/gifs/a.yaml': '',
+      'e2e/gifs/notes.md': '',
+      'e2e/gifs/shared/start.yaml': '',
+    });
+    expect(scenarioFiles('e2e/gifs', root, 'ci-videos')).toEqual([path.join('e2e/gifs', 'a.yaml')]);
+  });
+});
+
+describe('isScenarioFile', () => {
+  it.each([
+    ['a.ts', 'web', true],
+    ['a.mjs', 'web', true],
+    ['a.js', 'web', true],
+    ['a.test.ts', 'web', false],
+    ['a.d.ts', 'web', false],
+    ['a.yaml', 'web', false],
+    ['sub/a.ts', 'web', false],
+    ['a.yaml', 'ci-videos', true],
+    ['a.yml', 'ci-videos', false],
+    ['a.ts', 'ci-videos', false],
+    ['shared/a.yaml', 'ci-videos', false],
+  ])('%s for %s: %s', (name, source, is) => {
+    expect(isScenarioFile(name, /** @type {'web' | 'ci-videos'} */ (source))).toBe(is);
   });
 });

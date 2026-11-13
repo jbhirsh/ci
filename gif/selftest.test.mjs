@@ -86,6 +86,35 @@ describe('selftest', () => {
     ).toEqual([]);
   });
 
+  it('checks that the scenarios folder of an app whose CI records videos holds a flow', async () => {
+    const gif = { source: 'ci-videos', scenarios: 'e2e/gifs' };
+    /** @type {string[]} */
+    const logs = [];
+    expect(
+      await selftest(
+        app(
+          {
+            '.github/ci.json': ciJson(gif),
+            'e2e/gifs/swipe.yaml': 'appId: x',
+            'e2e/gifs/shared/start.yaml': 'appId: x',
+          },
+          false,
+        ),
+        (line) => logs.push(line),
+      ),
+    ).toEqual([]);
+    expect(logs).toContain('gif: 1 flow(s) in e2e/gifs');
+    expect(await selftest(app({ '.github/ci.json': ciJson(gif) }, false), () => {})).toEqual([
+      'gif.scenarios: no folder e2e/gifs',
+    ]);
+    expect(
+      await selftest(
+        app({ '.github/ci.json': ciJson(gif), 'e2e/gifs/notes.md': '' }, false),
+        () => {},
+      ),
+    ).toEqual(['gif.scenarios: no flow in e2e/gifs']);
+  });
+
   it('names every problem it finds', async () => {
     const root = app(
       {
