@@ -8,15 +8,24 @@
 // early must not delete baselines. To drop a screen, delete its baseline in
 // the PR by hand.
 //
+// With `verify` set, the rewrite is all-or-nothing instead (carry.mjs): it
+// waits for the head commit's checks, adds the baselines to that commit and
+// carries its results over. `verify.command` runs with
+// VISUAL_BASELINES_FRESH naming the folder holding the run's screenshots,
+// for a comparison of them with the amended baselines (compare.mjs, as
+// verify-check.mjs's COMPARE_COMMAND runs it).
+//
 //   node from-run.mjs        (from the app's checkout, on the branch; gh
 //                             reads GH_TOKEN, which needs actions: read)
 
+import { execSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig, appRoot } from '../lib/app.mjs';
-import { branchOf, commit, runIn } from './baselines.mjs';
+import { branchOf, commit, push, report, runIn } from './baselines.mjs';
+import { amendAndCarry, gitHubFromEnv } from './carry.mjs';
 import { isShotName, settings, singleFolder } from './settings.mjs';
 
 /**
@@ -78,15 +87,56 @@ export function downloadLatest({ run, workflow, name, sha, temp }) {
 /**
  * @param {{ root: string, s: import('./settings.mjs').Settings,
  *   run: import('./baselines.mjs').Run, sha: string, branch: string, by: string,
- *   temp: string }} options
- * @returns {boolean} whether anything was committed
+ *   temp: string, shell?: (command: string, env: Record<string, string>) => void,
+ *   github?: () => import('./carry.mjs').GitHub }} options
+ *   `shell` runs `verify.command`, and `github` is the API side, both read
+ *   only with `verify`
+ * @returns {boolean} whether anything was pushed
  */
-export function fromRun({ root, s, run, sha, branch, by, temp }) {
+export function fromRun({
+  root,
+  s,
+  run,
+  sha,
+  branch,
+  by,
+  temp,
+  shell = (command, env) =>
+    execSync(command, { cwd: root, stdio: 'inherit', env: { ...process.env, ...env } }),
+  github = () => gitHubFromEnv(process.env),
+}) {
   const folder = singleFolder(s);
-  if (!s.artifact) {
+  const { artifact, verify } = s;
+  if (!artifact) {
     throw new Error('.github/ci.json: visual-baselines.artifact is needed to rewrite from a run');
   }
-  const { workflow, name } = s.artifact;
+  const write = () => copyShots({ root, folder, artifact, run, sha, temp });
+  if (verify) {
+    return amendAndCarry({
+      verify,
+      globs: s.folders,
+      branch,
+      run,
+      check: () => shell(verify.command, { VISUAL_BASELINES_FRESH: temp }),
+      write,
+      github: github(),
+    });
+  }
+  write();
+  if (!commit({ globs: s.folders, by, run })) return false;
+  push({ branch, run });
+  return true;
+}
+
+/**
+ * Downloads the run's screenshots into `temp` and copies them into the
+ * baselines folder; throws when the run took none, or missed a baseline.
+ *
+ * @param {{ root: string, folder: string, artifact: { workflow: string, name: string },
+ *   run: import('./baselines.mjs').Run, sha: string, temp: string }} options
+ */
+function copyShots({ root, folder, artifact, run, sha, temp }) {
+  const { workflow, name } = artifact;
   const id = downloadLatest({ run, workflow, name, sha, temp });
   const fresh = shots(temp);
   const bad = fresh.filter((shot) => !isShotName(shot));
@@ -101,7 +151,6 @@ export function fromRun({ root, s, run, sha, branch, by, temp }) {
   }
   mkdirSync(target, { recursive: true });
   for (const shot of fresh) copyFileSync(path.join(temp, shot), path.join(target, shot));
-  return commit({ globs: s.folders, branch, by, run });
 }
 
 /** @param {string} [root] */
@@ -119,5 +168,5 @@ export function main(root = appRoot()) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  console.log(main() ? 'Committed the new baselines.' : 'The baselines are already up to date.');
+  process.exitCode = report(main);
 }

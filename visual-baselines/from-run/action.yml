@@ -1,19 +1,30 @@
 name: Visual baselines, rewrite from a run
 description: >-
   Rewrites the visual regression's baselines from the screenshots this
-  commit's CI run took, and commits them to the branch the workflow ran on
+  commit's CI run took, and pushes them to the branch the workflow ran on
   (from-run.mjs's header says how): for an app whose screenshots no Linux
   runner can take, sift's on the iOS Simulator. The only step of the app's
-  by-hand visual-baselines.yml after its checkout; the job needs contents
-  write and actions read. The Actions token's push does start the PR's
-  workflows, but each waits for a maintainer to approve it on the PR, then
-  runs as github-actions[bot].
+  by-hand visual-baselines.yml after its checkout. Without `verify` in the
+  app's settings it adds a commit, and the job needs contents write and
+  actions read; the Actions token's push queues the PR's workflows, each
+  waiting for a maintainer to approve it. With `verify` it's
+  all-or-nothing (carry.mjs's header): it waits up to 15 minutes for the
+  head commit's checks, refuses unless all but the visual one passed, adds
+  the baselines to that commit, runs `verify.command` (for sift,
+  verify-check.mjs's COMPARE_COMMAND: compare.mjs from
+  VISUAL_BASELINES_TOOLS on VISUAL_BASELINES_FRESH, the run's
+  screenshots, writing to VISUAL_BASELINES_DIFFS) and carries every
+  other result over, so nothing runs again; the job then needs contents,
+  checks and actions write, and about an hour.
 
 inputs:
   github-token:
     description: >-
-      Reads the run's artifact (actions read). The push goes out with the
-      checkout's credentials, so the job needs contents write too.
+      Reads the run's artifact (actions read); with `verify`, also reads
+      the branch rule and the head commit's checks, posts the results onto
+      the amended commit (checks write) and cancels the runs its push holds
+      for approval (actions write). The push goes out with the checkout's
+      credentials, so the job needs contents write too.
     default: ${{ github.token }}
 
 runs:
@@ -23,9 +34,30 @@ runs:
       with:
         node-version: 24
 
+    # pixelmatch and pngjs, for a verify command that compares
+    # (compare.mjs), from this repo's lockfile into the action's own
+    # checkout; without `verify`, nothing.
+    - name: Install the comparison's packages
+      shell: bash
+      run: |
+        if jq -e '."visual-baselines".verify' .github/ci.json > /dev/null 2>&1; then
+          npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
+        fi
+
     - name: Rewrite the baselines from this commit's run
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         REWRITTEN_BY: ${{ github.workflow }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+        VISUAL_BASELINES_TOOLS: ${{ github.action_path }}/..
+        VISUAL_BASELINES_DIFFS: ${{ runner.temp }}/visual-diffs
       run: node "$GITHUB_ACTION_PATH/../from-run.mjs"
+
+    # compare.mjs's diffs, when verify's comparison failed.
+    - uses: actions/upload-artifact@v7
+      if: failure()
+      with:
+        name: visual-diffs
+        path: ${{ runner.temp }}/visual-diffs
+        if-no-files-found: ignore
+        retention-days: 14

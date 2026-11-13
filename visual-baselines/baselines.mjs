@@ -3,7 +3,8 @@
 // written, so one no test takes any more goes, puts back the committed
 // version of each written again (for the app's command to compare and
 // rewrite only if it really changed), then commits whatever changed in them
-// to the branch the rewrite ran on. The folders are found from the
+// to the branch the rewrite ran on (a new commit, or with `verify` the
+// head commit amended, carry.mjs). The folders are found from the
 // files git knows (tracked, or new and not ignored), so a folder that's gone
 // still has its deletions staged.
 
@@ -109,15 +110,24 @@ export function restoreRewritten(globs, run) {
   return rewritten;
 }
 
+/** Who commits: the workflow's token, as GitHub shows it. */
+export const BOT = {
+  name: 'github-actions[bot]',
+  email: '41898282+github-actions[bot]@users.noreply.github.com',
+};
+
 /**
- * Commits what changed in the baselines folders and pushes it to `branch`,
- * with a subject and a body (the commit check wants both). Returns false,
- * having committed nothing, when nothing changed.
+ * Commits what changed in the baselines folders, with a subject and a body
+ * (the commit check wants both), or, with `amend`, adds it to the head
+ * commit instead: the message and author stay the head's, the committer
+ * becomes BOT (carry.mjs). Returns false, having committed nothing, when
+ * nothing changed. Nothing is pushed: push() does that.
  *
- * @param {{ globs: string[], branch: string, by: string, run: Run }} options
- *   `by`: what rewrote them, for the body (a workflow and its run's link)
+ * @param {{ globs: string[], by: string, run: Run, amend?: boolean }} options
+ *   `by`: what rewrote them, for a new commit's body (a workflow and its
+ *   run's link)
  */
-export function commit({ globs, branch, by, run }) {
+export function commit({ globs, by, run, amend = false }) {
   const folders = matchingFolders(knownFiles(run), globs);
   if (folders.length === 0) return false;
   run('git', ['add', '--', ...folders]);
@@ -127,21 +137,55 @@ export function commit({ globs, branch, by, run }) {
   } catch {
     // Staged changes: `git diff --quiet` exits 1.
   }
+  const message = amend
+    ? ['--amend', '--no-edit']
+    : ['-m', 'Update the visual baselines', '-m', `Rewritten on CI by ${by}.`];
   run('git', [
     '-c',
-    'user.name=github-actions[bot]',
+    `user.name=${BOT.name}`,
     '-c',
-    'user.email=41898282+github-actions[bot]@users.noreply.github.com',
+    `user.email=${BOT.email}`,
     'commit',
     // Only the baselines folders, whatever else the command staged.
     '--only',
-    '-m',
-    'Update the visual baselines',
-    '-m',
-    `Rewritten on CI by ${by}.`,
+    ...message,
     '--',
     ...folders,
   ]);
-  run('git', ['push', 'origin', `HEAD:refs/heads/${branch}`]);
   return true;
+}
+
+/**
+ * Pushes HEAD to `branch`. With `lease`, the commit the branch must still
+ * be at, it force-pushes (replacing an amended commit) and git refuses if
+ * anyone pushed since.
+ *
+ * @param {{ branch: string, run: Run, lease?: string }} options
+ */
+export function push({ branch, run, lease }) {
+  const ref = `refs/heads/${branch}`;
+  run('git', [
+    'push',
+    ...(lease ? [`--force-with-lease=${ref}:${lease}`] : []),
+    'origin',
+    `HEAD:${ref}`,
+  ]);
+}
+
+/**
+ * Runs a rewrite's main from the command line, printing what it did, or
+ * its refusal as an error annotation (a message for whoever ran it, not a
+ * stack trace), and returns the exit code.
+ *
+ * @param {() => boolean} main whether it pushed anything
+ * @param {(line: string) => void} [log]
+ */
+export function report(main, log = console.log) {
+  try {
+    log(main() ? 'Pushed the new baselines.' : 'The baselines are already up to date.');
+    return 0;
+  } catch (error) {
+    log(`::error::${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
 }

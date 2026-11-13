@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -6,6 +7,7 @@ import { runIn } from './baselines.mjs';
 import { fromRun, main, shots } from './from-run.mjs';
 import { settings } from './settings.mjs';
 import { repo } from './test-repo.mjs';
+import { apiRun, fake, rule } from './test-github.mjs';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -148,6 +150,38 @@ describe('fromRun', () => {
     expect(() =>
       fromRun({ ...base, s: settings({ ...S, folders: ['a/*'], artifact: S.artifact }) }),
     ).toThrow(/exactly one folder/);
+  });
+
+  it('with verify, amends the head commit and runs the check with the fresh screenshots', () => {
+    const { root, git, remote } = repo({ 'e2e/baselines/a.png': 'old' });
+    const a = git('rev-parse', 'HEAD').trim();
+    const f = fake({
+      rules: [[rule('Unit', 'Visual regression')]],
+      results: (sha) => (sha === a ? { runs: [apiRun(1, 'Unit', 'success')] } : {}),
+    });
+    const dir = temp();
+    /** @type {[string, Record<string, string>][]} */
+    const checked = [];
+    const pushed = fromRun({
+      root,
+      s: settings({ ...S, verify: { check: 'Visual regression', command: 'compare' } }),
+      run: runner(root, '42', { 'a.png': 'new' }),
+      sha: a,
+      branch: 'topic',
+      by: 'x',
+      temp: dir,
+      shell: (command, env) => checked.push([command, env]),
+      github: () => f.github,
+    });
+    expect(pushed).toBe(true);
+    expect(checked).toEqual([['compare', { VISUAL_BASELINES_FRESH: dir }]]);
+    expect(git('rev-list', '--count', 'HEAD').trim()).toBe('1');
+    expect(git('log', '-1', '--format=%s').trim()).toBe('first');
+    const head = execFileSync('git', ['--git-dir', remote, 'rev-parse', 'topic'], {
+      encoding: 'utf8',
+    }).trim();
+    expect(head).toBe(git('rev-parse', 'HEAD').trim());
+    expect(f.posted().map((c) => c.body?.name)).toEqual(['Visual regression', 'Unit']);
   });
 
   it('lists only the PNGs directly in a folder', () => {

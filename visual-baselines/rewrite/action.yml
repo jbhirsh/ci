@@ -1,15 +1,30 @@
 name: Visual baselines, rewrite
 description: >-
   Rewrites the visual regression's baselines on this Linux runner, the
-  machine they must match, and commits to the branch the workflow ran on
+  machine they must match, and pushes to the branch the workflow ran on
   the ones that really changed, the new ones, and the deletion of any no
   test takes (rewrite.mjs's header says how): for an app whose own command
   writes them, Playwright's --update-snapshots in BoardGames and
   fog-and-frontier.
   The only step of the app's by-hand visual-baselines.yml after its
-  checkout; the job needs contents write. The Actions token's push does
-  start the PR's workflows, but each waits for a maintainer to approve it
-  on the PR, then runs as github-actions[bot].
+  checkout. Without `verify` in the app's settings it adds a commit, and
+  the job needs contents write; the Actions token's push queues the PR's
+  workflows, each waiting for a maintainer to approve it. With `verify`
+  it's all-or-nothing (carry.mjs's header): it waits up to 15 minutes for
+  the head commit's checks, refuses unless all but the visual one passed,
+  adds the baselines to that commit, runs the visual check's command
+  itself, and carries every other result over, so nothing runs again;
+  the job then needs contents, checks and actions write, and about an
+  hour.
+
+inputs:
+  github-token:
+    description: >-
+      Reads the branch rule and the head commit's checks, posts the
+      results onto the amended commit (checks write) and cancels the runs
+      its push holds for approval (actions write); used only with
+      `verify`. The push goes out with the checkout's credentials.
+    default: ${{ github.token }}
 
 runs:
   using: composite
@@ -26,10 +41,11 @@ runs:
     - name: Rewrite the baselines
       shell: bash
       env:
+        GH_TOKEN: ${{ inputs.github-token }}
         REWRITTEN_BY: ${{ github.workflow }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
       run: node "$GITHUB_ACTION_PATH/../rewrite.mjs"
 
-    # Playwright's, when its command failed.
+    # Playwright's, when its command (or verify's) failed.
     - uses: actions/upload-artifact@v7
       if: failure() || cancelled()
       with:
