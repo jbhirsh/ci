@@ -184,7 +184,15 @@ describe('publish', () => {
       'index.html',
       'runs/77/check/index.html',
       'runs/77/meta.json',
+      'vercel.json',
     ]);
+    expect(
+      JSON.parse(
+        execFileSync('git', ['-C', s.env.REMOTE, 'show', `${BRANCH}:vercel.json`], {
+          encoding: 'utf8',
+        }),
+      ),
+    ).toEqual({ git: { deploymentEnabled: false } });
     expect(s.parents()).toBe('1');
     expect(s.calls.some((c) => c.some((arg) => arg.includes('AUTHORIZATION')))).toBe(false);
     expect(s.envs.some((e) => e.GIT_CONFIG_VALUE_0?.startsWith('AUTHORIZATION: basic '))).toBe(
@@ -200,6 +208,7 @@ describe('publish', () => {
     expect(publish(env, second.run, NOW)).toBe('Published 2 reports for run 77: check, e2e.');
     expect(first.tree()).toContain('runs/77/check/index.html');
     expect(first.tree()).toContain('runs/78/e2e/index.html');
+    expect(first.tree()).toContain('vercel.json');
     expect(first.parents()).toBe('1');
   });
 
