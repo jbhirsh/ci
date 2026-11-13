@@ -8,6 +8,31 @@ import { isShotName, settings, singleFolder } from './settings.mjs';
 const json = fc.jsonValue({ maxDepth: 4 });
 
 describe('settings, for any JSON', () => {
+  it('either refuses a verify setting with a ci.json message or reads one that holds', () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          json,
+          fc.record({ check: fc.string(), command: fc.string() }, { requiredKeys: [] }),
+        ),
+        (verify) => {
+          let s;
+          try {
+            s = settings({ folders: ['a'], verify });
+          } catch (error) {
+            expect(String(error)).toMatch(/\.github\/ci\.json: visual-baselines\.verify/);
+            return;
+          }
+          if (s.verify) {
+            expect(s.verify.check.trim()).toBe(s.verify.check);
+            expect(s.verify.check).not.toMatch(/[\n\r]/);
+            expect(s.verify.command.trim()).not.toBe('');
+          }
+        },
+      ),
+    );
+  });
+
   it('either refuses it with a ci.json message or returns settings that hold', () => {
     fc.assert(
       fc.property(fc.dictionary(fc.string(), json), (config) => {
@@ -24,6 +49,11 @@ describe('settings, for any JSON', () => {
         }
         expect(s.ratio >= 0 && s.ratio < 1).toBe(true);
         if (s.artifact) expect(s.artifact.workflow).toMatch(/\.ya?ml$/);
+        if (s.verify) {
+          expect(s.verify.check.trim()).toBe(s.verify.check);
+          expect(s.verify.check).not.toMatch(/[\n\r]/);
+          expect(s.verify.command.trim()).not.toBe('');
+        }
         for (const column of s.columns ?? []) {
           expect(column.file.length).toBeGreaterThan(0);
           for (const file of column.file) expect(file.split('{state}')).toHaveLength(2);

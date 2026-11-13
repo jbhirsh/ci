@@ -24,6 +24,18 @@
 //             `{state}-visual-phone-webkit-linux.png` and Desktop
 //             `{state}-visual-webkit-linux.png`. None by default: nothing
 //             pairs, and the tools that read it do as they did without it.
+//   verify    { check, command }: makes a rewrite all-or-nothing (carry.mjs
+//             says how). `check` is the required check holding the visual
+//             test (BoardGames: E2E Tests (Playwright)); `command` is exactly
+//             what that check's job runs, which the rewrite runs on its
+//             amended commit in place of the check, so a functional failure
+//             behind the visual one can't come out green (the self-test
+//             holds it to the job's steps). The rewrite then amends the PR's
+//             head commit with the new baselines and carries every other
+//             required check's result over to it, rather than adding a
+//             commit that runs CI and Vercel again. None by default: the
+//             rewrite adds a commit, as before, and needs no more than
+//             contents write.
 //
 // An app sets `command` or `artifact`, whichever its rewrite action reads.
 
@@ -34,6 +46,13 @@
  * @property {{ workflow: string, name: string } | undefined} artifact
  * @property {number} ratio
  * @property {import('../lib/baselines.mjs').Column[] | undefined} columns
+ * @property {Verify | undefined} verify
+ */
+
+/**
+ * @typedef {object} Verify
+ * @property {string} check the required check holding the visual test
+ * @property {string} command what that check's job runs
  */
 
 /**
@@ -117,6 +136,36 @@ function columns(value) {
 }
 
 /**
+ * The `verify` setting, checked: undefined when absent.
+ *
+ * @param {unknown} value
+ * @returns {Verify | undefined}
+ */
+function verify(value) {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('.github/ci.json: visual-baselines.verify must be { check, command }');
+  }
+  const v = /** @type {Record<string, unknown>} */ (value);
+  const unknown = Object.keys(v).filter((k) => !['check', 'command'].includes(k));
+  if (unknown.length > 0) {
+    throw new Error(
+      `.github/ci.json: visual-baselines.verify has an unknown key: ${unknown.join(', ')}`,
+    );
+  }
+  const check = text(v.check, 'verify.check');
+  const command = text(v.command, 'verify.command');
+  if (!check || !command) {
+    throw new Error('.github/ci.json: visual-baselines.verify needs a check and a command');
+  }
+  // A check's name is one line, as the branch rule lists it.
+  if (/[\n\r]/.test(check) || check.trim() !== check) {
+    throw new Error('.github/ci.json: visual-baselines.verify.check is a check name, on one line');
+  }
+  return { check, command };
+}
+
+/**
  * The settings, checked, with the defaults filled in.
  *
  * @param {Record<string, unknown>} config
@@ -159,6 +208,7 @@ export function settings(config) {
     artifact,
     ratio,
     columns: columns(config.columns),
+    verify: verify(config.verify),
   };
 }
 

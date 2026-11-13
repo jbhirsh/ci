@@ -11,6 +11,27 @@ describe('settings', () => {
     });
   });
 
+  it('reads verify, none by default', () => {
+    const verify = { check: 'E2E Tests (Playwright)', command: 'npm run test:e2e' };
+    expect(settings({ folders: ['a'], verify }).verify).toEqual(verify);
+    expect(settings({ folders: ['a'] }).verify).toBeUndefined();
+  });
+
+  it.each([
+    ['x', /verify must be \{ check, command \}/],
+    [[], /verify must be \{ check, command \}/],
+    [null, /verify must be \{ check, command \}/],
+    [{ check: 'a', command: 'b', extra: 1 }, /unknown key: extra/],
+    [{ check: 'a' }, /needs a check and a command/],
+    [{ command: 'b' }, /needs a check and a command/],
+    [{ check: '', command: 'b' }, /verify\.check must be text/],
+    [{ check: 'a', command: 3 }, /verify\.command must be text/],
+    [{ check: 'a\nb', command: 'b' }, /a check name, on one line/],
+    [{ check: ' a', command: 'b' }, /a check name, on one line/],
+  ])('refuses verify %j', (verify, message) => {
+    expect(() => settings({ folders: ['a'], verify })).toThrow(message);
+  });
+
   it('reads an artifact and a ratio', () => {
     const s = settings({
       folders: ['e2e/screenshots/baselines'],
