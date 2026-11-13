@@ -195,6 +195,12 @@ describe('parseVideoArgs', () => {
     ).toEqual({ pr: 42, repo: 'a-b/c.d', sideBySide: true, width: 300, fps: 12, noBefore: false });
     expect(parseVideoArgs(['7', '--no-before'], defaults).noBefore).toBe(true);
     expect(parseVideoArgs(['7', '--out', 'pr-gif'], defaults).out).toBe('pr-gif');
+    expect(
+      parseVideoArgs(
+        ['7', '--after-run', '11', '--head', 'b'.repeat(40), '--only', 'swipe,new-sheet'],
+        defaults,
+      ),
+    ).toMatchObject({ afterRun: 11, head: 'b'.repeat(40), only: ['swipe', 'new-sheet'] });
   });
 
   it.each([
@@ -209,6 +215,11 @@ describe('parseVideoArgs', () => {
     [['1', '--side-by-side', '--no-before'], '--side-by-side needs a before'],
     [['1', '--out'], '--out needs a folder'],
     [['1', '--out', '--no-before'], '--out needs a folder'],
+    [['1', '--after-run', 'x'], '--after-run needs a whole number above 0'],
+    [['1', '--head', 'abc1234'], '--head needs a full commit SHA'],
+    [['1', '--head'], '--head needs a full commit SHA'],
+    [['1', '--only'], '--only needs scenario names'],
+    [['1', '--only', 'a,../b'], '--only needs scenario names'],
   ])('turns away %j', (argv, why) => {
     expect(() => parseVideoArgs(argv, defaults)).toThrow(why);
   });
@@ -269,6 +280,40 @@ describe('main', () => {
     expect(readdirSync(path.join(out, 'new-sheet'))).toEqual(['new-sheet-after.gif']);
     expect(readFileSync(path.join(out, 'swipe', 'swipe-after.gif'), 'utf8')).toBe('GIF89a');
     expect(logged()).toContain(`GIFs for 2 scenario(s) left in ${out}/, nothing published`);
+  });
+
+  it('takes the given run for after, the given commit for both, and only the named scenarios', async () => {
+    const out = path.join(mkdtempSync(path.join(tmpdir(), 'videos-out-')), 'pr-gif');
+    world.api['repos/jbhirsh/sift/actions/runs/11'] = {
+      id: 11,
+      status: 'completed',
+      conclusion: 'success',
+    };
+    const head = 'b'.repeat(40);
+    await main(['7', '--out', out, '--after-run', '11', '--head', head, '--only', 'swipe,gone'], {
+      root: '/app',
+      settings,
+    });
+    // No search for the head's run, and no read of the PR's head.
+    const endpoints = asked('gh').map((a) => a.find((x) => x.startsWith('repos/')) ?? '');
+    expect(endpoints.some((e) => e.includes('runs?head_sha'))).toBe(false);
+    expect(endpoints.some((e) => e.endsWith('/pulls/7'))).toBe(false);
+    const dispatch = asked('gh').find((a) => a.includes('POST')) ?? [];
+    expect(dispatch).toContain(`inputs[gif_scenarios_from]=${head}`);
+    expect(readdirSync(out)).toEqual(['swipe']);
+    expect(logged()).toContain('run 11 has no finished recording of gone; no GIF of it');
+    // Only the kept scenario's videos are cut: swipe, before and after.
+    expect(asked('ffmpeg').filter((x) => x.includes('[cut]'))).toHaveLength(2);
+
+    // A run with none of them starts nothing on main.
+    world.asked = [];
+    await expect(
+      main(['7', '--out', out, '--after-run', '11', '--head', head, '--only', 'gone'], {
+        root: '/app',
+        settings,
+      }),
+    ).rejects.toThrow('The PR run recorded no GIF scenarios');
+    expect(asked('gh').some((x) => x.includes('POST'))).toBe(false);
   });
 
   it('skips the before for a new screen, asks again without run details, warns of a link that fails', async () => {

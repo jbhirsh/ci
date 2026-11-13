@@ -4,6 +4,14 @@
 // in), git, unzip and ffmpeg.
 //
 //   node ../ci/gif/cli.mjs <pr> [--side-by-side] [--no-before] [--width <px>] [--fps <n>] [--repo owner/name] [--out <dir>]
+//                          [--after-run <id>] [--head <sha>] [--only <names>]
+//
+// The last three are pr-gif-attach.yml's, which runs this once the PR's CI
+// run has finished: --after-run takes that run for "after" rather than
+// searching for the head's and waiting on it; --head is the commit whose
+// scenarios both runs play (the one that run recorded), rather than the PR's
+// head as it is now, which a push may have moved; --only keeps just the
+// named scenarios (comma-separated), the ones the PR changes.
 //
 // What it reads from the `gif.videos` setting (settings.mjs): the workflow
 // that records (`workflow`), the artifact it uploads, one <scenario>.mp4 per
@@ -98,6 +106,9 @@ const log = (line) => process.stderr.write(`${line}\n`);
  * @property {number} fps
  * @property {boolean} noBefore skip the "before" run: a new screen has nothing on main to compare
  * @property {string} [out] leave the GIFs in this folder, one subfolder a scenario, rather than publish them
+ * @property {number} [afterRun] the run whose videos are "after", rather than the head's newest
+ * @property {string} [head] the commit whose scenarios are played, rather than the PR's head
+ * @property {string[]} [only] just these scenarios, rather than every one the run recorded
  */
 
 /**
@@ -138,6 +149,17 @@ export function parseVideoArgs(argv, defaults) {
       const dir = argv[++i];
       if (!dir || dir.startsWith('-')) throw new Error('--out needs a folder');
       options.out = dir;
+    } else if (arg === '--after-run') options.afterRun = number(arg, argv[++i]);
+    else if (arg === '--head') {
+      const sha = argv[++i];
+      if (!sha || !/^[0-9a-f]{40}$/.test(sha)) throw new Error('--head needs a full commit SHA');
+      options.head = sha;
+    } else if (arg === '--only') {
+      const names = (argv[++i] ?? '').split(',').filter(Boolean);
+      if (names.length === 0 || names.some((n) => !/^\w[\w.-]*$/.test(n))) {
+        throw new Error('--only needs scenario names, comma-separated');
+      }
+      options.only = names;
     } else if (arg === '--repo') {
       const repo = argv[++i];
       if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error('--repo needs owner/name');
@@ -597,25 +619,45 @@ export async function main(argv, { root, settings }) {
     );
   }
   const { pr } = options;
-  /** @type {{ head: { sha: string } }} */
-  const pull = ghJson([`repos/${repo}/pulls/${pr}`]);
-  const head = pull.head.sha;
+  const head =
+    options.head ??
+    /** @type {{ head: { sha: string } }} */ (ghJson([`repos/${repo}/pulls/${pr}`])).head.sha;
   const work = mkdtempSync(path.join(tmpdir(), `pr-gifs-${pr}-`));
   try {
     log(`PR #${pr} at ${head.slice(0, 7)}: waiting for its ${videos.workflow} run (after)…`);
-    const afterId = (await afterRun(repo, videos.workflow, head)).id;
+    const afterId = options.afterRun ?? (await afterRun(repo, videos.workflow, head)).id;
+    const { only } = options;
+    /**
+     * The after run's videos and the scenarios to make, once it's done.
+     *
+     * @param {Run} done
+     */
+    const takeAfter = (done) => {
+      const recorded = downloadVideos(
+        repo,
+        done.id,
+        videos.artifact,
+        mkdtempSync(path.join(work, 'after-')),
+      );
+      for (const name of (only ?? []).filter((n) => !recorded[n])) {
+        log(`  warning: run ${done.id} has no finished recording of ${name}; no GIF of it`);
+      }
+      const names = Object.keys(recorded)
+        .filter((name) => !only || only.includes(name))
+        .sort();
+      if (names.length === 0) throw new Error('The PR run recorded no GIF scenarios');
+      return { done, recorded, names };
+    };
+    // A given run has finished: its videos first, so a run with none of
+    // them starts nothing on main.
+    const early = options.afterRun ? takeAfter(await waitForRun(repo, afterId)) : null;
     const beforeId = options.noBefore ? null : (await beforeRun(repo, videos, head)).id;
     if (beforeId) log(`Recording the same scenarios on main: run ${beforeId} (before)…`);
-    const [afterDone, beforeDone] = await Promise.all([
-      waitForRun(repo, afterId),
+    const [after, beforeDone] = await Promise.all([
+      early ?? waitForRun(repo, afterId).then(takeAfter),
       beforeId ? waitForRun(repo, beforeId) : Promise.resolve(null),
     ]);
-    const afterVideos = downloadVideos(
-      repo,
-      afterDone.id,
-      videos.artifact,
-      mkdtempSync(path.join(work, 'after-')),
-    );
+    const { done: afterDone, recorded: afterVideos, names } = after;
     const beforeVideos = beforeDone
       ? downloadVideos(
           repo,
@@ -624,14 +666,13 @@ export async function main(argv, { root, settings }) {
           mkdtempSync(path.join(work, 'before-')),
         )
       : {};
-    const names = Object.keys(afterVideos).sort();
-    if (names.length === 0) throw new Error('The PR run recorded no GIF scenarios');
 
-    // Cut each recording's waits for the test driver, found by its drawn touches.
+    // Cut each recording's waits for the test driver, found by its drawn
+    // touches: only the scenarios kept.
     for (const recorded of [afterVideos, beforeVideos]) {
-      for (const [name, video] of Object.entries(recorded)) {
+      for (const name of names.filter((n) => recorded[n])) {
         try {
-          recorded[name] = await cutWaits(video, ring);
+          recorded[name] = await cutWaits(recorded[name], ring);
         } catch (err) {
           log(
             `  warning: ${name}: cutting its waits failed (${err instanceof Error ? err.message : err}); keeping it whole`,
