@@ -5,8 +5,9 @@ description: >-
   (from-run.mjs's header says how): for an app whose screenshots no Linux
   runner can take, sift's on the iOS Simulator. The only step of the app's
   by-hand visual-baselines.yml after its checkout; the job needs contents
-  write and actions read. The Actions token's push starts no workflow, so
-  push again afterwards for the PR's checks to run on the new baselines.
+  write and actions read. The Actions token's push does start the PR's
+  workflows, but each waits for a maintainer to approve it on the PR, then
+  runs as github-actions[bot].
 
 inputs:
   github-token:
