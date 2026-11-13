@@ -183,16 +183,35 @@ export function setupProblems(setup) {
 }
 
 /**
+ * Whether a file's name (no folder) is one of an app's scenarios: for a web
+ * app, a .ts, .mjs or .js module that isn't a test or a type declaration;
+ * for an app whose CI records videos (sift), a Maestro flow ending .yaml,
+ * the only flows its recorder plays (sift's scripts/take-gifs.sh takes
+ * e2e/gifs/*.yaml), so a .yml file there is never one.
+ * scenarioFiles and workflow.mjs's changedScenarios (which scenarios a PR
+ * changes) both ask this, so the two never disagree.
+ *
+ * @param {string} name
+ * @param {'web' | 'ci-videos'} [source]
+ */
+export function isScenarioFile(name, source = 'web') {
+  if (source === 'ci-videos') return /^[^/]+\.yaml$/.test(name);
+  return /^[^/]+\.(ts|mjs|js)$/.test(name) && !/\.(test|d)\.(ts|mjs|js)$/.test(name);
+}
+
+/**
  * The scenario files in `dir` (from the app's root): its .ts and .mjs files
- * whose default export is meant to be a scenario. A helper module beside
- * them (no default export) is left out by selftest.mjs once loaded.
+ * whose default export is meant to be a scenario (isScenarioFile). A helper
+ * module beside them (no default export) is left out by selftest.mjs once
+ * loaded.
  *
  * @param {string} dir
  * @param {string} root
+ * @param {'web' | 'ci-videos'} [source]
  */
-export function scenarioFiles(dir, root) {
+export function scenarioFiles(dir, root, source = 'web') {
   return readdirSync(path.join(root, dir))
-    .filter((file) => /\.(ts|mjs|js)$/.test(file) && !/\.(test|d)\.(ts|mjs|js)$/.test(file))
+    .filter((file) => isScenarioFile(file, source))
     .sort()
     .map((file) => path.join(dir, file));
 }

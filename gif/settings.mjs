@@ -15,7 +15,12 @@
 //              stubbing its API or reading production's data (see cli.mjs's
 //              header for what it exports). Loaded like a scenario.
 //   scenarios  the folder of the app's scenarios, from its root (none by
-//              default), for selftest.mjs to load each and check its shape.
+//              default): for a web app, its modules (scenario.mjs), which
+//              selftest.mjs loads and checks; for "ci-videos", its Maestro
+//              flows (sift's e2e/gifs), which its CI records. Either way, a
+//              PR that adds or changes a file directly in it gets that
+//              scenario's GIFs recorded and attached on its own
+//              (pr-gif.yml, pr-gif-attach.yml); unset, nothing is automatic.
 //   viewport   the browser window a scenario gets unless it names one, in
 //              CSS pixels: a phone's, 402 x 874 (the newest iPhone Pro's), by
 //              default.
