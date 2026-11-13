@@ -297,7 +297,7 @@ describe('main', () => {
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 if (args[0] === '--version') { console.log(${JSON.stringify(`gh version ${version} (2026-09-01)`)}); process.exit(0); }
-if (args[1] === 'view') { console.log(fs.readFileSync(${JSON.stringify(state)}, 'utf8')); process.exit(0); }
+if (args[1] === 'view') { console.log(JSON.stringify({ body: fs.readFileSync(${JSON.stringify(state)}, 'utf8'), headRefOid: 'a'.repeat(40) })); process.exit(0); }
 let body = fs.readFileSync(args[args.indexOf('--body-file') + 1], 'utf8');
 args.forEach((arg, i) => {
   if (args[i - 1] === '--attach') body = body.replaceAll('](' + arg + ')', '](https://github.com/user-attachments/assets/id-' + i + ')');
