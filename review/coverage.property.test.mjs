@@ -84,4 +84,31 @@ describe('filesToRead and unreadFiles', () => {
       }),
     );
   });
+
+  it('a listing of the PR covers exactly the deleted files, never a kept one', () => {
+    fc.assert(
+      fc.property(
+        fc
+          .uniqueArray(path)
+          .chain((files) =>
+            fc.tuple(
+              fc.constant(files),
+              fc.subarray(files),
+              fc.constantFrom('--name-status', '--summary'),
+            ),
+          ),
+        ([files, removed, flag]) => {
+          const listing = [
+            {
+              name: 'Bash',
+              input: { command: `git diff ${flag} -M origin/main...HEAD` },
+              result: '',
+            },
+          ];
+          const unread = unreadFiles(files, listing, { repoDir: '/r', removed });
+          expect(unread).toEqual(filesToRead(files).filter((f) => !removed.includes(f)));
+        },
+      ),
+    );
+  });
 });

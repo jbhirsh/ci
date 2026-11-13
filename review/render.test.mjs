@@ -88,6 +88,17 @@ describe('renderPrompt', () => {
       "every commit of a bot's PR, one whose author is `dependabot[bot]` or\n    whose head branch starts with `dependabot/` or `bot/`.",
     );
   });
+  it('lets a deleted file be covered by its listing, but still asks why a test went', () => {
+    const prompt = renderPrompt('review', none, run);
+    expect(prompt).toContain(
+      'A file the PR deletes\n   (`D` in `--name-status`) is covered by that line',
+    );
+    expect(prompt).toContain('now\n   untested (a test deleted to get a failure through)');
+    expect(prompt).toContain('saying of each deleted test what it covered and why it could go');
+    expect(renderPrompt('followup', none, run)).toContain(
+      'a test file\ndeleted while the code it tested stays',
+    );
+  });
   it('points the review at the shared Claude rules, which a file read of CLAUDE.md misses', () => {
     expect(renderPrompt('review', none, run)).toContain('SHARED_CI/claude-rules/CLAUDE.md');
     expect(renderPrompt('followup', none, run)).toContain(`${CI_DIR}/claude-rules/CLAUDE.md`);

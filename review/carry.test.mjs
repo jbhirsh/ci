@@ -329,6 +329,9 @@ describe('summaryNote', () => {
     const carried = { ...p, carried: { 'a.ts': { patchId: SHA1, sha: SHA2 } } };
     expect(summaryNote(carried)).toContain('1 of 2 changed file(s) carried over');
     expect(summaryNote(carried)).toContain('- `a.ts`, read at bbbbbbb');
+    expect(summaryNote(carried, 4)).toContain(
+      '1 to read (and 4 deleted, which a listing of the diff covers):',
+    );
   });
 });
 
@@ -346,6 +349,7 @@ describe('main', () => {
     expect(main('plan', env, root)).toEqual({
       note: 'Claude Review: all 2 changed file(s) to be read.',
       carried: [],
+      removed: [],
     });
     main('save', env, root);
     const saved = parseRecord(readFileSync(env.RECORD, 'utf8'));
@@ -363,6 +367,25 @@ describe('main', () => {
     const env = { RECORD: path.join(dir, 'record.json'), PLAN: path.join(dir, 'plan.json') };
     writeFileSync(env.RECORD, '{"version": 1, "context": "x", "files": {}}garbage');
     expect(main('plan', env, root).carried).toEqual([]);
+  });
+
+  it('leaves out the files the PR deletes, which a listing covers', () => {
+    const root = prApp();
+    git(root, 'rm', '-q', '--', 'c.ts');
+    git(root, 'commit', '-q', '--no-gpg-sign', '-m', 'rm');
+    // A rename isn't a deletion: its new path is read as any other file.
+    git(root, 'mv', 'a.ts', 'moved.ts');
+    git(root, 'commit', '-q', '--no-gpg-sign', '-m', 'mv');
+    expect(changedFiles({ root, base: 'main', deleted: true })).toEqual(['c.ts']);
+    expect(changedFiles({ root, base: 'main' })).toContain('c.ts');
+    const dir = mkdtempSync(path.join(tmpdir(), 'carry-'));
+    const env = { RECORD: path.join(dir, 'record.json'), PLAN: path.join(dir, 'plan.json') };
+    expect(main('plan', env, root)).toEqual({
+      note: 'Claude Review: all 2 changed file(s) to be read (and 1 deleted, which a listing of the diff covers).',
+      carried: [],
+      removed: ['c.ts'],
+    });
+    expect(Object.keys(readPlan(env.PLAN)?.patchIds ?? {})).toEqual(['b.ts', 'moved.ts']);
   });
 
   it("leaves out the app's skip globs", () => {

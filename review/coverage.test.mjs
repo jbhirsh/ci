@@ -402,6 +402,109 @@ describe('carried-over files', () => {
   });
 });
 
+describe('deleted files', () => {
+  const files = ['src/a.ts', 'src/gone.ts', 'src/old.test.ts'];
+  const removed = ['src/gone.ts', 'src/old.test.ts'];
+  /** What the calls count as read, with gone.ts and old.test.ts deleted. */
+  const covered = (/** @type {ToolCall[]} */ ...calls) => {
+    const unread = new Set(unreadFiles(files, calls, { repoDir: REPO, removed }));
+    return files.filter((f) => !unread.has(f));
+  };
+
+  it('are covered by a listing of the PR that shows they went', () => {
+    for (const flags of [
+      '--name-status',
+      '--name-status -M',
+      '--summary -M50%',
+      '--name-status --find-renames=40% -z --no-color',
+      '--name-status --no-renames',
+      '--name-status --diff-filter=D',
+      '--name-status --diff-filter=AMD',
+    ]) {
+      expect(covered(bash(`git diff ${flags} ${RANGE}`)), flags).toEqual(removed);
+    }
+    expect(covered(bash(`cd ${REPO} && git diff --name-status origin/main HEAD`))).toEqual(removed);
+    expect(covered(bash(`cd "${REPO}/" && git diff --name-status ${RANGE}`))).toEqual(removed);
+    expect(covered(bash(`git diff --name-status ${RANGE} -- src/old.test.ts`))).toEqual([
+      'src/old.test.ts',
+    ]);
+    expect(covered(bash(`git diff --summary ${RANGE} -- src/`))).toEqual(removed);
+  });
+
+  it('are still covered by a full read of their diff', () => {
+    expect(covered(bash(`git diff -M ${RANGE} -- src/gone.ts`))).toEqual(['src/gone.ts']);
+  });
+
+  it("aren't covered by a listing that may leave them out, shorten or flip them, or isn't the PR's", () => {
+    for (const command of [
+      `git diff --name-only ${RANGE}`,
+      `git diff --stat ${RANGE}`,
+      `git diff --numstat ${RANGE}`,
+      `git diff --compact-summary ${RANGE}`,
+      `git diff --dirstat ${RANGE}`,
+      `git diff --shortstat ${RANGE}`,
+      `git diff --name-status --stat ${RANGE}`,
+      `git diff --name-status --diff-filter=M ${RANGE}`,
+      `git diff --name-status --diff-filter=d ${RANGE}`,
+      `git diff --name-status --diff-filter=Dd ${RANGE}`,
+      `git diff --name-status --diff-filter ${RANGE}`,
+      `git diff --name-status -Sfoo ${RANGE}`,
+      `git diff --name-status -Gfoo ${RANGE}`,
+      `git diff --name-status --relative=src ${RANGE}`,
+      `git diff --name-status --relative ${RANGE}`,
+      `git diff -R --name-status --diff-filter=D ${RANGE}`,
+      `git diff --name-status --skip-to=src/z ${RANGE}`,
+      `git diff --name-status --quiet ${RANGE}`,
+      `git diff --name-status --exit-code ${RANGE}`,
+      `git diff --name-status -s ${RANGE}`,
+      `git diff --name-status --output=/tmp/x ${RANGE}`,
+      'git diff --name-status',
+      'git diff --name-status HEAD~1 HEAD',
+      `git diff --name-status ${RANGE} -- src/a.ts`,
+      `git diff --name-status ${RANGE} -- ':!src/a.ts'`,
+      `git diff --name-status ${RANGE} | grep D`,
+      `cd api && git diff --name-status ${RANGE} -- .`,
+      `cd /home/runner/work/_actions/jbhirsh/ci/main && git diff --name-status ${RANGE}`,
+      'gh pr diff 307 --name-only',
+      `git log --name-status ${RANGE}`,
+      `git show --name-status HEAD`,
+    ]) {
+      expect(covered(bash(command)), command).toEqual([]);
+    }
+    expect(covered({ ...bash(`git diff --name-status ${RANGE}`), failed: true })).toEqual([]);
+  });
+
+  it('count a cut-off listing only once its saved output was opened', () => {
+    const cut = 'Output too large (80KB). Full output saved to: /tmp/out-9.txt\n\nPreview: D\tx';
+    const listing = bash(`git diff --name-status ${RANGE}`, cut);
+    expect(covered(listing)).toEqual([]);
+    expect(covered(listing, read('/tmp/out-9.txt'))).toEqual(removed);
+  });
+
+  it('are covered only when deleted: a listing reads no kept file', () => {
+    expect(
+      unreadFiles(files, [bash(`git diff --name-status ${RANGE}`)], { repoDir: REPO }),
+    ).toEqual(files);
+  });
+
+  it("run as BoardGames #307's did: the deleted files listed, the rest read", () => {
+    const pr = [
+      'src/data/wishlist.ts',
+      'src/__tests__/useSuggestions.test.tsx',
+      'src/__tests__/useLinkToken.test.tsx',
+      'src/__tests__/mergeWishlist.test.ts',
+      'src/context/GamesContext.tsx',
+    ];
+    const calls = [
+      bash(`git diff --stat -M ${RANGE}`),
+      bash(`git diff --name-status -M ${RANGE}`),
+      bash(`git diff -M ${RANGE} -- src/context/GamesContext.tsx`),
+    ];
+    expect(unreadFiles(pr, calls, { repoDir: REPO })).toEqual(pr.slice(0, 4));
+    expect(unreadFiles(pr, calls, { repoDir: REPO, removed: pr.slice(0, 4) })).toEqual([]);
+  });
+});
+
 describe('main', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'coverage-'));
   const file = (/** @type {string} */ name, /** @type {unknown} */ value) => {
@@ -447,6 +550,30 @@ describe('main', () => {
 
   it('takes the carried-over files from CARRIED', () => {
     expect(main([], 'a.ts\nb.ts\n', { CARRIED: 'b.ts\n\n' }, () => {})).toEqual(['a.ts']);
+  });
+
+  it('takes the deleted files from REMOVED', () => {
+    const listing = file('listing.json', [
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'l',
+              name: 'Bash',
+              input: { command: `git diff --name-status ${RANGE}` },
+            },
+          ],
+        },
+      },
+      {
+        type: 'user',
+        message: { content: [{ type: 'tool_result', tool_use_id: 'l', content: 'D\tb.ts' }] },
+      },
+    ]);
+    expect(main([listing], 'a.ts\nb.ts\n', { REMOVED: 'b.ts\n\n' }, () => {})).toEqual(['a.ts']);
+    expect(main([listing], 'a.ts\nb.ts\n', {}, () => {})).toEqual(['a.ts', 'b.ts']);
   });
 
   it('takes the base branch from BASE_REF', () => {
