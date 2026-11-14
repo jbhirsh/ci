@@ -88,6 +88,11 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
 - **A required workflow has no trigger-level `paths:` filter.** A filtered-out workflow
   never reports, so its required check waits forever. Decide inside the job and skip the
   expensive step: a skipped step or job still passes.
+- **One-off scripts and workflows never go on `main`.** A migration, backfill or cleanup
+  that runs once runs from its own branch. A workflow there uses an `on: push` trigger
+  filtered to that branch, since `workflow_dispatch` only works once the file is on the
+  default branch. Record what it did and its result in the issue, then close any PR for it
+  unmerged and delete the branch. `main` holds only what keeps being used.
 - **Adding or renaming a required job means updating the branch rule.** The rule requires
   checks by job name, so a renamed job is no longer required, and a new one isn't until the
   rule names it; meanwhile bots' PRs auto-merge without it. Update the rule in the same PR.

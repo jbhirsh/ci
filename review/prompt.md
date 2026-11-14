@@ -130,6 +130,11 @@ Treat violations of these as review issues and flag them inline:
     rule applies to it in full, as to a person's;
   - every commit of a bot's PR, one whose author is `dependabot[bot]` or
     whose head branch starts with `dependabot/` or `bot/`.
+- **One-off scripts and workflows.** A migration, backfill or cleanup meant
+  to run once, or a workflow with a one-time trigger, runs from its own
+  branch and never goes on the base branch (shared rules, CI). Flag a PR
+  that adds one, even when the PR is the one-off itself: it is closed
+  unmerged once it has run.
 - **Scripts that commit** (workflows, bots) stage files by name, never
   `git add -A` or `git add .`.
 - DO NOT flag floating GitHub Action version tags (e.g. `@v7`, `@v1`, a
