@@ -1,11 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
+import { ATTACH_LIMIT } from '../lib/attach.mjs';
 import {
-  ATTACH_LIMIT,
   BRANCH_VERCEL_JSON,
   GIF_WARN_BYTES,
   HeadMovedError,
@@ -13,7 +13,6 @@ import {
   attachmentTable,
   blockKeys,
   blockMarkers,
-  ghIn,
   gifNames,
   gitIn,
   markdownTable,
@@ -560,28 +559,6 @@ describe('publishing to attachments', () => {
       "pr-gif: updated #4's description",
       "pr-gif: #4's description needs no change",
     ]);
-  });
-
-  it('runs gh in the given directory', () => {
-    // A fake gh first on PATH: it prints where it ran, and fails on "fail".
-    const bin = mkdtempSync(path.join(tmpdir(), 'pr-gif-bin-'));
-    const fake = path.join(bin, 'gh');
-    writeFileSync(fake, '#!/bin/sh\n[ "$1" = fail ] && { echo nope >&2; exit 1; }\npwd\n');
-    chmodSync(fake, 0o755);
-    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), 'pr-gif-gh-')));
-    const saved = process.env.PATH;
-    process.env.PATH = `${bin}${path.delimiter}${saved}`;
-    try {
-      expect(ghIn(cwd)(['pr', 'view'])).toEqual({ status: 0, stdout: `${cwd}\n`, stderr: '' });
-      expect(ghIn(cwd)(['fail'], { allowFail: true })).toEqual({
-        status: 1,
-        stdout: '',
-        stderr: 'nope\n',
-      });
-      expect(() => ghIn(cwd)(['fail'])).toThrow('gh fail failed: nope');
-    } finally {
-      process.env.PATH = saved;
-    }
   });
 });
 

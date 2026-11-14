@@ -9,8 +9,8 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { ATTACH_MAX_BYTES } from '../lib/attach.mjs';
 import {
-  ATTACH_MAX_BYTES,
   attachmentLinks,
   automaticChange,
   changedScenarios,
@@ -460,7 +460,7 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
     );
   });
 
-  it('stops without a token or GIFs, and on an old gh or an unknown step', async () => {
+  it('stops without a token or GIFs, and on an unknown step', async () => {
     const cwd = folder({ 'pr-gif/sheet/sheet-after.gif': GIF });
     const env = { PR: '12', GH_TOKEN: 'token', GITHUB_REPOSITORY: 'o/r' };
     await expect(main(['attach'], { env: { ...env, GH_TOKEN: '' }, cwd })).rejects.toThrow(
@@ -469,11 +469,6 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
     await expect(main(['attach'], { env, cwd: folder({ 'pr-gif/x.txt': '' }) })).rejects.toThrow(
       'no GIFs in pr-gif/ to attach',
     );
-    fakeGh('2.89.0');
-    await expect(main(['gh'])).rejects.toThrow('install gh ≥ 2.99');
-    await expect(main(['gh'])).rejects.toThrow('yours is 2.89.0');
-    fakeGh('2.99.0');
-    expect(await main(['gh'])).toBe(0);
     await expect(main(['wat'])).rejects.toThrow('usage: node gif/workflow.mjs');
   });
 

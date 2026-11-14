@@ -14,8 +14,10 @@
 // and rewrites the reference to it in place with the uploaded URL
 // (`https://github.com/user-attachments/assets/<id>`; tried in ci#33's
 // trial T1), so there is nothing to read back but a check that none is
-// left local. The description is read just before each edit, so an edit
-// made meanwhile by someone else is kept unless it lands in those seconds.
+// left local (the markers are lib/blocks.mjs's, the upload
+// lib/attach.mjs's). The description is read just before each edit, so an
+// edit made meanwhile by someone else is kept unless it lands in those
+// seconds.
 // The alt text's `GIF:` is what PR visuals counts when its pictures come
 // from the visual baselines (ci#33), since the URL can't say what it
 // holds. Markdown images can't take a width, so `cellWidth` doesn't apply
@@ -34,10 +36,12 @@
 // it (HeadMovedError), so a run for an older push never overwrites a newer
 // one's GIFs; once it has edited, it attaches the rest whatever the head.
 
-import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { attachToDescription } from '../lib/attach.mjs';
+import { blocksFor } from '../lib/blocks.mjs';
+import { commandIn, ghIn } from '../lib/gh.mjs';
 
 /** Over this, a PR description may not show a GIF. */
 export const GIF_WARN_BYTES = 5 * 1024 * 1024;
@@ -148,30 +152,8 @@ export function sizeNote(file, bytes) {
 export const BRANCH_VERCEL_JSON = '{\n  "git": { "deploymentEnabled": false }\n}\n';
 
 /**
- * @typedef {(args: string[], options?: { env?: Record<string, string | undefined>; allowFail?: boolean }) => { status: number | null; stdout: string; stderr: string }} Git
- *   Runs git in the app's checkout.
+ * @typedef {import('../lib/gh.mjs').Command} Git Runs git in the app's checkout.
  */
-
-/**
- * A command run in `cwd`, returning what it printed; a failure throws
- * unless `allowFail`.
- *
- * @param {string} command
- * @param {string} cwd
- * @returns {Git}
- */
-function commandIn(command, cwd) {
-  return (args, { env, allowFail = false } = {}) => {
-    const result = spawnSync(command, args, { cwd, encoding: 'utf8', env });
-    const out = { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
-    if (out.status !== 0 && !allowFail) {
-      throw new Error(
-        `${command} ${args[0]} failed: ${(out.stderr || out.stdout).trim().slice(-800)}`,
-      );
-    }
-    return out;
-  };
-}
 
 /**
  * Git in `root`, returning what it printed; a failure throws unless
@@ -267,8 +249,8 @@ export function publishFiles(git, files, { message, branch, push, log = console.
   }
 }
 
-/** The most files one `gh pr edit --attach` takes, per gh's manual. */
-export const ATTACH_LIMIT = 50;
+/** The scenarios' blocks in a PR's description: `<!-- pr-gif:<scenario> -->`. */
+const blocks = blocksFor('pr-gif', { named: 'a scenario named', where: 'a PR description' });
 
 /**
  * The markers around a scenario's block in the PR's description.
@@ -277,12 +259,7 @@ export const ATTACH_LIMIT = 50;
  *   of which could end the HTML comment the marker is
  */
 export function blockMarkers(key) {
-  if (!/^[^\s<>]+$/.test(key) || key.includes('--')) {
-    throw new Error(
-      `pr-gif: a scenario named ${JSON.stringify(key)} can't mark its block in a PR description; rename it`,
-    );
-  }
-  return { start: `<!-- pr-gif:${key} -->`, end: `<!-- /pr-gif:${key} -->` };
+  return blocks.markers(key);
 }
 
 /**
@@ -294,11 +271,7 @@ export function blockMarkers(key) {
  * @param {string} block the table, without its markers
  */
 export function withBlock(body, key, block) {
-  const { start, end } = blockMarkers(key);
-  const marked = `${start}\n${block}\n${end}`;
-  const found = findBlock(body, key);
-  if (found) return body.slice(0, found.from) + marked + body.slice(found.to);
-  return body.trimEnd() ? `${body.trimEnd()}\n\n${marked}\n` : `${marked}\n`;
+  return blocks.write(body, key, block);
 }
 
 /**
@@ -311,13 +284,7 @@ export function withBlock(body, key, block) {
  * @returns {{ from: number; to: number } | null}
  */
 export function findBlock(body, key) {
-  const { start, end } = blockMarkers(key);
-  for (let from = body.lastIndexOf(start); from !== -1; from = body.lastIndexOf(start, from - 1)) {
-    const to = body.indexOf(end, from);
-    if (to !== -1) return { from, to: to + end.length };
-    if (from === 0) break;
-  }
-  return null;
+  return blocks.find(body, key);
 }
 
 /**
@@ -328,11 +295,7 @@ export function findBlock(body, key) {
  * @param {string} key
  */
 export function withoutBlock(body, key) {
-  const found = findBlock(body, key);
-  if (!found) return body;
-  const head = body.slice(0, found.from).trimEnd();
-  const tail = body.slice(found.to).replace(/^\n+/, '');
-  return head && tail ? `${head}\n\n${tail}` : head || tail;
+  return blocks.remove(body, key);
 }
 
 /**
@@ -341,15 +304,7 @@ export function withoutBlock(body, key) {
  * @param {string} body
  */
 export function blockKeys(body) {
-  const keys = [...body.matchAll(/<!-- pr-gif:([^\s<>]+) -->/g)].map((m) => m[1]);
-  return [...new Set(keys)].filter((key) => {
-    try {
-      return findBlock(body, key) !== null;
-    } catch {
-      // A name no marker of ours could hold (`--`): someone else's comment.
-      return false;
-    }
-  });
+  return blocks.keys(body);
 }
 
 /** A "Not updated" note at the start of a block's first line. */
@@ -464,17 +419,6 @@ export function attachmentTable(scenario, { base = 'main' } = {}) {
  * @typedef {Git} Gh Runs gh in the directory the GIFs' paths are relative to.
  */
 
-/**
- * gh in `cwd`, returning what it printed; a failure throws unless
- * `allowFail`.
- *
- * @param {string} cwd
- * @returns {Gh}
- */
-export function ghIn(cwd) {
-  return commandIn('gh', cwd);
-}
-
 /** The PR's head moved past the commit the GIFs were recorded for. */
 export class HeadMovedError extends Error {}
 
@@ -522,53 +466,19 @@ export function attachToPr({
     return body;
   };
   const was = read();
-  let body = change(was);
-  if (files.length === 0 && body === was) {
-    log(`pr-gif: #${pr}'s description needs no change`);
-    return was;
-  }
-  const bodyFile = path.join(cwd, `.pr-gif-body-${pr}.md`);
-  try {
-    // One edit at least: a change with nothing to attach (a block dropped).
-    for (let i = 0; i < Math.max(files.length, 1); i += ATTACH_LIMIT) {
-      // Once the first edit is in, the rest must follow, or its local
-      // references would stay: no head check.
-      if (i > 0) body = view().body;
-      writeFileSync(bodyFile, body);
-      const batch = files.slice(i, i + ATTACH_LIMIT);
-      try {
-        gh([
-          'pr',
-          'edit',
-          pr,
-          '--repo',
-          repo,
-          '--body-file',
-          bodyFile,
-          ...batch.flatMap((file) => ['--attach', `./${file}`]),
-        ]);
-      } catch (error) {
-        throw new Error(
-          `pr-gif: attaching to #${pr} stopped after ${i} of ${files.length} GIFs; its description may still reference the rest locally (./…): run it again to attach them`,
-          { cause: error },
-        );
-      }
-    }
-  } finally {
-    rmSync(bodyFile, { force: true });
-  }
-  // The edits are made: a push since doesn't matter to this read.
-  const after = view().body;
-  const local = files.filter((file) => after.includes(`](./${file})`));
-  if (local.length > 0) {
-    throw new Error(
-      `pr-gif: gh uploaded the GIFs but left ${local.join(', ')} referenced locally in #${pr}'s description: gh's --attach no longer rewrites references as attachToPr expects (gif/publish.mjs)`,
-    );
-  }
-  log(
-    files.length > 0
-      ? `pr-gif: attached ${files.length} GIF${files.length === 1 ? '' : 's'} to #${pr}'s description`
-      : `pr-gif: updated #${pr}'s description`,
-  );
-  return after;
+  // Once the first edit is in, the rest must follow, or its local
+  // references would stay: no head check after it.
+  return attachToDescription({
+    repo,
+    pr,
+    cwd,
+    files,
+    was,
+    body: change(was),
+    view: () => view().body,
+    gh,
+    prefix: 'pr-gif',
+    noun: 'GIF',
+    log,
+  });
 }
