@@ -1,0 +1,120 @@
+name: Migrate pictures
+description: >-
+  One or more steps of moving an app's old PR pictures off its picture
+  branch to GitHub attachments and rewriting every link to them (ci#33):
+  takes the state an earlier run left as its migrate-pictures-state
+  artifact, runs the steps (migrate-pictures/cli.mjs; steps.mjs's header
+  says what each reads and writes), and leaves the state, with the steps'
+  reports, as this run's artifact, even when a step fails or runs out of
+  time. A one-off, never on main: each app runs it from a throwaway
+  migrate-pictures branch of its own, whose workflow uses
+  jbhirsh/ci/migrate-pictures@migrate-pictures on a push to that branch.
+
+inputs:
+  step:
+    description: >-
+      inventory, plan, upload, rewrite, verify or undo; or several,
+      separated by spaces, run in that order in this one job (the dry run's
+      "inventory plan"), stopping at the first that fails.
+    required: true
+  from-run:
+    description: >-
+      The id of the run whose state this step continues (the run before it);
+      empty for inventory, which starts one.
+    default: ""
+  host-pr:
+    description: >-
+      upload: the PR whose description takes the attachments, replaced each
+      batch, so a throwaway PR of the token's owner (a closed trial PR, or a
+      draft). plan: named in the report.
+    default: ""
+  repos:
+    description: >-
+      The repositories whose posts are read, owner/name separated by spaces
+      or commas; empty for all four that share this CI.
+    default: ""
+  include-others:
+    description: >-
+      plan: "true" to also rewrite posts by people other than the
+      repository's owner and bots, which the plan otherwise lists and leaves.
+    default: "false"
+  token:
+    description: >-
+      The app's BOT_PR_TOKEN: a person's fine-grained token with Contents,
+      Pull requests and Issues read and write on the app. GitHub refuses
+      the Actions token for attachments, and Issues write is what edits
+      issue bodies and comments.
+    required: true
+  github-token:
+    description: Reads the earlier run's artifact (actions read).
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    # A re-run would start again from from-run's state and drop what the
+    # failed attempt saved (its uploads, its originals), so each run starts
+    # from the run before it, set as from-run in a new push.
+    - name: Not a re-run
+      shell: bash
+      run: |
+        if [ "$GITHUB_RUN_ATTEMPT" != 1 ]; then
+          echo "::error::Don't re-run a migrate-pictures run: push again with from-run $GITHUB_RUN_ID, which keeps what this run saved."
+          exit 1
+        fi
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: The state so far
+      if: inputs.from-run != ''
+      uses: actions/download-artifact@v8
+      with:
+        name: migrate-pictures-state
+        path: state
+        run-id: ${{ inputs.from-run }}
+        github-token: ${{ inputs.github-token }}
+
+    # `--attach` came in gh 2.99 (lib/gh.mjs); an image whose gh lags
+    # upgrades from the runner's own signed apt source, as gif/attach does.
+    - name: A gh that can attach
+      if: contains(inputs.step, 'upload')
+      shell: bash
+      run: |
+        node "$GITHUB_ACTION_PATH/../gif/workflow.mjs" gh || {
+          sudo apt-get update -q && sudo apt-get install -y -q --only-upgrade gh
+          node "$GITHUB_ACTION_PATH/../gif/workflow.mjs" gh
+        }
+
+    - name: Run the step
+      shell: bash
+      env:
+        STEPS: ${{ inputs.step }}
+        HOST_PR: ${{ inputs.host-pr }}
+        REPOS: ${{ inputs.repos }}
+        INCLUDE_OTHERS: ${{ inputs.include-others }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        args=(--repo "$GITHUB_REPOSITORY" --state state)
+        if [ -n "$HOST_PR" ]; then args+=(--host "$HOST_PR"); fi
+        if [ -n "$REPOS" ]; then args+=(--repos "$REPOS"); fi
+        if [ "$INCLUDE_OTHERS" = true ]; then args+=(--include-others); fi
+        for step in $STEPS; do
+          echo "::group::$step"
+          node "$GITHUB_ACTION_PATH/cli.mjs" "$step" "${args[@]}" || { code=$?; echo "::endgroup::"; exit "$code"; }
+          echo "::endgroup::"
+        done
+
+    # Even after a failure or a timeout, so a stopped step's progress (the
+    # uploads in mapping.jsonl, the originals in posts/) is never lost. Kept
+    # 90 days, GitHub's most: download the last run's state and keep it,
+    # pictures.bundle above all, before then.
+    - name: Keep the state for the next step
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: migrate-pictures-state
+        path: state
+        retention-days: 90
+        if-no-files-found: ignore
