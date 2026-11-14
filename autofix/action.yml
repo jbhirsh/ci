@@ -25,13 +25,12 @@
 #     commits folded into the commits they fix (review-fix.md), and resolve
 #     those threads. One round per head, two per PR.
 # A fixer whose Claude step crashed before taking a turn (a timeout setting
-# it up) is tried once more in the same job, after a wait; one that ran and
-# failed isn't, but says so on the PR (crash.mjs).
+# it up) is tried once more in the same job, straight away; one that ran
+# and failed isn't, but says so on the PR (crash.mjs).
 # Before either, on a Dependabot npm bump, it turns auto-merge on, once
 # per PR (../dependabot-merge/enable.mjs), whatever its labels say: a run
 # here puts no check on the PR, where a workflow of its own would.
-# Nothing polls: the completions are the clock. The one wait is before a
-# crashed fixer's retry, when no completion is left to wake a later run.
+# Nothing polls or waits: the completions are the clock.
 # Each fixer proves its fix before pushing with the app's own commands, the
 # steps of its CI that can run here (`autofix` in `.github/ci.json`,
 # settings.mjs and commands.mjs), read from the default branch. A person's
@@ -288,7 +287,7 @@ runs:
     # doing anything (a timeout setting the step up) would spend the head's
     # one attempt with nothing to show and nothing left to wake another run.
     # crash.mjs tells that apart from a fixer that ran and failed: only a
-    # crash is tried again, once, after a wait; a run that failed was the
+    # crash is tried again, once and at once; a run that failed was the
     # attempt. A push before the failure starts new runs on the new head.
     - name: Decide whether to retry the CI fixer
       id: ci-retry
@@ -436,8 +435,8 @@ runs:
           --max-turns 80
           --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
 
-    # As for the CI fixer above: a crash is tried once more, a run that
-    # failed was the round, and the last failure is said on the PR.
+    # As for the CI fixer above: a crash is tried once more, at once, a run
+    # that failed was the round, and the last failure is said on the PR.
     - name: Decide whether to retry the review fixer
       id: review-retry
       if: steps.review-fix.outcome == 'failure'
