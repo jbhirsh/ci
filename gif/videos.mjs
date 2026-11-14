@@ -26,7 +26,9 @@
 // 2. "Before": runs the workflow by hand on main with those inputs and the
 //    PR's head as the scenarios' commit, so the same steps play against
 //    main's app, and takes that run's artifact (unless --no-before, for a
-//    screen main doesn't have).
+//    screen main doesn't have). A run GitHub won't name is the oldest run by
+//    hand on main since, that finishes with the artifact (beforeRun), so
+//    another run by hand, such as sift's mockup run, is never "before".
 // 3. Turns each video into a GIF (video.mjs): the waits between touches cut,
 //    idle ends trimmed, still frames dropped at real timing, scaled sharp.
 //    --side-by-side also joins each pair into one labelled GIF playing in
@@ -236,6 +238,19 @@ export async function waitForRun(repo, runId) {
 }
 
 /**
+ * The run's artifact of that name, if it has one.
+ *
+ * @param {string} repo
+ * @param {number} runId
+ * @param {string} name
+ */
+function artifactOf(repo, runId, name) {
+  /** @type {{ artifacts: { id: number; name: string }[] }} */
+  const { artifacts } = ghJson([`repos/${repo}/actions/runs/${runId}/artifacts`]);
+  return artifacts.find((a) => a.name === name);
+}
+
+/**
  * Downloads a run's videos into `into`: { scenario: file }. A scenario that
  * stopped before its last step (set aside in failed/) is warned of and left
  * out.
@@ -247,9 +262,7 @@ export async function waitForRun(repo, runId) {
  * @returns {Record<string, string>}
  */
 export function downloadVideos(repo, runId, artifactName, into) {
-  /** @type {{ artifacts: { id: number; name: string }[] }} */
-  const { artifacts } = ghJson([`repos/${repo}/actions/runs/${runId}/artifacts`]);
-  const artifact = artifacts.find((a) => a.name === artifactName);
+  const artifact = artifactOf(repo, runId, artifactName);
   if (!artifact) throw new Error(`Run ${runId} has no ${artifactName} artifact`);
   const zip = path.join(into, 'videos.zip');
   // Binary: straight to a file, not through a string.
@@ -303,12 +316,22 @@ export async function afterRun(repo, workflow, sha) {
 const dispatchRuns = (repo, workflow) =>
   /** @type {{ workflow_runs: Run[] }} */ (
     ghJson([
-      `repos/${repo}/actions/workflows/${workflow}/runs?event=workflow_dispatch&branch=main&per_page=5`,
+      `repos/${repo}/actions/workflows/${workflow}/runs?event=workflow_dispatch&branch=main&per_page=30`,
     ])
   ).workflow_runs;
 
 /**
  * Runs the workflow by hand on main, recording the PR's scenarios only.
+ *
+ * GitHub names the run it started, when asked. If it won't, the run is
+ * found among the runs by hand on main started since, but another kind of
+ * run by hand may be among them: sift's mockup runs (ci#60) build a patch
+ * and record no GIF videos, and the runs API doesn't return a run's
+ * inputs. So each poll reads every run by hand on main since (up to 30,
+ * newest first), and the run taken is the oldest that has finished holding
+ * the videos artifact; one that finished without it is passed over, and
+ * while none has, it waits on them all, up to one limit for the whole
+ * search. A mockup run can never be "before".
  *
  * @param {string} repo
  * @param {import('./settings.mjs').VideoSettings} videos
@@ -341,14 +364,35 @@ export async function beforeRun(repo, videos, sha) {
   const answer = reply.stdout.trim() ? JSON.parse(reply.stdout) : {};
   const named = answer.workflow_run_id;
   if (typeof named === 'number') return { id: named };
+  /** @type {Set<number>} */
+  const passedOver = new Set();
+  let seen = false;
   for (const startedAt = Date.now(); ;) {
-    const found = dispatchRuns(repo, videos.workflow)
-      .filter((r) => r.id > newestBefore)
-      .sort((a, b) => a.id - b.id)[0];
-    if (found) return found;
-    if (Date.now() - startedAt > timing.startLimitMs)
-      throw new Error('The run on main never started');
-    await sleep(Math.min(5000, timing.pollMs));
+    const fresh = dispatchRuns(repo, videos.workflow)
+      .filter((r) => r.id > newestBefore && !passedOver.has(r.id))
+      .sort((a, b) => a.id - b.id);
+    seen ||= fresh.length > 0;
+    let unfinished = 0;
+    for (const listed of fresh) {
+      /** @type {Run} */
+      const r = listed.status ? listed : ghJson([`repos/${repo}/actions/runs/${listed.id}`]);
+      if (r.status !== 'completed') {
+        unfinished += 1;
+        continue;
+      }
+      if (artifactOf(repo, r.id, videos.artifact)) return r;
+      log(`  run ${r.id} on main has no ${videos.artifact}: not the one started here`);
+      passedOver.add(r.id);
+    }
+    const waited = Date.now() - startedAt;
+    if (!seen && waited > timing.startLimitMs) throw new Error('The run on main never started');
+    if (waited > timing.waitLimitMs) {
+      throw new Error(
+        `No run by hand on main since this started finished with ${videos.artifact} within ${timing.waitLimitMs / 3_600_000} h`,
+      );
+    }
+    if (unfinished > 0) log(`  waiting on ${unfinished} run(s) by hand on main…`);
+    await sleep(seen ? timing.pollMs : Math.min(5000, timing.pollMs));
   }
 }
 

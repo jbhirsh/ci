@@ -412,3 +412,72 @@ describe('main', () => {
     );
   });
 });
+
+describe('beforeRun, when GitHub won’t name the run it started', () => {
+  const runs = 'repos/jbhirsh/sift/actions/workflows/ci.yml/runs?event=workflow_dispatch';
+
+  it('passes over a run by hand without the videos, such as a mockup run', async () => {
+    world.dispatchError = 'HTTP 422';
+    world.api[runs] = [{ workflow_runs: [{ id: 5 }] }, { workflow_runs: [{ id: 13 }, { id: 12 }] }];
+    // 12, a mockup run, finished with no GIF videos; 13, this one, records them.
+    world.api['repos/jbhirsh/sift/actions/runs/12/artifacts'] = {
+      artifacts: [{ id: 9, name: 'ios-screenshots' }],
+    };
+    world.api['repos/jbhirsh/sift/actions/runs/13/artifacts'] = {
+      artifacts: [{ id: 103, name: 'ios-gif-videos' }],
+    };
+    world.api['repos/jbhirsh/sift/actions/runs/13'] = [
+      { id: 13, status: 'queued' },
+      { id: 13, status: 'completed', conclusion: 'success' },
+    ];
+    const found = await videos.beforeRun('jbhirsh/sift', settings.videos, 'abc');
+    expect(found.id).toBe(13);
+    expect(logged()).toContain('run 12 on main has no ios-gif-videos: not the one started here');
+    expect(logged()).toContain('waiting on 1 run(s) by hand on main…');
+  });
+
+  it('takes a newer finished run with the videos past an older one still queued', async () => {
+    world.dispatchError = 'HTTP 422';
+    // The list says each run's status: 12, a queued mockup, is ahead of 13.
+    world.api[runs] = [
+      { workflow_runs: [{ id: 5 }] },
+      {
+        workflow_runs: [
+          { id: 13, status: 'completed', conclusion: 'success' },
+          { id: 12, status: 'queued' },
+        ],
+      },
+    ];
+    world.api['repos/jbhirsh/sift/actions/runs/13/artifacts'] = {
+      artifacts: [{ id: 103, name: 'ios-gif-videos' }],
+    };
+    const found = await videos.beforeRun('jbhirsh/sift', settings.videos, 'abc');
+    expect(found.id).toBe(13);
+    // Read from the list: no run of its own was asked for.
+    expect(asked('gh').some((a) => a.includes('repos/jbhirsh/sift/actions/runs/12'))).toBe(false);
+    expect(asked('gh').some((a) => a.some((x) => x.includes('per_page=30')))).toBe(true);
+  });
+
+  it('gives up after one limit for the whole search, naming no run', async () => {
+    Object.assign(timing, { waitLimitMs: 5, startLimitMs: 5 });
+    world.dispatchError = 'HTTP 422';
+    world.api[runs] = [
+      { workflow_runs: [{ id: 5 }] },
+      { workflow_runs: [{ id: 12, status: 'completed', conclusion: 'success' }] },
+      {
+        workflow_runs: [
+          { id: 14, status: 'in_progress' },
+          { id: 12, status: 'completed', conclusion: 'success' },
+        ],
+      },
+    ];
+    world.api['repos/jbhirsh/sift/actions/runs/12/artifacts'] = { artifacts: [] };
+    const error = await videos.beforeRun('jbhirsh/sift', settings.videos, 'abc').catch((e) => e);
+    expect(String(error)).toContain(
+      'No run by hand on main since this started finished with ios-gif-videos within',
+    );
+    expect(String(error)).not.toMatch(/Run \d+/);
+    // 12 is passed over once, not each poll.
+    expect(logged().match(/run 12 on main has no/g)).toHaveLength(1);
+  });
+});

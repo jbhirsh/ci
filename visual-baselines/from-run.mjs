@@ -4,9 +4,10 @@
 // its `artifact.name`, puts its PNGs in the baselines folder (settings.mjs)
 // and commits what changed (baselines.mjs).
 //
-// A baseline the run didn't take stops it: a screenshot job that stopped
-// early must not delete baselines. To drop a screen, delete its baseline in
-// the PR by hand.
+// A run by hand on main is never taken: it may have built a patch that's on
+// no branch (sift's mockup run, ci#60). A baseline the run didn't take
+// stops it: a screenshot job that stopped early must not delete baselines.
+// To drop a screen, delete its baseline in the PR by hand.
 //
 // With `verify` set, the rewrite is all-or-nothing instead (carry.mjs): it
 // waits for the head commit's checks, adds the baselines to that commit and
@@ -43,7 +44,11 @@ export function shots(dir) {
 /**
  * Downloads `name` from the newest finished run of `workflow` on `sha` that
  * has it (a run that failed on E2E still has its screenshots; a newer one
- * that skipped them doesn't), returning the run's id.
+ * that skipped them doesn't), returning the run's id. A run by hand on
+ * main is passed over: it may have built a patch that's on no branch
+ * (sift's `mockup_patch`, ci#60), whose screenshots must never become
+ * baselines. A run by hand on another branch counts, as a branch with no PR
+ * may have no other.
  *
  * @param {{ run: import('./baselines.mjs').Run, workflow: string, name: string,
  *   sha: string, temp: string }} options
@@ -58,15 +63,18 @@ export function downloadLatest({ run, workflow, name, sha, temp }) {
     sha,
     '--status',
     'completed',
+    // Room for the runs by hand on main passed over.
     '--limit',
-    '10',
+    '30',
     '--json',
-    'databaseId',
+    'databaseId,event,headBranch',
     '--jq',
-    '.[].databaseId',
+    '.[] | "\\(.databaseId) \\(.event) \\(.headBranch)"',
   ])
     .split('\n')
-    .filter(Boolean);
+    .map((line) => line.trim().split(' '))
+    .filter(([id, event, branch]) => id && !(event === 'workflow_dispatch' && branch === 'main'))
+    .map(([id]) => id);
   let last = '';
   for (const id of ids) {
     try {
@@ -80,7 +88,7 @@ export function downloadLatest({ run, workflow, name, sha, temp }) {
     }
   }
   throw new Error(
-    `no finished ${workflow} run on ${sha.slice(0, 7)} has ${name}: run this once one has taken the screenshots${last ? ` (last: ${last.trim()})` : ''}`,
+    `no finished ${workflow} run on ${sha.slice(0, 7)} has ${name}: run this once one has taken the screenshots (a run by hand on main doesn't count)${last ? ` (last: ${last.trim()})` : ''}`,
   );
 }
 
