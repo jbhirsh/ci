@@ -135,6 +135,18 @@ Treat violations of these as review issues and flag them inline:
   branch and never goes on the base branch (shared rules, CI). Flag a PR
   that adds one, even when the PR is the one-off itself: it is closed
   unmerged once it has run.
+- **No fixed-time waits.** Flag a wait a PR adds to CI, scripts or tests
+  (shared rules, CI): a `sleep`, `waitForTimeout`, timer delay,
+  poll-until-deadline loop, settle or quiet period (including a framework
+  settle that always runs to its limit), retry after a pause, rate-limit
+  pacing, a retry of a failed test in CI, or a unit test that sleeps for
+  real rather than using fake timers. Say which replaces it: the event (a
+  workflow trigger, `needs:`), a call that returns when the thing happens,
+  the test framework's condition wait on the end state, or a refusal naming
+  what isn't ready. The shared rule's exceptions are fine: a timeout that
+  only ends a hang, one immediate retry with no pause for a third party's
+  transient error (never our own code), `setTimeout(…, 0)` as a yield in a
+  unit test, and a GIF scenario's hold for the viewer.
 - **Scripts that commit** (workflows, bots) stage files by name, never
   `git add -A` or `git add .`.
 - DO NOT flag floating GitHub Action version tags (e.g. `@v7`, `@v1`, a
