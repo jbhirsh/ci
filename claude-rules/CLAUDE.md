@@ -93,6 +93,37 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
   filtered to that branch, since `workflow_dispatch` only works once the file is on the
   default branch. Record what it did and its result in the issue, then close any PR for it
   unmerged and delete the branch. `main` holds only what keeps being used.
+- **No fixed-time waits.** CI, scripts and tests never pause for a duration we picked so
+  that something else can happen: no `sleep N`, no `waitForTimeout`, no `setTimeout`
+  promise delay, no polling every N seconds up to a deadline, no settle or quiet period
+  (including a framework settle that always runs to its limit), no retry after a pause, no
+  rate-limit pacing (a fixed delay between requests, or sleeping out a `Retry-After`), and
+  no retrying a failed test in CI, such as Playwright's `retries` (a flaky test is a bug).
+  Each is a guess: too short makes a flaky check, too long holds a runner, and either can
+  hide a real bug. Instead:
+  - **React to the event**: a workflow trigger (`deployment_status`, `workflow_run`,
+    `check_suite`) or `needs:`.
+  - **Use a call that returns when the thing happens**: a process's exit, a server's own
+    "listening" line, a log stream read until the line, `simctl bootstatus -b`.
+  - **Use the test framework's condition wait on the end state**, which returns as soon as
+    it holds: Playwright's web-first assertions and `waitFor`, `expect.poll`,
+    `toHaveScreenshot`'s stability check, Maestro's `extendedWaitUntil`, XCTest's
+    `waitForExistence`.
+  - **Or refuse and name it**: if a prerequisite isn't ready, fail at once, saying what's
+    missing and what to do.
+
+  Allowed, as they wait for nothing:
+  - a timeout that only ends a hang and is never the success path: a job's or step's
+    `timeout-minutes`, a request's timeout, the `timeout` command, a condition wait's own
+    failure limit;
+  - one immediate retry, with no pause, when a third party fails for a moment (a 429 or
+    503, a service unreachable while a step sets up, a test driver that dies under a
+    run), never for our own code or a test's own failure;
+  - `setTimeout(…, 0)` in a unit test, a yield to the next turn rather than a wait;
+  - a pause in a GIF scenario that holds a frame for whoever watches.
+
+  A unit test never sleeps for real: it uses fake timers, or waits for the outcome.
+
 - **Adding or renaming a required job means updating the branch rule.** The rule requires
   checks by job name, so a renamed job is no longer required, and a new one isn't until the
   rule names it; meanwhile bots' PRs auto-merge without it. Update the rule in the same PR.
