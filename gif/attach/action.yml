@@ -92,9 +92,9 @@ runs:
     - name: A gh that can attach
       shell: bash
       run: |
-        node "$GITHUB_ACTION_PATH/../workflow.mjs" gh || {
+        node "$GITHUB_ACTION_PATH/../../lib/gh.mjs" check || {
           sudo apt-get update -q && sudo apt-get install -y -q --only-upgrade gh
-          node "$GITHUB_ACTION_PATH/../workflow.mjs" gh
+          node "$GITHUB_ACTION_PATH/../../lib/gh.mjs" check
         }
 
     - name: Attach the GIFs to the PR
