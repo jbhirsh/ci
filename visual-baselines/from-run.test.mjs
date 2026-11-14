@@ -142,6 +142,47 @@ describe('fromRun', () => {
     expect(git('show', 'HEAD:e2e/baselines/a.png')).toBe('new');
   });
 
+  it('passes over a run by hand on main, which may have built a patch on no branch', () => {
+    const { root, git } = repo({ 'e2e/baselines/a.png': 'old' });
+    /** @type {string[][]} */
+    const calls = [];
+    const listed = ['12 workflow_dispatch main', '11 pull_request topic', '10 push main'];
+    const run = runner(root, listed, { 'a.png': 'new' }, calls);
+    expect(fromRun({ root, s: S, run, sha: 'abc', branch: 'topic', by: 'x', temp: temp() })).toBe(
+      true,
+    );
+    expect(calls[0]).toEqual(
+      expect.arrayContaining(['--json', 'databaseId,event,headBranch', '--limit', '30']),
+    );
+    expect(calls.slice(1).map((args) => args[2])).toEqual(['11']);
+    expect(git('show', 'HEAD:e2e/baselines/a.png')).toBe('new');
+    // Only runs by hand on main: none to take.
+    expect(() =>
+      fromRun({
+        root,
+        s: S,
+        run: runner(root, ['12 workflow_dispatch main'], { 'a.png': 'x' }),
+        sha: 'abcdef0123',
+        branch: 'topic',
+        by: 'x',
+        temp: temp(),
+      }),
+    ).toThrow(
+      /no finished ci.yml run on abcdef0 has ios-screenshots: run this once one has taken the screenshots \(a run by hand on main doesn't count\)/,
+    );
+  });
+
+  it('takes a run by hand on a branch, which may be all a branch with no PR has', () => {
+    const { root } = repo({ 'e2e/baselines/a.png': 'old' });
+    /** @type {string[][]} */
+    const calls = [];
+    const run = runner(root, ['7 workflow_dispatch topic'], { 'a.png': 'new' }, calls);
+    expect(fromRun({ root, s: S, run, sha: 'abc', branch: 'topic', by: 'x', temp: temp() })).toBe(
+      true,
+    );
+    expect(calls[1][2]).toBe('7');
+  });
+
   it('needs an artifact and one literal folder', () => {
     const base = { root: '/x', run: () => '', sha: 'a', branch: 'topic', by: 'x', temp: '/t' };
     expect(() => fromRun({ ...base, s: settings({ folders: ['a'] }) })).toThrow(

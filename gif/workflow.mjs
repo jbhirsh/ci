@@ -11,7 +11,6 @@
 //   node gif/workflow.mjs record   records the GIFs into pr-gif/<scenario>/
 //   node gif/workflow.mjs check    whether a finished run's GIFs may be
 //                                  attached (gif/check), on workflow_run
-//   node gif/workflow.mjs gh       fails unless gh can attach (lib/gh.mjs)
 //   node gif/workflow.mjs attach   attaches pr-gif/'s GIFs to the PR
 //
 // from the app's checkout (changed, record, check) or the artifact's folder
@@ -71,9 +70,8 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { appRoot } from '../lib/app.mjs';
-import { checkGh } from '../lib/gh.mjs';
+import { ATTACH_MAX_BYTES, attachmentLinksIn, waitForLinks as waitFor } from '../lib/attach.mjs';
 import {
   HeadMovedError,
   attachToPr,
@@ -97,9 +95,6 @@ import { loadSettings } from './settings.mjs';
 
 /** Where record leaves the GIFs and attach reads them, from the step's folder. */
 export const OUT = 'pr-gif';
-
-/** The largest image GitHub takes as an attachment (its docs: 10 MB). */
-export const ATTACH_MAX_BYTES = 10 * 1024 * 1024;
 
 /** What record wrote, beside the scenarios' folders in OUT. */
 export const MANIFEST = 'pr-gif.json';
@@ -574,12 +569,7 @@ export function collectGifs(cwd, dir = OUT) {
 export function attachmentLinks(body, scenarios) {
   const links = scenarios.flatMap(({ name }) => {
     const found = findBlock(body, name);
-    if (!found) return [];
-    return [
-      ...body
-        .slice(found.from, found.to)
-        .matchAll(/https:\/\/github\.com\/user-attachments\/assets\/[\w-]+/g),
-    ].map((m) => m[0]);
+    return found ? attachmentLinksIn(body.slice(found.from, found.to)) : [];
   });
   const attached = shownFiles(scenarios).length;
   if (links.length !== attached) {
@@ -592,49 +582,13 @@ export function attachmentLinks(body, scenarios) {
 
 /**
  * Waits until every link answers 200, signed out, for up to `limitMs` in
- * all; throws naming the ones that never did.
+ * all; throws naming the ones that never did (lib/attach.mjs).
  *
  * @param {readonly string[]} links
  * @param {{ fetch?: typeof globalThis.fetch; wait?: (ms: number) => Promise<unknown>; now?: () => number; limitMs?: number; everyMs?: number }} [options]
  */
-export async function waitForLinks(
-  links,
-  {
-    fetch = globalThis.fetch,
-    wait = sleep,
-    now = Date.now,
-    limitMs = 60_000,
-    everyMs = 5_000,
-  } = {},
-) {
-  /** @type {string[]} */
-  const failed = [];
-  // One deadline for all: they were edited in together.
-  const until = now() + limitMs;
-  for (const link of links) {
-    /** @type {string} */
-    let last;
-    for (;;) {
-      try {
-        const response = await fetch(link, { redirect: 'follow' });
-        await response.body?.cancel();
-        if (response.status === 200) break;
-        last = String(response.status);
-      } catch (error) {
-        last = error instanceof Error ? error.message : String(error);
-      }
-      if (now() >= until) {
-        failed.push(`${link} (${last})`);
-        break;
-      }
-      await wait(everyMs);
-    }
-  }
-  if (failed.length > 0) {
-    throw new Error(
-      `pr-gif: ${failed.length} attached GIF(s) didn't answer within ${limitMs / 1000} s: ${failed.join(', ')}`,
-    );
-  }
+export function waitForLinks(links, options = {}) {
+  return waitFor(links, { prefix: 'pr-gif', label: 'attached GIF(s)', ...options });
 }
 
 /**
@@ -1060,10 +1014,6 @@ export async function main(argv, context = {}) {
     setOutputs(env, { source });
     return 0;
   }
-  if (step === 'gh') {
-    checkGh();
-    return 0;
-  }
   if (step === 'changed') {
     return changedStep(env, context.git ?? ((args) => output('git', args, appRoot())), log);
   }
@@ -1072,7 +1022,7 @@ export async function main(argv, context = {}) {
   }
   if (step === 'record') return recordStep(env, context, log);
   if (step === 'attach') return attachStep(env, context, cwd, log);
-  throw new Error('usage: node gif/workflow.mjs source | changed | record | check | gh | attach');
+  throw new Error('usage: node gif/workflow.mjs source | changed | record | check | attach');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

@@ -53,8 +53,13 @@ describe('ignoreFilesArgs, for any glob however it is quoted', () => {
     fc.constantFrom(/** @type {const} */ ('single'), 'double', 'bare'),
     fc.boolean(),
   );
+  // A single-quoted glob can't hold a `'`. And after a separate
+  // `--ignore-files`, a word starting with `--` is an option, not its glob:
+  // the shell strips the quotes, and type-coverage's minimist then reads
+  // it as a flag, so ignoreFilesArgs rightly takes no glob there.
   /** @param {[string, string, boolean]} arg */
-  const safe = ([text, quoting]) => !(quoting === 'single' && text.includes("'"));
+  const safe = ([text, quoting, equals]) =>
+    !(quoting === 'single' && text.includes("'")) && (equals || !text.startsWith('--'));
 
   it("reads back every glob given to type-coverage, in order, and no other command's", () => {
     fc.assert(
