@@ -30,6 +30,29 @@
 # A pass that runs past its `--max-turns` but finishes is not a failure
 # (result.mjs says why claude-code-action calls it one); coverage decides.
 #
+# A pass that stops on the Claude account's usage limit (the API's
+# usage_limit_reached, result.mjs) says so plainly: which limit, when it
+# resets (UTC) and to re-run the job after then, in the log, a warning or
+# error, and the summary, and in one PR comment saying what went
+# unreviewed (limit.mjs). The limit says nothing about the PR, so a
+# person's PR passes with the warning; a PR that could merge without a
+# person looking (a bot's, a dependabot/ or bot/ branch, auto-merge on, or
+# that can't be read) still fails. A person who turns auto-merge on after
+# the warning isn't caught, as nothing re-runs the check; the comment
+# tells them not to. "limited" is set only when the limit left something
+# unreviewed: a follow-up that stops after the rest was read is a normal
+# pass.
+#
+#   Case                          Coverage, second pass   Record   Check      Comment
+#   Finished                      yes                     if all   as before  cleared
+#                                                         was read
+#   Limited, a person's PR        no (on the second       no       warning,   kept
+#                                 pass: unread computed)           passes
+#   Limited, a bot's PR, a bot    as above                no       fails      kept
+#   branch, auto-merge on, or
+#   the lookup failed
+#   Any other failure             no                      no       fails      untouched
+#
 # The prompts ask only for what no automated check of the apps decides:
 # each app's CI already runs lint, Prettier, the type-check and type
 # coverage, dependency-cruiser, tests with a coverage gate, mutation
@@ -139,7 +162,7 @@ runs:
       run: node "$GITHUB_ACTION_PATH/render.mjs" review
 
     # continue-on-error: a pass that runs past its turn cap but finishes is
-    # failed by claude-code-action; the next step judges it (result.mjs).
+    # failed by claude-code-action; the next step judges it (limit.mjs).
     - uses: anthropics/claude-code-action@v1
       id: review
       continue-on-error: true
@@ -173,12 +196,21 @@ runs:
           --add-dir ${{ github.action_path }}/..
           --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git fetch:*),Bash(git checkout:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git branch:*),Bash(git ls-files:*),mcp__github_inline_comment__create_inline_comment"
 
+    # Sets `limited` when the pass stopped on a usage limit; passes or
+    # fails that by who could merge the PR (limit.mjs).
     - name: Check the review finished
+      id: finished
       if: steps.review.outcome == 'failure'
       shell: bash
       env:
         EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
-      run: node "$GITHUB_ACTION_PATH/result.mjs" "$EXECUTION_FILE"
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+        HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: node "$GITHUB_ACTION_PATH/limit.mjs" review "$EXECUTION_FILE"
 
     # No execution file from a step that succeeded: claude-code-action
     # skipped, almost always because this PR edits the app's
@@ -191,9 +223,11 @@ runs:
         echo "::warning title=Claude Review skipped::$msg"
         echo "$msg" >> "$GITHUB_STEP_SUMMARY"
 
+    # Not after a usage limit: the pass read little or nothing, and a second
+    # pass would hit the same limit.
     - name: Check the review read every changed file
       id: coverage
-      if: steps.review.outputs.execution_file != ''
+      if: steps.review.outputs.execution_file != '' && steps.finished.outputs.limited != 'true'
       shell: bash
       env:
         REPO_DIR: ${{ github.workspace }}
@@ -253,15 +287,40 @@ runs:
           --add-dir ${{ github.action_path }}/..
           --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(git rev-parse:*),Bash(git ls-files:*),mcp__github_inline_comment__create_inline_comment"
 
+    # As "Check the review finished", given the files still unread across
+    # both passes: a limit after the follow-up read the rest is no failure.
     - name: Check the follow-up finished
+      id: followup-finished
       if: steps.followup.outcome == 'failure'
       shell: bash
       env:
+        REPO_DIR: ${{ github.workspace }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        SKIP: ${{ steps.render.outputs.skip }}
+        CARRIED: ${{ steps.plan.outputs.carried }}
+        REMOVED: ${{ steps.plan.outputs.removed }}
         EXECUTION_FILE: ${{ steps.followup.outputs.execution_file }}
-      run: node "$GITHUB_ACTION_PATH/result.mjs" "$EXECUTION_FILE"
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+        HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        set -o pipefail
+        passes=("$RUNNER_TEMP/review-pass-1.json")
+        if [ -n "$EXECUTION_FILE" ]; then
+          passes+=("$EXECUTION_FILE")
+        fi
+        UNREAD=$(git -c core.quotePath=false diff --name-only -M "origin/$BASE_REF...HEAD" \
+          | node "$GITHUB_ACTION_PATH/coverage.mjs" "${passes[@]}")
+        export UNREAD
+        node "$GITHUB_ACTION_PATH/limit.mjs" followup "$EXECUTION_FILE"
 
+    # A follow-up stopped on a usage limit leaves this to that step's
+    # decision, which passes a person's PR.
     - name: Fail if files are still unread
-      if: steps.coverage.outputs.unread != ''
+      if: steps.coverage.outputs.unread != '' && steps.followup-finished.outputs.limited != 'true'
       shell: bash
       env:
         REPO_DIR: ${{ github.workspace }}
@@ -288,9 +347,13 @@ runs:
         echo "The follow-up read the rest."
 
     # Reached only when every pass finished and read every file it had to,
-    # so the record claims nothing a review didn't read.
+    # so the record claims nothing a review didn't read: not after a usage
+    # limit either, which a person's PR passes with unread files.
     - name: Record what this review read
-      if: steps.review.outputs.execution_file != '' && steps.plan.outcome == 'success'
+      if: >-
+        steps.review.outputs.execution_file != '' && steps.plan.outcome == 'success'
+        && steps.finished.outputs.limited != 'true'
+        && steps.followup-finished.outputs.limited != 'true'
       shell: bash
       env:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -299,8 +362,30 @@ runs:
       run: node "$GITHUB_ACTION_PATH/carry.mjs" save
 
     - name: Save what this review read
-      if: steps.review.outputs.execution_file != '' && steps.plan.outcome == 'success'
+      if: >-
+        steps.review.outputs.execution_file != '' && steps.plan.outcome == 'success'
+        && steps.finished.outputs.limited != 'true'
+        && steps.followup-finished.outputs.limited != 'true'
       uses: actions/cache/save@v6
       with:
         path: ${{ runner.temp }}/claude-review/record.json
         key: claude-review-pr${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+    # Once the review (and any follow-up) finished without a usage limit,
+    # the "not reviewed" comment is out of date: delete it, whether or not
+    # coverage or the plan then failed (!cancelled()). Never the check's
+    # result.
+    - name: Clear the usage-limit note
+      if: >-
+        !cancelled() && steps.review.outputs.execution_file != ''
+        && (steps.review.outcome == 'success' || steps.finished.outcome == 'success')
+        && steps.finished.outputs.limited != 'true'
+        && (steps.followup.outcome != 'failure' || steps.followup-finished.outcome == 'success')
+        && steps.followup-finished.outputs.limited != 'true'
+      continue-on-error: true
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: node "$GITHUB_ACTION_PATH/limit.mjs" clear

@@ -10,8 +10,8 @@
 //   - the coverage rules (coverage.mjs) judge the fixture transcripts in
 //     fixtures/ as they should, the app's skip globs applied;
 //   - the carry-over's context (carry.mjs) reads the app's settings and
-//     CLAUDE.md, and the fixture passes' result (result.mjs) is a finished
-//     review.
+//     CLAUDE.md, the fixture passes' result (result.mjs) is a finished
+//     review, and #320's usage-limited pass is told as a usage limit.
 // Prints what it checked; exits 1 on the first problem.
 
 import { execFileSync } from 'node:child_process';
@@ -119,7 +119,12 @@ export function selftest(root) {
   if (!judge(execution('read-all.json')).finished) {
     throw new Error('result: read-all.json is not a finished review');
   }
-  log.push("carry-over: the app's context hashes; the fixture review finished");
+  if (!judge(execution('usage-limit.json')).limit) {
+    throw new Error('result: usage-limit.json is not a usage limit');
+  }
+  log.push(
+    "carry-over: the app's context hashes; the fixture review finished, the usage-limited one is told",
+  );
   return log;
 }
 
