@@ -1,0 +1,12 @@
+{
+  "id": 43104204587,
+  "number": 93,
+  "workflow": "CI",
+  "branch": "claude/focused-volta-i4unj7",
+  "sha": "b80a3dce7c1d7cb48d4c51fd874db5c3c14925b2",
+  "created": "2026-11-11T21:34:13Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43104204587",
+  "jobs": [
+    "check"
+  ]
+}

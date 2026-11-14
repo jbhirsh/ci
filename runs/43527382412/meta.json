@@ -1,0 +1,12 @@
+{
+  "id": 43527382412,
+  "number": 143,
+  "workflow": "CI",
+  "branch": "baselines-carry",
+  "sha": "382be50f5638b7552bd8839c5c810c8fd6cda7c9",
+  "created": "2026-11-13T23:28:35Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43527382412",
+  "jobs": [
+    "check"
+  ]
+}

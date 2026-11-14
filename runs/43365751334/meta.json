@@ -1,0 +1,12 @@
+{
+  "id": 43365751334,
+  "number": 122,
+  "workflow": "CI",
+  "branch": "baselines-lib",
+  "sha": "147255e99a531c95a14966328328712e2ebc10cd",
+  "created": "2026-11-13T04:28:28Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43365751334",
+  "jobs": [
+    "check"
+  ]
+}

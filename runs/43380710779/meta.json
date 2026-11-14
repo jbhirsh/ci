@@ -1,0 +1,12 @@
+{
+  "id": 43380710779,
+  "number": 130,
+  "workflow": "CI",
+  "branch": "review-removed-files",
+  "sha": "1e54a4f097281cc667e3568ffa3ca7dfee4eb245",
+  "created": "2026-11-13T06:43:46Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43380710779",
+  "jobs": [
+    "check"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": 43132670679,
+  "number": 106,
+  "workflow": "CI",
+  "branch": "claude/unmeasured-coverage",
+  "sha": "5983fec499de3bbda05eb307cabd9252a8815f49",
+  "created": "2026-11-12T01:10:48Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43132670679",
+  "jobs": [
+    "check"
+  ]
+}
