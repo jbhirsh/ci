@@ -18,8 +18,10 @@ Every new feature request, in this order:
    issue. Mock up phone size first where the app is phone first, then each wider size it
    looks different at, in both themes where the app has two. Make them from the app's own
    styles and components, so they show what will ship rather than a sketch: a throwaway
-   build of the screen in a scratch worktree, never committed, screenshotted and hosted
-   where the app hosts its PR pictures.
+   build of the screen, never committed. Where the app has a mockup run (none yet; sift's is
+   coming), run its `ci.yml` by hand with the change as `mockup_patch`, then its
+   `.github/workflows/attach-pictures.yml` to attach the screenshots to the issue. Where it
+   doesn't, take the screenshots, say where they are, and the owner hosts them.
 3. **Plan review.** Spawn a reviewer agent on the plan, briefed with the issue (its mockups
    too) and these rules but not your reasoning, so its read is independent. Fix what it
    finds, and note in the issue what changed.
