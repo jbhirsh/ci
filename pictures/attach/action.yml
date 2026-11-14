@@ -1,0 +1,126 @@
+name: Pictures, attach
+description: >-
+  Attaches pictures a CI run made (its artifact, such as sift's
+  ios-screenshots) to an issue or a PR, as a table between markers in its
+  description, so a Claude session that can only dispatch workflows gets a
+  plan's mockups into its issue (ci#60). gh uploads them to a host PR's
+  description, the only place gh 2.99 can attach, then the table links
+  them into the target with a plain edit; pictures/cli.mjs's header says
+  how. The job must run none of the app's code and check nothing out (it
+  reads the artifact's files as bytes), so it alone holds the token. gh
+  can't edit a description only if no one else has, so the job should
+  share pr-gif's attach concurrency group for the host PR's number
+  (pr-gif-attach-<repo>-<host-pr>, cancel-in-progress false). GitHub
+  keeps one job running and one waiting in a group, and a third queued
+  cancels the waiting one, so a session dispatches one run at a time and
+  waits for it to finish before the next. A job takes one group, so a PR
+  target's own pr-gif attach can still race the one edit of the target,
+  in the seconds between its read and write.
+
+inputs:
+  target:
+    description: >-
+      The issue's or PR's number that gets the table, in its pictures:<block>
+      block (replaced in place by a later run with the same block). Whether
+      it's an issue or a PR is read from the API. It may be the host PR.
+    required: true
+  host-pr:
+    description: >-
+      The number of a PR in this repository whose description may be
+      overwritten, which the pictures upload to (gh attaches only to a PR):
+      sift's is the repository variable PICTURES_HOST_PR, a throwaway draft.
+    required: true
+  run-id:
+    description: The run whose artifact holds the pictures (sift's mockup run, say).
+    required: true
+  artifact:
+    description: The artifact's name in that run, such as ios-screenshots.
+    required: true
+  files:
+    description: >-
+      The pictures, one a line, in the table's order, as "path | caption":
+      each path relative to the artifact's root (plain names, no . or ..),
+      a PNG, JPEG or GIF of at most 10 MB; the caption is optional and
+      defaults to the file's name.
+    required: true
+  block:
+    description: >-
+      The block's name in the markers (letters, digits, _, . and -, no --),
+      such as the issue's number: the same name replaces the same block.
+    required: true
+  columns:
+    description: How many pictures a table row holds, 1 to 4.
+    default: "2"
+  width:
+    description: >-
+      Each picture's width in the table, in pixels: a phone screenshot at
+      300 shows two side by side.
+    default: "300"
+  token:
+    description: >-
+      A person's token that may attach files and edit the host PR and the
+      target, such as the apps' BOT_PR_TOKEN (fine-grained: Contents, Pull
+      requests and Issues read and write on the app). GitHub refuses the
+      Actions token for attachments.
+    required: true
+  github-token:
+    description: Reads the run's artifact (actions read). Never the token above.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    # Every input checked before anything is downloaded or installed, so a
+    # bad one (an unset PICTURES_HOST_PR) stops the job at once.
+    - name: The inputs
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        TARGET: ${{ inputs.target }}
+        HOST_PR: ${{ inputs.host-pr }}
+        RUN_ID: ${{ inputs.run-id }}
+        ARTIFACT: ${{ inputs.artifact }}
+        FILES: ${{ inputs.files }}
+        BLOCK: ${{ inputs.block }}
+        COLUMNS: ${{ inputs.columns }}
+        WIDTH: ${{ inputs.width }}
+      run: node "$GITHUB_ACTION_PATH/../inputs.mjs"
+
+    - uses: actions/download-artifact@v8
+      with:
+        name: ${{ inputs.artifact }}
+        run-id: ${{ inputs.run-id }}
+        repository: ${{ github.repository }}
+        github-token: ${{ inputs.github-token }}
+        path: pictures-in
+
+    # `--attach` came in gh 2.99 (lib/gh.mjs). The runner's image installs
+    # gh from GitHub's own apt source, so an image whose gh lags upgrades
+    # from there, signed, rather than from a download.
+    - name: A gh that can attach
+      shell: bash
+      run: |
+        node "$GITHUB_ACTION_PATH/../../lib/gh.mjs" check || {
+          sudo apt-get update -q && sudo apt-get install -y -q --only-upgrade gh
+          node "$GITHUB_ACTION_PATH/../../lib/gh.mjs" check
+        }
+
+    - name: Attach the pictures
+      shell: bash
+      working-directory: pictures-in
+      env:
+        REPO: ${{ github.repository }}
+        TARGET: ${{ inputs.target }}
+        HOST_PR: ${{ inputs.host-pr }}
+        RUN_ID: ${{ inputs.run-id }}
+        ARTIFACT: ${{ inputs.artifact }}
+        FILES: ${{ inputs.files }}
+        BLOCK: ${{ inputs.block }}
+        COLUMNS: ${{ inputs.columns }}
+        WIDTH: ${{ inputs.width }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: node "$GITHUB_ACTION_PATH/../cli.mjs"

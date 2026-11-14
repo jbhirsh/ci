@@ -15,9 +15,9 @@
 // (`https://github.com/user-attachments/assets/<id>`; tried in ci#33's
 // trial T1), so there is nothing to read back but a check that none is
 // left local (the markers are lib/blocks.mjs's, the upload
-// lib/attach.mjs's). The description is read just before each edit, so an
-// edit made meanwhile by someone else is kept unless it lands in those
-// seconds.
+// lib/attach.mjs's, both shared with pictures/). The description is read
+// just before each edit, so an edit made meanwhile by someone else is kept
+// unless it lands in those seconds.
 // The alt text's `GIF:` is what PR visuals counts when its pictures come
 // from the visual baselines (ci#33), since the URL can't say what it
 // holds. Markdown images can't take a width, so `cellWidth` doesn't apply
