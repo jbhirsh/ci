@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RETRY_WAIT_MS, crashed, failedBody, main, markerFor, releasedBody } from './crash.mjs';
+import { crashed, failedBody, main, markerFor, releasedBody } from './crash.mjs';
 
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 const NEW = 'fedcba9876543210fedcba9876543210fedcba98';
@@ -88,7 +88,6 @@ function fakeIo(over = {}) {
     output: (name, value) => {
       outputs[name] = value;
     },
-    wait: (ms) => calls.push(`wait ${ms}`),
   };
   return { io, outputs, calls };
 }
@@ -102,19 +101,14 @@ const ENV = {
 };
 
 describe('main retry', () => {
-  it('retries a crash from the head as it was', () => {
+  it('retries a crash at once, from the head as it was', () => {
     const { io, outputs, calls } = fakeIo();
     expect(main(['retry'], ENV, io)).toEqual({
       log: expect.stringMatching(/once more/),
       fail: false,
     });
     expect(outputs).toEqual({ retry: 'true', report: 'false' });
-    expect(calls).toEqual([
-      'read /tmp/x.json',
-      `wait ${RETRY_WAIT_MS}`,
-      `reset ${SHA}`,
-      'remove /tmp/x.json',
-    ]);
+    expect(calls).toEqual(['read /tmp/x.json', `reset ${SHA}`, 'remove /tmp/x.json']);
   });
   it('reports, and does not retry, a run that failed', () => {
     const { io, outputs, calls } = fakeIo({ file: ran });
