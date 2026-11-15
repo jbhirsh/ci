@@ -7,6 +7,14 @@
 // has never had auto-merge set: a person who turns it off on one PR doesn't
 // see it switched back on.
 //
+// In an app that uses visual review (a `visual-review` key in main's
+// .github/ci.json, ci#64), it also waits for the `Visual changes` status on
+// the PR's head to find no change: a bump that moves a screen must not be
+// set to merge itself before anyone sees it. visual-review calls this again
+// once it has posted that status, so the wait is for that event, not a
+// clock. main's settings are read through the API, since this runs before
+// anything is checked out.
+//
 //   node enable.mjs   (env: GITHUB_REPOSITORY; PR_NUMBER, or HEAD_BRANCH to
 //                      look it up; GH_TOKEN for gh)
 
@@ -24,16 +32,23 @@ export const NPM_BRANCH = 'dependabot/npm_and_yarn/';
  * @property {{ login: string }} author
  * @property {string} headRefName
  * @property {unknown} autoMergeRequest null when auto-merge is off
+ * @property {string} [headRefOid] the head commit
  */
+
+/** The descriptions of `Visual changes` that let a PR merge itself. */
+const NO_VISUAL_CHANGE = ['No visual changes', 'No screens taken'];
 
 /**
  * Whether to turn auto-merge on, and why (not).
  *
  * @param {Pr} pr
  * @param {string[]} events the PR's timeline event names
+ * @param {string | null} [visual] in an app with visual review, the
+ *   `Visual changes` description on the head (null: none yet); undefined
+ *   in an app without it
  * @returns {{ enable: boolean, reason: string }}
  */
-export function decide(pr, events) {
+export function decide(pr, events, visual) {
   if (pr.state !== 'OPEN') return { enable: false, reason: 'the PR is not open' };
   if (!/^(app\/)?dependabot(\[bot\])?$/.test(pr.author.login)) {
     return { enable: false, reason: 'not a Dependabot PR' };
@@ -45,7 +60,55 @@ export function decide(pr, events) {
   if (events.includes('auto_merge_enabled') || events.includes('auto_merge_disabled')) {
     return { enable: false, reason: 'auto-merge was set on it before; it stays as it is' };
   }
+  if (visual !== undefined && !NO_VISUAL_CHANGE.includes(visual ?? '')) {
+    return {
+      enable: false,
+      reason: visual
+        ? `Visual changes says "${visual}"; a person merges it`
+        : 'waiting for Visual changes on its head',
+    };
+  }
   return { enable: true, reason: 'turning auto-merge on' };
+}
+
+/**
+ * The `Visual changes` description on a commit, when main's settings use
+ * visual review: undefined when they don't, null before the status.
+ *
+ * @param {string} repo
+ * @param {string} sha
+ * @param {Gh} gh
+ */
+function visualStatus(repo, sha, gh) {
+  /** @type {string} */
+  let text;
+  try {
+    text = gh(['api', `repos/${repo}/contents/.github/ci.json`, '--jq', '.content']).trim();
+  } catch (error) {
+    // A repository with no .github/ci.json (this one) uses no visual review.
+    if (
+      /\b404\b|Not Found/.test(
+        `${/** @type {Error} */ (error).message}${String(/** @type {{ stderr?: unknown }} */ (error).stderr ?? '')}`,
+      )
+    ) {
+      return undefined;
+    }
+    throw error;
+  }
+  if (!text) return undefined;
+  /** @type {unknown} */
+  const config = JSON.parse(Buffer.from(text, 'base64').toString('utf8'));
+  if (typeof config !== 'object' || config === null || !('visual-review' in config)) {
+    return undefined;
+  }
+  const found = gh([
+    'api',
+    `repos/${repo}/commits/${sha}/statuses`,
+    '--jq',
+    // Only the Actions token's: anyone with statuses write can post one.
+    '[.[] | select(.context == "Visual changes" and .creator.login == "github-actions[bot]")][0].description // ""',
+  ]).trim();
+  return found || null;
 }
 
 /**
@@ -83,7 +146,7 @@ export function enable(env, gh) {
       '--repo',
       repo,
       '--json',
-      'state,author,headRefName,autoMergeRequest',
+      'state,author,headRefName,autoMergeRequest,headRefOid',
     ]),
   );
   const events = gh([
@@ -95,7 +158,8 @@ export function enable(env, gh) {
   ])
     .split('\n')
     .filter(Boolean);
-  const { enable: on, reason } = decide(pr, events);
+  const visual = pr.headRefOid ? visualStatus(repo, pr.headRefOid, gh) : undefined;
+  const { enable: on, reason } = decide(pr, events, visual);
   if (on) gh(['pr', 'merge', number, '--repo', repo, '--auto', '--rebase']);
   return `#${number}: ${reason}`;
 }
