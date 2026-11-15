@@ -6,6 +6,12 @@
 # federation IDs). Everything else is here, so a
 # change to the review reaches all three apps at once.
 #
+# Every Claude pass runs on the newest Sonnet: `--model sonnet` in
+# claude_args, Claude Code's alias for the newest Sonnet it knows (it
+# moves when claude-code-action@v1 updates its Claude Code), rather than
+# Claude Code's default model, which can change to another tier. Its thinking is adaptive (the model decides how
+# much), at that model's default effort; no `--effort` is set.
+#
 # What it does:
 #   1. Renders the prompt (render.mjs): prompt.md, the shared review, plus
 #      the app's own guide (`review.instructions` in `.github/ci.json`,
@@ -205,6 +211,7 @@ runs:
         # (the copy GitHub downloaded to run this action; the prompt calls
         # it SHARED_CI), to check what a PR says about a shared tool.
         claude_args: |
+          --model sonnet
           --max-turns 200
           --add-dir ${{ github.action_path }}/..
           --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git fetch:*),Bash(git checkout:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git branch:*),Bash(git ls-files:*),mcp__github_inline_comment__create_inline_comment"
@@ -289,6 +296,7 @@ runs:
         display_report: "true"
         show_full_output: "true"
         claude_args: |
+          --model sonnet
           --max-turns ${{ steps.render-followup.outputs.max_turns }}
           --add-dir ${{ github.action_path }}/..
           --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(git rev-parse:*),Bash(git ls-files:*),mcp__github_inline_comment__create_inline_comment"

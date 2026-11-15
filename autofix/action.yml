@@ -48,6 +48,12 @@
 # workflow_run event runs the stub from the default branch, so a PR can't
 # change it, and claude-code-action's workflow check (../review/action.yml
 # explains it) always passes here.
+#
+# Every Claude pass runs on the newest Sonnet: `--model sonnet` in
+# claude_args, Claude Code's alias for the newest Sonnet it knows (it
+# moves when claude-code-action@v1 updates its Claude Code), rather than
+# Claude Code's default model, which can change to another tier. Its thinking is adaptive (the model decides how
+# much), at that model's default effort; no `--effort` is set.
 name: Claude autofix
 description: >-
   Fixes a bot's PR: mechanical breakage when a dependency bump fails a
@@ -317,6 +323,7 @@ runs:
         allowed_bots: "dependabot[bot],claude[bot]"
         prompt: ${{ steps.ci-prompt.outputs.prompt }}
         claude_args: |
+          --model sonnet
           --max-turns 80
           --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
 
@@ -351,6 +358,7 @@ runs:
         allowed_bots: "dependabot[bot],claude[bot]"
         prompt: ${{ steps.ci-prompt.outputs.prompt }}
         claude_args: |
+          --model sonnet
           --max-turns 80
           --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
 
@@ -477,6 +485,7 @@ runs:
         # issue events, and setting it on workflow_run fails the run.
         prompt: ${{ steps.review-prompt.outputs.prompt }}
         claude_args: |
+          --model sonnet
           --max-turns 80
           --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
 
@@ -507,6 +516,7 @@ runs:
         allowed_bots: "dependabot[bot],claude[bot]"
         prompt: ${{ steps.review-prompt.outputs.prompt }}
         claude_args: |
+          --model sonnet
           --max-turns 80
           --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
 
