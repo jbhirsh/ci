@@ -58,6 +58,8 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
 
 - `git add -A` or `git add .`: stage files by name.
 - Change a test to make it pass: fix the implementation.
+- Turn on a PR's auto-merge: GitHub records it as the owner's, and the owner turning it on is
+  how a changed screen is accepted (`Visual changes`, jbhirsh/ci#64). The owner merges.
 - Install packages outside the project root.
 
 ## Code
