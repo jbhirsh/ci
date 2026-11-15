@@ -1,0 +1,39 @@
+name: Visual shots
+description: >-
+  Uploads a screenshot job's shots for visual review (ci#64): every PNG
+  under the app's `visual-review.folders`, paths kept, with
+  visual-shots.json (the commit, the commit a PR is built on, the event, a
+  mockup's issue), as the artifact `visual-shots`. The last step of the
+  app's screenshot job, after its shots are taken in take mode
+  (`--update-snapshots=all` into git-ignored folders). Main's push runs are
+  the reference, so they're kept 90 days, the most a public repository
+  allows; every other run's for 7. It needs no token and runs no network
+  call: visual-review, from main's code, reads the artifact.
+
+inputs:
+  mockup-issue:
+    description: >-
+      A mockup run's issue number (the dispatch's mockup_issue input), for
+      visual-review to post the table on. Empty for every other run.
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Collect the shots
+      shell: bash
+      env:
+        MOCKUP_ISSUE: ${{ inputs.mockup-issue }}
+        OUT: ${{ runner.temp }}/visual-shots
+      run: node "$GITHUB_ACTION_PATH/shots.mjs" collect "$OUT"
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: visual-shots
+        path: ${{ runner.temp }}/visual-shots
+        if-no-files-found: error
+        retention-days: ${{ github.event_name == 'push' && 90 || 7 }}

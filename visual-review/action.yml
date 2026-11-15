@@ -1,0 +1,68 @@
+name: Visual review
+description: >-
+  One review of the visual-review workflow (ci#64): a PR's or a mockup's
+  screenshot run against main's shots of its base, its table uploaded in a
+  comment with BOT_PR_TOKEN and the `Visual changes` status set
+  (review.mjs's header says in what order). Run from a checkout of the
+  app's default branch, for its settings, never the PR's: it reads the
+  shots only as bytes from the runs' artifacts. For a mockup it also writes
+  the issue's description (describe), as nothing else writes it. The job
+  needs actions read, contents write (enable.mjs turns Dependabot's
+  auto-merge on), statuses, pull-requests and issues write, and a
+  concurrency group per PR so its status writes take turns.
+
+inputs:
+  target:
+    description: One entry of the find job's targets, as JSON.
+    required: true
+  upload-token:
+    description: >-
+      BOT_PR_TOKEN: GitHub takes attachments only from a person's token.
+      Used only to post and finish the upload comment.
+    required: true
+  github-token:
+    description: The Actions token, for everything else.
+    default: ${{ github.token }}
+
+outputs:
+  number:
+    description: The PR's or issue's number, empty when there was nothing to review.
+    value: ${{ steps.review.outputs.number }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    # pixelmatch and pngjs, from this repo's lockfile into the action's own
+    # checkout, for the comparison.
+    - name: Install the comparison's packages
+      shell: bash
+      run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/.."
+
+    # --attach came in gh 2.99 (lib/gh.mjs).
+    - name: Check gh can attach
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../lib/gh.mjs" check
+
+    - name: Review
+      id: review
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        UPLOAD_TOKEN: ${{ inputs.upload-token }}
+        TARGET: ${{ inputs.target }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        OWNER: ${{ github.repository_owner }}
+      run: node "$GITHUB_ACTION_PATH/run.mjs"
+
+    - name: Write the mockup's issue
+      if: fromJSON(inputs.target).kind == 'issue' && steps.review.outputs.number != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        NUMBER: ${{ steps.review.outputs.number }}
+        BOT_LOGIN: ${{ steps.review.outputs.login }}
+      run: node "$GITHUB_ACTION_PATH/../describe/run.mjs"

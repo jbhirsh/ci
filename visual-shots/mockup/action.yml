@@ -1,0 +1,32 @@
+name: Visual shots, apply a mockup
+description: >-
+  Applies a mockup's throwaway patch to the checkout before the app is
+  built, for a run by hand on main (ci#64): the patch comes base64 in the
+  dispatch's mockup_patch input, and only paths the app's
+  `visual-review.mockupPaths` allows may change, never a lockfile, with no
+  rename, link or mode change (visual-shots/shots.mjs). The job must hold
+  no secret and write no cache while the patch is applied: the patch is
+  code on no branch. Pass the inputs straight from the dispatch, never
+  spliced into a script.
+
+inputs:
+  patch:
+    description: The dispatch's mockup_patch input.
+    required: true
+  issue:
+    description: The dispatch's mockup_issue input.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Apply the mockup patch
+      shell: bash
+      env:
+        MOCKUP_PATCH: ${{ inputs.patch }}
+        MOCKUP_ISSUE: ${{ inputs.issue }}
+      run: node "$GITHUB_ACTION_PATH/../shots.mjs" mockup

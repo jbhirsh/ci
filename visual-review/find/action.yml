@@ -1,0 +1,39 @@
+name: Visual review, find
+description: >-
+  The first job of the visual-review workflow (ci#64): which reviews the
+  event calls for (find.mjs's header), as JSON for the review job's matrix,
+  and the PRs whose descriptions describe then writes. Run from a checkout
+  of the app's default branch, for its `visual-review` settings; it runs
+  nothing of a PR's. Needs actions, contents, pull-requests and statuses
+  read.
+
+inputs:
+  github-token:
+    description: The Actions token.
+    default: ${{ github.token }}
+
+outputs:
+  targets:
+    description: The reviews to do, a JSON list of { kind, number?, run }.
+    value: ${{ steps.find.outputs.targets }}
+  any:
+    description: Whether there is any.
+    value: ${{ steps.find.outputs.any }}
+  prs:
+    description: The PRs among them, a JSON list of numbers.
+    value: ${{ steps.find.outputs.prs }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Find the reviews this event calls for
+      id: find
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      run: node "$GITHUB_ACTION_PATH/../find.mjs"

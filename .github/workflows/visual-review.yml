@@ -1,0 +1,128 @@
+# Visual review (ci#64): each PR's screenshots against main's of the commit
+# it's built on, as a before/after table in the PR's description and the
+# `Visual changes` status. It runs from the default branch's copy of the
+# caller, on events GitHub starts there, so a PR can't change it, and it
+# never checks out or runs a PR's code: it reads the shots as bytes from
+# the runs' artifacts (visual-shots uploads them). An app calls it from a
+# visual-review.yml of its own:
+#
+#   on:
+#     workflow_run:
+#       workflows: [E2E, PR GIFs]   # its screenshot workflow, and its GIF bot's
+#       types: [completed]
+#     pull_request_target:
+#       types: [edited, auto_merge_enabled, auto_merge_disabled]
+#   permissions: {}
+#   jobs:
+#     review:
+#       permissions:
+#         actions: read
+#         contents: write     # enable.mjs turns Dependabot's auto-merge on
+#         statuses: write
+#         pull-requests: write
+#         issues: write
+#       uses: jbhirsh/ci/.github/workflows/visual-review.yml@main
+#       secrets:
+#         bot-pr-token: ${{ secrets.BOT_PR_TOKEN }}
+#
+# Its settings are the app's `visual-review` key in .github/ci.json
+# (visual-review/settings.mjs). Three jobs:
+#   - find (visual-review/find): which reviews the event calls for, from the
+#     event and the API alone (find.mjs's header);
+#   - review (visual-review), one per PR or mockup, in a concurrency group of
+#     its own so a PR's status writes take turns: compares, uploads the
+#     table in a comment with BOT_PR_TOKEN, sets the status;
+#   - describe, one per PR, in the group the GIF bot's describe shares
+#     (describe-<repo>-<pr>): copies the bots' sections into the PR's
+#     description with the Actions token, which starts no workflow.
+# Nothing waits on a clock: each event that could change a result runs it
+# again, and every run works the result out afresh.
+
+name: Visual review
+
+on:
+  workflow_call:
+    secrets:
+      bot-pr-token:
+        description: BOT_PR_TOKEN, the only kind of token GitHub lets attach files.
+        required: true
+
+permissions: {}
+
+jobs:
+  find:
+    # A workflow_run of anything but a PR, a push or a run by hand (a
+    # schedule's) calls for nothing.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      contains(fromJSON('["pull_request", "push", "workflow_dispatch"]'), github.event.workflow_run.event)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+      statuses: read
+    outputs:
+      targets: ${{ steps.find.outputs.targets }}
+      any: ${{ steps.find.outputs.any }}
+      prs: ${{ steps.find.outputs.prs }}
+    steps:
+      # The default branch, for the settings, never the PR: named outright,
+      # since pull_request_target's default ref is the PR's base branch.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - id: find
+        uses: jbhirsh/ci/visual-review/find@main
+
+  review:
+    needs: find
+    if: needs.find.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+      statuses: write
+      pull-requests: write
+      issues: write
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.find.outputs.targets) }}
+    concurrency:
+      group: visual-review-${{ github.repository }}-${{ matrix.target.kind == 'pr' && format('pr-{0}', matrix.target.number) || format('run-{0}', matrix.target.run) }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: jbhirsh/ci/visual-review@main
+        with:
+          target: ${{ toJSON(matrix.target) }}
+          upload-token: ${{ secrets.bot-pr-token }}
+
+  describe:
+    needs: [find, review]
+    if: always() && needs.find.result == 'success' && needs.find.outputs.prs != '[]' && needs.find.outputs.prs != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    strategy:
+      fail-fast: false
+      matrix:
+        number: ${{ fromJSON(needs.find.outputs.prs) }}
+    concurrency:
+      group: describe-${{ github.repository }}-${{ matrix.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: jbhirsh/ci/describe@main
+        with:
+          number: ${{ matrix.number }}
+          upload-token: ${{ secrets.bot-pr-token }}

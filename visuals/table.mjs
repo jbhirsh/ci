@@ -31,7 +31,7 @@ export const DEFAULT_WIDTH = 300;
  *
  * @param {string} text
  */
-function html(text) {
+export function html(text) {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
