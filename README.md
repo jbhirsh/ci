@@ -31,8 +31,11 @@ choices.
   reason (`unmeasured/`), UI changes without pictures (`visuals/`), secrets ([gitleaks](https://gitleaks.io),
   `gitleaks/`) and static analysis ([Semgrep](https://semgrep.dev), `semgrep/`).
 - **Pictures of every change.** Before/after GIFs for a PR, recorded and attached to its
-  description on their own whenever a push changes a GIF scenario (`gif/`), visual-regression
-  baselines rewritten from CI's own screenshots (`visual-baselines/`), README screenshots
+  description on their own whenever a push changes a GIF scenario (`gif/`), each PR's
+  screenshots compared with main's, as an inline before/after table in its description and a
+  `Visual changes` status that holds only a PR that merges itself (`visual-review/`, with
+  `visual-shots/` in the app's screenshot job and `describe/` writing the bots' sections),
+  visual-regression baselines rewritten from CI's own screenshots (`visual-baselines/`), README screenshots
   that refresh themselves (`readme-screenshots/`), and a CI run's pictures attached to an
   issue or a PR, so a plan's mockups reach its issue (`pictures/`).
 - **Reports that remember.** Each job's summary, a report page on GitHub Pages and one PR
