@@ -34,9 +34,16 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
-      # claude-code-action exchanges an OIDC token for the Claude app's token.
+      # claude-code-action uses the job's OIDC token for the Claude GitHub
+      # App's token, and for a Claude API token (federation, below).
       id-token: write
     steps:
       - uses: jbhirsh/ci/review@main
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Signs in by workload identity federation (the Anthropic Console's
+          # Workload identity): the job's OIDC token for a short-lived Claude
+          # API token, so no secret is stored. These IDs aren't secret.
+          anthropic_federation_rule_id: fdrl_01BuwYpezaN3Vw9dbwvdF5JY
+          anthropic_organization_id: 22970ab4-b9f2-4f4b-a7d7-d2e0bab4fcac
+          anthropic_service_account_id: svac_01UZj2itXNdhewkTjp9Wv6YG
+          anthropic_workspace_id: wrkspc_01GbH32ibMELoz7yNtpC8bB6

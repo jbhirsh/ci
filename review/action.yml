@@ -98,10 +98,11 @@ inputs:
       short-lived Claude API token each run, so there is no secret to
       expire or be revoked. Billed as API usage,
       not to a Claude subscription. The rule is made in the Anthropic
-      Console (Workload identity) and limited to the one repository; not
-      secret, so an app passes its repository variable. Pass these instead
-      of claude_code_oauth_token and anthropic_api_key, not beside them: a
-      stored credential is likely tried first.
+      Console (Workload identity), and one rule can serve several
+      repositories. The IDs aren't secret, so an app writes them in its
+      workflow. Pass these instead of claude_code_oauth_token and
+      anthropic_api_key, not beside them: a stored credential is likely
+      tried first.
     required: false
     default: ""
   anthropic_organization_id:
