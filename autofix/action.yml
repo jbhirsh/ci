@@ -4,7 +4,8 @@
 # (that list stays in the app, since only YAML can say it, and
 # check-triggers/action.yml, a step of the app's CI, keeps it complete), its
 # concurrency group, the job's permissions and timeout, and one step calling
-# this action at @main with the Claude token.
+# this action at @main with its Claude credentials (a token, or the
+# federation IDs).
 #
 # On each listed workflow's completion it decides from the PR's state, not
 # from which run woke it (the concurrency group keeps one pending run, so a
@@ -58,11 +59,42 @@ inputs:
   claude_code_oauth_token:
     description: >-
       Claude Code OAuth token (the app's CLAUDE_CODE_OAUTH_TOKEN secret).
-      Give this or anthropic_api_key.
+      Give this, anthropic_api_key, or the two federation inputs.
     required: false
     default: ""
   anthropic_api_key:
     description: Anthropic API key, instead of the OAuth token.
+    required: false
+    default: ""
+  anthropic_federation_rule_id:
+    description: >-
+      Workload identity federation rule (fdrl_...), instead of a stored
+      token: with the organization and service account IDs below,
+      claude-code-action trades the job's GitHub OIDC token for a
+      short-lived Claude API token each run, so there is no secret to
+      expire or be revoked. Billed as API usage,
+      not to a Claude subscription. The rule is made in the Anthropic
+      Console (Workload identity) and limited to the one repository; not
+      secret, so an app passes its repository variable. Pass these instead
+      of claude_code_oauth_token and anthropic_api_key, not beside them: a
+      stored credential is likely tried first.
+    required: false
+    default: ""
+  anthropic_organization_id:
+    description: >-
+      Anthropic organization UUID, with anthropic_federation_rule_id.
+    required: false
+    default: ""
+  anthropic_service_account_id:
+    description: >-
+      Service account (svac_...) the federated token acts as, with
+      anthropic_federation_rule_id.
+    required: false
+    default: ""
+  anthropic_workspace_id:
+    description: >-
+      Workspace (wrkspc_...) for federation; needed when the rule spans more
+      than one workspace.
     required: false
     default: ""
   github_token:
@@ -276,6 +308,10 @@ runs:
       with:
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        anthropic_federation_rule_id: ${{ inputs.anthropic_federation_rule_id }}
+        anthropic_organization_id: ${{ inputs.anthropic_organization_id }}
+        anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
+        anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
         # workflow_run reports the initiating actor: dependabot[bot], or
         # claude[bot] when the run followed an autofix push.
         allowed_bots: "dependabot[bot],claude[bot]"
@@ -308,6 +344,10 @@ runs:
       with:
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        anthropic_federation_rule_id: ${{ inputs.anthropic_federation_rule_id }}
+        anthropic_organization_id: ${{ inputs.anthropic_organization_id }}
+        anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
+        anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
         allowed_bots: "dependabot[bot],claude[bot]"
         prompt: ${{ steps.ci-prompt.outputs.prompt }}
         claude_args: |
@@ -426,6 +466,10 @@ runs:
       with:
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        anthropic_federation_rule_id: ${{ inputs.anthropic_federation_rule_id }}
+        anthropic_organization_id: ${{ inputs.anthropic_organization_id }}
+        anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
+        anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
         # workflow_run reports the initiating actor: dependabot[bot] for a
         # Dependabot PR, claude[bot] after an autofix push.
         allowed_bots: "dependabot[bot],claude[bot]"
@@ -456,6 +500,10 @@ runs:
       with:
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        anthropic_federation_rule_id: ${{ inputs.anthropic_federation_rule_id }}
+        anthropic_organization_id: ${{ inputs.anthropic_organization_id }}
+        anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
+        anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
         allowed_bots: "dependabot[bot],claude[bot]"
         prompt: ${{ steps.review-prompt.outputs.prompt }}
         claude_args: |
