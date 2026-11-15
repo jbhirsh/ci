@@ -2,8 +2,15 @@
 # as its required "Claude Review" check. The app's workflow
 # (.github/workflows/claude-review.yml) is a stub: its trigger, its job (whose
 # `name:` is the required check), the job's permissions, and one step calling
-# this action at @main with the Claude token. Everything else is here, so a
+# this action at @main with its Claude credentials (a token, or the
+# federation IDs). Everything else is here, so a
 # change to the review reaches all three apps at once.
+#
+# Every Claude pass runs on the newest Sonnet: `--model sonnet` in
+# claude_args, Claude Code's alias for the newest Sonnet it knows (it
+# moves when claude-code-action@v1 updates its Claude Code), rather than
+# Claude Code's default model, which can change to another tier. Its thinking is adaptive (the model decides how
+# much), at that model's default effort; no `--effort` is set.
 #
 # What it does:
 #   1. Renders the prompt (render.mjs): prompt.md, the shared review, plus
@@ -76,11 +83,42 @@ inputs:
   claude_code_oauth_token:
     description: >-
       Claude Code OAuth token (the app's CLAUDE_CODE_OAUTH_TOKEN secret).
-      Give this or anthropic_api_key.
+      Give this, anthropic_api_key, or the two federation inputs.
     required: false
     default: ""
   anthropic_api_key:
     description: Anthropic API key, instead of the OAuth token.
+    required: false
+    default: ""
+  anthropic_federation_rule_id:
+    description: >-
+      Workload identity federation rule (fdrl_...), instead of a stored
+      token: with the organization and service account IDs below,
+      claude-code-action trades the job's GitHub OIDC token for a
+      short-lived Claude API token each run, so there is no secret to
+      expire or be revoked. Billed as API usage,
+      not to a Claude subscription. The rule is made in the Anthropic
+      Console (Workload identity) and limited to the one repository; not
+      secret, so an app passes its repository variable. Pass these instead
+      of claude_code_oauth_token and anthropic_api_key, not beside them: a
+      stored credential is likely tried first.
+    required: false
+    default: ""
+  anthropic_organization_id:
+    description: >-
+      Anthropic organization UUID, with anthropic_federation_rule_id.
+    required: false
+    default: ""
+  anthropic_service_account_id:
+    description: >-
+      Service account (svac_...) the federated token acts as, with
+      anthropic_federation_rule_id.
+    required: false
+    default: ""
+  anthropic_workspace_id:
+    description: >-
+      Workspace (wrkspc_...) for federation; needed when the rule spans more
+      than one workspace.
     required: false
     default: ""
   github_token:
@@ -148,6 +186,10 @@ runs:
       with:
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        anthropic_federation_rule_id: ${{ inputs.anthropic_federation_rule_id }}
+        anthropic_organization_id: ${{ inputs.anthropic_organization_id }}
+        anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
+        anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
         # claude-code-action refuses to run for a bot actor unless it's
         # listed ("Workflow initiated by non-human actor"). Dependabot's
         # bumps are reviewed, claude[bot] pushes autofix's commits, and
@@ -169,6 +211,7 @@ runs:
         # (the copy GitHub downloaded to run this action; the prompt calls
         # it SHARED_CI), to check what a PR says about a shared tool.
         claude_args: |
+          --model sonnet
           --max-turns 200
           --add-dir ${{ github.action_path }}/..
           --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git fetch:*),Bash(git checkout:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git branch:*),Bash(git ls-files:*),mcp__github_inline_comment__create_inline_comment"
@@ -243,12 +286,17 @@ runs:
       with:
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        anthropic_federation_rule_id: ${{ inputs.anthropic_federation_rule_id }}
+        anthropic_organization_id: ${{ inputs.anthropic_organization_id }}
+        anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
+        anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
         allowed_bots: "dependabot[bot],claude[bot],github-actions[bot]"
         prompt: ${{ steps.render-followup.outputs.prompt }}
         classify_inline_comments: "true"
         display_report: "true"
         show_full_output: "true"
         claude_args: |
+          --model sonnet
           --max-turns ${{ steps.render-followup.outputs.max_turns }}
           --add-dir ${{ github.action_path }}/..
           --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(git rev-parse:*),Bash(git ls-files:*),mcp__github_inline_comment__create_inline_comment"
