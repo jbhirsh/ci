@@ -1,0 +1,49 @@
+# One-off, never merged: signs in by workload identity federation as Claude
+# Review does, then sends one tiny request per model, printing the API's own
+# status and error (never the token), to find why the review gets "Credit
+# balance is too low". Runs only on a push to this branch.
+name: wif-credit-probe
+on:
+  push:
+    branches: [wif-credit-probe]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the job's OIDC token
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const token = await core.getIDToken('https://api.anthropic.com');
+            core.setSecret(token);
+            core.exportVariable('JWT', token);
+      - name: Exchange it, then call the API
+        run: |
+          set -u
+          body=$(jq -n --arg a "$JWT" '{
+            grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            assertion: $a,
+            federation_rule_id: "fdrl_01BuwYpezaN3Vw9dbwvdF5JY",
+            organization_id: "22970ab4-b9f2-4f4b-a7d7-d2e0bab4fcac",
+            service_account_id: "svac_01UZj2itXNdhewkTjp9Wv6YG",
+            workspace_id: "wrkspc_01GbH32ibMELoz7yNtpC8bB6"}')
+          resp=$(curl -sS https://api.anthropic.com/v1/oauth/token -H 'content-type: application/json' -d "$body")
+          tok=$(jq -r '.access_token // empty' <<<"$resp")
+          if [ -z "$tok" ]; then
+            echo "exchange failed:"; jq 'with_entries(if (.key|test("token$")) then .value="<redacted>" else . end)' <<<"$resp"; exit 1
+          fi
+          echo "::add-mask::$tok"
+          echo "exchange ok; fields: $(jq -c 'with_entries(if (.key|test("token$")) then .value="<redacted>" else . end)' <<<"$resp")"
+          for model in claude-sonnet-5-5 claude-haiku-5-5; do
+            for beta in "" "oauth-2025-04-20"; do
+              code=$(curl -sS -o out.json -w '%{http_code}' https://api.anthropic.com/v1/messages \
+                -H "Authorization: Bearer $tok" -H 'anthropic-version: 2023-06-01' \
+                ${beta:+-H "anthropic-beta: $beta"} -H 'content-type: application/json' \
+                -d "{\"model\":\"$model\",\"max_tokens\":16,\"messages\":[{\"role\":\"user\",\"content\":\"Say ok\"}]}")
+              echo "== $model beta=${beta:-none}: HTTP $code"
+              jq -c '{type, error, usage}' out.json || cat out.json
+            done
+          done
