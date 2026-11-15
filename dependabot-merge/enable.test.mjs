@@ -98,3 +98,64 @@ describe('enable', () => {
     expect(() => enable({}, () => '')).toThrow(/GITHUB_REPOSITORY/);
   });
 });
+
+describe('the visual review gate', () => {
+  const env = { GITHUB_REPOSITORY: 'jbhirsh/sift', PR_NUMBER: '208' };
+  const HEAD = 'c'.repeat(40);
+  const config = Buffer.from(JSON.stringify({ 'visual-review': {} })).toString('base64');
+
+  /** @param {string} description what `Visual changes` says on the head */
+  const gh = (description) => {
+    /** @type {string[][]} */
+    const calls = [];
+    const run = (/** @type {string[]} */ args) => {
+      calls.push(args);
+      if (args[0] === 'pr' && args[1] === 'view') {
+        return JSON.stringify({ ...PR, headRefOid: HEAD });
+      }
+      if (args[1] === 'repos/jbhirsh/sift/contents/.github/ci.json') return config;
+      if (args[1] === `repos/${env.GITHUB_REPOSITORY}/commits/${HEAD}/statuses`) return description;
+      return '';
+    };
+    return { run, calls };
+  };
+
+  it('turns auto-merge on once Visual changes finds no change', () => {
+    for (const ok of ['No visual changes', 'No screens taken']) {
+      const { run, calls } = gh(ok);
+      expect(enable(env, run)).toBe('#208: turning auto-merge on');
+      expect(calls.some((a) => a[1] === 'merge')).toBe(true);
+    }
+  });
+
+  it('waits for the status, and leaves a changed screen to a person', () => {
+    const waiting = gh('');
+    expect(enable(env, waiting.run)).toMatch(/waiting for Visual changes/);
+    expect(waiting.calls.some((a) => a[1] === 'merge')).toBe(false);
+    const changed = gh('3 screens changed: see the table [vr:abcdef12@1]');
+    expect(enable(env, changed.run)).toMatch(/a person merges it/);
+  });
+
+  it('is off in a repository with no .github/ci.json, and rethrows other errors', () => {
+    const missing = (/** @type {string[]} */ args) => {
+      if (args[0] === 'pr' && args[1] === 'view')
+        return JSON.stringify({ ...PR, headRefOid: HEAD });
+      if (args[1]?.endsWith('/contents/.github/ci.json')) {
+        throw Object.assign(new Error('gh: Not Found (HTTP 404)'), { stderr: '' });
+      }
+      return '';
+    };
+    expect(enable(env, missing)).toBe('#208: turning auto-merge on');
+    const broken = (/** @type {string[]} */ args) => {
+      if (args[0] === 'pr' && args[1] === 'view')
+        return JSON.stringify({ ...PR, headRefOid: HEAD });
+      if (args[1]?.endsWith('/contents/.github/ci.json')) throw new Error('HTTP 502');
+      return '';
+    };
+    expect(() => enable(env, broken)).toThrow(/502/);
+  });
+
+  it('is off in an app without visual review', () => {
+    expect(decide(PR, [], undefined).enable).toBe(true);
+  });
+});
