@@ -3,8 +3,8 @@ name: Claude Review
 # AI code review on every PR to main, by the review action the apps use
 # (review/action.yml says what it does and what it leaves to CI). It runs
 # that action from main, not from the PR: a PR is reviewed by the reviewer
-# already merged, never by the copy it changes. This repo has no
-# .github/ci.json "review" key, so the defaults apply.
+# already merged, never by the copy it changes. This repo's
+# .github/ci.json turns on the Agent SDK engine, with the Opus advisor.
 #
 # claude-code-action skips (and still reports success on) a PR that edits the
 # workflow file it runs from, so only a PR that edits this file goes

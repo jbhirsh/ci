@@ -1,0 +1,7 @@
+{
+  "review": {
+    "engine": "sdk",
+    "advisor": "opus",
+    "skipBots": ["dependabot[bot]"]
+  }
+}

@@ -3,8 +3,9 @@
 ## Setup
 
 Node 24, then `npm ci`. Nothing here is installed into the apps: they run these tools from
-their own checkout, with their own dependencies, and the compare actions install this repo's
-two runtime libraries into their own copy of it.
+their own checkout, with their own dependencies, and the actions that need this repo's runtime
+libraries (the compare actions' pixelmatch and pngjs, the review's Agent SDK) install them
+into their own copy of it.
 
 ## Changing a tool
 
@@ -47,3 +48,26 @@ applies to every repo's next session:
   The link reads the clone as it stands, so pull it to pick up a change.
 
 - **Claude Review** reads the rules from its own checkout of this repo (`review/prompt.md`).
+
+## Claude Review on the Agent SDK
+
+An app turns it on in `.github/ci.json` (`review/settings.mjs` says what each setting does):
+
+```json
+{ "review": { "engine": "sdk", "advisor": "opus", "skipBots": ["dependabot[bot]"] } }
+```
+
+- **Payment.** The Max plan's API credit, in the linked Console organization, pays for it;
+  it doesn't pay for claude-code-action, which runs Claude Code (jbhirsh/ci#68). The review
+  shows each pass's cost in its job summary.
+- **Sign-in.** Workload identity federation: the app's stub passes the four IDs and grants
+  `id-token: write`. The Console rule matches by CEL, since its subject-prefix match refuses
+  GitHub's `repo:<owner>@<id>/<repo>@<id>` subjects:
+  `claims.repository_owner_id == "22871808" && claims.repository_owner == "jbhirsh"`, scope
+  `workspace:developer`. An API key (`anthropic_api_key`) works instead.
+- **Comments.** It posts with the job's own token, as github-actions[bot]. Each inline comment
+  ends with `<!-- claude-review -->`, which autofix's review fixer looks for
+  (`autofix/threads.mjs`).
+- **Dependabot.** With `skipBots`, a bump nobody has pushed to isn't reviewed, and auto-merges
+  on CI alone: the owner's decision (#68). Once autofix pushes a fix, the PR is reviewed.
+- **Out of credit.** A pass refused for credit or a spend limit warns and passes the check.

@@ -18,8 +18,11 @@ choices.
 
 - **AI review and repair.** Claude Review reads every changed file of every PR and checks it
   against the app's conventions (`review/`); Claude autofix fixes CI failures and review
-  threads on bots' PRs (`autofix/`). Both run on [Claude Code](https://claude.com/claude-code)
-  through `anthropics/claude-code-action`.
+  threads on bots' PRs (`autofix/`). Autofix runs on [Claude Code](https://claude.com/claude-code)
+  through `anthropics/claude-code-action`; the review runs on it too, or on the
+  [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) where an app sets
+  `review.engine: "sdk"`, which the Max plan's API credit pays for and which reviews with no
+  shell (`review/sdk.mjs`).
 - **Tests that test the tests.** Mutation testing with [StrykerJS](https://stryker-mutator.io)
   on the lines a PR changed, and a monthly sweep of everything (`mutation/`): a test that
   passes whatever the code does fails here.

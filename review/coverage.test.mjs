@@ -745,3 +745,65 @@ describe('main', () => {
     expect(main([pass], 'a.ts\n', { BASE_REF: 'develop' }, () => {})).toEqual(['a.ts']);
   });
 });
+
+describe("the SDK engine's tools", () => {
+  /** @returns {ToolCall} */
+  const own = (
+    /** @type {string} */ name,
+    /** @type {Record<string, unknown>} */ input = {},
+    result = 'diff --git a/x b/x',
+  ) => ({ name: `mcp__review__${name}`, input, result });
+
+  it('count a diff of the PR, whole or for the files named', () => {
+    expect(readBy(own('diff'))).toEqual(changed);
+    expect(readBy(own('diff', { paths: ['src/a.ts'] }))).toEqual(['src/a.ts']);
+    expect(readBy(own('diff', { paths: ['src'] }))).toEqual(['src/a.ts', 'src/b.ts']);
+  });
+  it('count show of HEAD only, the file as the PR leaves it', () => {
+    expect(readBy(own('show', { ref: 'HEAD', path: 'src/b.ts' }))).toEqual(['src/b.ts']);
+    expect(readBy(own('show', { ref: 'origin/main', path: 'src/b.ts' }))).toEqual([]);
+  });
+  it('count nothing from a call that failed, or a listing of kept files', () => {
+    expect(readBy({ ...own('diff'), failed: true })).toEqual([]);
+    expect(readBy(own('diff_list'), own('diff_stat'), own('log'), own('pr'))).toEqual([]);
+  });
+  it('cover a deleted file with a listing, and a stat that shows its whole path', () => {
+    const files = ['src/gone.ts', 'src/kept.ts'];
+    const opts = { repoDir: REPO, removed: ['src/gone.ts'] };
+    expect(unreadFiles(files, [own('diff_list', {}, 'D\tsrc/gone.ts')], opts)).toEqual([
+      'src/kept.ts',
+    ]);
+    const stat = own('diff_stat', {}, ' src/gone.ts | 4 ----');
+    expect(unreadFiles(files, [stat], opts)).toEqual(['src/kept.ts']);
+  });
+  it('count a cut-off diff only once its saved output was opened', () => {
+    const saved = '/tmp/config/projects/x/tool-results/mcp-review-diff-1.txt';
+    const cut = own(
+      'diff',
+      {},
+      `<persisted-output>\nOutput too large. Full output saved to: ${saved}`,
+    );
+    expect(readBy(cut)).toEqual([]);
+    expect(readBy(cut, read(saved))).toEqual(changed);
+  });
+  it('count a diff read in parts once every part came back, and not before', () => {
+    const part = (/** @type {number} */ n, of = 3, paths = ['src/a.ts']) =>
+      own('diff', { paths, part: n }, `Part ${n} of ${of} of this diff.\ndiff --git`);
+    expect(readBy(part(1), part(3))).toEqual([]);
+    expect(readBy(part(1), part(2), part(3))).toEqual(['src/a.ts']);
+    // Parts of another split, or of another file, don't add up.
+    expect(readBy(part(1), part(2), part(3, 4))).toEqual([]);
+    expect(readBy(part(1), part(2), part(3, 3, ['src/b.ts']))).toEqual([]);
+    // A part whose header doesn't say what it was asked for counts for nothing.
+    expect(readBy(part(1), part(2), { ...part(3), result: 'diff --git' })).toEqual([]);
+    // A part the SDK cut after all reads nothing.
+    const cut = { ...part(2), result: 'Part 2 of 3 of this diff.\n<persisted-output>' };
+    expect(readBy(part(1), cut, part(3))).toEqual([]);
+    const mentions = { ...part(2), result: 'Part 2 of 3 of this diff.\n+// Output too large' };
+    expect(readBy(part(1), mentions, part(3))).toEqual(['src/a.ts']);
+    // The notice that a diff is too long reads nothing.
+    expect(
+      readBy({ ...own('diff'), result: 'This diff is 90000 characters', failed: true }),
+    ).toEqual([]);
+  });
+});
