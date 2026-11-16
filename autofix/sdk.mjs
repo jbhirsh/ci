@@ -69,8 +69,13 @@ export const ALLOWED = [
 ];
 /** The programs Bash may start: the hook's second line, by first word. */
 const PROGRAMS = new Set(['git', 'npm', 'npx', 'gh', 'make']);
-/** Environment the fixer's process never gets. */
-const WITHHELD = /^(ACTIONS_ID_TOKEN_REQUEST_|ACTIONS_RUNTIME_TOKEN$|GITHUB_TOKEN$|INPUT_)/;
+/**
+ * Environment the fixer's process never gets. CLAUDE_CODE_OAUTH_TOKEN, the
+ * owner's subscription, is the review's retry credential (#57): here it
+ * would reach the bump's npm scripts, and outrank the federated sign-in.
+ */
+const WITHHELD =
+  /^(ACTIONS_ID_TOKEN_REQUEST_|ACTIONS_RUNTIME_TOKEN$|GITHUB_TOKEN$|INPUT_|CLAUDE_CODE_OAUTH_TOKEN$)/;
 
 /**
  * Whether a Bash command starts one of the allowed programs, as

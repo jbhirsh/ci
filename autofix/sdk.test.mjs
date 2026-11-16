@@ -185,7 +185,7 @@ describe('allowedCommand', () => {
 });
 
 describe('fixerEnv', () => {
-  it("passes the job's environment, less the runner's tokens", () => {
+  it("passes the job's environment, less the runner's tokens and the subscription's", () => {
     expect(
       fixerEnv(
         {
@@ -194,6 +194,7 @@ describe('fixerEnv', () => {
           GITHUB_TOKEN: 'x',
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'y',
           INPUT_X: 'z',
+          CLAUDE_CODE_OAUTH_TOKEN: 'oat',
         },
         { tokenFile: null, configDir: '/c' },
       ),
