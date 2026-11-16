@@ -127,14 +127,21 @@ export async function oidcToken(env, fetchImpl) {
   return value;
 }
 
+/** The API's error code for a subscription's spent usage window. */
+const USAGE_LIMIT = 'usage_limit_reached';
+
 /**
  * Why a pass that failed stopped short for reasons not the PR's: out of
  * credit, or a spend or usage limit. Null for any other failure, and for a
  * pass that finished, whatever its text says: the reviewer's own words
  * (a review of a PR about rate limits) never count, only the API's error
  * (the SDK's `error` on an assistant message, the result's error text, or
- * the query's thrown error). A transient rate limit or overload isn't a
- * stop: it's a failure, re-run like any other.
+ * the query's thrown error). A subscription's usage limit (its 5-hour or
+ * weekly window) is read from its `api_error`, `usage_limit_reached`, on
+ * the result or the limited assistant message, since its text ("You've hit
+ * your 5-hour limit") names no usage limit (BoardGames #320). A transient
+ * rate limit or overload isn't a stop: it's a failure, re-run like any
+ * other.
  *
  * @param {unknown[]} messages the pass's messages
  * @param {string} failure what the query threw, or ''
@@ -151,18 +158,20 @@ export function stoppedBy(messages, failure) {
     if (Array.isArray(result.errors)) errors.push(...result.errors.map(String));
   }
   let billing = false;
+  let usage = result?.is_error === true && result.api_error === USAGE_LIMIT;
   for (const m of messages) {
-    const message = /** @type {{ type?: unknown, error?: unknown }} */ (
+    const message = /** @type {{ type?: unknown, error?: unknown, api_error?: unknown }} */ (
       m && typeof m === 'object' ? m : {}
     );
     if (message.type === 'assistant' && typeof message.error === 'string') {
       if (message.error === 'billing_error') billing = true;
+      if (message.api_error === USAGE_LIMIT) usage = true;
       errors.push(JSON.stringify(m));
     }
   }
   const text = errors.join('\n');
   if (billing || /credit balance is too low/i.test(text)) return 'credit';
-  if (/(spend|spending|usage) limit/i.test(text)) return 'limit';
+  if (usage || /(spend|spending|usage) limit/i.test(text)) return 'limit';
   return null;
 }
 
