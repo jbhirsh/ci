@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { advisorSetting, engineSetting } from './config.mjs';
+import { advisorSetting, checkEngine } from './config.mjs';
 
 /** Values an app's .github/ci.json might hold for a setting. */
 const value = fc.oneof(
@@ -25,11 +25,11 @@ function attempt(read) {
 }
 
 describe('engine and advisor settings, for any value in .github/ci.json', () => {
-  it('read back as an engine, or fail naming the setting', () => {
+  it('accept only "sdk" or no engine, or fail naming the setting', () => {
     fc.assert(
       fc.property(value, (v) => {
-        const out = attempt(() => engineSetting('autofix.engine', v));
-        if (out.ok) expect(['action', 'sdk']).toContain(out.value);
+        const out = attempt(() => checkEngine('autofix.engine', v));
+        if (out.ok) expect([undefined, 'sdk']).toContain(v);
         else expect(out.message).toContain('"autofix.engine"');
       }),
     );

@@ -5,11 +5,11 @@
 //     tree; an app with no `review` key is checked against the defaults;
 //   - each `review.skip` glob still matches a tracked file (a stale glob
 //     would let the review skip a file it should read);
-//   - both prompts render for both engines with nothing left unfilled, the
-//     app's guide in them;
+//   - both prompts render with nothing left unfilled, the app's guide in
+//     them;
 //   - the coverage rules (coverage.mjs) judge the fixture transcripts in
-//     fixtures/ as they should, the app's skip globs applied, the SDK
-//     engine's (sdk-read-all.json) among them;
+//     fixtures/ as they should, the app's skip globs applied, the SDK's
+//     (sdk-read-all.json) among them;
 //   - the carry-over's context (carry.mjs) reads the app's settings and
 //     CLAUDE.md, and the fixture passes' result (result.mjs) is a finished
 //     review.
@@ -74,8 +74,8 @@ export function selftest(root) {
   const settings = reviewSettings({ root });
   log.push(
     settings.instructions
-      ? `settings: guide ${settings.instructions} (${settings.guide.length} characters), ${settings.skip.length} skip glob(s), engine ${settings.engine}`
-      : `settings: no guide, checked against the defaults, engine ${settings.engine}`,
+      ? `settings: guide ${settings.instructions} (${settings.guide.length} characters), ${settings.skip.length} skip glob(s)`
+      : 'settings: no guide, checked against the defaults',
   );
 
   const tracked = trackedFiles(root);
@@ -90,14 +90,12 @@ export function selftest(root) {
   }
 
   const run = { repo: 'jbhirsh/app', pr: '1', base: 'main', repoDir: root };
-  for (const engine of /** @type {const} */ (['action', 'sdk'])) {
-    for (const pass of /** @type {const} */ (['review', 'followup'])) {
-      const prompt = renderPrompt(pass, { ...settings, engine }, { ...run, unread: ['src/a.ts'] });
-      if (settings.guide && !prompt.includes(settings.guide)) {
-        throw new Error(`the ${engine} ${pass} prompt is missing the app's guide`);
-      }
-      log.push(`${engine} ${pass} prompt: renders, ${prompt.length} characters`);
+  for (const pass of /** @type {const} */ (['review', 'followup'])) {
+    const prompt = renderPrompt(pass, settings, { ...run, unread: ['src/a.ts'] });
+    if (settings.guide && !prompt.includes(settings.guide)) {
+      throw new Error(`the ${pass} prompt is missing the app's guide`);
     }
+    log.push(`${pass} prompt: renders, ${prompt.length} characters`);
   }
 
   const changed = [

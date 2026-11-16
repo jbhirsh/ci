@@ -2,8 +2,8 @@
 // Claude Review or the owner opened. Anyone can comment on a public PR, and
 // this job turns a thread into a pushed commit that can then auto-merge, so
 // a thread counts only when its first comment is
-//   - the Claude GitHub App's (claude[bot]: Claude Review on
-//     claude-code-action, `review.engine: "action"`), or
+//   - the Claude GitHub App's (claude[bot]: Claude Review's threads from
+//     before it left claude-code-action), or
 //   - github-actions[bot]'s carrying REVIEW_MARKER (Claude Review on the
 //     Agent SDK, which posts with the job's token, review/tools.mjs). Only a
 //     workflow run with write access posts as github-actions[bot], and the

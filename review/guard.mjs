@@ -1,4 +1,4 @@
-// The SDK engine's guard (sdk.mjs runs it as a PreToolUse and PostToolUse
+// The review's guard (sdk.mjs runs it as a PreToolUse and PostToolUse
 // hook): every tool call the reviewer makes passes through it before it
 // runs, whatever the permission mode or any settings file says, since
 // hooks run ahead of every other permission check. It allows:

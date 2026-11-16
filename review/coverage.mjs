@@ -2,10 +2,9 @@
 // The prompt (prompt.md) says to read every changed file's diff, tests
 // included, yet a review once passed a PR having opened only its source
 // files and seen the tests in `--stat` (sift #188, twice). This reads the
-// review's own tool calls from the execution file (claude-code-action's,
-// or the SDK engine's, sdk.mjs: the same SDK messages), so the
-// action can send it back for what it missed (followup.md) and fail the
-// check on a file still unread after that.
+// review's own tool calls from the execution file (sdk.mjs's: the SDK's
+// messages), so the action can send it back for what it missed
+// (followup.md) and fail the check on a file still unread after that.
 //
 // CLI: `node coverage.mjs <execution file>...`, the PR's changed files on
 // stdin, one per line; prints each changed file no pass read, one per line.
@@ -27,7 +26,7 @@
 //   - `git show HEAD:<path>`, the file as the PR leaves it;
 //   - `gh pr diff` (every file);
 //   - Read of the file itself, whole (no offset or limit);
-//   - the SDK engine's tools that run those git commands (tools.mjs):
+//   - the reviewer's tools that run those git commands (tools.mjs):
 //     `mcp__review__diff` (with or without paths; a long one only once
 //     every numbered part of it was read), `mcp__review__show` of HEAD,
 //     and for a deleted file `mcp__review__diff_list` or
@@ -389,7 +388,7 @@ function statLine(file, flags) {
 const PART = /^Part (\d+) of (\d+) of this diff\.\n/;
 
 /**
- * Whether a call asked the SDK engine's diff tool for one part of a long
+ * Whether a call asked the reviewer's diff tool for one part of a long
  * diff.
  *
  * @param {ToolCall} call
@@ -431,7 +430,7 @@ function partedDiffs(calls, base) {
 }
 
 /**
- * The git command one of the SDK engine's tools runs (tools.mjs), as the
+ * The git command one of the reviewer's tools runs (tools.mjs), as the
  * words a Bash call of it would have, so it's credited the same way: the
  * tools always run in the checkout, on the PR's own range. Null for any
  * other call.
@@ -523,7 +522,7 @@ export function unreadFiles(
   // A saved full output too long for one Read is read in parts.
   const opened = new Set(paths(true));
   const read = new Set(paths(false).map((p) => relative(p, repoDir)));
-  // A long diff from the SDK engine's tool comes in numbered parts; it
+  // A long diff from the reviewer's diff tool comes in numbered parts; it
   // counts once every part of the same call was read.
   for (const words of partedDiffs(calls, base)) {
     for (const file of filesReadBy(words, needed, base)) read.add(file);
@@ -574,8 +573,8 @@ function resultText(content) {
 }
 
 /**
- * The tool calls in claude-code-action's execution file (the SDK's message
- * list), each with its result. Unknown shapes are skipped, not fatal.
+ * The tool calls in a pass's execution file (the SDK's message list), each
+ * with its result. Unknown shapes are skipped, not fatal.
  *
  * @param {unknown} execution
  * @returns {ToolCall[]}

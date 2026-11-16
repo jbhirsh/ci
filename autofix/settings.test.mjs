@@ -12,7 +12,6 @@ describe('autofixSettings', () => {
       reviewFixChecks: DEFAULT_CHECKS,
       cannotRun: DEFAULT_CANNOT_RUN,
       exempt: {},
-      engine: 'action',
       advisor: null,
     });
   });
@@ -23,7 +22,6 @@ describe('autofixSettings', () => {
       reviewFixChecks: ['`a`', '`b`'],
       cannotRun: ['E2E'],
       exempt: {},
-      engine: 'action',
       advisor: null,
     });
     const both = app({ ciFixChecks: ['`a`'], reviewFixChecks: ['`make check`'] });
@@ -47,12 +45,13 @@ describe('autofixSettings', () => {
       '"autofix.checks" is not a setting',
     );
   });
-  it('reads the engine and advisor, and refuses bad ones', () => {
+  it('reads the advisor, accepts the ignored "sdk" engine, and refuses bad ones', () => {
     expect(autofixSettings({ root: app({ engine: 'sdk', advisor: 'opus' }) })).toMatchObject({
-      engine: 'sdk',
       advisor: 'opus',
     });
-    expect(() => autofixSettings({ root: app({ engine: 'claude' }) })).toThrow('"autofix.engine"');
+    for (const engine of ['action', 'claude']) {
+      expect(() => autofixSettings({ root: app({ engine }) })).toThrow('"autofix.engine"');
+    }
     expect(() => autofixSettings({ root: app({ advisor: 'Opus!' }) })).toThrow('"autofix.advisor"');
   });
 });

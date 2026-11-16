@@ -20,29 +20,29 @@
 //   of generated files the review may skim rather than read whole, as it
 //   may lockfiles, images and fonts; the coverage check (coverage.mjs)
 //   doesn't count them. Default: none.
-// - engine: what runs Claude. "action" (the default) is claude-code-action,
-//   which runs Claude Code: the Max plan's API credit doesn't pay for that.
-//   "sdk" is sdk.mjs, the Claude Agent SDK on the runner, which the credit
-//   does pay for (jbhirsh/ci#68), with a reviewer that can only read and
-//   post through its own tools (sdk.mjs says how).
-// - advisor: with "sdk", the model Sonnet may consult on a hard call (the
+// - engine: ignored. The review runs on the Claude Agent SDK (sdk.mjs), the
+//   only engine since claude-code-action went (jbhirsh/ci#68). The apps
+//   still set "sdk", so "sdk" is accepted and anything else fails; a later
+//   change drops the key once no repo sets it.
+// - advisor: the model Sonnet may consult on a hard call (the
 //   advisor tool), e.g. "opus". Default: none. Each review's step summary
 //   shows whether it ran and what it cost.
 // - skipBots: bots whose PRs aren't reviewed while every commit on them is
 //   theirs (skip.mjs): a Dependabot bump that passes CI needs no review,
-//   but once autofix pushes a fix (a claude[bot] commit) the PR is
-//   reviewed. Such a PR auto-merges on CI alone. Default: none.
+//   but once autofix pushes a fix (a github-actions[bot] commit, pushed
+//   with the app's BOT_PR_TOKEN) the PR is reviewed. Such a PR auto-merges
+//   on CI alone. Default: none.
 //
 // CLI: `node settings.mjs`, run from the app's checkout, with CONFIG_REF
-// (where to read them, `origin/<base>`). Step outputs `engine`, `advisor`
-// and `skip_bots` (one per line), for action.yml to choose its steps by.
+// (where to read them, `origin/<base>`). Step outputs `advisor` and
+// `skip_bots` (one per line), for action.yml's steps.
 
 import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appRoot } from '../lib/app.mjs';
 import {
   advisorSetting,
-  engineSetting,
+  checkEngine,
   loadConfig,
   onlyKnownKeys,
   readAppFile,
@@ -54,7 +54,6 @@ import {
  * @property {string | null} instructions the guide's path, if the app names one
  * @property {string} guide the guide's text ('' without one)
  * @property {string[]} skip
- * @property {'action' | 'sdk'} engine
  * @property {string | null} advisor the advisor model, if any
  * @property {string[]} skipBots
  */
@@ -67,10 +66,10 @@ export function reviewSettings(where) {
   const section = loadConfig('review', where);
   onlyKnownKeys('review', section, ['instructions', 'skip', 'engine', 'advisor', 'skipBots']);
   const skip = stringList('review.skip', section.skip, []);
-  const engine = engineSetting('review.engine', section.engine);
+  checkEngine('review.engine', section.engine);
   const advisor = advisorSetting('review.advisor', section.advisor);
   const skipBots = stringList('review.skipBots', section.skipBots, []);
-  const rest = { skip, engine, advisor, skipBots };
+  const rest = { skip, advisor, skipBots };
   const { instructions } = section;
   if (instructions === undefined) return { instructions: null, guide: '', ...rest };
   if (typeof instructions !== 'string' || instructions.trim() === '') {
@@ -88,7 +87,6 @@ export function reviewSettings(where) {
 /* c8 ignore start: the CLI's lines, run by action.yml */
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const settings = reviewSettings({ root: appRoot(), ref: process.env.CONFIG_REF || undefined });
-  setOutput('engine', settings.engine);
   setOutput('advisor', settings.advisor ?? '');
   setOutput('skip_bots', settings.skipBots.join('\n'));
 }

@@ -746,7 +746,7 @@ describe('main', () => {
   });
 });
 
-describe("the SDK engine's tools", () => {
+describe("the reviewer's tools", () => {
   /** @returns {ToolCall} */
   const own = (
     /** @type {string} */ name,

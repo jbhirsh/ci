@@ -1,13 +1,10 @@
-// Whether a review pass that claude-code-action failed did finish. The
-// action fails a run that ran past `--max-turns` even when Claude came back
-// with a successful result (base-action/src/run-claude-sdk.ts, October
-// 2026: "Claude reported a successful result after N turns, exceeding the
-// configured maximum of M"), after writing the execution file. A review
-// that ran long but finished has done its job, and whether it read
-// everything is coverage.mjs's call, so action.yml runs each pass with
-// continue-on-error and asks this instead. Anything else (an error result,
-// a run stopped at the cap, no result at all, no execution file) still
-// fails.
+// Whether a review pass that failed did finish, from its execution file.
+// action.yml runs each pass with continue-on-error and asks this after a
+// failure, so this is what fails the check, saying why. A review that ran
+// long but came back with a successful result has done its job, and
+// whether it read everything is coverage.mjs's call. Anything else (an
+// error result, a run stopped at the cap, no result at all, no execution
+// file) fails.
 //
 // CLI: `node result.mjs <execution file>`; exits 0 for a finished review,
 // 1 otherwise, saying which on stdout.
@@ -22,8 +19,8 @@ import { pathToFileURL } from 'node:url';
  */
 
 /**
- * Judges claude-code-action's execution file (the SDK's message list) by
- * its last result message.
+ * Judges a pass's execution file (the SDK's message list) by its last
+ * result message.
  *
  * @param {unknown} execution
  * @returns {Outcome}

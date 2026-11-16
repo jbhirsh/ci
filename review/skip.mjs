@@ -1,7 +1,9 @@
 // Whether a PR's review is skipped for being a bot's own work
 // (`review.skipBots` in `.github/ci.json`, settings.mjs): the PR was opened
-// by one of those bots and every commit on it is by one of them. A Dependabot bump that passes CI isn't
-// reviewed; once autofix pushes a fix to it, a claude[bot] commit, it is.
+// by one of those bots and every commit on it is by one of them. A
+// Dependabot bump that passes CI isn't reviewed; once autofix pushes a fix
+// to it, it is: a github-actions[bot] commit, pushed with the app's
+// BOT_PR_TOKEN.
 // A commit counts by its GitHub author login, falling back to its
 // committer's when GitHub matched no account to the author. Those logins
 // come from the commit's email, which anyone who can push can set to a

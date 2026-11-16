@@ -1,18 +1,17 @@
-// Claude autofix's SDK engine (`autofix.engine: "sdk"`, settings.mjs): runs
-// one fixer pass (ci-fix.md or review-fix.md) on the Claude Agent SDK on the
-// runner, in place of claude-code-action, which the Max plan's API credit
-// doesn't pay for (jbhirsh/ci#68).
+// Claude autofix's fixer pass: runs one pass (ci-fix.md or review-fix.md) on
+// the Claude Agent SDK on the runner, in place of claude-code-action, which
+// the Max plan's API credit doesn't pay for (jbhirsh/ci#68).
 //
 // A port of the claude-code-action pass, as the owner chose (#68): the same
 // tools (Read, Edit, Write, Glob, Grep, Agent for review-fix's sub-agents,
 // and Bash for git, npm, npx, gh and make, by the same allow rules, with a
-// PreToolUse hook as a second line), the same 80-turn cap, and Claude pushes and posts itself. It does
-// so with the app's BOT_PR_TOKEN (the stub's `bot_token`), which
-// action.yml sets as git's credential and gh's token; that token lasts
-// longer than the Claude app's, and the bump's npm scripts run in this
-// job, a risk the owner accepted. WebSearch and WebFetch are added under the
-// review's guard (../review/guard.mjs): a few searches, a page only from a
-// link it was shown (a package's changelog, say).
+// PreToolUse hook as a second line), the same 80-turn cap, and Claude pushes
+// and posts itself. It does so with the app's BOT_PR_TOKEN (the stub's
+// `bot_token`), which action.yml sets as git's credential and gh's token;
+// that token lasts longer than the Claude app's, and the bump's npm scripts
+// run in this job, a risk the owner accepted. WebSearch and WebFetch are
+// added under the review's guard (../review/guard.mjs): a few searches, a
+// page only from a link it was shown (a package's changelog, say).
 //
 // Model "sonnet"; with `autofix.advisor`, Sonnet may consult that model.
 // Sign-in is the review's: federation with a fresh OIDC token, or an API

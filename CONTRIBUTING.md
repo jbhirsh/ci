@@ -49,17 +49,18 @@ applies to every repo's next session:
 
 - **Claude Review** reads the rules from its own checkout of this repo (`review/prompt.md`).
 
-## Claude Review on the Agent SDK
+## Claude Review
 
-An app turns it on in `.github/ci.json` (`review/settings.mjs` says what each setting does):
+Claude Review runs on the Claude Agent SDK (`review/sdk.mjs`). An app's settings are in
+`.github/ci.json` (`review/settings.mjs` says what each does), for example:
 
 ```json
-{ "review": { "engine": "sdk", "advisor": "opus", "skipBots": ["dependabot[bot]"] } }
+{ "review": { "advisor": "opus", "skipBots": ["dependabot[bot]"] } }
 ```
 
 - **Payment.** The Max plan's API credit, in the linked Console organization, pays for it;
-  it doesn't pay for claude-code-action, which runs Claude Code (jbhirsh/ci#68). The review
-  shows each pass's cost in its job summary.
+  it doesn't pay for Claude Code, which is why the review left claude-code-action
+  (jbhirsh/ci#68). The review shows each pass's cost in its job summary.
 - **Sign-in.** Workload identity federation: the app's stub passes the four IDs and grants
   `id-token: write`. The Console rule matches by CEL, since its subject-prefix match refuses
   GitHub's `repo:<owner>@<id>/<repo>@<id>` subjects:
@@ -72,12 +73,14 @@ An app turns it on in `.github/ci.json` (`review/settings.mjs` says what each se
   on CI alone: the owner's decision (#68). Once autofix pushes a fix, the PR is reviewed.
 - **Out of credit.** A pass refused for credit or a spend limit warns and passes the check.
 
-## Claude autofix on the Agent SDK
+## Claude autofix
 
-An app turns it on with `"autofix": { "engine": "sdk", "advisor": "opus" }` in
-`.github/ci.json`, and its `claude-autofix.yml` stub passes `bot_token: ${{ secrets.BOT_PR_TOKEN }}`
-beside the four federation IDs. The fixer pushes and runs `gh` with that token, so its pushes
-start the PR's workflows. The token needs Contents and Pull requests read and write and Actions
-read on the app, and no Workflows permission. The token sits in the job that runs a Dependabot bump's npm scripts,
-which `pr-gif-attach.yml` keeps it out of: the owner accepted that here (jbhirsh/ci#68), as
-today's job holds the Claude app's token the same way.
+Claude autofix runs on the Claude Agent SDK too (`autofix/sdk.mjs`), signed in as the review
+is, with `"autofix": { "advisor": "opus" }` in `.github/ci.json`. An app's
+`claude-autofix.yml` stub passes `bot_token: ${{ secrets.BOT_PR_TOKEN }}` beside the four
+federation IDs. The fixer pushes and runs `gh` with that token, so its pushes start the PR's
+workflows; it commits as github-actions[bot]. The token needs Contents and Pull requests read
+and write and Actions read on the app, and no Workflows permission. It sits in the job that
+runs a Dependabot bump's npm scripts, which `pr-gif-attach.yml` keeps it out of: the owner
+accepted that here (jbhirsh/ci#68), as the job held the Claude app's token the same way before
+autofix left claude-code-action.

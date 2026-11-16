@@ -30,12 +30,12 @@
 // compared with what git says, never run.
 //
 // The record is void (everything is read) when any of these changed since:
-// prompt.md, followup.md, system.md (the SDK engine's system prompt), the
+// prompt.md, followup.md, system.md (the reviewer's system prompt), the
 // shared Claude rules the prompts point at
 // (claude-rules/CLAUDE.md, read from this checkout of jbhirsh/ci, so
 // renaming it fails the review until this follows), the
-// app's review settings (its engine and advisor among them) and guide, the
-// app's CLAUDE.md on the base branch,
+// app's review settings (its advisor and skipped bots among them) and
+// guide, the app's CLAUDE.md on the base branch,
 // or the base branch's name. Its `context` is a hash of them all.
 //
 // CLI, run from the app's checkout:

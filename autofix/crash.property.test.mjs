@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { crashed, markerFor, releasedBody } from './crash.mjs';
 
-// The execution file is whatever claude-code-action left, and the comment
+// The execution file is whatever the fixer's pass left, and the comment
 // body whatever the API returns: anything at all, as far as these know.
 const sha = fc.stringMatching(/^[0-9a-f]{40}$/);
 const fixer = fc.constantFrom(/** @type {const} */ ('ci'), /** @type {const} */ ('review'));

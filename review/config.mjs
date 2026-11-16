@@ -3,10 +3,9 @@
 //
 // Why the base branch: on a pull request the checkout is the PR's own code,
 // so a PR could otherwise rewrite the instructions its own review follows
-// (`review.instructions` in `.github/ci.json`, or the guide file it names)
-// without touching the workflow stub, which claude-code-action guards (see
-// action.yml). claude-code-action restores CLAUDE.md and `.claude/` from
-// the base for the same reason. Autofix runs on `workflow_run` with the
+// (`review.instructions` in `.github/ci.json`, or the guide file it names).
+// restore.mjs puts CLAUDE.md and `.claude/` back as the base holds them for
+// the same reason. Autofix runs on `workflow_run` with the
 // PR's branch checked out, so it reads the default branch the same way.
 // With no ref (the self-tests, a local run) it reads the working tree.
 
@@ -87,21 +86,18 @@ export function stringList(name, value, fallback) {
   return /** @type {string[]} */ (value);
 }
 
-/** The engines a tool's `engine` setting may name (review, autofix). */
-export const ENGINES = /** @type {const} */ (['action', 'sdk']);
-
 /**
- * A tool's `engine` setting: "action" (claude-code-action, the default) or
- * "sdk" (the Agent SDK).
+ * A tool's `engine` setting (review, autofix), which no longer chooses
+ * anything: the Agent SDK is the only engine (jbhirsh/ci#68). Every app
+ * still sets "sdk", so the key is accepted, as "sdk" alone, and ignored; a
+ * later change drops it once no repo sets it.
  *
  * @param {string} name e.g. `review.engine`
  * @param {unknown} value
- * @returns {'action' | 'sdk'}
  */
-export function engineSetting(name, value) {
-  if (value === undefined) return 'action';
-  if (value === 'action' || value === 'sdk') return value;
-  throw new Error(`.github/ci.json: "${name}" must be one of ${ENGINES.join(', ')}`);
+export function checkEngine(name, value) {
+  if (value === undefined || value === 'sdk') return;
+  throw new Error(`.github/ci.json: "${name}" must be "sdk", the only engine, or be left out`);
 }
 
 /**

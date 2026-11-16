@@ -1,4 +1,4 @@
-// The SDK engine's tools (sdk.mjs): everything the reviewer can do beyond
+// The reviewer's tools (sdk.mjs): everything the reviewer can do beyond
 // reading files (Read, Grep, Glob) and the web (WebSearch, WebFetch). It
 // has no shell. A shell allowlist proved escapable (jbhirsh/ci#68's plan
 // review: newlines, `<(...)`, `git --output`, `--upload-pack`,

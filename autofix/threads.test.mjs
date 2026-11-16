@@ -14,7 +14,7 @@ const thread = (typename, login, body = 'Fix this.', isResolved = false) => ({
 });
 
 describe('counts', () => {
-  it("counts Claude Review's threads, either engine's, and the owner's", () => {
+  it("counts Claude Review's threads, claude[bot]'s and marked ones, and the owner's", () => {
     expect(counts(thread('Bot', 'claude'), 'jb')).toBe(true);
     expect(counts(thread('Bot', 'github-actions', `Bug.\n\n${REVIEW_MARKER}`), 'jb')).toBe(true);
     expect(counts(thread('User', 'jb'), 'jb')).toBe(true);

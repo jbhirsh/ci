@@ -1,14 +1,11 @@
-// Claude Review's SDK engine (`review.engine: "sdk"`, settings.mjs): runs one
-// review pass on the Claude Agent SDK on the runner, in place of
-// claude-code-action. The Max plan's API credit pays for Agent SDK runs but
-// not for Claude Code, which is what claude-code-action runs
-// (jbhirsh/ci#68, whose step 0 proved it on #69).
+// Claude Review's pass: runs one review pass (render.mjs's prompt) on the
+// Claude Agent SDK on the runner. The Max plan's API credit pays for Agent
+// SDK runs but not for Claude Code, which is why the review left
+// claude-code-action (jbhirsh/ci#68, whose step 0 proved it on #69).
 //
-// The pass is the same review: render.mjs's prompt, coverage.mjs's check of
-// what it read, carry.mjs's carry-over and the follow-up all stay as they
-// are, since this writes the same execution file (the SDK's messages, one
-// JSON array) and gives action.yml the same outputs. What differs is what
-// the reviewer can do. It reads and reports, nothing else:
+// It writes the execution file (the SDK's messages, one JSON array) that
+// coverage.mjs checks for what the pass read, and that carry.mjs and the
+// follow-up build on. The reviewer reads and reports, nothing else:
 //   - tools: Read, Grep, Glob, WebSearch, WebFetch and the in-process tools
 //     (tools.mjs: git reads, the PR, the two posting tools). No Bash, Edit,
 //     Write or Agent.
