@@ -31,10 +31,21 @@
 // ANTHROPIC_IDENTITY_TOKEN_FILE; the federated token lasts an hour, longer
 // than the job's timeout. An API key (ANTHROPIC_API_KEY) works instead.
 //
-// A pass refused for credit or a spend limit isn't the PR's fault: it ends
-// with a warning and the output `stopped` (credit or limit), and action.yml
-// skips the coverage check and the follow-up on it, so the check passes
-// (#57).
+// A pass refused for credit or a spend or usage limit isn't the PR's fault.
+// With CLAUDE_CODE_OAUTH_TOKEN set (the owner's Claude subscription, made
+// by `claude setup-token`), the same pass runs once more on it, from a
+// fresh config folder with a fresh guard, so it can't read the stopped
+// attempt's files (#57). Its prompt says an earlier attempt may have left
+// comments, not to repeat. The retry's cost goes into the subscription's
+// own 5-hour and weekly limits, which the owner's interactive Claude Code
+// shares. Each attempt's environment holds exactly one credential, since
+// the bundled CLI picks by precedence (ANTHROPIC_AUTH_TOKEN, then
+// ANTHROPIC_API_KEY, then CLAUDE_CODE_OAUTH_TOKEN, then federation): the
+// API attempt never sees the subscription token, nor the retry the key,
+// the federation IDs or the OIDC token file. A pass still stopped after
+// that, or with no token to retry with, ends with a warning and the output
+// `stopped` (credit or limit); action.yml skips the coverage check and the
+// follow-up on it.
 //
 // CLI: `node sdk.mjs`, run from the app's checkout, with
 //   PROMPT          the rendered prompt (render.mjs)
@@ -43,13 +54,16 @@
 //   CI_DIR          this repo's checkout (SHARED_CI)
 //   REPO, PR, BASE_REF, HEAD_SHA   the PR
 //   GH_TOKEN        the job's token, for the posting tools
-//   OUT_FILE        where the execution file goes
+//   OUT_FILE        where the execution file goes: the last attempt's
+//                   messages only, so coverage credits only what it read
 //   RUNNER_TEMP     for the OIDC token file and the SDK's own files
 //   the federation variables (ANTHROPIC_FEDERATION_RULE_ID,
 //   _ORGANIZATION_ID, _SERVICE_ACCOUNT_ID, _WORKSPACE_ID) or
 //   ANTHROPIC_API_KEY, and the Actions OIDC variables
-// Step outputs: `execution_file` and `stopped`. Exits 1 when the pass
-// didn't finish (result.mjs then judges it), 0 otherwise.
+//   CLAUDE_CODE_OAUTH_TOKEN   the subscription to retry a stop on, or empty
+// Step outputs: `execution_file`, `stopped` and `fallback` ("true" when the
+// subscription retry ran). Exits 1 when the pass didn't finish (result.mjs
+// then judges it), 0 otherwise.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -67,35 +81,56 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const BUILT_IN = ['Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch'];
 /** Built-in tools it never has, refused by name as well as by the guard. */
 export const DISALLOWED = ['Bash', 'Edit', 'Write', 'NotebookEdit', 'Agent'];
-/** The environment the reviewer's process gets: nothing else. */
-const ENV_ALLOWED = [
-  'PATH',
-  'HOME',
-  'LANG',
-  'TMPDIR',
-  'ANTHROPIC_API_KEY',
+/** The environment every attempt's process gets, besides its credential. */
+const ENV_ALLOWED = ['PATH', 'HOME', 'LANG', 'TMPDIR'];
+/** The federation variables, the API attempt's credential without a key. */
+const FEDERATION = [
   'ANTHROPIC_FEDERATION_RULE_ID',
   'ANTHROPIC_ORGANIZATION_ID',
   'ANTHROPIC_SERVICE_ACCOUNT_ID',
   'ANTHROPIC_WORKSPACE_ID',
 ];
+/** What the retry's prompt adds: the stopped attempt may have posted. */
+export const RETRY_NOTE = [
+  '',
+  'An earlier attempt at this pass stopped, out of API credit or at a limit,',
+  'and may already have left inline comments and a summary on the PR. Read',
+  "them with `mcp__review__pr` first, and don't post an inline comment",
+  "that's already there.",
+].join('\n');
 
 /**
- * The reviewer's environment: the allowlist, plus where its token file and
- * config folder are.
+ * @typedef {'api' | 'subscription'} Auth how an attempt signs in: the API
+ *   (a key, or federation), or the owner's Claude subscription
+ */
+
+/**
+ * The reviewer's environment: the allowlist, its one credential and where
+ * its config folder is. The API attempt gets the key, or else the
+ * federation variables and the OIDC token file; the subscription retry
+ * gets CLAUDE_CODE_OAUTH_TOKEN and nothing else that signs in.
  *
  * @param {Record<string, string | undefined>} env
- * @param {{ tokenFile: string | null, configDir: string }} files
+ * @param {{ auth: Auth, tokenFile: string | null, configDir: string }} files
  * @returns {Record<string, string>}
  */
-export function reviewerEnv(env, { tokenFile, configDir }) {
+export function reviewerEnv(env, { auth, tokenFile, configDir }) {
   /** @type {Record<string, string>} */
   const out = {};
-  for (const name of ENV_ALLOWED) {
+  /** @param {string} name */
+  const pass = (name) => {
     const value = env[name];
     if (value) out[name] = value;
+  };
+  ENV_ALLOWED.forEach(pass);
+  if (auth === 'subscription') {
+    pass('CLAUDE_CODE_OAUTH_TOKEN');
+  } else if (env.ANTHROPIC_API_KEY) {
+    pass('ANTHROPIC_API_KEY');
+  } else {
+    FEDERATION.forEach(pass);
+    if (tokenFile) out.ANTHROPIC_IDENTITY_TOKEN_FILE = tokenFile;
   }
-  if (tokenFile) out.ANTHROPIC_IDENTITY_TOKEN_FILE = tokenFile;
   out.CLAUDE_CONFIG_DIR = configDir;
   out.CLAUDE_AGENT_SDK_CLIENT_APP = 'jbhirsh-ci-review';
   return out;
@@ -367,11 +402,60 @@ export function queryOptions({ sdk, ctx, guard, run }) {
 }
 
 /**
- * Runs one pass. Returns the outputs and whether it finished.
+ * @typedef {object} Attempt
+ * @property {unknown[]} messages
+ * @property {'credit' | 'limit' | null} stopped
+ * @property {boolean} finished
+ * @property {string} report
+ */
+
+/**
+ * Runs one attempt at the pass, signed in as `auth`, with its own config
+ * folder and guard.
+ *
+ * @param {object} p
+ * @param {typeof import('@anthropic-ai/claude-agent-sdk')} p.sdk
+ * @param {import('./tools.mjs').Context} p.ctx
+ * @param {Record<string, string | undefined>} p.env
+ * @param {{ auth: Auth, tokenFile: string | null, configDir: string }} p.as
+ * @param {{ prompt: string, maxTurns: number, advisor: string | null, ciDir: string }} p.run
+ * @returns {Promise<Attempt>}
+ */
+async function attempt({ sdk, ctx, env, as, run }) {
+  mkdirSync(as.configDir, { recursive: true });
+  // The SDK saves long tool output under its config folder; the reviewer
+  // reads it back, so it's one of the guard's roots.
+  const guard = createGuard({ roots: [ctx.repoDir, run.ciDir, as.configDir], cwd: ctx.repoDir });
+  const options = queryOptions({
+    sdk,
+    ctx,
+    guard,
+    run: { ...run, env: reviewerEnv(env, as) },
+  });
+  /** @type {unknown[]} */
+  const messages = [];
+  let failure = '';
+  try {
+    for await (const message of sdk.query({ prompt: run.prompt, options })) messages.push(message);
+  } catch (error) {
+    failure = error instanceof Error ? error.message : String(error);
+  }
+  const result = lastResult(messages);
+  return {
+    messages,
+    stopped: stoppedBy(messages, failure),
+    finished: !failure && result?.subtype === 'success' && result.is_error !== true,
+    report: failure ? `${report(result)}\n\nThe pass failed: ${failure}` : report(result),
+  };
+}
+
+/**
+ * Runs one pass, and retries a stopped one on the subscription. Returns the
+ * outputs and whether it finished.
  *
  * @param {Record<string, string | undefined>} env
  * @param {{ sdk?: typeof import('@anthropic-ai/claude-agent-sdk'), fetchImpl?: import('./github.mjs').Fetch, root?: string }} [deps]
- * @returns {Promise<{ executionFile: string, stopped: 'credit' | 'limit' | null, finished: boolean, report: string }>}
+ * @returns {Promise<{ executionFile: string, stopped: 'credit' | 'limit' | null, finished: boolean, fallback: boolean, report: string }>}
  */
 export async function main(env, deps = {}) {
   const fetchImpl =
@@ -385,8 +469,6 @@ export async function main(env, deps = {}) {
   };
   const temp = path.join(need('RUNNER_TEMP'), 'claude-review-sdk');
   mkdirSync(temp, { recursive: true });
-  const configDir = path.join(temp, 'config');
-  mkdirSync(configDir, { recursive: true });
 
   let tokenFile = null;
   if (!env.ANTHROPIC_API_KEY) {
@@ -402,57 +484,58 @@ export async function main(env, deps = {}) {
     headSha: need('HEAD_SHA'),
     api: github(need('GH_TOKEN'), fetchImpl),
   };
-  const ciDir = need('CI_DIR');
-  // The SDK saves long tool output under its config folder; the reviewer
-  // reads it back, so it's one of the guard's roots.
-  const guard = createGuard({ roots: [root, ciDir, configDir], cwd: root });
-  const options = queryOptions({
+  const run = {
+    prompt: need('PROMPT'),
+    maxTurns: Number(env.MAX_TURNS) || 200,
+    advisor: env.ADVISOR || null,
+    ciDir: need('CI_DIR'),
+  };
+  const first = await attempt({
     sdk,
     ctx,
-    guard,
-    run: {
-      maxTurns: Number(env.MAX_TURNS) || 200,
-      advisor: env.ADVISOR || null,
-      ciDir,
-      env: reviewerEnv(env, { tokenFile, configDir }),
-    },
+    env,
+    as: { auth: 'api', tokenFile, configDir: path.join(temp, 'config') },
+    run,
   });
-
-  /** @type {unknown[]} */
-  const messages = [];
-  let failure = '';
-  try {
-    for await (const message of sdk.query({ prompt: need('PROMPT'), options }))
-      messages.push(message);
-  } catch (error) {
-    failure = error instanceof Error ? error.message : String(error);
-  }
+  const fallback = first.stopped !== null && Boolean(env.CLAUDE_CODE_OAUTH_TOKEN);
+  const last = fallback
+    ? await attempt({
+        sdk,
+        ctx,
+        env,
+        as: { auth: 'subscription', tokenFile: null, configDir: path.join(temp, 'config-retry') },
+        run: { ...run, prompt: `${run.prompt}\n${RETRY_NOTE}` },
+      })
+    : first;
   const executionFile = env.OUT_FILE || path.join(temp, 'execution.json');
-  writeFileSync(executionFile, JSON.stringify(messages));
-
-  const result = lastResult(messages);
-  const stopped = stoppedBy(messages, failure);
-  const finished = !failure && result?.subtype === 'success' && result.is_error !== true;
+  writeFileSync(executionFile, JSON.stringify(last.messages));
   return {
     executionFile,
-    stopped,
-    finished,
-    report: failure ? `${report(result)}\n\nThe pass failed: ${failure}` : report(result),
+    stopped: last.stopped,
+    finished: last.finished,
+    fallback,
+    report: fallback
+      ? `${first.report}\n\nStopped (${first.stopped}); retried on the Claude subscription:\n\n${last.report}`
+      : last.report,
   };
 }
 
 /* c8 ignore start: the CLI's lines, run by action.yml */
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { executionFile, stopped, finished, report: text } = await main(process.env);
+  const { executionFile, stopped, finished, fallback, report: text } = await main(process.env);
   setOutput('execution_file', executionFile);
   setOutput('stopped', stopped ?? '');
+  setOutput('fallback', fallback ? 'true' : '');
   summary(text);
   console.log(text);
   if (stopped) {
     const why =
       stopped === 'credit' ? 'the API credit is spent' : 'a spend or usage limit was reached';
+    const retry = fallback
+      ? 'The retry on the Claude subscription stopped too.'
+      : 'No subscription token was given to retry on.';
     console.log(
-      `::warning title=Claude Review stopped::Claude Review didn't run: ${why}. The check passes; review this PR by hand, or re-run once the credit or limit resets.`,
+      `::warning title=Claude Review stopped::Claude Review didn't finish: ${why}. ${retry}`,
     );
   } else if (!finished) {
     process.exit(1);

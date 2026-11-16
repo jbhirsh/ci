@@ -3,11 +3,15 @@
 # (.github/workflows/claude-review.yml) is a stub: its trigger, its job (whose
 # `name:` is the required check), the job's permissions, and one step calling
 # this action at @main with its Claude credentials (the federation IDs, or
-# an API key). Everything else is here, so a
+# an API key, and the subscription token a stopped pass is retried on).
+# Everything else is here, so a
 # change to the review reaches all three apps at once.
 #
 # Claude runs on the Claude Agent SDK, on the runner (sdk.mjs), which the
-# Max plan's API credit pays for (jbhirsh/ci#68). The reviewer has no
+# Max plan's API credit pays for (jbhirsh/ci#68). A pass the API refuses
+# for credit or a limit is tried once more on the owner's Claude
+# subscription, when the stub passes its token (`claude_code_oauth_token`,
+# #57). The reviewer has no
 # shell: it reads through its own tools and posts through code holding the
 # job's token, as github-actions[bot], each inline comment marked for
 # autofix (sdk.mjs and guard.mjs say how it's locked down).
@@ -78,6 +82,16 @@ inputs:
   anthropic_api_key:
     description: >-
       Anthropic API key. Give this or the federation inputs below.
+    required: false
+    default: ""
+  claude_code_oauth_token:
+    description: >-
+      Subscription fallback only: the federation inputs or an API key sign
+      in first. The owner's Claude subscription token (the app's
+      CLAUDE_CODE_OAUTH_TOKEN secret, made by `claude setup-token`, set for
+      Actions and for Dependabot): a pass the API refuses for credit or a
+      spend or usage limit runs once more on it (sdk.mjs). Without it, no
+      retry.
     required: false
     default: ""
   anthropic_federation_rule_id:
@@ -245,6 +259,7 @@ runs:
         ANTHROPIC_ORGANIZATION_ID: ${{ inputs.anthropic_organization_id }}
         ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
         ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
       run: |
         mkdir -p "$RUNNER_TEMP/claude-review"
         node "$GITHUB_ACTION_PATH/sdk.mjs"
@@ -320,6 +335,7 @@ runs:
         ANTHROPIC_ORGANIZATION_ID: ${{ inputs.anthropic_organization_id }}
         ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
         ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
       run: node "$GITHUB_ACTION_PATH/sdk.mjs"
 
     - name: Check the follow-up finished
