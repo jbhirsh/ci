@@ -81,8 +81,8 @@ CI's commit check fails), a body that explains why, and the
 
 Push with `git push origin HEAD:{{branch}}`: a plain push on top of
 Dependabot's commit, never a force push, never `--no-verify`. The push goes
-out as the Claude app, so it starts the PR's workflows itself; don't
-dispatch them.
+out with a token whose pushes start the PR's workflows; don't dispatch
+them.
 
 ## 6. Comment
 

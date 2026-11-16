@@ -86,3 +86,33 @@ export function stringList(name, value, fallback) {
   }
   return /** @type {string[]} */ (value);
 }
+
+/** The engines a tool's `engine` setting may name (review, autofix). */
+export const ENGINES = /** @type {const} */ (['action', 'sdk']);
+
+/**
+ * A tool's `engine` setting: "action" (claude-code-action, the default) or
+ * "sdk" (the Agent SDK).
+ *
+ * @param {string} name e.g. `review.engine`
+ * @param {unknown} value
+ * @returns {'action' | 'sdk'}
+ */
+export function engineSetting(name, value) {
+  if (value === undefined) return 'action';
+  if (value === 'action' || value === 'sdk') return value;
+  throw new Error(`.github/ci.json: "${name}" must be one of ${ENGINES.join(', ')}`);
+}
+
+/**
+ * A tool's `advisor` setting: a model name, or null for none.
+ *
+ * @param {string} name e.g. `review.advisor`
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+export function advisorSetting(name, value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string' && /^[a-z0-9][a-z0-9.-]*$/.test(value)) return value;
+  throw new Error(`.github/ci.json: "${name}" must be a model name, such as "opus", or null`);
+}

@@ -441,6 +441,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   setOutput('execution_file', executionFile);
   setOutput('stopped', stopped ?? '');
   summary(text);
+  console.log(text);
   if (stopped) {
     const why =
       stopped === 'credit' ? 'the API credit is spent' : 'a spend or usage limit was reached';

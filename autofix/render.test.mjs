@@ -8,6 +8,8 @@ const settings = {
   reviewFixChecks: ['`make check` (lint, typecheck, tests)'],
   cannotRun: ['visual regression', 'mutation testing'],
   exempt: {},
+  engine: /** @type {'action' | 'sdk'} */ ('action'),
+  advisor: null,
 };
 const run = { repo: 'jbhirsh/app', pr: '9', base: 'main', repoDir: '/r' };
 

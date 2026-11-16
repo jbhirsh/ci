@@ -40,10 +40,14 @@
 import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appRoot } from '../lib/app.mjs';
-import { loadConfig, onlyKnownKeys, readAppFile, stringList } from './config.mjs';
-
-/** The engines `review.engine` may name. */
-export const ENGINES = /** @type {const} */ (['action', 'sdk']);
+import {
+  advisorSetting,
+  engineSetting,
+  loadConfig,
+  onlyKnownKeys,
+  readAppFile,
+  stringList,
+} from './config.mjs';
 
 /**
  * @typedef {object} ReviewSettings
@@ -56,28 +60,6 @@ export const ENGINES = /** @type {const} */ (['action', 'sdk']);
  */
 
 /**
- * @param {unknown} value
- * @returns {'action' | 'sdk'}
- */
-function engineOf(value) {
-  if (value === undefined) return 'action';
-  if (value === 'action' || value === 'sdk') return value;
-  throw new Error(`.github/ci.json: "review.engine" must be one of ${ENGINES.join(', ')}`);
-}
-
-/**
- * @param {unknown} value
- * @returns {string | null}
- */
-function advisorOf(value) {
-  if (value === undefined || value === null) return null;
-  if (typeof value === 'string' && /^[a-z0-9][a-z0-9.-]*$/.test(value)) return value;
-  throw new Error(
-    '.github/ci.json: "review.advisor" must be a model name, such as "opus", or null',
-  );
-}
-
-/**
  * @param {{ root: string, ref?: string }} where
  * @returns {ReviewSettings}
  */
@@ -85,8 +67,8 @@ export function reviewSettings(where) {
   const section = loadConfig('review', where);
   onlyKnownKeys('review', section, ['instructions', 'skip', 'engine', 'advisor', 'skipBots']);
   const skip = stringList('review.skip', section.skip, []);
-  const engine = engineOf(section.engine);
-  const advisor = advisorOf(section.advisor);
+  const engine = engineSetting('review.engine', section.engine);
+  const advisor = advisorSetting('review.advisor', section.advisor);
   const skipBots = stringList('review.skipBots', section.skipBots, []);
   const rest = { skip, engine, advisor, skipBots };
   const { instructions } = section;
