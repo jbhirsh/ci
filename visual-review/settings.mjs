@@ -15,7 +15,9 @@
 //                Phone and Desktop; sift: Light and Dark). None: a row per
 //                shot, named by its path
 //   mockupPaths  globs of the paths a mockup patch may change (src/**,
-//                public/**): everything else, lockfiles always, is refused
+//                public/**): everything else, lockfiles always, is refused.
+//                What a patched file can then reach, and what to leave out:
+//                visual-shots/mockup/action.yml
 //
 // An app without the key doesn't use visual review, and every tool that
 // reads it (enable.mjs's gate, the self-test) behaves as before it.
