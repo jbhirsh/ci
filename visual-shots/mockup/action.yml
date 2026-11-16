@@ -29,4 +29,6 @@ runs:
       env:
         MOCKUP_PATCH: ${{ inputs.patch }}
         MOCKUP_ISSUE: ${{ inputs.issue }}
+        # Only a dispatch on the default branch is read by visual-review.
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       run: node "$GITHUB_ACTION_PATH/../shots.mjs" mockup

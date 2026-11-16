@@ -168,14 +168,38 @@ describe('main', () => {
     writeFileSync(path.join(root, 'src/a.txt'), 'two\n');
     const ok = Buffer.from(git(['diff', '--binary'])).toString('base64');
     git(['checkout', '-q', '--', '.']);
-    expect(main(['mockup'], { MOCKUP_PATCH: ok, MOCKUP_ISSUE: '3' }, root)).toMatch(/applied/);
+    const onMain = { GITHUB_REF: 'refs/heads/main', DEFAULT_BRANCH: 'main', MOCKUP_ISSUE: '3' };
+    expect(main(['mockup'], { ...onMain, MOCKUP_PATCH: ok }, root)).toMatch(/applied/);
     expect(readFileSync(path.join(root, 'src/a.txt'), 'utf8')).toBe('two\n');
     git(['checkout', '-q', '--', '.']);
     writeFileSync(path.join(root, 'README.md'), 'changed\n');
     const bad = Buffer.from(git(['diff', '--binary'])).toString('base64');
     git(['checkout', '-q', '--', '.']);
-    expect(() => main(['mockup'], { MOCKUP_PATCH: bad }, root)).toThrow(/may not: README\.md/);
+    expect(() => main(['mockup'], { ...onMain, MOCKUP_PATCH: bad }, root)).toThrow(
+      /may not: README\.md/,
+    );
     expect(readFileSync(path.join(root, 'README.md'), 'utf8')).toBe('r\n');
+  });
+
+  it('refuses a mockup that would post nowhere: no issue, or not on the default branch', () => {
+    const { root, git } = app({ 'src/a.txt': 'one\n' });
+    writeFileSync(path.join(root, 'src/a.txt'), 'two\n');
+    const patch = Buffer.from(git(['diff', '--binary'])).toString('base64');
+    git(['checkout', '-q', '--', '.']);
+    const onMain = { GITHUB_REF: 'refs/heads/main', DEFAULT_BRANCH: 'main', MOCKUP_PATCH: patch };
+    expect(() => main(['mockup'], onMain, root)).toThrow(/mockup_issue is required/);
+    expect(() =>
+      main(['mockup'], { ...onMain, MOCKUP_ISSUE: '3', GITHUB_REF: 'refs/heads/topic' }, root),
+    ).toThrow(
+      /runs by hand on main only \(this run is on refs\/heads\/topic\).*run it again on main/,
+    );
+    expect(() =>
+      main(['mockup'], { ...onMain, MOCKUP_ISSUE: '3', DEFAULT_BRANCH: undefined }, root),
+    ).toThrow(/runs by hand on the default branch only/);
+    expect(() =>
+      main(['mockup'], { ...onMain, MOCKUP_ISSUE: '3', GITHUB_REF: undefined }, root),
+    ).toThrow(/this run is on no ref/);
+    expect(readFileSync(path.join(root, 'src/a.txt'), 'utf8')).toBe('one\n');
   });
 
   it('needs the settings and a known command', () => {
