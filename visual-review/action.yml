@@ -35,6 +35,7 @@ runs:
     - uses: actions/setup-node@v7
       with:
         node-version: 24
+        package-manager-cache: false
 
     # pixelmatch and pngjs, from this repo's lockfile into the action's own
     # checkout, for the comparison.

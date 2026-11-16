@@ -39,6 +39,11 @@ runs:
     - uses: actions/setup-node@v7
       with:
         node-version: 24
+        # Nothing here installs packages, so there's no cache to restore; and
+        # an app's `packageManager` field would otherwise turn setup-node's
+        # automatic caching on, writing one from a run that holds code no one
+        # reviewed (a PR's, or a mockup's patch).
+        package-manager-cache: false
 
     - name: Apply the mockup patch
       shell: bash

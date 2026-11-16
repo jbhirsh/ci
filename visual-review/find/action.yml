@@ -29,6 +29,7 @@ runs:
     - uses: actions/setup-node@v7
       with:
         node-version: 24
+        package-manager-cache: false
 
     - name: Find the reviews this event calls for
       id: find
