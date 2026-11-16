@@ -801,6 +801,11 @@ describe("the reviewer's tools", () => {
     expect(readBy(part(1), cut, part(3))).toEqual([]);
     const mentions = { ...part(2), result: 'Part 2 of 3 of this diff.\n+// Output too large' };
     expect(readBy(part(1), mentions, part(3))).toEqual(['src/a.ts']);
+    // The follow-up's one call naming every unread file covers them all,
+    // once every part is read.
+    const all = ['src/a.ts', 'src/b.ts', '__tests__/unit/a.test.ts'];
+    expect(readBy(part(1, 2, all), part(2, 2, all))).toEqual(changed);
+    expect(readBy(part(1, 2, all))).toEqual([]);
     // The notice that a diff is too long reads nothing.
     expect(
       readBy({ ...own('diff'), result: 'This diff is 90000 characters', failed: true }),

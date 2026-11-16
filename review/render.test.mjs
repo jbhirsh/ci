@@ -39,7 +39,7 @@ describe('the templates', () => {
       'ciDir',
       'skippable',
       'appGuide',
-      'unread',
+      'unreadPaths',
       'carried',
     ];
     for (const pass of /** @type {const} */ (['review', 'followup'])) {
@@ -107,9 +107,19 @@ describe('renderPrompt', () => {
     expect(renderPrompt('review', none, run)).toContain('SHARED_CI/claude-rules/CLAUDE.md');
     expect(renderPrompt('followup', none, run)).toContain(`${CI_DIR}/claude-rules/CLAUDE.md`);
   });
-  it('lists the unread files in the follow-up', () => {
-    const prompt = renderPrompt('followup', none, { ...run, unread: ['a.ts', 'b c.ts'] });
-    expect(prompt).toContain('diffs:\n  - a.ts\n  - b c.ts\n');
+  it('lists the unread files in the follow-up once, as the paths to read them by', () => {
+    const prompt = renderPrompt('followup', none, { ...run, unread: ['a.ts', 'b "c".ts'] });
+    expect(prompt).toContain('diffs:\n\n["a.ts","b \\"c\\".ts"]\n');
+    expect(prompt.split('a.ts').length).toBe(2);
+    expect(prompt).toMatch(/`mcp__review__diff` with `paths`\s+set to that list/);
+    expect(prompt).not.toContain('one file per call');
+  });
+  it('tells both passes that a one-line change must be read too', () => {
+    for (const pass of /** @type {const} */ (['review', 'followup'])) {
+      expect(renderPrompt(pass, none, { ...run, unread: ['a.ts'] })).toMatch(
+        /A one-line change is a changed\s+file/,
+      );
+    }
   });
 });
 
@@ -185,7 +195,7 @@ describe('main', () => {
   it('renders the follow-up from UNREAD', () => {
     const root = testApp({});
     const { prompt, maxTurns } = main('followup', { ...env, UNREAD: 'a.ts\n\n b.ts \n' }, root);
-    expect(prompt).toContain('  - a.ts\n  - b.ts');
+    expect(prompt).toContain('["a.ts","b.ts"]');
     expect(maxTurns).toBe('40');
     expect(() => main('followup', env, root)).toThrow('UNREAD is empty');
   });
