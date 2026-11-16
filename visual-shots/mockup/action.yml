@@ -9,6 +9,22 @@ description: >-
   code on no branch. Pass the inputs straight from the dispatch, never
   spliced into a script.
 
+  The limit of that: a patched file that ends up running on the runner,
+  outside a browser page, runs with the job. That's a Playwright spec, a
+  test helper, anything a spec or config imports from `src/`, or the app
+  itself in sift's Simulator. Such code can reach the job's later steps,
+  and through them the job's runtime token, which uploads artifacts and
+  writes caches. A mockup runs on main, so anything it caches is restored
+  by every later run on every branch and PR, main's reference runs
+  included. A writer's branch can't do that: it writes only its own cache.
+  The owner accepted this so mockups can show new screens (ci#64): only
+  someone with write access can dispatch one, and they can already run
+  code in this repository's workflows. So keep `mockupPaths` to the files
+  a screen needs (name the spec files or their folder, not `**` or all
+  of `e2e/`), never the test config, global setup, `package.json` or CI
+  files (only lockfiles are refused by the tool), and check out with
+  `persist-credentials: false` on a mockup.
+
 inputs:
   patch:
     description: The dispatch's mockup_patch input.
