@@ -5,11 +5,10 @@
 // that head to wake another run (BoardGames #298: a 504 while the step set
 // up, then exit 127, and the PR sat red under "Attempt 1 of 2").
 //
-// So a failure is read from claude-code-action's execution file, the
+// So a failure is read from the fixer's execution file (sdk.mjs's), the
 // messages of the Claude run:
 //   - crashed: Claude never took a turn. No file, or no assistant message
-//     in it: the step died setting up (claude-code-action has already
-//     retried its own install by then) or the model wasn't reachable.
+//     in it: the step died setting up or the model wasn't reachable.
 //     Nothing was tried, so after a wait, to outlast a short outage, the
 //     action tries once more in the same job, from the head as it was. The
 //     one sleep in autofix: no completion is left to wake a later run. A

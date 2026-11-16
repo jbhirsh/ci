@@ -1,11 +1,10 @@
 // Puts the base branch's Claude instructions back in the PR's checkout
-// before the SDK engine's review (sdk.mjs), which loads them
+// before the review (sdk.mjs), which loads them
 // (`settingSources: ["project"]`). A PR can't then rewrite what its own
 // reviewer is told, or what it may do: every CLAUDE.md and CLAUDE.local.md,
 // at any depth, and everything under a `.claude/` folder, is made as the
 // base holds it, and one the PR adds is removed. What the PR changes in
-// them is still in its diff, which the review reads. claude-code-action
-// does the same before it starts (review/action.yml's header).
+// them is still in its diff, which the review reads.
 //
 // A PR could make one of these paths, or a folder above one, a symlink, so
 // that writing the base's copy overwrote a file elsewhere (this action's own

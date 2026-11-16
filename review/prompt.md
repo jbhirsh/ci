@@ -5,7 +5,9 @@ BASE: origin/{{base}}
 SHARED_CI: {{ciDir}}
 
 Review this pull request for correctness, bugs, design and security, and
-for the project's conventions that no automated check enforces. {{claudeMd}} Then read
+for the project's conventions that no automated check enforces.
+CLAUDE.md is already loaded, for the architecture (the base branch's copy;
+what the PR changes in it is in the diff). Then read
 the shared rules every repo here follows, SHARED_CI/claude-rules/CLAUDE.md:
 Claude sessions load them from the user's rules folder, which this run
 doesn't have, so read them here.
@@ -24,7 +26,8 @@ unverifiable. It's reference, not part of the diff.
 A review that passes a PR must have read all of its diff. Do this right
 after reading CLAUDE.md, however large the PR:
 
-1. See what changed and how much: {{listCommands}}. {{skippable}} may
+1. See what changed and how much: `mcp__review__diff_stat` and
+   `mcp__review__diff_list`. {{skippable}} may
    be skimmed or skipped; say which in the summary. A file the PR deletes
    (`D` in `--name-status`) is covered by that line: what it held is gone,
    so its old contents needn't be read whole. Still look at each deleted
@@ -35,13 +38,15 @@ after reading CLAUDE.md, however large the PR:
    Every other file must be read in full.
 {{carried}}
 2. Read each other file's diff on its own, tests included:
-   {{diffCommand}} (for a rename, give both
+   `mcp__review__diff` with `paths: ["<file>"]` (for a rename, give both
    paths). Tests, fixtures, end-to-end flows and snapshots are changed files
    like any other, and a changed or removed assertion is where a weakened
    test hides. Seeing a file only in `--stat` is not reading it (a deleted
    file's `--name-status` line aside). Don't ask for several files in one
    command: large output is cut to a preview. A check counts what you read
-   from your own tool calls{{countRule}}; a file it
+   from your own tool calls, so read each diff with `mcp__review__diff` or
+   Read; a long diff comes in numbered parts, and counts once you have read
+   every part; a file it
    can't see you read comes back to you in a second pass. To save turns,
    send several of these single-file diffs as parallel tool calls in one
    message; each gets its own output limit.
@@ -109,7 +114,8 @@ Treat violations of these as review issues and flag them inline:
   abstractions the task doesn't need. Don't add error handling or fallbacks
   for scenarios that can't happen; validate only at system boundaries.
 - **A branch holds only its final design.** List the PR's commits
-  ({{logCommand}}) and flag a commit
+  (`mcp__review__log`, and `mcp__review__commit` for any that look
+  related) and flag a commit
   that reverts or replaces what an earlier commit in the same PR added, or
   fixes a mistake in it: a design tried and dropped, a fix on top, a
   revert. Each belongs folded into the commit it changes, so every commit
@@ -119,8 +125,9 @@ Treat violations of these as review issues and flag them inline:
   (the dropped work left nothing, or only binary files), and name both
   commits. Bots' commits are exempt, as committing on top is how they work,
   and nothing else is:
-  - a commit whose author name is exactly `github-actions[bot]` (visual
-    baselines, README screenshots) or `claude[bot]` (autofix). A commit authored
+  - a commit whose author name is exactly `github-actions[bot]` (autofix,
+    visual baselines, README screenshots) or `claude[bot]` (autofix before
+    it moved to the Agent SDK). A commit authored
     `Claude <noreply@anthropic.com>` is an AI session's, not a bot's: the
     rule applies to it in full, as to a person's;
   - every commit of a bot's PR, one whose author is `dependabot[bot]` or
@@ -139,7 +146,8 @@ Treat violations of these as review issues and flag them inline:
 
 ## Visual evidence
 
-Read the PR description ({{prBody}}). Skip this section
+Read the PR description (`mcp__review__pr`, which also holds its review
+comments and your earlier summary). Skip this section
 on Dependabot's PRs. The "PR visuals" check already fails a UI change with
 no picture at all; your job is the judgment it can't make. If the diff
 changes how something on screen moves or responds (a transition or
@@ -254,5 +262,7 @@ summary's notes on a file only while that file still differs from
 `origin/{{base}}`; drop those on one that no longer does (one an earlier
 push added and a later push removed, say, or changed and then reverted).
 
-{{summaryPost}}
+Keep a single summary per PR, updated on each push: post it with
+`mcp__review__post_summary`, which replaces your earlier summary if
+there is one (`mcp__review__pr` shows it), or posts it otherwise.
 This comment is not a review thread and blocks nothing.

@@ -4,11 +4,8 @@ name: Claude Review
 # (review/action.yml says what it does and what it leaves to CI). It runs
 # that action from main, not from the PR: a PR is reviewed by the reviewer
 # already merged, never by the copy it changes. This repo's
-# .github/ci.json turns on the Agent SDK engine, with the Opus advisor.
-#
-# claude-code-action skips (and still reports success on) a PR that edits the
-# workflow file it runs from, so only a PR that edits this file goes
-# unreviewed. The job's `name:` is a required status check.
+# .github/ci.json turns on the Opus advisor and leaves Dependabot's own
+# bumps unreviewed. The job's `name:` is a required status check.
 on:
   pull_request:
     branches: [main]
@@ -19,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Run the JavaScript actions (claude-code-action et al.) on Node 24.
+  # Run the JavaScript actions (checkout, setup-node, cache) on Node 24.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
@@ -34,8 +31,8 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
-      # claude-code-action uses the job's OIDC token for the Claude GitHub
-      # App's token, and for a Claude API token (federation, below).
+      # The job's OIDC token, traded for a Claude API token (federation,
+      # below).
       id-token: write
     steps:
       - uses: jbhirsh/ci/review@main

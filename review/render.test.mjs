@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { tmpdir } from 'node:os';
@@ -6,7 +6,6 @@ import {
   CI_DIR,
   appGuide,
   carriedSection,
-  engineText,
   followupTurns,
   main,
   renderPrompt,
@@ -17,7 +16,6 @@ import { testApp, writeFiles } from './testApp.mjs';
 
 /** The settings' defaults beside the ones each test sets. */
 const DEFAULTS = {
-  engine: /** @type {'action' | 'sdk'} */ ('action'),
   advisor: null,
   /** @type {string[]} */
   skipBots: [],
@@ -43,23 +41,10 @@ describe('the templates', () => {
       'appGuide',
       'unread',
       'carried',
-      ...Object.keys(engineText('action', run)).filter((k) => k !== 'carriedRead'),
     ];
-    expect(Object.keys(engineText('sdk', run))).toEqual(Object.keys(engineText('action', run)));
     for (const pass of /** @type {const} */ (['review', 'followup'])) {
       for (const name of placeholders(template(pass))) expect(given).toContain(name);
     }
-  });
-});
-
-describe('action.yml', () => {
-  it("runs both passes for the bots that push to a PR's branch, and no others", () => {
-    const action = readFileSync(path.join(CI_DIR, 'review', 'action.yml'), 'utf8');
-    const lists = [...action.matchAll(/^\s*allowed_bots: "([^"]*)"$/gm)].map((m) => m[1]);
-    expect(lists).toEqual([
-      'dependabot[bot],claude[bot],github-actions[bot]',
-      'dependabot[bot],claude[bot],github-actions[bot]',
-    ]);
   });
 });
 
@@ -73,8 +58,8 @@ describe('renderPrompt', () => {
     };
     const prompt = renderPrompt('review', settings, run);
     expect(prompt).toContain('PR: 7');
-    expect(prompt).toContain('git diff -M origin/main...HEAD -- <file>');
-    expect(prompt).toContain('gh api repos/jbhirsh/app/issues/7/comments');
+    expect(prompt).toContain('`mcp__review__diff` with `paths: ["<file>"]`');
+    expect(prompt).toContain('`mcp__review__post_summary`');
     expect(prompt).toContain('Lockfiles, images, fonts and the generated files `src/gql/**` may');
     expect(prompt).toContain('## This app (from `g.md`)\n\n## Auth\n\nGates.');
   });
@@ -92,15 +77,13 @@ describe('renderPrompt', () => {
   });
   it("asks the review to flag commits that undo or patch the PR's earlier ones", () => {
     const prompt = renderPrompt('review', none, run);
-    expect(prompt).toContain(
-      "git log --reverse --no-merges --format='%h %an <%ae> %s' origin/main..HEAD",
-    );
+    expect(prompt).toContain('`mcp__review__log`, and `mcp__review__commit`');
     expect(prompt).toContain('reverts or replaces what an earlier commit in the same PR added');
   });
   it("exempts only bots' commits, by exact author name, never an AI session's", () => {
     const prompt = renderPrompt('review', none, run);
     expect(prompt).toContain(
-      'a commit whose author name is exactly `github-actions[bot]` (visual\n    baselines, README screenshots) or `claude[bot]` (autofix)',
+      'a commit whose author name is exactly `github-actions[bot]` (autofix,\n    visual baselines, README screenshots) or `claude[bot]` (autofix before\n    it moved to the Agent SDK)',
     );
     expect(prompt).toContain(
       "A commit authored\n    `Claude <noreply@anthropic.com>` is an AI session's, not a bot's: the\n    rule applies to it in full",
@@ -137,23 +120,22 @@ describe('carried-over files', () => {
     const prompt = renderPrompt('review', none, { ...run, carried });
     expect(prompt).toContain('Already reviewed: an earlier review of this PR read these files');
     expect(prompt).toContain('   - `src/a b.ts`, reviewed at abcdef0');
-    expect(prompt).toContain('gh api repos/jbhirsh/app/issues/comments/<id> --jq .body');
+    expect(prompt).toContain(
+      'read it\n   (`mcp__review__pr`, `earlierSummary`) and keep its notes',
+    );
     expect(prompt).toContain('`git diff -M origin/main...HEAD -- <file>`). You needn');
   });
 
   it("keep an earlier summary's notes only on files still in the diff, carried or not", () => {
-    const sdk = { ...none, engine: /** @type {'action' | 'sdk'} */ ('sdk') };
-    for (const settings of [none, sdk]) {
-      for (const c of [[], carried]) {
-        expect(renderPrompt('review', settings, { ...run, carried: c })).toMatch(
-          /only while that file still differs from\s+`origin\/main`/,
-        );
-      }
+    for (const c of [[], carried]) {
+      expect(renderPrompt('review', none, { ...run, carried: c })).toMatch(
+        /only while that file still differs from\s+`origin\/main`/,
+      );
     }
   });
 
   it('leave the prompt as it was when there are none', () => {
-    expect(carriedSection([], run, 'read it')).toBe('');
+    expect(carriedSection([], run)).toBe('');
     expect(renderPrompt('review', none, run)).not.toContain('Already reviewed');
   });
 });
@@ -239,11 +221,10 @@ describe('main', () => {
   });
 });
 
-describe('the SDK engine', () => {
-  const sdk = { ...none, engine: /** @type {'action' | 'sdk'} */ ('sdk') };
-  it('reads and posts through its own tools, and never through a shell', () => {
+describe('both prompts', () => {
+  it("read and post through the reviewer's own tools, and never through a shell", () => {
     for (const pass of /** @type {const} */ (['review', 'followup'])) {
-      const prompt = renderPrompt(pass, sdk, {
+      const prompt = renderPrompt(pass, none, {
         ...run,
         unread: ['src/a.ts'],
         carried: [{ file: 'b.ts', sha: 'abcdef1234' }],

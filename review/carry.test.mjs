@@ -270,8 +270,8 @@ describe('the context', () => {
   it.each([
     ['the prompt', { prompt: 'p2' }],
     ['the follow-up prompt', { followup: 'f2' }],
-    ["the SDK engine's system prompt", { system: 's2' }],
-    ['the engine', { settings: { ...parts.settings, engine: 'sdk' } }],
+    ["the reviewer's system prompt", { system: 's2' }],
+    ['the bots whose PRs are skipped', { settings: { ...parts.settings, skipBots: ['x[bot]'] } }],
     ['the advisor', { settings: { ...parts.settings, advisor: 'opus' } }],
     ['the shared Claude rules', { rules: 'r2' }],
     ["the app's instructions", { settings: { ...parts.settings, guide: 'G2' } }],

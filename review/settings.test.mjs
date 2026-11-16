@@ -8,7 +8,6 @@ describe('reviewSettings', () => {
       instructions: null,
       guide: '',
       skip: [],
-      engine: 'action',
       advisor: null,
       skipBots: [],
     });
@@ -25,7 +24,6 @@ describe('reviewSettings', () => {
         instructions: '.github/claude-review.md',
         guide: '## Auth\n\nGates.',
         skip: ['src/gql/**'],
-        engine: 'action',
         advisor: null,
         skipBots: [],
       });
@@ -44,26 +42,27 @@ describe('reviewSettings', () => {
     const typo = testApp({ '.github/ci.json': '{"review": {"guide": "x.md"}}' });
     expect(() => reviewSettings({ root: typo })).toThrow('"review.guide" is not a setting');
   });
-  it('reads the engine, the advisor and the bots to skip', () => {
+  it('reads the advisor and the bots to skip, and accepts the ignored "sdk" engine', () => {
     const root = testApp({
       '.github/ci.json': JSON.stringify({
         review: { engine: 'sdk', advisor: 'opus', skipBots: ['dependabot[bot]'] },
       }),
     });
     expect(reviewSettings({ root })).toMatchObject({
-      engine: 'sdk',
       advisor: 'opus',
       skipBots: ['dependabot[bot]'],
     });
     const off = testApp({ '.github/ci.json': '{"review": {"engine": "sdk", "advisor": null}}' });
     expect(reviewSettings({ root: off }).advisor).toBeNull();
   });
-  it('fails on an unknown engine, a bad advisor or bad bots', () => {
+  it('fails on an engine other than "sdk", a bad advisor or bad bots', () => {
     /** @param {unknown} review */
     const with_ = (review) => testApp({ '.github/ci.json': JSON.stringify({ review }) });
-    expect(() => reviewSettings({ root: with_({ engine: 'managed' }) })).toThrow(
-      '"review.engine" must be one of action, sdk',
-    );
+    for (const engine of ['action', 'managed', null]) {
+      expect(() => reviewSettings({ root: with_({ engine }) })).toThrow(
+        '"review.engine" must be "sdk", the only engine, or be left out',
+      );
+    }
     for (const advisor of ['', 'Opus 5', 3, ['opus']]) {
       expect(() => reviewSettings({ root: with_({ advisor }) })).toThrow('"review.advisor"');
     }

@@ -4,8 +4,8 @@
 # (that list stays in the app, since only YAML can say it, and
 # check-triggers/action.yml, a step of the app's CI, keeps it complete), its
 # concurrency group, the job's permissions and timeout, and one step calling
-# this action at @main with its Claude credentials (a token, or the
-# federation IDs).
+# this action at @main with its Claude credentials (the federation IDs, or
+# an API key).
 #
 # On each listed workflow's completion it decides from the PR's state, not
 # from which run woke it (the concurrency group keeps one pending run, so a
@@ -46,23 +46,19 @@
 # from Claude Review or the owner, and counts only markers that
 # github-actions[bot] posted, since anyone can comment on a public PR. The
 # workflow_run event runs the stub from the default branch, so a PR can't
-# change it, and claude-code-action's workflow check (../review/action.yml
-# explains it) always passes here.
+# change it.
 #
-# Two engines run Claude (`autofix.engine`, settings.mjs): "action" (the
-# default), claude-code-action, which the Max plan's API credit doesn't
-# pay for; and "sdk", sdk.mjs on the Claude Agent SDK, which it does
-# (jbhirsh/ci#68). The SDK pass is a port: the same tools, and Claude
-# pushes and posts itself, with the app's BOT_PR_TOKEN (`bot_token`)
-# instead of the Claude app's token. That token lasts longer, and the
-# bump's npm scripts run in this job: a risk the owner accepted (#68).
-# Either engine's execution file goes to the same crash and retry steps.
+# Claude runs on the Claude Agent SDK (sdk.mjs), which the Max plan's API
+# credit pays for (jbhirsh/ci#68). Claude pushes and posts itself, with the
+# app's BOT_PR_TOKEN (`bot_token`). That token lasts longer than the Claude
+# app's token it replaced, and the bump's npm scripts run in this job: a
+# risk the owner accepted (#68). Its execution file goes to the crash and
+# retry steps.
 #
-# Every Claude pass runs on the newest Sonnet: `--model sonnet` in
-# claude_args (`model: "sonnet"` for the SDK), rather than a default model,
-# which can change to another tier. Its thinking is adaptive (the model
-# decides how much), at that model's default effort; no `--effort` is set.
-# With "sdk", `autofix.advisor` lets it consult a stronger model.
+# Every Claude pass runs on the newest Sonnet (`model: "sonnet"`), rather
+# than a default model, which can change to another tier. Its thinking is
+# adaptive (the model decides how much), at that model's default effort; no
+# effort is set. `autofix.advisor` lets it consult a stronger model.
 name: Claude autofix
 description: >-
   Fixes a bot's PR: mechanical breakage when a dependency bump fails a
@@ -71,29 +67,23 @@ description: >-
   once (../dependabot-merge/enable.mjs).
 
 inputs:
-  claude_code_oauth_token:
-    description: >-
-      Claude Code OAuth token (the app's CLAUDE_CODE_OAUTH_TOKEN secret).
-      Give this, anthropic_api_key, or the two federation inputs.
-    required: false
-    default: ""
   anthropic_api_key:
-    description: Anthropic API key, instead of the OAuth token.
+    description: >-
+      Anthropic API key. Give this or the federation inputs below.
     required: false
     default: ""
   anthropic_federation_rule_id:
     description: >-
       Workload identity federation rule (fdrl_...), instead of a stored
-      token: with the organization and service account IDs below,
-      claude-code-action trades the job's GitHub OIDC token for a
-      short-lived Claude API token each run, so there is no secret to
+      token: with the organization and service account IDs below, the
+      Agent SDK trades the job's GitHub OIDC token for a short-lived Claude
+      API token each run, so there is no secret to
       expire or be revoked. Billed as API usage,
       not to a Claude subscription. The rule is made in the Anthropic
       Console (Workload identity), and one rule can serve several
       repositories. The IDs aren't secret, so an app writes them in its
-      workflow. Pass these instead of claude_code_oauth_token and
-      anthropic_api_key, not beside them: a stored credential is likely
-      tried first.
+      workflow. Pass these instead of anthropic_api_key, not beside it: a
+      stored credential is likely tried first.
     required: false
     default: ""
   anthropic_organization_id:
@@ -115,23 +105,20 @@ inputs:
     default: ""
   bot_token:
     description: >-
-      With `autofix.engine: "sdk"`: the app's BOT_PR_TOKEN, a fine-grained
-      token on the app with Contents and Pull requests read and write (the
-      push, the fixer's comment, resolving threads) and Actions read (the
-      failed runs' logs), which the fixer pushes with and runs gh with
-      (sdk.mjs). Pushes by it start the PR's workflows, as the Claude app's
-      did. No Workflows permission: it mustn't push workflow files. Unused
-      by the default engine.
+      The app's BOT_PR_TOKEN, a fine-grained token on the app with Contents
+      and Pull requests read and write (the push, the fixer's comment,
+      resolving threads) and Actions read (the failed runs' logs), which the
+      fixer pushes with and runs gh with (sdk.mjs). Pushes by it start the
+      PR's workflows, as the Claude app's did. No Workflows permission: it
+      mustn't push workflow files.
     required: false
     default: ""
   github_token:
     description: >-
       Token for this action's own `gh` calls (finding the PR, its checks and
-      threads, posting marker comments). Claude itself pushes with the Claude
-      GitHub App's token, which claude-code-action gets through the job's
-      id-token permission, or with "sdk" with bot_token. The job needs
-      contents, pull-requests and issues write, actions read and id-token
-      write.
+      threads, posting marker comments). Claude itself pushes with
+      bot_token. The job needs contents, pull-requests and issues write,
+      actions read, and id-token write for a federated Claude API token.
     required: false
     default: ${{ github.token }}
 
@@ -217,8 +204,7 @@ runs:
         ref: ${{ steps.pr.outputs.branch }}
         fetch-depth: 0
         # Don't leave the Actions token in git config: git would push with
-        # it instead of the Claude app token claude-code-action sets up (or,
-        # with "sdk", the bot token "Set up the SDK engine" sets), and
+        # it instead of the bot token "Set up the Agent SDK" sets, and
         # GitHub holds every workflow on a push by that token
         # ("action_required"), so the fix would never be checked.
         persist-credentials: false
@@ -229,11 +215,11 @@ runs:
         node-version: 24
         cache: npm
 
-    # Which engine runs Claude (settings.mjs), from the default branch. It
-    # reads the app's autofix settings on every run, so a bad autofix key
-    # in .github/ci.json fails even a run with nothing to fix.
-    - name: Read autofix's engine
-      id: engine
+    # The advisor (settings.mjs), from the default branch. It reads the
+    # app's autofix settings on every run, so a bad autofix key in
+    # .github/ci.json fails even a run with nothing to fix.
+    - name: Read autofix's settings
+      id: settings
       if: steps.pr.outputs.skip == 'false'
       shell: bash
       env:
@@ -263,7 +249,7 @@ runs:
         set -o pipefail
         echo "fix=false" >> "$GITHUB_OUTPUT"
         # npm bumps only: a github-actions bump edits workflow files, which
-        # neither engine's token can push.
+        # the bot token can't push.
         case "$BRANCH" in
           # An app's Dependabot groups named blocked-<package> hold majors
           # that wait on another package (its dependabot.yml says which,
@@ -327,153 +313,13 @@ runs:
           echo "fix=true"
         } >> "$GITHUB_OUTPUT"
 
-    # With the SDK engine the fixer pushes with the bot token (sdk.mjs), as
-    # git's credential for github.com in this checkout, and commits as
-    # github-actions[bot], whose commits the review exempts from its
-    # one-design rule as it does claude[bot]'s. Only when there's a fix to
-    # make, so a run with nothing to do installs nothing.
-    - name: Set up the SDK engine
-      id: sdk-setup
-      if: steps.ci.outputs.fix == 'true' && steps.engine.outputs.engine == 'sdk'
-      shell: bash
-      env:
-        BOT_TOKEN: ${{ inputs.bot_token }}
-      run: |
-        if [ -z "$BOT_TOKEN" ]; then
-          echo "::error title=No bot token::autofix.engine is \"sdk\" but the stub passes no bot_token (the app's BOT_PR_TOKEN secret)."
-          exit 1
-        fi
-        auth=$(printf 'x-access-token:%s' "$BOT_TOKEN" | base64 -w0)
-        git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $auth"
-        git config --local user.name 'github-actions[bot]'
-        git config --local user.email '41898282+github-actions[bot]@users.noreply.github.com'
-        npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/.."
-
-    - name: Render the CI fixer's prompt
-      id: ci-prompt
-      if: steps.ci.outputs.fix == 'true'
-      shell: bash
-      env:
-        REPO: ${{ github.repository }}
-        PR: ${{ steps.pr.outputs.number }}
-        BASE_REF: ${{ github.event.repository.default_branch }}
-        BRANCH: ${{ steps.pr.outputs.branch }}
-        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        FAILED_CHECKS: ${{ steps.ci.outputs.failed_checks }}
-      run: node "$GITHUB_ACTION_PATH/render.mjs" ci-fix
-
-    - uses: anthropics/claude-code-action@v1
-      id: ci-fix
-      if: steps.ci.outputs.fix == 'true' && steps.engine.outputs.engine == 'action'
-      # A failure is read by the steps below (crash.mjs), which fail the job.
-      continue-on-error: true
-      with:
-        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
-        anthropic_api_key: ${{ inputs.anthropic_api_key }}
-        anthropic_federation_rule_id: ${{ inputs.anthropic_federation_rule_id }}
-        anthropic_organization_id: ${{ inputs.anthropic_organization_id }}
-        anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
-        anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
-        # workflow_run reports the initiating actor: dependabot[bot], or
-        # claude[bot] when the run followed an autofix push.
-        allowed_bots: "dependabot[bot],claude[bot]"
-        prompt: ${{ steps.ci-prompt.outputs.prompt }}
-        claude_args: |
-          --model sonnet
-          --max-turns 80
-          --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
-
-    # The same pass on the Agent SDK (sdk.mjs); one or the other runs.
-    - name: Fix with the Agent SDK (ci-fix)
-      id: ci-fix-sdk
-      if: steps.ci.outputs.fix == 'true' && steps.engine.outputs.engine == 'sdk'
-      continue-on-error: true
-      shell: bash
-      env:
-        PROMPT: ${{ steps.ci-prompt.outputs.prompt }}
-        ADVISOR: ${{ steps.engine.outputs.advisor }}
-        GH_TOKEN: ${{ inputs.bot_token }}
-        OUT_FILE: ${{ runner.temp }}/claude-autofix/ci-fix.json
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
-        ANTHROPIC_FEDERATION_RULE_ID: ${{ inputs.anthropic_federation_rule_id }}
-        ANTHROPIC_ORGANIZATION_ID: ${{ inputs.anthropic_organization_id }}
-        ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
-        ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
-      run: node "$GITHUB_ACTION_PATH/sdk.mjs"
-
-    # The marker went up before Claude started, so a fixer that dies before
-    # doing anything (a timeout setting the step up) would spend the head's
-    # one attempt with nothing to show and nothing left to wake another run.
-    # crash.mjs tells that apart from a fixer that ran and failed: only a
-    # crash is tried again, once, after a wait; a run that failed was the
-    # attempt. A push before the failure starts new runs on the new head.
-    - name: Decide whether to retry the CI fixer
-      id: ci-retry
-      if: steps.ci-fix.outcome == 'failure' || steps.ci-fix-sdk.outcome == 'failure'
-      shell: bash
-      env:
-        GH_TOKEN: ${{ inputs.github_token }}
-        PR: ${{ steps.pr.outputs.number }}
-        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        EXECUTION_FILE: ${{ steps.ci-fix.outputs.execution_file || steps.ci-fix-sdk.outputs.execution_file }}
-      run: node "$GITHUB_ACTION_PATH/crash.mjs" retry
-
-    - uses: anthropics/claude-code-action@v1
-      id: ci-fix-again
-      if: steps.ci-retry.outputs.retry == 'true' && steps.engine.outputs.engine == 'action'
-      continue-on-error: true
-      with:
-        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
-        anthropic_api_key: ${{ inputs.anthropic_api_key }}
-        anthropic_federation_rule_id: ${{ inputs.anthropic_federation_rule_id }}
-        anthropic_organization_id: ${{ inputs.anthropic_organization_id }}
-        anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
-        anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
-        allowed_bots: "dependabot[bot],claude[bot]"
-        prompt: ${{ steps.ci-prompt.outputs.prompt }}
-        claude_args: |
-          --model sonnet
-          --max-turns 80
-          --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
-
-    # The retry, on the Agent SDK.
-    - name: Fix with the Agent SDK (ci-fix-again)
-      id: ci-fix-again-sdk
-      if: steps.ci-retry.outputs.retry == 'true' && steps.engine.outputs.engine == 'sdk'
-      continue-on-error: true
-      shell: bash
-      env:
-        PROMPT: ${{ steps.ci-prompt.outputs.prompt }}
-        ADVISOR: ${{ steps.engine.outputs.advisor }}
-        GH_TOKEN: ${{ inputs.bot_token }}
-        OUT_FILE: ${{ runner.temp }}/claude-autofix/ci-fix-again.json
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
-        ANTHROPIC_FEDERATION_RULE_ID: ${{ inputs.anthropic_federation_rule_id }}
-        ANTHROPIC_ORGANIZATION_ID: ${{ inputs.anthropic_organization_id }}
-        ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
-        ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
-      run: node "$GITHUB_ACTION_PATH/sdk.mjs"
-
-    # The last try failed without pushing: say so on the PR, and fail the
-    # job, which continue-on-error above would otherwise hide (crash.mjs).
-    - name: Report the CI fixer's failure
-      if: steps.ci-retry.outputs.report == 'true' || steps.ci-fix-again.outcome == 'failure' || steps.ci-fix-again-sdk.outcome == 'failure'
-      shell: bash
-      env:
-        GH_TOKEN: ${{ inputs.github_token }}
-        PR: ${{ steps.pr.outputs.number }}
-        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        EXECUTION_FILE: ${{ steps.ci-fix-again.outputs.execution_file || steps.ci-fix-again-sdk.outputs.execution_file || steps.ci-fix.outputs.execution_file || steps.ci-fix-sdk.outputs.execution_file }}
-      run: node "$GITHUB_ACTION_PATH/crash.mjs" report ci
-
     - name: Count unresolved threads
       # Runs on any listed workflow's completion and decides from the PR's
       # state. Green CI only: on a red build the review fixer would be
       # changing code nobody has checked, and could patch the breakage
       # outside the CI fixer's rules. Claude Review no longer waits for CI,
       # so both must be green on the head; it doesn't fail for its findings.
-      # Not after the CI fixer ran in this job: it may have left edits in
+      # Not when the CI fixer has work in this run: it may leave edits in
       # the checkout, and its push starts new runs that pick the round up.
       id: threads
       if: steps.pr.outputs.skip == 'false' && steps.ci.outputs.fix != 'true'
@@ -488,7 +334,7 @@ runs:
       run: |
         set -o pipefail
         echo "count=0" >> "$GITHUB_OUTPUT"
-        # Fresh from the API: an earlier run, or the CI fixer, may have pushed.
+        # Fresh from the API: an earlier run may have pushed.
         CURRENT=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.head.sha')
         if [ "$CURRENT" != "$RUN_SHA" ]; then
           echo "Run is for $RUN_SHA but the PR head is $CURRENT — skipping"
@@ -543,15 +389,18 @@ runs:
         gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$BODY"
         echo "count=$UNRESOLVED" >> "$GITHUB_OUTPUT"
 
-    # As before the CI fixer, unless that already ran this job.
-    - name: Set up the SDK engine for the review fixer
-      if: steps.threads.outputs.count != '' && steps.threads.outputs.count != '0' && steps.engine.outputs.engine == 'sdk' && steps.sdk-setup.outcome != 'success'
+    # Either fixer pushes with the bot token (sdk.mjs), as git's credential
+    # for github.com in this checkout, and commits as github-actions[bot],
+    # whose commits the review exempts from its one-design rule. Only when
+    # there's a fix to make, so a run with nothing to do installs nothing.
+    - name: Set up the Agent SDK
+      if: steps.ci.outputs.fix == 'true' || (steps.threads.outputs.count != '' && steps.threads.outputs.count != '0')
       shell: bash
       env:
         BOT_TOKEN: ${{ inputs.bot_token }}
       run: |
         if [ -z "$BOT_TOKEN" ]; then
-          echo "::error title=No bot token::autofix.engine is \"sdk\" but the stub passes no bot_token (the app's BOT_PR_TOKEN secret)."
+          echo "::error title=No bot token::The autofix stub passes no bot_token (the app's BOT_PR_TOKEN secret), which the fixer pushes with."
           exit 1
         fi
         auth=$(printf 'x-access-token:%s' "$BOT_TOKEN" | base64 -w0)
@@ -559,6 +408,83 @@ runs:
         git config --local user.name 'github-actions[bot]'
         git config --local user.email '41898282+github-actions[bot]@users.noreply.github.com'
         npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/.."
+
+    - name: Render the CI fixer's prompt
+      id: ci-prompt
+      if: steps.ci.outputs.fix == 'true'
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        PR: ${{ steps.pr.outputs.number }}
+        BASE_REF: ${{ github.event.repository.default_branch }}
+        BRANCH: ${{ steps.pr.outputs.branch }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        FAILED_CHECKS: ${{ steps.ci.outputs.failed_checks }}
+      run: node "$GITHUB_ACTION_PATH/render.mjs" ci-fix
+
+    - name: Fix with the Agent SDK (ci-fix)
+      id: ci-fix
+      if: steps.ci.outputs.fix == 'true'
+      continue-on-error: true
+      shell: bash
+      env:
+        PROMPT: ${{ steps.ci-prompt.outputs.prompt }}
+        ADVISOR: ${{ steps.settings.outputs.advisor }}
+        GH_TOKEN: ${{ inputs.bot_token }}
+        OUT_FILE: ${{ runner.temp }}/claude-autofix/ci-fix.json
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        ANTHROPIC_FEDERATION_RULE_ID: ${{ inputs.anthropic_federation_rule_id }}
+        ANTHROPIC_ORGANIZATION_ID: ${{ inputs.anthropic_organization_id }}
+        ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
+        ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
+      run: node "$GITHUB_ACTION_PATH/sdk.mjs"
+
+    # The marker went up before Claude started, so a fixer that dies before
+    # doing anything (a timeout setting the step up) would spend the head's
+    # one attempt with nothing to show and nothing left to wake another run.
+    # crash.mjs tells that apart from a fixer that ran and failed: only a
+    # crash is tried again, once, after a wait; a run that failed was the
+    # attempt. A push before the failure starts new runs on the new head.
+    - name: Decide whether to retry the CI fixer
+      id: ci-retry
+      if: steps.ci-fix.outcome == 'failure'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        PR: ${{ steps.pr.outputs.number }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        EXECUTION_FILE: ${{ steps.ci-fix.outputs.execution_file }}
+      run: node "$GITHUB_ACTION_PATH/crash.mjs" retry
+
+    - name: Fix with the Agent SDK (ci-fix-again)
+      id: ci-fix-again
+      if: steps.ci-retry.outputs.retry == 'true'
+      continue-on-error: true
+      shell: bash
+      env:
+        PROMPT: ${{ steps.ci-prompt.outputs.prompt }}
+        ADVISOR: ${{ steps.settings.outputs.advisor }}
+        GH_TOKEN: ${{ inputs.bot_token }}
+        OUT_FILE: ${{ runner.temp }}/claude-autofix/ci-fix-again.json
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        ANTHROPIC_FEDERATION_RULE_ID: ${{ inputs.anthropic_federation_rule_id }}
+        ANTHROPIC_ORGANIZATION_ID: ${{ inputs.anthropic_organization_id }}
+        ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
+        ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
+      run: node "$GITHUB_ACTION_PATH/sdk.mjs"
+
+    # The last try failed without pushing: say so on the PR, and fail the
+    # job, which continue-on-error above would otherwise hide (crash.mjs).
+    - name: Report the CI fixer's failure
+      if: steps.ci-retry.outputs.report == 'true' || steps.ci-fix-again.outcome == 'failure'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        PR: ${{ steps.pr.outputs.number }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        EXECUTION_FILE: ${{ steps.ci-fix-again.outputs.execution_file || steps.ci-fix.outputs.execution_file }}
+      run: node "$GITHUB_ACTION_PATH/crash.mjs" report ci
 
     - name: Render the review fixer's prompt
       id: review-prompt
@@ -570,38 +496,14 @@ runs:
         BASE_REF: ${{ github.event.repository.default_branch }}
       run: node "$GITHUB_ACTION_PATH/render.mjs" review-fix
 
-    - uses: anthropics/claude-code-action@v1
-      id: review-fix
-      if: steps.threads.outputs.count != '' && steps.threads.outputs.count != '0' && steps.engine.outputs.engine == 'action'
-      # A failure is read by the steps below (crash.mjs), which fail the job.
-      continue-on-error: true
-      with:
-        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
-        anthropic_api_key: ${{ inputs.anthropic_api_key }}
-        anthropic_federation_rule_id: ${{ inputs.anthropic_federation_rule_id }}
-        anthropic_organization_id: ${{ inputs.anthropic_organization_id }}
-        anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
-        anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
-        # workflow_run reports the initiating actor: dependabot[bot] for a
-        # Dependabot PR, claude[bot] after an autofix push.
-        allowed_bots: "dependabot[bot],claude[bot]"
-        # No track_progress: the action accepts it only on pull_request and
-        # issue events, and setting it on workflow_run fails the run.
-        prompt: ${{ steps.review-prompt.outputs.prompt }}
-        claude_args: |
-          --model sonnet
-          --max-turns 80
-          --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
-
-    # The same pass on the Agent SDK (sdk.mjs).
     - name: Fix with the Agent SDK (review-fix)
-      id: review-fix-sdk
-      if: steps.threads.outputs.count != '' && steps.threads.outputs.count != '0' && steps.engine.outputs.engine == 'sdk'
+      id: review-fix
+      if: steps.threads.outputs.count != '' && steps.threads.outputs.count != '0'
       continue-on-error: true
       shell: bash
       env:
         PROMPT: ${{ steps.review-prompt.outputs.prompt }}
-        ADVISOR: ${{ steps.engine.outputs.advisor }}
+        ADVISOR: ${{ steps.settings.outputs.advisor }}
         GH_TOKEN: ${{ inputs.bot_token }}
         OUT_FILE: ${{ runner.temp }}/claude-autofix/review-fix.json
         ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
@@ -615,42 +517,23 @@ runs:
     # failed was the round, and the last failure is said on the PR.
     - name: Decide whether to retry the review fixer
       id: review-retry
-      if: steps.review-fix.outcome == 'failure' || steps.review-fix-sdk.outcome == 'failure'
+      if: steps.review-fix.outcome == 'failure'
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github_token }}
         PR: ${{ steps.pr.outputs.number }}
         HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        EXECUTION_FILE: ${{ steps.review-fix.outputs.execution_file || steps.review-fix-sdk.outputs.execution_file }}
+        EXECUTION_FILE: ${{ steps.review-fix.outputs.execution_file }}
       run: node "$GITHUB_ACTION_PATH/crash.mjs" retry
 
-    - uses: anthropics/claude-code-action@v1
-      id: review-fix-again
-      if: steps.review-retry.outputs.retry == 'true' && steps.engine.outputs.engine == 'action'
-      continue-on-error: true
-      with:
-        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
-        anthropic_api_key: ${{ inputs.anthropic_api_key }}
-        anthropic_federation_rule_id: ${{ inputs.anthropic_federation_rule_id }}
-        anthropic_organization_id: ${{ inputs.anthropic_organization_id }}
-        anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
-        anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
-        allowed_bots: "dependabot[bot],claude[bot]"
-        prompt: ${{ steps.review-prompt.outputs.prompt }}
-        claude_args: |
-          --model sonnet
-          --max-turns 80
-          --allowedTools "Read,Edit,Write,Glob,Grep,Task,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(gh:*),Bash(make:*)"
-
-    # The retry, on the Agent SDK.
     - name: Fix with the Agent SDK (review-fix-again)
-      id: review-fix-again-sdk
-      if: steps.review-retry.outputs.retry == 'true' && steps.engine.outputs.engine == 'sdk'
+      id: review-fix-again
+      if: steps.review-retry.outputs.retry == 'true'
       continue-on-error: true
       shell: bash
       env:
         PROMPT: ${{ steps.review-prompt.outputs.prompt }}
-        ADVISOR: ${{ steps.engine.outputs.advisor }}
+        ADVISOR: ${{ steps.settings.outputs.advisor }}
         GH_TOKEN: ${{ inputs.bot_token }}
         OUT_FILE: ${{ runner.temp }}/claude-autofix/review-fix-again.json
         ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
@@ -661,12 +544,12 @@ runs:
       run: node "$GITHUB_ACTION_PATH/sdk.mjs"
 
     - name: Report the review fixer's failure
-      if: steps.review-retry.outputs.report == 'true' || steps.review-fix-again.outcome == 'failure' || steps.review-fix-again-sdk.outcome == 'failure'
+      if: steps.review-retry.outputs.report == 'true' || steps.review-fix-again.outcome == 'failure'
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github_token }}
         PR: ${{ steps.pr.outputs.number }}
         HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        EXECUTION_FILE: ${{ steps.review-fix-again.outputs.execution_file || steps.review-fix-again-sdk.outputs.execution_file || steps.review-fix.outputs.execution_file || steps.review-fix-sdk.outputs.execution_file }}
+        EXECUTION_FILE: ${{ steps.review-fix-again.outputs.execution_file || steps.review-fix.outputs.execution_file }}
       run: node "$GITHUB_ACTION_PATH/crash.mjs" report review

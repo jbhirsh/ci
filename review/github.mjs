@@ -1,4 +1,4 @@
-// The GitHub REST calls the SDK engine's own code makes (skip.mjs, tools.mjs):
+// The GitHub REST calls the review's own code makes (skip.mjs, tools.mjs):
 // reading a PR's commits, threads and comments, and posting the review's
 // comments. Plain fetch with the token it's given, never `gh`: the job's
 // token, which only this code holds, never the reviewer's process (sdk.mjs
