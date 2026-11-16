@@ -9,11 +9,14 @@
 //       and a mockup's issue
 //   node shots.mjs mockup              checks MOCKUP_PATCH (base64) and
 //       applies it to the checkout: only paths `mockupPaths` allows, never
-//       a lockfile, no rename, copy, link or mode change
+//       a lockfile, no rename, copy, link or mode change. It needs
+//       MOCKUP_ISSUE, and a run on the default branch (GITHUB_REF against
+//       DEFAULT_BRANCH), the only mockups visual-review reads
 //
 // Run from the app's checkout. Both read the environment Actions sets
-// (GITHUB_EVENT_NAME), and mockup reads MOCKUP_PATCH and MOCKUP_ISSUE,
-// which the workflow passes through env, never spliced into a script.
+// (GITHUB_EVENT_NAME, GITHUB_REF), and mockup reads MOCKUP_PATCH, MOCKUP_ISSUE
+// and DEFAULT_BRANCH, which the workflow passes through env, never spliced
+// into a script.
 // visual-review checks the manifest again where it reads it, since a PR's
 // code writes it.
 
@@ -200,7 +203,19 @@ export function main(argv, env, root = appRoot()) {
     return `${files.length} shot(s) collected`;
   }
   if (command === 'mockup') {
-    mockupIssue(env.MOCKUP_ISSUE);
+    // A mockup's table goes to its issue, and visual-review takes only
+    // dispatches on the default branch: anything else would run and post
+    // nowhere, so it's refused before the build.
+    if (mockupIssue(env.MOCKUP_ISSUE) === null) {
+      throw new Error("mockup_issue is required: the plan's issue, which the table goes on");
+    }
+    const defaultBranch = env.DEFAULT_BRANCH ?? '';
+    if (!defaultBranch || env.GITHUB_REF !== `refs/heads/${defaultBranch}`) {
+      const branch = defaultBranch || 'the default branch';
+      throw new Error(
+        `a mockup runs by hand on ${branch} only (this run is on ${env.GITHUB_REF || 'no ref'}): visual review takes no other branch's mockup, so run it again on ${branch}`,
+      );
+    }
     const patch = decodePatch(env.MOCKUP_PATCH ?? '');
     const file = path.join(mkdtempSync(path.join(tmpdir(), 'mockup-')), 'mockup.patch');
     writeFileSync(file, patch);
