@@ -212,15 +212,42 @@ const ghJson = (args) => /** @type {T} */ (JSON.parse(run('gh', ['api', ...args]
  * Waits for a run to finish. A cancelled one is an error; a red one (a
  * failing test, say) still recorded its videos, which are used.
  *
+ * With `justStarted`, for a run the dispatch API has only just named: GitHub
+ * can answer 404 for it for a moment before serving it (sift#235's "before"
+ * run did, 0.7 s after it was made). Until it has been read once, a 404 then
+ * means "not readable yet", and it is asked again at the next poll, within
+ * the start limit counted from this call. Once it has been read, past the
+ * start limit, without `justStarted`, or on any other error, it fails as
+ * before.
+ *
  * @param {string} repo
  * @param {number} runId
+ * @param {{ justStarted?: boolean }} [options]
  * @returns {Promise<Run>}
  */
-export async function waitForRun(repo, runId) {
+export async function waitForRun(repo, runId, { justStarted = false } = {}) {
   const startedAt = Date.now();
+  let seen = false;
   for (;;) {
+    const reply = run('gh', ['api', `repos/${repo}/actions/runs/${runId}`], { allowFail: true });
+    if (reply.status !== 0) {
+      const notYet =
+        justStarted &&
+        !seen &&
+        /\b404\b|Not Found/.test(reply.stderr) &&
+        Date.now() - startedAt <= timing.startLimitMs;
+      if (!notYet) {
+        throw new Error(
+          `gh api repos/${repo}/actions/runs/${runId} failed: ${(reply.stderr || reply.stdout).slice(0, 500)}`,
+        );
+      }
+      log(`  run ${runId}: not readable yet…`);
+      await sleep(timing.pollMs);
+      continue;
+    }
+    seen = true;
     /** @type {Run} */
-    const r = ghJson([`repos/${repo}/actions/runs/${runId}`]);
+    const r = JSON.parse(reply.stdout);
     if (r.status === 'completed') {
       if (r.conclusion === 'cancelled') {
         throw new Error(`Run ${runId} was cancelled before it finished: run this again`);
@@ -699,7 +726,7 @@ export async function main(argv, { root, settings }) {
     if (beforeId) log(`Recording the same scenarios on main: run ${beforeId} (before)…`);
     const [after, beforeDone] = await Promise.all([
       early ?? waitForRun(repo, afterId).then(takeAfter),
-      beforeId ? waitForRun(repo, beforeId) : Promise.resolve(null),
+      beforeId ? waitForRun(repo, beforeId, { justStarted: true }) : Promise.resolve(null),
     ]);
     const { done: afterDone, recorded: afterVideos, names } = after;
     const beforeVideos = beforeDone
