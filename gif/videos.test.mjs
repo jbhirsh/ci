@@ -23,6 +23,8 @@ const world = vi.hoisted(() => ({
   curl: '200',
   /** @type {Set<string>} ffmpeg outputs that fail */
   failing: new Set(),
+  /** @type {Record<string, number>} endpoints that answer 404 this many more times */
+  notFound: {},
 }));
 
 /**
@@ -47,6 +49,10 @@ function answer(cmd, args) {
       return ok(
         args.includes('return_run_details=true') ? JSON.stringify({ workflow_run_id: 12 }) : '',
       );
+    }
+    if (world.notFound[endpoint] > 0) {
+      world.notFound[endpoint] -= 1;
+      return { status: 1, stdout: '', stderr: 'gh: Not Found (HTTP 404)' };
     }
     const zip = /actions\/artifacts\/(\d+)\/zip$/.exec(endpoint);
     if (zip) return ok(Buffer.from(`zip ${zip[1]}`));
@@ -137,6 +143,7 @@ beforeEach(() => {
   world.drawtext = true;
   world.curl = '200';
   world.failing = new Set();
+  world.notFound = {};
   world.frames = [blank(), ringed(), blank()];
   world.videos = {
     after: ['swipe.mp4', 'new-sheet.mp4'],
@@ -410,6 +417,51 @@ describe('main', () => {
     await expect(videos.beforeRun('jbhirsh/sift', settings.videos, 'abc')).rejects.toThrow(
       'The run on main never started',
     );
+  });
+});
+
+describe('waitForRun, on a run GitHub doesn’t serve yet', () => {
+  const runs = 'repos/jbhirsh/sift/actions/runs/12';
+  const reads = (/** @type {string} */ endpoint) =>
+    world.asked.filter((a) => a.includes(endpoint)).length;
+
+  it('asks again while a run it just started answers 404', async () => {
+    world.notFound[runs] = 2;
+    world.api[runs] = { id: 12, status: 'completed', conclusion: 'success' };
+    await expect(
+      videos.waitForRun('jbhirsh/sift', 12, { justStarted: true }),
+    ).resolves.toMatchObject({ id: 12 });
+    expect(reads(runs)).toBe(3);
+  });
+
+  it('fails on a 404 at once for a run it didn’t just start', async () => {
+    world.notFound[runs] = 1;
+    world.api[runs] = { id: 12, status: 'completed', conclusion: 'success' };
+    await expect(videos.waitForRun('jbhirsh/sift', 12)).rejects.toThrow(
+      'gh api repos/jbhirsh/sift/actions/runs/12 failed: gh: Not Found (HTTP 404)',
+    );
+    expect(reads(runs)).toBe(1);
+  });
+
+  it('fails on a 404 once the run has been read', async () => {
+    world.api[runs] = { id: 12, status: 'in_progress' };
+    // The first read happens before waitForRun's first await.
+    const waiting = videos.waitForRun('jbhirsh/sift', 12, { justStarted: true });
+    world.notFound[runs] = 1;
+    await expect(waiting).rejects.toThrow('Not Found');
+  });
+
+  it('fails on a 404 past the start limit, and on any other error at once', async () => {
+    Object.assign(timing, { startLimitMs: 5 });
+    world.notFound[runs] = Number.MAX_SAFE_INTEGER;
+    await expect(videos.waitForRun('jbhirsh/sift', 12, { justStarted: true })).rejects.toThrow(
+      'Not Found',
+    );
+    const other = 'repos/jbhirsh/sift/actions/runs/99';
+    await expect(videos.waitForRun('jbhirsh/sift', 99, { justStarted: true })).rejects.toThrow(
+      'no answer for',
+    );
+    expect(reads(other)).toBe(1);
   });
 });
 
