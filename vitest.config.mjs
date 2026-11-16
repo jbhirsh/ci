@@ -12,7 +12,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['**/*.mjs'],
-      exclude: ['**/*.test.mjs', '*.config.*', 'node_modules/**', 'coverage/**'],
+      exclude: ['**/*.test.mjs', '*.config.*', 'node_modules/**', 'coverage/**', 'probe/**'],
       // Every file on its own, as in the apps.
       thresholds: { perFile: true, lines: 80 },
     },

@@ -1,0 +1,120 @@
+# One-off probe for #68, step 0. Never merged: it runs on its own draft PR,
+# which is closed unmerged, and its branch deleted, once the results are
+# recorded in #68.
+#
+# It reviews this repo's own commit 8ae34d8 (PR #66, "Let review and autofix
+# use identity federation") against its base e42ab91, three times: once as the
+# lean agent #68 plans, once with Claude Code's default prompt and tools,
+# and once as the lean agent with an Opus advisor.
+# Each pass's cost goes in the job summary, and its transcript is uploaded and
+# checked with coverage.mjs. Nothing is posted to the PR.
+#
+# It signs in by workload identity federation only, with the rule the
+# reviews use (the Default workspace, which shows the $100 credit). That
+# rule admits pull_request runs only, so the probe runs on its PR rather than
+# on a push to its branch.
+name: Credit probe
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+  id-token: write
+
+jobs:
+  probe:
+    if: github.head_ref == 'credit-probe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: tools
+
+      # The reviewed checkout: PR #66's commit, with origin/main put back at
+      # its base so `git diff origin/main...HEAD` shows the PR.
+      - uses: actions/checkout@v7
+        with:
+          path: app
+          ref: 8ae34d8c17ba3c03c57f8006a0d910061a382d5f
+          fetch-depth: 0
+      - name: Point origin/main at the PR's base
+        working-directory: app
+        run: git update-ref refs/remotes/origin/main e42ab91
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install the SDKs
+        working-directory: tools
+        run: npm install --no-save --omit=dev @anthropic-ai/sdk @anthropic-ai/claude-agent-sdk zod @modelcontextprotocol/sdk
+
+      - name: Render the review prompt
+        id: render
+        working-directory: app
+        env:
+          REPO: jbhirsh/ci
+          PR: "66"
+          BASE_REF: main
+          CONFIG_REF: origin/main
+          PLAN: ${{ runner.temp }}/no-plan.json
+        run: node ../tools/review/render.mjs review
+
+      # The SDKs exchange this GitHub OIDC token (audience api.anthropic.com,
+      # as the Console's own test workflow asks for) for an Anthropic one.
+      - name: Fetch the GitHub OIDC token
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('node:fs');
+            const token = await core.getIDToken('https://api.anthropic.com');
+            core.setSecret(token);
+            fs.writeFileSync(`${process.env.RUNNER_TEMP}/oidc-token`, token, { mode: 0o600 });
+            // The claims a federation rule matches on (not the token itself,
+            // which stays secret), to compare with the rule's conditions.
+            const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+            const keys = ['aud', 'iss', 'sub', 'repository', 'repository_owner', 'ref', 'event_name', 'workflow_ref', 'job_workflow_ref', 'environment'];
+            core.info(JSON.stringify(Object.fromEntries(keys.map((k) => [k, claims[k]])), null, 2));
+
+      - name: Run the probe
+        working-directory: app
+        env:
+          ANTHROPIC_FEDERATION_RULE_ID: fdrl_01BuwYpezaN3Vw9dbwvdF5JY
+          ANTHROPIC_ORGANIZATION_ID: 22970ab4-b9f2-4f4b-a7d7-d2e0bab4fcac
+          ANTHROPIC_SERVICE_ACCOUNT_ID: svac_01UZj2itXNdhewkTjp9Wv6YG
+          ANTHROPIC_WORKSPACE_ID: wrkspc_01GbH32ibMELoz7yNtpC8bB6
+          ANTHROPIC_IDENTITY_TOKEN_FILE: ${{ runner.temp }}/oidc-token
+          GH_TOKEN: ${{ github.token }}
+          PROMPT: ${{ steps.render.outputs.prompt }}
+          CI_DIR: ${{ github.workspace }}/tools
+          OUT_DIR: ${{ runner.temp }}
+        run: node ../tools/probe/credit-probe.mjs
+
+      - name: Check each transcript with coverage.mjs
+        if: always()
+        working-directory: app
+        env:
+          REPO_DIR: ${{ github.workspace }}/app
+          BASE_REF: main
+          SKIP: ${{ steps.render.outputs.skip }}
+        run: |
+          for kind in lean default advisor; do
+            f="$RUNNER_TEMP/execution-$kind.json"
+            [ -f "$f" ] || continue
+            echo "== $kind: files left unread"
+            git -c core.quotePath=false diff --name-only -M origin/main...HEAD \
+              | node ../tools/review/coverage.mjs "$f" || true
+          done
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: credit-probe
+          path: |
+            ${{ runner.temp }}/execution-*.json
+            ${{ runner.temp }}/summary.json
+          if-no-files-found: ignore
