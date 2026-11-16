@@ -71,9 +71,14 @@ describe('settings, for any JSON', () => {
         } catch {
           return;
         }
-        expect(path.posix.normalize(one).startsWith('..')).toBe(false);
+        // Out of the checkout is a leading `..` segment, not a name that
+        // starts with two dots: `.. ` and `..foo` are folders inside it.
+        const normal = path.posix.normalize(one);
+        expect(normal === '..' || normal.startsWith('../')).toBe(false);
         expect(path.isAbsolute(one)).toBe(false);
       }),
+      // fast-check found `.. ` once (seed 1505426127); each run tries it.
+      { examples: [['.. '], ['..foo'], ['a/..'], ['a/../..']] },
     );
   });
 });
