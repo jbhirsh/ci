@@ -35,21 +35,23 @@ after reading CLAUDE.md, however large the PR:
    too, or move with its tests, or is that code still here and now
    untested (a test deleted to get a failure through)? Open its diff, or
    Grep for what it tested, whenever the rest of the PR doesn't settle it.
-   Every other file must be read in full.
+   Every other file must be read in full. An earlier summary of this PR
+   (in `mcp__review__pr`) is context, not reading: a file it lists as read
+   still has to be read now, unless this prompt lists it as already reviewed.
 {{carried}}
 2. Read each other file's diff on its own, tests included:
    `mcp__review__diff` with `paths: ["<file>"]` (for a rename, give both
    paths). Tests, fixtures, end-to-end flows and snapshots are changed files
    like any other, and a changed or removed assertion is where a weakened
-   test hides. Seeing a file only in `--stat` is not reading it (a deleted
-   file's `--name-status` line aside). Don't ask for several files in one
-   command: large output is cut to a preview. A check counts what you read
-   from your own tool calls, so read each diff with `mcp__review__diff` or
-   Read; a long diff comes in numbered parts, and counts once you have read
-   every part; a file it
-   can't see you read comes back to you in a second pass. To save turns,
-   send several of these single-file diffs as parallel tool calls in one
-   message; each gets its own output limit.
+   test hides. A one-line change is a changed file too: read it, don't wave
+   it through. Seeing a file only in `--stat` is not reading it (a deleted
+   file's `--name-status` line aside). Ask for one file per call here, so
+   each gets its own careful read. A check counts what you read from your
+   own tool calls, so read each diff with `mcp__review__diff` or Read; a
+   long diff comes in numbered parts, and counts once you have read every
+   part; a file it can't see you read comes back to you in a second pass.
+   To save turns, send several of these single-file diffs as parallel tool
+   calls in one message; each gets its own output limit.
 3. If a result comes back as "Output too large" with a path to the full
    output, open that path with the Read tool (use offset/limit for long
    ones) and read the rest before moving on. A preview is not the diff.

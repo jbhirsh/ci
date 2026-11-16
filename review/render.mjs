@@ -118,7 +118,7 @@ export function renderPrompt(pass, settings, run) {
     ciDir: CI_DIR,
     skippable,
     appGuide: appGuide(settings),
-    unread: bullets(run.unread ?? [], '  '),
+    unreadPaths: JSON.stringify(run.unread ?? []),
     carried: carriedSection(run.carried ?? [], run),
   });
 }
