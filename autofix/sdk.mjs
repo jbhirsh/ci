@@ -15,8 +15,9 @@
 //
 // Model "sonnet"; with `autofix.advisor`, Sonnet may consult that model.
 // Sign-in is the review's: federation with a fresh OIDC token, or an API
-// key. A pass refused for credit or a spend limit warns and passes, posting
-// no failure. The execution file is the SDK's messages, the shape crash.mjs
+// key. A pass refused for credit or a spend or usage limit (a
+// subscription's `usage_limit_reached` among them, ../review/sdk.mjs's
+// stoppedBy) warns and passes, posting no failure. The execution file is the SDK's messages, the shape crash.mjs
 // already reads.
 //
 // CLI: `node sdk.mjs`, run from the app's checkout, with PROMPT, ADVISOR,

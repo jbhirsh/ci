@@ -1,10 +1,12 @@
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { fakeFetch } from './fakeFetch.mjs';
 import { lastResult, main, oidcToken, report, reviewerEnv, stoppedBy } from './sdk.mjs';
 
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OIDC = 'https://oidc.example/token?x=1';
 
 /**
@@ -256,6 +258,33 @@ describe('helpers', () => {
     // A transient rate limit is a failure to re-run, not a stop.
     expect(stoppedBy(failed('{"type":"rate_limit_error"}'), '')).toBeNull();
     expect(stoppedBy(failed('error_max_turns'), '')).toBeNull();
+  });
+  it("stops on a subscription's usage limit, read from the API's error code", () => {
+    /** @type {Record<string, unknown>[]} */
+    const limited = JSON.parse(
+      readFileSync(path.join(HERE, 'fixtures', 'usage-limit.json'), 'utf8'),
+    );
+    expect(stoppedBy(limited, '')).toBe('limit');
+    // The weekly window, with only the assistant message carrying the code.
+    const weekly = limited.map((m) =>
+      m.type === 'result'
+        ? { ...m, api_error: undefined, result: "You've hit your weekly limit" }
+        : m.type === 'assistant'
+          ? {
+              ...m,
+              api_error_params: {
+                rate_limit_info: { status: 'rejected', rateLimitType: 'seven_day' },
+              },
+            }
+          : m,
+    );
+    expect(stoppedBy(weekly, '')).toBe('limit');
+    // The code on a pass that finished, or with no error, is no stop.
+    const finished = limited.map((m) => (m.type === 'result' ? { ...m, is_error: false } : m));
+    expect(stoppedBy(finished, '')).toBeNull();
+    expect(
+      stoppedBy([{ ...success, is_error: true, result: 'x', api_error: 'overloaded' }], ''),
+    ).toBeNull();
   });
   it("never stops on the reviewer's own words in a pass that finished", () => {
     const words = {
