@@ -1,10 +1,10 @@
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { fakeFetch } from './fakeFetch.mjs';
-import { lastResult, main, oidcToken, report, reviewerEnv, stoppedBy } from './sdk.mjs';
+import { RETRY_NOTE, lastResult, main, oidcToken, report, reviewerEnv, stoppedBy } from './sdk.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OIDC = 'https://oidc.example/token?x=1';
@@ -17,14 +17,15 @@ const OIDC = 'https://oidc.example/token?x=1';
  */
 
 /**
- * A fake Agent SDK: records the options it's given and yields the messages.
+ * A fake Agent SDK: records the options it's given and yields the messages,
+ * or with `then`, those of `then` from its second query on.
  *
  * @param {unknown[]} messages
- * @param {{ throws?: string }} [behaviour]
+ * @param {{ throws?: string, then?: unknown[] }} [behaviour]
  */
 function fakeSdk(messages, behaviour = {}) {
-  /** @type {{ prompt?: string, options?: Loose }} */
-  const seen = {};
+  /** @type {{ prompt?: string, options?: Loose, calls: { prompt: string, options: Loose }[] }} */
+  const seen = { calls: [] };
   const sdk = {
     /** @param {{ name: string, tools: unknown[] }} server */
     createSdkMcpServer: (server) => ({ type: 'sdk', ...server }),
@@ -42,8 +43,9 @@ function fakeSdk(messages, behaviour = {}) {
     query: async function* ({ prompt, options }) {
       seen.prompt = prompt;
       seen.options = options;
+      seen.calls.push({ prompt, options });
       if (behaviour.throws) throw new Error(behaviour.throws);
-      yield* messages;
+      yield* seen.calls.length > 1 && behaviour.then ? behaviour.then : messages;
     },
   };
   return {
@@ -198,6 +200,78 @@ describe('main', () => {
     });
   });
 
+  it('retries a stopped pass once on the subscription, with only that credential', async () => {
+    const credit = { ...success, is_error: true, result: 'API Error: Credit balance is too low' };
+    const { sdk, seen } = fakeSdk([{ type: 'assistant', n: 1 }, credit], {
+      then: [{ type: 'assistant', n: 2 }, success],
+    });
+    const vars = env({ CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat-1' });
+    const out = await main(vars, { sdk, fetchImpl: oidc, root: '/app' });
+    expect(out).toMatchObject({ stopped: null, finished: true, fallback: true });
+    expect(out.report).toContain('retried on the Claude subscription');
+    // The execution file holds the retry's messages only.
+    expect(JSON.parse(readFileSync(out.executionFile, 'utf8'))).toEqual([
+      { type: 'assistant', n: 2 },
+      success,
+    ]);
+
+    expect(seen.calls).toHaveLength(2);
+    const [api, retry] = seen.calls;
+    expect(api.options.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+    expect(api.options.env.ANTHROPIC_IDENTITY_TOKEN_FILE).toBeDefined();
+    expect(retry.options.env).toMatchObject({ CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat-1' });
+    for (const name of [
+      'ANTHROPIC_API_KEY',
+      'ANTHROPIC_FEDERATION_RULE_ID',
+      'ANTHROPIC_ORGANIZATION_ID',
+      'ANTHROPIC_IDENTITY_TOKEN_FILE',
+    ]) {
+      expect(retry.options.env[name]).toBeUndefined();
+    }
+    // A fresh config folder, which its guard's roots name instead of the first's.
+    expect(retry.options.env.CLAUDE_CONFIG_DIR).not.toBe(api.options.env.CLAUDE_CONFIG_DIR);
+    const read = retry.options.hooks.PreToolUse[0].hooks[0];
+    const firstFile = path.join(String(api.options.env.CLAUDE_CONFIG_DIR), 'session.jsonl');
+    expect(await read({ tool_name: 'Read', tool_input: { file_path: firstFile } })).toMatchObject({
+      hookSpecificOutput: { permissionDecision: 'deny' },
+    });
+    expect(retry.prompt).toBe(`Review it.\n${RETRY_NOTE}`);
+    expect(api.prompt).toBe('Review it.');
+
+    // Nothing sdk.mjs itself wrote holds the token. What the real CLI writes
+    // under its config folder isn't covered: the fake SDK runs no CLI.
+    for (const file of readdirSync(vars.RUNNER_TEMP, { recursive: true, withFileTypes: true })) {
+      if (file.isFile()) {
+        const text = readFileSync(path.join(file.parentPath, file.name), 'utf8');
+        expect(text).not.toContain('sk-ant-oat-1');
+      }
+    }
+  });
+
+  it('retries at most once, and not at all without a token or a stop', async () => {
+    const limit = { ...success, is_error: true, result: 'You have reached your spend limit' };
+    const twice = fakeSdk([limit], { then: [limit] });
+    const vars = env({ CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat-1' });
+    expect(await main(vars, { sdk: twice.sdk, fetchImpl: oidc, root: '/app' })).toMatchObject({
+      stopped: 'limit',
+      finished: false,
+      fallback: true,
+    });
+    expect(twice.seen.calls).toHaveLength(2);
+
+    const none = fakeSdk([limit]);
+    expect(await main(env(), { sdk: none.sdk, fetchImpl: oidc, root: '/app' })).toMatchObject({
+      stopped: 'limit',
+      fallback: false,
+    });
+    expect(none.seen.calls).toHaveLength(1);
+
+    const capped = { ...success, subtype: 'error_max_turns', is_error: true, result: undefined };
+    const other = fakeSdk([capped]);
+    await main(vars, { sdk: other.sdk, fetchImpl: oidc, root: '/app' });
+    expect(other.seen.calls).toHaveLength(1);
+  });
+
   it("fails a pass that didn't finish, or threw, keeping what it got", async () => {
     const capped = { ...success, subtype: 'error_max_turns', is_error: true, result: undefined };
     expect(
@@ -226,6 +300,8 @@ describe('main', () => {
     const o = /** @type {Loose} */ (seen.options);
     expect(o.env.ANTHROPIC_API_KEY).toBe('sk-test');
     expect(o.env.ANTHROPIC_IDENTITY_TOKEN_FILE).toBeUndefined();
+    // The key alone: the federation IDs beside it would be a second credential.
+    expect(o.env.ANTHROPIC_FEDERATION_RULE_ID).toBeUndefined();
     expect(o.settings).toBeUndefined();
   });
 
@@ -305,16 +381,31 @@ describe('helpers', () => {
     expect(report(undefined)).toContain('no result');
     expect(report({ subtype: 'success', num_turns: 1 })).toContain('unknown');
   });
-  it('gives the reviewer only the allowed environment', () => {
-    const out = reviewerEnv(
-      { PATH: '/bin', GH_TOKEN: 'x', GITHUB_TOKEN: 'y', AWS_SECRET: 'z', ANTHROPIC_API_KEY: '' },
-      { tokenFile: '/t', configDir: '/c' },
-    );
-    expect(out).toEqual({
+  it('gives the reviewer only the allowed environment, with one credential', () => {
+    const all = {
       PATH: '/bin',
+      GH_TOKEN: 'x',
+      GITHUB_TOKEN: 'y',
+      AWS_SECRET: 'z',
+      ANTHROPIC_AUTH_TOKEN: 'a',
+      ANTHROPIC_FEDERATION_RULE_ID: 'fdrl',
+      CLAUDE_CODE_OAUTH_TOKEN: 'oat',
+    };
+    const files = { tokenFile: '/t', configDir: '/c' };
+    const app = { CLAUDE_CONFIG_DIR: '/c', CLAUDE_AGENT_SDK_CLIENT_APP: 'jbhirsh-ci-review' };
+    expect(reviewerEnv({ ...all, ANTHROPIC_API_KEY: '' }, { auth: 'api', ...files })).toEqual({
+      PATH: '/bin',
+      ANTHROPIC_FEDERATION_RULE_ID: 'fdrl',
       ANTHROPIC_IDENTITY_TOKEN_FILE: '/t',
-      CLAUDE_CONFIG_DIR: '/c',
-      CLAUDE_AGENT_SDK_CLIENT_APP: 'jbhirsh-ci-review',
+      ...app,
     });
+    expect(reviewerEnv({ ...all, ANTHROPIC_API_KEY: 'sk' }, { auth: 'api', ...files })).toEqual({
+      PATH: '/bin',
+      ANTHROPIC_API_KEY: 'sk',
+      ...app,
+    });
+    expect(
+      reviewerEnv({ ...all, ANTHROPIC_API_KEY: 'sk' }, { auth: 'subscription', ...files }),
+    ).toEqual({ PATH: '/bin', CLAUDE_CODE_OAUTH_TOKEN: 'oat', ...app });
   });
 });
