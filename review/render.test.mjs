@@ -141,6 +141,17 @@ describe('carried-over files', () => {
     expect(prompt).toContain('`git diff -M origin/main...HEAD -- <file>`). You needn');
   });
 
+  it("keep an earlier summary's notes only on files still in the diff, carried or not", () => {
+    const sdk = { ...none, engine: /** @type {'action' | 'sdk'} */ ('sdk') };
+    for (const settings of [none, sdk]) {
+      for (const c of [[], carried]) {
+        expect(renderPrompt('review', settings, { ...run, carried: c })).toMatch(
+          /only while that file still differs from\s+`origin\/main`/,
+        );
+      }
+    }
+  });
+
   it('leave the prompt as it was when there are none', () => {
     expect(carriedSection([], run, 'read it')).toBe('');
     expect(renderPrompt('review', none, run)).not.toContain('Already reviewed');

@@ -249,5 +249,10 @@ what was checked. Its body starts with the line
   was read in full;
 - the non-blocking notes.
 
+The summary covers only what this PR would merge now. Carry over an earlier
+summary's notes on a file only while that file still differs from
+`origin/{{base}}`; drop those on one that no longer does (one an earlier
+push added and a later push removed, say, or changed and then reverted).
+
 {{summaryPost}}
 This comment is not a review thread and blocks nothing.
