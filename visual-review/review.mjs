@@ -75,6 +75,21 @@ export const BOT = 'visual-review';
 const fingerprintIn = (body) => /^fingerprint: ([0-9a-f]{8})$/m.exec(body)?.[1] ?? null;
 
 /**
+ * The shape of an upload's section. It goes up whenever the section's form
+ * changes (table.mjs, describe/describe.mjs), so a PR whose last upload is
+ * the old form gets one new upload in the new form, though its pictures
+ * didn't change: the fingerprint alone would leave it as it was.
+ */
+const UPLOAD_FORMAT = 2;
+
+/**
+ * The format an upload comment records: 1 for one without the line.
+ *
+ * @param {string} body
+ */
+const formatIn = (body) => Number(/^format: (\d+)$/m.exec(body)?.[1] ?? 1);
+
+/**
  * Whether `to` is `from` or comes after it on the history GitHub compares.
  *
  * @param {Io} io
@@ -239,6 +254,7 @@ function post(io, { kind, number, sha, hash, rows, changes, before, after, base 
     "Pictures for this PR's visual-review table. A newer one hides this comment as outdated.",
     '',
     `fingerprint: ${hash}`,
+    `format: ${UPLOAD_FORMAT}`,
     '',
   ];
   const id = io.upload(
@@ -355,7 +371,13 @@ export function review(target, { s, visuals, io }) {
     if (result.kind !== 'compared' || !compared || !manifest) return;
     // Only when the result differs from the last upload's: the same
     // pictures on a new head ("Update branch") upload nothing.
-    if (previous && fingerprintIn(previous.body) === result.fingerprint) return;
+    if (
+      previous &&
+      fingerprintIn(previous.body) === result.fingerprint &&
+      formatIn(previous.body) === UPLOAD_FORMAT
+    ) {
+      return;
+    }
     if (result.screens === 0 && !previous) return;
     post(io, {
       kind: target.kind,

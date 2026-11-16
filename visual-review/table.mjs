@@ -2,7 +2,15 @@
 // description (ci#64): one row per screen and size, before and after shown
 // inline, the diffs folded below. Pure: the comparison's changes and the
 // attachment links come in, Markdown goes out. describe/ puts it between
-// the `describe:visual-review` markers.
+// the `describe:visual-review` markers, or, a screen at a time, in the slots
+// an author put under the changes that made them (ci#80).
+//
+// The section is parts (describe/describe.mjs says how they're written): the
+// heading, then one part a screen, a `<details open>` holding its rows and
+// its diffs, so each screen can sit under its change and be folded. A row
+// whose screen can't have a slot (a shot no column takes, so named by its
+// path, or a state outside letters, digits, `.`, `_` and `-`, or holding `--`) goes in one `rest` part, which stays
+// in the bot's block.
 //
 // A row is a screen in one of the app's `columns` (phone and desktop, light
 // and dark), paired by lib/baselines.mjs's rules, so the two sizes of one
@@ -15,6 +23,7 @@
 // row order, then the diffs. A picture left out says so in its cell.
 
 import path from 'node:path';
+import { isScreenState, partMarker } from '../describe/describe.mjs';
 import { pairBaselines } from '../lib/baselines.mjs';
 import { html } from '../visuals/table.mjs';
 
@@ -30,9 +39,10 @@ export const DEFAULT_WIDTH = 300;
  */
 
 /**
- * One row: its label, and the change it shows.
+ * One row: its label, and the change it shows. A paired row also has its
+ * screen's state and its column's name; a shot no column takes has neither.
  *
- * @typedef {{ label: string, width: number,
+ * @typedef {{ label: string, width: number, state?: string, size?: string,
  *   change: import('./compare.mjs').Change }} Line
  */
 
@@ -66,6 +76,8 @@ export function lines(changes, columns) {
       out.push({
         label: `${row.state}, ${column.label.toLowerCase()}`,
         width: column.width ?? DEFAULT_WIDTH,
+        state: row.state,
+        size: column.label.toLowerCase(),
         change,
       });
     }
@@ -110,13 +122,12 @@ export function pick(rows, limit = UPLOAD_LIMIT) {
 export const keyOf = (p) => `${p.side}:${p.file}`;
 
 /**
- * The block's Markdown.
+ * The section's Markdown: the heading, then the screens as parts.
  *
  * @param {{ rows: Line[], links: Map<string, string>, base: string }} input
  *   `links`: each uploaded picture's attachment URL, by keyOf
  */
 export function renderTable({ rows, links, base }) {
-  const count = rows.length;
   /**
    * @param {Line} row
    * @param {'before' | 'after' | 'diff'} side
@@ -129,25 +140,54 @@ export function renderTable({ rows, links, base }) {
     if (!url) return 'not shown (too many pictures)';
     return `<img src="${html(url)}" alt="${html(`${row.label}, ${side}`)}" width="${row.width}">`;
   };
+  /** @param {Line[]} group */
+  const tables = (group) => {
+    const out = [
+      '| Screen | Before | After |',
+      '|---|---|---|',
+      ...group.map((r) => `| ${html(r.label)} | ${cell(r, 'before')} | ${cell(r, 'after')} |`),
+    ];
+    const withDiff = group.filter((r) => r.change.kind === 'changed' && r.change.diff);
+    if (withDiff.length > 0) {
+      out.push(
+        '',
+        '<details><summary>Show diffs</summary>',
+        '',
+        '| Screen | Diff |',
+        '|---|---|',
+        ...withDiff.map((r) => `| ${html(r.label)} | ${cell(r, 'diff')} |`),
+        '',
+        '</details>',
+      );
+    }
+    return out;
+  };
+
+  /** @type {Map<string, Line[]>} a screen's key (its state, when a slot can hold it), in row order */
+  const screens = new Map();
+  /** @type {Line[]} */
+  const rest = [];
+  for (const row of rows) {
+    if (row.state === undefined || !isScreenState(row.state)) rest.push(row);
+    else screens.set(row.state, [...(screens.get(row.state) ?? []), row]);
+  }
+  const count = new Set(rows.map((r) => r.state ?? r.label)).size;
   const out = [
+    partMarker('head'),
     `### Visual changes: ${count} screen${count === 1 ? '' : 's'}, compared with main at \`${base.slice(0, 7)}\``,
-    '',
-    '| Screen | Before | After |',
-    '|---|---|---|',
-    ...rows.map((r) => `| ${html(r.label)} | ${cell(r, 'before')} | ${cell(r, 'after')} |`),
   ];
-  const withDiff = rows.filter((r) => r.change.kind === 'changed' && r.change.diff);
-  if (withDiff.length > 0) {
+  for (const [state, group] of screens) {
+    const sizes = [...new Set(group.map((r) => r.size).filter(Boolean))];
     out.push(
       '',
-      '<details><summary>Show diffs</summary>',
+      partMarker(`screen:${state}`),
+      `<details open><summary><b>${html(state)}</b>${sizes.length ? `: ${html(sizes.join(', '))}` : ''}</summary>`,
       '',
-      '| Screen | Diff |',
-      '|---|---|',
-      ...withDiff.map((r) => `| ${html(r.label)} | ${cell(r, 'diff')} |`),
+      ...tables(group),
       '',
       '</details>',
     );
   }
+  if (rest.length > 0) out.push('', partMarker('rest'), ...tables(rest));
   return out.join('\n');
 }

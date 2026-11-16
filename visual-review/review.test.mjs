@@ -157,7 +157,7 @@ describe('review', () => {
             id: 70,
             node_id: 'N',
             user: { login: 'jbhirsh' },
-            body: `${uploadMarker(BOT, MB)}\nfingerprint: ${hash}\n\n${SECTION}\ntable`,
+            body: `${uploadMarker(BOT, MB)}\nfingerprint: ${hash}\nformat: 2\n\n${SECTION}\ntable`,
           },
         ],
         [`GET repos/${REPO}/commits/${MB}/statuses?per_page=100&page=1`]: [],
@@ -166,6 +166,29 @@ describe('review', () => {
     review(PR, { s, visuals, io: f.io });
     expect(f.uploads).toEqual([]);
     expect(f.posted()?.state).toBe('success');
+  });
+
+  it('uploads once more in the new form for a result whose last upload was in the old one', () => {
+    const first = fake();
+    review(PR, { s, visuals, io: first.io });
+    expect(first.uploads[0].body).toMatch(/^format: 2$/m);
+    const hash = /fingerprint: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
+    const f = fake({
+      routes: {
+        [`GET repos/${REPO}/issues/5/comments?per_page=100&page=1`]: [
+          {
+            id: 70,
+            node_id: 'N',
+            user: { login: 'jbhirsh' },
+            // No `format:` line: an upload from before sections came in parts.
+            body: `${uploadMarker(BOT, MB)}\nfingerprint: ${hash}\n\n${SECTION}\ntable`,
+          },
+        ],
+        [`GET repos/${REPO}/commits/${MB}/statuses?per_page=100&page=1`]: [],
+      },
+    });
+    review(PR, { s, visuals, io: f.io });
+    expect(f.uploads).toHaveLength(1);
   });
 
   it("keeps the owner's acceptance from an earlier head with the same result", () => {
@@ -181,7 +204,7 @@ describe('review', () => {
             id: 70,
             node_id: 'N',
             user: { login: 'jbhirsh' },
-            body: `${uploadMarker(BOT, MB)}\nfingerprint: ${hash}\n\n${SECTION}\ntable`,
+            body: `${uploadMarker(BOT, MB)}\nfingerprint: ${hash}\nformat: 2\n\n${SECTION}\ntable`,
           },
         ],
         [`GET repos/${REPO}/commits/${MB}/statuses?per_page=100&page=1`]: [
