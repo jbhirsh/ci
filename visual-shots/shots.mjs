@@ -171,7 +171,13 @@ export function commitsOf(root, event) {
   const rev = (/** @type {string} */ r) =>
     execFileSync('git', ['rev-parse', r], { cwd: root, encoding: 'utf8' }).trim();
   if (event !== 'pull_request') return { sha: rev('HEAD'), base: rev('HEAD') };
-  return { sha: rev('HEAD^2'), base: rev('HEAD^1') };
+  try {
+    return { sha: rev('HEAD^2'), base: rev('HEAD^1') };
+  } catch {
+    throw new Error(
+      "this PR run's checkout has no merge parents: check out with `fetch-depth: 2` before visual-shots",
+    );
+  }
 }
 
 /**

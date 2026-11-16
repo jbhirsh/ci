@@ -163,6 +163,14 @@ describe('main', () => {
     expect(p.sha).toBe(p.base);
   });
 
+  it("says to fetch deeper when a PR run's checkout has no merge parents", () => {
+    const { root } = app({ 'shots/a-snapshots/x.png': 'x' });
+    const out = mkdtempSync(path.join(tmpdir(), 'out-'));
+    expect(() => main(['collect', out], { GITHUB_EVENT_NAME: 'pull_request' }, root)).toThrow(
+      /fetch-depth: 2/,
+    );
+  });
+
   it('applies a mockup patch inside mockupPaths, and refuses one outside', () => {
     const { root, git } = app({ 'src/a.txt': 'one\n', 'README.md': 'r\n' });
     writeFileSync(path.join(root, 'src/a.txt'), 'two\n');

@@ -8,7 +8,10 @@ description: >-
   (`--update-snapshots=all` into git-ignored folders). Main's push runs are
   the reference, so they're kept 90 days, the most a public repository
   allows; every other run's for 7. It needs no token and runs no network
-  call: visual-review, from main's code, reads the artifact.
+  call: visual-review, from main's code, reads the artifact. A PR's run
+  needs its checkout's `fetch-depth: 2` (or more): the manifest reads the
+  merge commit's parents (`HEAD^1`, `HEAD^2`), which a depth-1 checkout
+  doesn't have.
 
 inputs:
   mockup-issue:
