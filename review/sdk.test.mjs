@@ -250,12 +250,14 @@ describe('main', () => {
 
   it('retries at most once, and not at all without a token or a stop', async () => {
     const limit = { ...success, is_error: true, result: 'You have reached your spend limit' };
-    const twice = fakeSdk([limit], { then: [limit] });
+    const twice = fakeSdk([{ ...limit, num_turns: 40 }], { then: [{ ...limit, num_turns: 1 }] });
     const vars = env({ CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat-1' });
     expect(await main(vars, { sdk: twice.sdk, fetchImpl: oidc, root: '/app' })).toMatchObject({
       stopped: 'limit',
       finished: false,
       fallback: true,
+      // How far the pass got: the API attempt's 40 turns, not the retry's one.
+      turns: 40,
     });
     expect(twice.seen.calls).toHaveLength(2);
 

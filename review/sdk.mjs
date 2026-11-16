@@ -45,7 +45,7 @@
 // the federation IDs or the OIDC token file. A pass still stopped after
 // that, or with no token to retry with, ends with a warning and the output
 // `stopped` (credit or limit); action.yml skips the coverage check and the
-// follow-up on it.
+// follow-up on it, and stopped.mjs fails the check.
 //
 // CLI: `node sdk.mjs`, run from the app's checkout, with
 //   PROMPT          the rendered prompt (render.mjs)
@@ -61,8 +61,8 @@
 //   _ORGANIZATION_ID, _SERVICE_ACCOUNT_ID, _WORKSPACE_ID) or
 //   ANTHROPIC_API_KEY, and the Actions OIDC variables
 //   CLAUDE_CODE_OAUTH_TOKEN   the subscription to retry a stop on, or empty
-// Step outputs: `execution_file`, `stopped` and `fallback` ("true" when the
-// subscription retry ran). Exits 1 when the pass didn't finish (result.mjs
+// Step outputs: `execution_file`, `stopped`, `fallback` ("true" when the
+// subscription retry ran) and `turns` (the most any attempt ran). Exits 1 when the pass didn't finish (result.mjs
 // then judges it), 0 otherwise.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -406,6 +406,7 @@ export function queryOptions({ sdk, ctx, guard, run }) {
  * @property {unknown[]} messages
  * @property {'credit' | 'limit' | null} stopped
  * @property {boolean} finished
+ * @property {number} turns how many turns it ran (0 when it gave no count)
  * @property {string} report
  */
 
@@ -445,6 +446,7 @@ async function attempt({ sdk, ctx, env, as, run }) {
     messages,
     stopped: stoppedBy(messages, failure),
     finished: !failure && result?.subtype === 'success' && result.is_error !== true,
+    turns: Number.isSafeInteger(result?.num_turns) ? /** @type {number} */ (result?.num_turns) : 0,
     report: failure ? `${report(result)}\n\nThe pass failed: ${failure}` : report(result),
   };
 }
@@ -455,7 +457,7 @@ async function attempt({ sdk, ctx, env, as, run }) {
  *
  * @param {Record<string, string | undefined>} env
  * @param {{ sdk?: typeof import('@anthropic-ai/claude-agent-sdk'), fetchImpl?: import('./github.mjs').Fetch, root?: string }} [deps]
- * @returns {Promise<{ executionFile: string, stopped: 'credit' | 'limit' | null, finished: boolean, fallback: boolean, report: string }>}
+ * @returns {Promise<{ executionFile: string, stopped: 'credit' | 'limit' | null, finished: boolean, fallback: boolean, turns: number, report: string }>}
  */
 export async function main(env, deps = {}) {
   const fetchImpl =
@@ -514,6 +516,9 @@ export async function main(env, deps = {}) {
     stopped: last.stopped,
     finished: last.finished,
     fallback,
+    // How far the pass got: a stopped API attempt may have read and posted
+    // more than a retry that stopped on its first turn.
+    turns: Math.max(first.turns, last.turns),
     report: fallback
       ? `${first.report}\n\nStopped (${first.stopped}); retried on the Claude subscription:\n\n${last.report}`
       : last.report,
@@ -522,10 +527,18 @@ export async function main(env, deps = {}) {
 
 /* c8 ignore start: the CLI's lines, run by action.yml */
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { executionFile, stopped, finished, fallback, report: text } = await main(process.env);
+  const {
+    executionFile,
+    stopped,
+    finished,
+    fallback,
+    turns,
+    report: text,
+  } = await main(process.env);
   setOutput('execution_file', executionFile);
   setOutput('stopped', stopped ?? '');
   setOutput('fallback', fallback ? 'true' : '');
+  setOutput('turns', String(turns));
   summary(text);
   console.log(text);
   if (stopped) {

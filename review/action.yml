@@ -8,13 +8,20 @@
 # change to the review reaches all three apps at once.
 #
 # Claude runs on the Claude Agent SDK, on the runner (sdk.mjs), which the
-# Max plan's API credit pays for (jbhirsh/ci#68). A pass the API refuses
-# for credit or a limit is tried once more on the owner's Claude
-# subscription, when the stub passes its token (`claude_code_oauth_token`,
-# #57). The reviewer has no
+# Max plan's API credit pays for (jbhirsh/ci#68). The reviewer has no
 # shell: it reads through its own tools and posts through code holding the
 # job's token, as github-actions[bot], each inline comment marked for
 # autofix (sdk.mjs and guard.mjs say how it's locked down).
+#
+# A pass the API refuses for credit or a spend or usage limit is tried once
+# more on the owner's Claude subscription, when the stub passes its token
+# (`claude_code_oauth_token`, #57). A pass still stopped after that, or with
+# no token, fails the check for every PR, since a green check would let a
+# self-merging PR (a Dependabot bump, a bot's branch, auto-merge) in
+# unreviewed; one PR comment says which limit and when to re-run
+# (stopped.mjs), and goes once a review runs without stopping. Two passes
+# and two retries on a big PR, with the limits hit late, can come near the
+# apps' 45-minute job timeout: accepted.
 #
 # Every Claude pass runs on the newest Sonnet (`model: "sonnet"`, the alias
 # for the newest Sonnet), rather than a default model, which can change to
@@ -235,9 +242,11 @@ runs:
       run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/.."
 
     # The review (sdk.mjs says how it's locked down). continue-on-error: it
-    # fails when the pass doesn't finish, for result.mjs to judge, and stops
-    # with a warning when the credit or a limit is spent (`stopped`), which
-    # skips everything after it.
+    # fails when the pass doesn't finish, for result.mjs to judge. A pass the
+    # API refuses for credit or a limit is retried on the subscription; one
+    # still stopped ends with a warning (`stopped`), which skips the coverage
+    # check, the follow-up and the record, and "Fail a review that stopped"
+    # fails the check.
     - name: Review with the Agent SDK
       id: review
       if: steps.skip.outputs.skip != 'true'
@@ -389,3 +398,40 @@ runs:
       with:
         path: ${{ runner.temp }}/claude-review/record.json
         key: claude-review-pr${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+    # A pass still stopped after the subscription retry, or with no token to
+    # retry on: the PR isn't reviewed, so this fails the check, whoever
+    # opened the PR, and keeps one PR comment saying why (stopped.mjs). A
+    # first-pass stop skips the coverage check and the follow-up; a
+    # follow-up stop fails here even with nothing left unread, as it may
+    # have stopped before posting what it found. `!cancelled()`: the pass
+    # steps are continue-on-error, but a step before this may have failed.
+    - name: Fail a review that stopped
+      if: ${{ !cancelled() && (steps.review.outputs.stopped != '' || steps.followup.outputs.stopped != '') }}
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        GH_TOKEN: ${{ inputs.github_token }}
+        REVIEW_STOPPED: ${{ steps.review.outputs.stopped }}
+        REVIEW_FALLBACK: ${{ steps.review.outputs.fallback }}
+        REVIEW_TURNS: ${{ steps.review.outputs.turns }}
+        REVIEW_FILE: ${{ steps.review.outputs.execution_file }}
+        FOLLOWUP_STOPPED: ${{ steps.followup.outputs.stopped }}
+        FOLLOWUP_FALLBACK: ${{ steps.followup.outputs.fallback }}
+        FOLLOWUP_TURNS: ${{ steps.followup.outputs.turns }}
+        FOLLOWUP_FILE: ${{ steps.followup.outputs.execution_file }}
+      run: node "$GITHUB_ACTION_PATH/stopped.mjs" report
+
+    # No pass stopped (a retry that cured a stop included): an earlier run's
+    # stopped-review comment goes, even if a later step failed for another
+    # reason. Best-effort, so it never decides the check.
+    - name: Clear the stopped-review comment
+      if: ${{ !cancelled() && steps.review.outputs.execution_file != '' && steps.review.outputs.stopped == '' && steps.followup.outputs.stopped == '' }}
+      continue-on-error: true
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: node "$GITHUB_ACTION_PATH/stopped.mjs" clear

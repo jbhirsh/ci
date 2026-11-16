@@ -71,7 +71,13 @@ Claude Review runs on the Claude Agent SDK (`review/sdk.mjs`). An app's settings
   (`autofix/threads.mjs`).
 - **Dependabot.** With `skipBots`, a bump nobody has pushed to isn't reviewed, and auto-merges
   on CI alone: the owner's decision (#68). Once autofix pushes a fix, the PR is reviewed.
-- **Out of credit.** A pass refused for credit or a spend limit warns and passes the check.
+- **Out of credit.** A pass the API refuses for credit or a spend or usage limit runs once more
+  on the owner's Claude subscription, then fails the check if it's still stopped, for every PR.
+  One PR comment says which limit and when it resets; re-run the job after then.
+- **The subscription token.** Each app keeps `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`)
+  as an Actions secret and as a Dependabot secret, since Dependabot's PRs see only Dependabot
+  secrets, and its review stub passes `claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}`.
+  Without it a stop isn't retried. A fork's PR gets no secrets, so a stop fails it.
 
 ## Claude autofix
 

@@ -12,7 +12,9 @@
 //     (sdk-read-all.json) among them;
 //   - the carry-over's context (carry.mjs) reads the app's settings and
 //     CLAUDE.md, and the fixture passes' result (result.mjs) is a finished
-//     review.
+//     review;
+//   - BoardGames #320's usage-limit stop (usage-limit.json) reads as a
+//     limit (sdk.mjs), with its name and reset for the comment (stopped.mjs).
 // Prints what it checked; exits 1 on the first problem.
 
 import { execFileSync } from 'node:child_process';
@@ -23,7 +25,9 @@ import { currentContext } from './carry.mjs';
 import { globToRegExp, toolCalls, unreadFiles } from './coverage.mjs';
 import { renderPrompt } from './render.mjs';
 import { judge } from './result.mjs';
+import { stoppedBy } from './sdk.mjs';
 import { reviewSettings } from './settings.mjs';
+import { limitOf } from './stopped.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -123,6 +127,13 @@ export function selftest(root) {
     throw new Error('result: read-all.json is not a finished review');
   }
   log.push("carry-over: the app's context hashes; the fixture review finished");
+
+  const limited = /** @type {unknown[]} */ (execution('usage-limit.json'));
+  const limit = limitOf(limited, Date.UTC(2026, 10, 13, 22));
+  if (stoppedBy(limited, '') !== 'limit' || limit.name !== '5-hour limit' || !limit.resets) {
+    throw new Error("stopped: usage-limit.json isn't read as a 5-hour limit with a reset");
+  }
+  log.push('stopped: the usage-limit fixture reads as a 5-hour limit, with its reset');
   return log;
 }
 
