@@ -43,7 +43,8 @@ for a human.
 
 ## Step 2 — fan out patching agents in parallel
 
-For every unresolved thread, spawn a sub-agent via the Task tool. Send them
+For every unresolved thread, spawn a sub-agent via the Agent tool (Task, in older
+versions). Send them
 all in a single message so they run in parallel. Each sub-agent:
 
 - Reads the referenced file/line and the comment body
@@ -102,8 +103,8 @@ threshold, add tests for any code you introduced to pass it.
 
 NEVER use `--no-verify`.
 
-The push goes out with the Claude GitHub App's token, so it triggers the
-PR's workflows itself; do not dispatch CI as well (it would only duplicate
+The push goes out with a token whose pushes trigger the PR's workflows,
+so it triggers them itself; do not dispatch CI as well (it would only duplicate
 the runs the push starts, and Claude Review doesn't run on a dispatch).
 
 ## Step 7 — resolve threads (REQUIRED)

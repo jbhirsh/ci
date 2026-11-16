@@ -6,7 +6,9 @@
 //     "ciFixChecks": ["`npm run lint`", "`npm run typecheck`", ...],
 //     "reviewFixChecks": ["`npm run lint`", ...],
 //     "cannotRun": ["visual regression", "deployment smoke tests"],
-//     "exempt": { "PR visuals": "wants pictures in the description" }
+//     "exempt": { "PR visuals": "wants pictures in the description" },
+//     "engine": "sdk",
+//     "advisor": "opus"
 //   }
 //
 // - ciFixChecks: what the CI fixer (ci-fix.md) must get green before it
@@ -28,8 +30,27 @@
 //   one must be in the stub's `on.workflow_run.workflows`
 //   (check-triggers.mjs), and the CI fixer doesn't wait for an exempt one's
 //   runs (gate.mjs), since its completion wakes nothing. Default: none.
+// - engine: what runs Claude, as `review.engine` (../review/settings.mjs):
+//   "action" (the default) is claude-code-action, which the Max plan's API
+//   credit doesn't pay for; "sdk" is sdk.mjs, the Agent SDK, which it does
+//   (jbhirsh/ci#68). With "sdk", the fixer pushes with the app's
+//   BOT_PR_TOKEN (the stub's `bot_token`).
+// - advisor: with "sdk", the model Sonnet may consult on a hard call, e.g.
+//   "opus". Default: none.
+//
+// CLI: `node settings.mjs`, run from the app's checkout, with CONFIG_REF
+// (where to read them). Step outputs `engine` and `advisor`.
 
-import { loadConfig, onlyKnownKeys, stringList } from '../review/config.mjs';
+import { pathToFileURL } from 'node:url';
+import { setOutput } from '../lib/actions.mjs';
+import { appRoot } from '../lib/app.mjs';
+import {
+  advisorSetting,
+  engineSetting,
+  loadConfig,
+  onlyKnownKeys,
+  stringList,
+} from '../review/config.mjs';
 
 export const DEFAULT_CHECKS = [
   'the `run:` steps of `.github/workflows/ci.yml` that can run here (copy their commands)',
@@ -47,6 +68,8 @@ export const DEFAULT_CANNOT_RUN = [
  * @property {string[]} reviewFixChecks
  * @property {string[]} cannotRun
  * @property {Record<string, string>} exempt workflow name → why
+ * @property {'action' | 'sdk'} engine
+ * @property {string | null} advisor
  */
 
 /**
@@ -74,12 +97,29 @@ function reasons(value) {
  */
 export function autofixSettings(where) {
   const section = loadConfig('autofix', where);
-  onlyKnownKeys('autofix', section, ['ciFixChecks', 'reviewFixChecks', 'cannotRun', 'exempt']);
+  onlyKnownKeys('autofix', section, [
+    'ciFixChecks',
+    'reviewFixChecks',
+    'cannotRun',
+    'exempt',
+    'engine',
+    'advisor',
+  ]);
   const ciFixChecks = stringList('autofix.ciFixChecks', section.ciFixChecks, DEFAULT_CHECKS);
   return {
     ciFixChecks,
     reviewFixChecks: stringList('autofix.reviewFixChecks', section.reviewFixChecks, ciFixChecks),
     cannotRun: stringList('autofix.cannotRun', section.cannotRun, DEFAULT_CANNOT_RUN),
     exempt: reasons(section.exempt),
+    engine: engineSetting('autofix.engine', section.engine),
+    advisor: advisorSetting('autofix.advisor', section.advisor),
   };
 }
+
+/* c8 ignore start: the CLI's lines, run by action.yml */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const settings = autofixSettings({ root: appRoot(), ref: process.env.CONFIG_REF || undefined });
+  setOutput('engine', settings.engine);
+  setOutput('advisor', settings.advisor ?? '');
+}
+/* c8 ignore stop */

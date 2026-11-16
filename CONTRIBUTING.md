@@ -71,3 +71,13 @@ An app turns it on in `.github/ci.json` (`review/settings.mjs` says what each se
 - **Dependabot.** With `skipBots`, a bump nobody has pushed to isn't reviewed, and auto-merges
   on CI alone: the owner's decision (#68). Once autofix pushes a fix, the PR is reviewed.
 - **Out of credit.** A pass refused for credit or a spend limit warns and passes the check.
+
+## Claude autofix on the Agent SDK
+
+An app turns it on with `"autofix": { "engine": "sdk", "advisor": "opus" }` in
+`.github/ci.json`, and its `claude-autofix.yml` stub passes `bot_token: ${{ secrets.BOT_PR_TOKEN }}`
+beside the four federation IDs. The fixer pushes and runs `gh` with that token, so its pushes
+start the PR's workflows. The token needs Contents and Pull requests read and write and Actions
+read on the app, and no Workflows permission. The token sits in the job that runs a Dependabot bump's npm scripts,
+which `pr-gif-attach.yml` keeps it out of: the owner accepted that here (jbhirsh/ci#68), as
+today's job holds the Claude app's token the same way.
