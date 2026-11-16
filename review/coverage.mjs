@@ -2,7 +2,8 @@
 // The prompt (prompt.md) says to read every changed file's diff, tests
 // included, yet a review once passed a PR having opened only its source
 // files and seen the tests in `--stat` (sift #188, twice). This reads the
-// review's own tool calls from claude-code-action's execution file, so the
+// review's own tool calls from the execution file (claude-code-action's,
+// or the SDK engine's, sdk.mjs: the same SDK messages), so the
 // action can send it back for what it missed (followup.md) and fail the
 // check on a file still unread after that.
 //
@@ -25,7 +26,12 @@
 //     folder holding it after `--` (no path: every file);
 //   - `git show HEAD:<path>`, the file as the PR leaves it;
 //   - `gh pr diff` (every file);
-//   - Read of the file itself, whole (no offset or limit).
+//   - Read of the file itself, whole (no offset or limit);
+//   - the SDK engine's tools that run those git commands (tools.mjs):
+//     `mcp__review__diff` (with or without paths; a long one only once
+//     every numbered part of it was read), `mcp__review__show` of HEAD,
+//     and for a deleted file `mcp__review__diff_list` or
+//     `mcp__review__diff_stat` (mcpCommand), judged as the same command.
 // A cut-off output's saved file counts once a Read opened it, in parts or
 // whole: a diff too long for one Read must be read in parts.
 // A file the PR deletes is covered by any of those, or by a listing of the
@@ -379,6 +385,82 @@ function statLine(file, flags) {
   return new RegExp(shapes.filter(Boolean).join('|'), 'm');
 }
 
+/** The first line of a part of a long diff (tools.mjs partHeader). */
+const PART = /^Part (\d+) of (\d+) of this diff\.\n/;
+
+/**
+ * Whether a call asked the SDK engine's diff tool for one part of a long
+ * diff.
+ *
+ * @param {ToolCall} call
+ * @returns {boolean}
+ */
+function isPart(call) {
+  return call.name === 'mcp__review__diff' && call.input.part !== undefined;
+}
+
+/**
+ * The diffs read whole in parts: every part of the same paths, 1 to N,
+ * came back without being cut. Each as the words of the git command.
+ *
+ * @param {ToolCall[]} calls
+ * @param {string} base
+ * @returns {string[][]}
+ */
+function partedDiffs(calls, base) {
+  /** @type {Map<string, { of: number, seen: Set<number>, words: string[] }>} */
+  const byPaths = new Map();
+  for (const call of calls) {
+    if (call.failed || !isPart(call)) continue;
+    // A part the SDK cut after all reads nothing. Parts are kept to 20 KB,
+    // under the SDK's own limit, so this shouldn't happen; a diff that only
+    // mentions those words further down is still read.
+    if (CUT_OFF.test((call.result ?? '').replace(PART, ''))) continue;
+    const m = PART.exec(call.result ?? '');
+    const words = mcpCommand(call, base);
+    if (!m || !words || Number(m[1]) !== call.input.part) continue;
+    const key = JSON.stringify(words);
+    const entry = byPaths.get(key) ?? { of: Number(m[2]), seen: new Set(), words };
+    if (entry.of !== Number(m[2])) continue;
+    entry.seen.add(Number(m[1]));
+    byPaths.set(key, entry);
+  }
+  return [...byPaths.values()]
+    .filter((e) => e.of > 0 && [...Array(e.of).keys()].every((i) => e.seen.has(i + 1)))
+    .map((e) => e.words);
+}
+
+/**
+ * The git command one of the SDK engine's tools runs (tools.mjs), as the
+ * words a Bash call of it would have, so it's credited the same way: the
+ * tools always run in the checkout, on the PR's own range. Null for any
+ * other call.
+ *
+ * @param {ToolCall} call
+ * @param {string} base
+ * @returns {string[] | null}
+ */
+export function mcpCommand(call, base) {
+  const range = `origin/${base}...HEAD`;
+  const { input } = call;
+  switch (call.name) {
+    case 'mcp__review__diff': {
+      const paths = Array.isArray(input.paths) ? input.paths.map(String) : [];
+      return ['git', 'diff', '-M', range, ...(paths.length ? ['--', ...paths] : [])];
+    }
+    case 'mcp__review__diff_list':
+      return ['git', 'diff', '--name-status', '-M', range];
+    case 'mcp__review__diff_stat':
+      return ['git', 'diff', '--stat', '-M', range];
+    case 'mcp__review__show':
+      return input.ref === 'HEAD' && typeof input.path === 'string'
+        ? ['git', 'show', `HEAD:${input.path}`]
+        : null;
+    default:
+      return null;
+  }
+}
+
 /**
  * Whether a command line runs in the checkout: no leading `cd`, or one to
  * the checkout's own path. A `cd` elsewhere would read its paths from
@@ -441,8 +523,15 @@ export function unreadFiles(
   // A saved full output too long for one Read is read in parts.
   const opened = new Set(paths(true));
   const read = new Set(paths(false).map((p) => relative(p, repoDir)));
+  // A long diff from the SDK engine's tool comes in numbered parts; it
+  // counts once every part of the same call was read.
+  for (const words of partedDiffs(calls, base)) {
+    for (const file of filesReadBy(words, needed, base)) read.add(file);
+  }
   for (const call of calls) {
-    if (call.name !== 'Bash' || call.failed || typeof call.input.command !== 'string') continue;
+    if (call.failed || isPart(call)) continue;
+    const own = mcpCommand(call, base);
+    if (!own && (call.name !== 'Bash' || typeof call.input.command !== 'string')) continue;
     const result = call.result ?? '';
     const cut = CUT_OFF.test(result);
     if (cut) {
@@ -450,7 +539,9 @@ export function unreadFiles(
       const saved = SAVED_TO.exec(result.slice(0, 400))?.[1];
       if (!saved || !opened.has(saved)) continue;
     }
-    const line = commandLine(call.input.command);
+    const line = own
+      ? { cd: null, commands: [own], alone: true }
+      : commandLine(/** @type {string} */ (call.input.command));
     if (!line || !inCheckout(line.cd, repoDir)) continue;
     // A stat line counts only from a whole output that is one command's.
     const output = !cut && line.alone ? result : null;

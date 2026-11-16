@@ -6,17 +6,34 @@
 # federation IDs). Everything else is here, so a
 # change to the review reaches all three apps at once.
 #
+# Two engines run Claude (`review.engine`, settings.mjs):
+#   - "action" (the default): claude-code-action, which runs Claude Code
+#     with a shell for git and gh. The Max plan's API credit doesn't pay for
+#     Claude Code ("Credit balance is too low"), so it needs another payer.
+#   - "sdk": sdk.mjs, the Claude Agent SDK on the runner, which the credit
+#     does pay for (jbhirsh/ci#68). Its reviewer has no shell: it reads
+#     through its own tools and posts through code holding the job's token,
+#     as github-actions[bot], each inline comment marked for autofix
+#     (sdk.mjs and guard.mjs say how it's locked down). Having no
+#     claude-code-action, it reviews a PR that edits the app's
+#     claude-review.yml too.
+# Both write the same execution file, so everything else below is the same.
+#
 # Every Claude pass runs on the newest Sonnet: `--model sonnet` in
-# claude_args, Claude Code's alias for the newest Sonnet it knows (it
-# moves when claude-code-action@v1 updates its Claude Code), rather than
-# Claude Code's default model, which can change to another tier. Its thinking is adaptive (the model decides how
-# much), at that model's default effort; no `--effort` is set.
+# claude_args (`model: "sonnet"` for the SDK), the alias for the newest
+# Sonnet, rather than a default model, which can change to another tier.
+# Its thinking is adaptive (the model decides how much), at that model's
+# default effort; no `--effort` is set. With "sdk", `review.advisor` lets
+# it consult a stronger model on a hard call.
+#
+# A PR every commit of which is a bot's in `review.skipBots` isn't
+# reviewed (skip.mjs): the step passes, saying so.
 #
 # What it does:
 #   1. Renders the prompt (render.mjs): prompt.md, the shared review, plus
 #      the app's own guide (`review.instructions` in `.github/ci.json`,
 #      settings.mjs), both read from the PR's base branch.
-#   2. Runs the review (claude-code-action). It leaves an inline comment per
+#   2. Runs the review (either engine). It leaves an inline comment per
 #      merge blocker and one summary comment saying what it read.
 #   3. Checks the review read every changed file's diff (coverage.mjs, from
 #      the review's own tool calls), lockfiles, images, fonts and the app's
@@ -62,18 +79,21 @@
 #     instead of passing silently.
 #   - A PR can't change what its own review runs or reads: this action comes
 #     from jbhirsh/ci@main, the app's settings and guide are read from the
-#     base branch (config.mjs), and claude-code-action restores CLAUDE.md
-#     and .claude/ from the base before Claude starts.
+#     base branch (config.mjs), and CLAUDE.md and .claude/ are the base's
+#     before Claude starts (claude-code-action restores them; for "sdk",
+#     restore.mjs does).
 #   - No new route to the secrets. A pull_request run executes the PR's
 #     copy of the stub, so a same-repo PR could add a step that prints a
 #     secret, exactly as it could with the whole review in the app's file
 #     before; only people with write access can push such a branch. Fork
 #     PRs get no secrets, and Dependabot's get only Dependabot secrets.
 #     The token goes into this action as an input and from here only to
-#     claude-code-action.
+#     claude-code-action, or with "sdk" only to sdk.mjs's own code (the
+#     posting tools), never to the reviewer's process.
 name: Claude Review
 description: >-
-  Reviews a pull request with Claude Code, checks it read every changed
+  Reviews a pull request with Claude (Claude Code through
+  claude-code-action, or the Claude Agent SDK), checks it read every changed
   file's diff (a second pass for any it missed, failing if still unread),
   and leaves inline comments for merge blockers and one summary comment.
   On a later push, a file whose part of the diff is unchanged since a
@@ -124,9 +144,11 @@ inputs:
     default: ""
   github_token:
     description: >-
-      Token for the `gh` calls the review makes (reading the PR, posting the
-      summary comment). The job needs pull-requests and issues write, and
-      id-token write for claude-code-action's own app token.
+      Token for reading the PR and posting the review's comments (the
+      action engine's `gh` calls, or the SDK engine's own tools, which post
+      as github-actions[bot]). The job needs pull-requests and issues write,
+      and id-token write for claude-code-action's app token and for a
+      federated Claude API token.
     required: false
     default: ${{ github.token }}
 
@@ -142,10 +164,41 @@ runs:
       with:
         node-version: 24
 
+    # The engine, the advisor and the bots whose own PRs aren't reviewed
+    # (settings.mjs), from the base branch.
+    - name: Read the review settings
+      id: settings
+      shell: bash
+      env:
+        CONFIG_REF: origin/${{ github.event.pull_request.base.ref }}
+      run: node "$GITHUB_ACTION_PATH/settings.mjs"
+
+    # A PR every commit of which is a listed bot's (`review.skipBots`): a
+    # Dependabot bump nobody has fixed. It auto-merges on CI alone; once
+    # autofix pushes to it, it's reviewed (skip.mjs).
+    - name: Skip a bot's own PR
+      id: skip
+      if: steps.settings.outputs.skip_bots != ''
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        GH_TOKEN: ${{ inputs.github_token }}
+        BOTS: ${{ steps.settings.outputs.skip_bots }}
+      run: node "$GITHUB_ACTION_PATH/skip.mjs"
+
+    - name: Note a bot's PR not reviewed
+      if: steps.skip.outputs.skip == 'true'
+      shell: bash
+      run: |
+        msg="Not reviewed: every commit on this PR is by a bot in review.skipBots (.github/ci.json). It's reviewed once anyone else, autofix included, pushes to it."
+        echo "$msg"
+        echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+
     # The newest record of what this PR's reviews read (carry.mjs). Not
     # restored for a PR labelled claude-review:full: everything is read.
     - name: Restore what earlier reviews read
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'claude-review:full') }}
+      if: ${{ steps.skip.outputs.skip != 'true' && !contains(github.event.pull_request.labels.*.name, 'claude-review:full') }}
       uses: actions/cache/restore@v6
       with:
         path: ${{ runner.temp }}/claude-review/record.json
@@ -157,6 +210,7 @@ runs:
     # is saved.
     - name: Plan which files to read
       id: plan
+      if: steps.skip.outputs.skip != 'true'
       continue-on-error: true
       shell: bash
       env:
@@ -168,6 +222,7 @@ runs:
 
     - name: Render the review prompt
       id: render
+      if: steps.skip.outputs.skip != 'true'
       shell: bash
       env:
         REPO: ${{ github.repository }}
@@ -177,10 +232,31 @@ runs:
         PLAN: ${{ runner.temp }}/claude-review/plan.json
       run: node "$GITHUB_ACTION_PATH/render.mjs" review
 
+    # What the SDK engine loads is the base's (restore.mjs), and the
+    # checkout's git credentials go: the reviewer can't read the token
+    # files under $RUNNER_TEMP (guard.mjs), and this leaves none in .git.
+    - name: Restore Claude's files from the base
+      if: steps.settings.outputs.engine == 'sdk' && steps.skip.outputs.skip != 'true'
+      shell: bash
+      env:
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+      run: |
+        node "$GITHUB_ACTION_PATH/restore.mjs"
+        { git config --local --name-only --get-regexp '^(includeif\.|http\.https://github\.com/\.extraheader)' || true; } \
+          | sort -u | while IFS= read -r key; do git config --local --unset-all "$key"; done
+
+    # The Agent SDK and its peers, from this repo's lockfile into the
+    # action's own checkout: nothing in the app's workspace changes.
+    - name: Install the Agent SDK
+      if: steps.settings.outputs.engine == 'sdk' && steps.skip.outputs.skip != 'true'
+      shell: bash
+      run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/.."
+
     # continue-on-error: a pass that runs past its turn cap but finishes is
     # failed by claude-code-action; the next step judges it (result.mjs).
     - uses: anthropics/claude-code-action@v1
       id: review
+      if: steps.settings.outputs.engine == 'action' && steps.skip.outputs.skip != 'true'
       continue-on-error: true
       env:
         GH_TOKEN: ${{ inputs.github_token }}
@@ -217,11 +293,57 @@ runs:
           --add-dir ${{ github.action_path }}/..
           --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git fetch:*),Bash(git checkout:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git branch:*),Bash(git ls-files:*),mcp__github_inline_comment__create_inline_comment"
 
-    - name: Check the review finished
-      if: steps.review.outcome == 'failure'
+    # The same pass on the Agent SDK (sdk.mjs says how it's locked down).
+    # It fails like claude-code-action when the pass doesn't finish, for
+    # result.mjs to judge, and stops with a warning when the credit or a
+    # limit is spent (`stopped`), which skips everything after it.
+    - name: Review with the Agent SDK
+      id: review-sdk
+      if: steps.settings.outputs.engine == 'sdk' && steps.skip.outputs.skip != 'true'
+      continue-on-error: true
       shell: bash
       env:
-        EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+        PROMPT: ${{ steps.render.outputs.prompt }}
+        MAX_TURNS: "200"
+        ADVISOR: ${{ steps.settings.outputs.advisor }}
+        CI_DIR: ${{ github.action_path }}/..
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        GH_TOKEN: ${{ inputs.github_token }}
+        OUT_FILE: ${{ runner.temp }}/claude-review/sdk-pass-1.json
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        ANTHROPIC_FEDERATION_RULE_ID: ${{ inputs.anthropic_federation_rule_id }}
+        ANTHROPIC_ORGANIZATION_ID: ${{ inputs.anthropic_organization_id }}
+        ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
+        ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
+      run: |
+        mkdir -p "$RUNNER_TEMP/claude-review"
+        node "$GITHUB_ACTION_PATH/sdk.mjs"
+
+    # The first pass's result, whichever engine ran it, for the steps after.
+    - name: Take the review's result
+      id: pass1
+      if: steps.skip.outputs.skip != 'true'
+      shell: bash
+      env:
+        ACTION_FILE: ${{ steps.review.outputs.execution_file }}
+        SDK_FILE: ${{ steps.review-sdk.outputs.execution_file }}
+        FAILED: ${{ steps.review.outcome == 'failure' || steps.review-sdk.outcome == 'failure' }}
+        STOPPED: ${{ steps.review-sdk.outputs.stopped }}
+      run: |
+        {
+          echo "execution_file=${ACTION_FILE:-$SDK_FILE}"
+          echo "outcome=$([ "$FAILED" = true ] && echo failure || echo success)"
+          echo "stopped=$STOPPED"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Check the review finished
+      if: steps.pass1.outputs.outcome == 'failure' && steps.pass1.outputs.stopped == ''
+      shell: bash
+      env:
+        EXECUTION_FILE: ${{ steps.pass1.outputs.execution_file }}
       run: node "$GITHUB_ACTION_PATH/result.mjs" "$EXECUTION_FILE"
 
     # No execution file from a step that succeeded: claude-code-action
@@ -237,7 +359,7 @@ runs:
 
     - name: Check the review read every changed file
       id: coverage
-      if: steps.review.outputs.execution_file != ''
+      if: steps.pass1.outputs.execution_file != '' && steps.pass1.outputs.stopped == ''
       shell: bash
       env:
         REPO_DIR: ${{ github.workspace }}
@@ -246,7 +368,7 @@ runs:
         CARRIED: ${{ steps.plan.outputs.carried }}
         # The files the PR deletes (carry.mjs), which a listing covers.
         REMOVED: ${{ steps.plan.outputs.removed }}
-        EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+        EXECUTION_FILE: ${{ steps.pass1.outputs.execution_file }}
       run: |
         set -o pipefail
         # The follow-up writes its log to the same path.
@@ -280,7 +402,7 @@ runs:
 
     - uses: anthropics/claude-code-action@v1
       id: followup
-      if: steps.coverage.outputs.unread != ''
+      if: steps.coverage.outputs.unread != '' && steps.settings.outputs.engine == 'action'
       continue-on-error: true
       env:
         GH_TOKEN: ${{ inputs.github_token }}
@@ -302,15 +424,54 @@ runs:
           --add-dir ${{ github.action_path }}/..
           --allowedTools "Read,Grep,Glob,Bash(gh:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(git rev-parse:*),Bash(git ls-files:*),mcp__github_inline_comment__create_inline_comment"
 
-    - name: Check the follow-up finished
-      if: steps.followup.outcome == 'failure'
+    - name: Follow up with the Agent SDK
+      id: followup-sdk
+      if: steps.coverage.outputs.unread != '' && steps.settings.outputs.engine == 'sdk'
+      continue-on-error: true
       shell: bash
       env:
-        EXECUTION_FILE: ${{ steps.followup.outputs.execution_file }}
+        PROMPT: ${{ steps.render-followup.outputs.prompt }}
+        MAX_TURNS: ${{ steps.render-followup.outputs.max_turns }}
+        ADVISOR: ${{ steps.settings.outputs.advisor }}
+        CI_DIR: ${{ github.action_path }}/..
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        GH_TOKEN: ${{ inputs.github_token }}
+        OUT_FILE: ${{ runner.temp }}/claude-review/sdk-pass-2.json
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        ANTHROPIC_FEDERATION_RULE_ID: ${{ inputs.anthropic_federation_rule_id }}
+        ANTHROPIC_ORGANIZATION_ID: ${{ inputs.anthropic_organization_id }}
+        ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
+        ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
+      run: node "$GITHUB_ACTION_PATH/sdk.mjs"
+
+    - name: Take the follow-up's result
+      id: pass2
+      if: steps.coverage.outputs.unread != ''
+      shell: bash
+      env:
+        ACTION_FILE: ${{ steps.followup.outputs.execution_file }}
+        SDK_FILE: ${{ steps.followup-sdk.outputs.execution_file }}
+        FAILED: ${{ steps.followup.outcome == 'failure' || steps.followup-sdk.outcome == 'failure' }}
+        STOPPED: ${{ steps.followup-sdk.outputs.stopped }}
+      run: |
+        {
+          echo "execution_file=${ACTION_FILE:-$SDK_FILE}"
+          echo "outcome=$([ "$FAILED" = true ] && echo failure || echo success)"
+          echo "stopped=$STOPPED"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Check the follow-up finished
+      if: steps.pass2.outputs.outcome == 'failure' && steps.pass2.outputs.stopped == ''
+      shell: bash
+      env:
+        EXECUTION_FILE: ${{ steps.pass2.outputs.execution_file }}
       run: node "$GITHUB_ACTION_PATH/result.mjs" "$EXECUTION_FILE"
 
     - name: Fail if files are still unread
-      if: steps.coverage.outputs.unread != ''
+      if: steps.coverage.outputs.unread != '' && steps.pass2.outputs.stopped == ''
       shell: bash
       env:
         REPO_DIR: ${{ github.workspace }}
@@ -319,7 +480,7 @@ runs:
         CARRIED: ${{ steps.plan.outputs.carried }}
         # The files the PR deletes (carry.mjs), which a listing covers.
         REMOVED: ${{ steps.plan.outputs.removed }}
-        FOLLOWUP_FILE: ${{ steps.followup.outputs.execution_file }}
+        FOLLOWUP_FILE: ${{ steps.pass2.outputs.execution_file }}
       run: |
         set -o pipefail
         passes=("$RUNNER_TEMP/review-pass-1.json")
@@ -339,7 +500,7 @@ runs:
     # Reached only when every pass finished and read every file it had to,
     # so the record claims nothing a review didn't read.
     - name: Record what this review read
-      if: steps.review.outputs.execution_file != '' && steps.plan.outcome == 'success'
+      if: steps.pass1.outputs.execution_file != '' && steps.plan.outcome == 'success' && steps.pass1.outputs.stopped == '' && steps.pass2.outputs.stopped == ''
       shell: bash
       env:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -348,7 +509,7 @@ runs:
       run: node "$GITHUB_ACTION_PATH/carry.mjs" save
 
     - name: Save what this review read
-      if: steps.review.outputs.execution_file != '' && steps.plan.outcome == 'success'
+      if: steps.pass1.outputs.execution_file != '' && steps.plan.outcome == 'success' && steps.pass1.outputs.stopped == '' && steps.pass2.outputs.stopped == ''
       uses: actions/cache/save@v6
       with:
         path: ${{ runner.temp }}/claude-review/record.json

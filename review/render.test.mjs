@@ -6,6 +6,7 @@ import {
   CI_DIR,
   appGuide,
   carriedSection,
+  engineText,
   followupTurns,
   main,
   renderPrompt,
@@ -14,8 +15,21 @@ import {
 import { placeholders } from './template.mjs';
 import { testApp, writeFiles } from './testApp.mjs';
 
+/** The settings' defaults beside the ones each test sets. */
+const DEFAULTS = {
+  engine: /** @type {'action' | 'sdk'} */ ('action'),
+  advisor: null,
+  /** @type {string[]} */
+  skipBots: [],
+};
+
 const run = { repo: 'jbhirsh/app', pr: '7', base: 'main', repoDir: '/r' };
-const none = { instructions: null, guide: '', skip: [] };
+const none = {
+  instructions: null,
+  guide: '',
+  skip: [],
+  ...DEFAULTS,
+};
 
 describe('the templates', () => {
   it('ask only for the values render.mjs gives', () => {
@@ -29,7 +43,9 @@ describe('the templates', () => {
       'appGuide',
       'unread',
       'carried',
+      ...Object.keys(engineText('action', run)).filter((k) => k !== 'carriedRead'),
     ];
+    expect(Object.keys(engineText('sdk', run))).toEqual(Object.keys(engineText('action', run)));
     for (const pass of /** @type {const} */ (['review', 'followup'])) {
       for (const name of placeholders(template(pass))) expect(given).toContain(name);
     }
@@ -49,7 +65,12 @@ describe('action.yml', () => {
 
 describe('renderPrompt', () => {
   it('fills in the run and the app', () => {
-    const settings = { instructions: 'g.md', guide: '## Auth\n\nGates.', skip: ['src/gql/**'] };
+    const settings = {
+      instructions: 'g.md',
+      guide: '## Auth\n\nGates.',
+      skip: ['src/gql/**'],
+      ...DEFAULTS,
+    };
     const prompt = renderPrompt('review', settings, run);
     expect(prompt).toContain('PR: 7');
     expect(prompt).toContain('git diff -M origin/main...HEAD -- <file>');
@@ -121,7 +142,7 @@ describe('carried-over files', () => {
   });
 
   it('leave the prompt as it was when there are none', () => {
-    expect(carriedSection([], run)).toBe('');
+    expect(carriedSection([], run, 'read it')).toBe('');
     expect(renderPrompt('review', none, run)).not.toContain('Already reviewed');
   });
 });
@@ -140,9 +161,14 @@ describe('followupTurns', () => {
 
 describe('appGuide', () => {
   it('heads the guide with where it came from', () => {
-    expect(appGuide({ instructions: 'x.md', guide: 'Body', skip: [] })).toBe(
-      '## This app (from `x.md`)\n\nBody',
-    );
+    expect(
+      appGuide({
+        instructions: 'x.md',
+        guide: 'Body',
+        skip: [],
+        ...DEFAULTS,
+      }),
+    ).toBe('## This app (from `x.md`)\n\nBody');
   });
 });
 
@@ -199,5 +225,23 @@ describe('main', () => {
     expect(() => main('nope', env, root)).toThrow('usage');
     expect(() => main(undefined, env, root)).toThrow('usage');
     expect(() => main('review', { PR: '1' }, root)).toThrow('REPO is not set');
+  });
+});
+
+describe('the SDK engine', () => {
+  const sdk = { ...none, engine: /** @type {'action' | 'sdk'} */ ('sdk') };
+  it('reads and posts through its own tools, and never through a shell', () => {
+    for (const pass of /** @type {const} */ (['review', 'followup'])) {
+      const prompt = renderPrompt(pass, sdk, {
+        ...run,
+        unread: ['src/a.ts'],
+        carried: [{ file: 'b.ts', sha: 'abcdef1234' }],
+      });
+      expect(prompt).toContain('mcp__review__diff');
+      expect(prompt).toContain('mcp__review__post_summary');
+      expect(prompt).toContain('CLAUDE.md is already loaded');
+      // The carried-over section still names the diff its patch-ids are of.
+      expect(prompt).not.toMatch(/gh (api|pr)|git (log|show)|heredoc/);
+    }
   });
 });

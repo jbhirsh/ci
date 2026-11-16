@@ -260,6 +260,7 @@ describe('the context', () => {
   const parts = {
     prompt: 'p',
     followup: 'f',
+    system: 's',
     rules: 'r',
     settings: { instructions: 'g.md', guide: 'G', skip: [] },
     claudeMd: '# app',
@@ -269,6 +270,9 @@ describe('the context', () => {
   it.each([
     ['the prompt', { prompt: 'p2' }],
     ['the follow-up prompt', { followup: 'f2' }],
+    ["the SDK engine's system prompt", { system: 's2' }],
+    ['the engine', { settings: { ...parts.settings, engine: 'sdk' } }],
+    ['the advisor', { settings: { ...parts.settings, advisor: 'opus' } }],
     ['the shared Claude rules', { rules: 'r2' }],
     ["the app's instructions", { settings: { ...parts.settings, guide: 'G2' } }],
     ["the app's CLAUDE.md", { claudeMd: '# app, edited' }],

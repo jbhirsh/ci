@@ -34,6 +34,90 @@ export const CI_DIR = path.resolve(HERE, '..');
 /** @typedef {'review' | 'followup'} Pass */
 
 /**
+ * The prompts' lines that differ by engine (settings.mjs): how the review
+ * reads the PR and posts its summary. The action engine has a shell (`git`,
+ * `gh`); the SDK engine has its own tools (tools.mjs) and no shell, and
+ * loads CLAUDE.md itself (sdk.mjs). Everything else in the prompts is the
+ * same review.
+ *
+ * @param {'action' | 'sdk'} engine
+ * @param {{ repo: string, pr: string, base: string }} run
+ * @returns {Record<string, string>}
+ */
+export function engineText(engine, { repo, pr, base }) {
+  const range = `origin/${base}...HEAD`;
+  if (engine === 'sdk') {
+    return {
+      claudeMd:
+        "CLAUDE.md is already loaded, for the architecture (the base branch's copy; what the PR changes in it is in the diff).",
+      listCommands: '`mcp__review__diff_stat` and `mcp__review__diff_list`',
+      diffCommand: '`mcp__review__diff` with `paths: ["<file>"]`',
+      countRule:
+        ', so read each diff with `mcp__review__diff` or Read; a long diff comes in numbered parts, and counts once you have read every part',
+      logCommand: '`mcp__review__log`, and `mcp__review__commit` for any that look related',
+      prBody: '`mcp__review__pr`, which also holds its review comments and your earlier summary',
+      summaryPost: [
+        'Keep a single summary per PR, updated on each push: post it with',
+        '`mcp__review__post_summary`, which replaces your earlier summary if',
+        'there is one (`mcp__review__pr` shows it), or posts it otherwise.',
+      ].join('\n'),
+      followupRead: [
+        'CLAUDE.md is already loaded. Read the shared rules',
+        `(${CI_DIR}/claude-rules/CLAUDE.md), then read each of those diffs in`,
+        'full, one file per call: `mcp__review__diff` with `paths: ["<file>"]`.',
+      ].join('\n'),
+      followupSummary: [
+        "Then update the review's summary comment: read it with",
+        '`mcp__review__pr` (`earlierSummary`), and post it again with',
+        '`mcp__review__post_summary`. Keep its first line and everything still',
+        'true; move these files from skimmed to read, and add what you found (or',
+        'that you found nothing).',
+      ].join('\n'),
+      carriedRead: 'read it (`mcp__review__pr`, `earlierSummary`)',
+    };
+  }
+  const find = `\`gh api repos/${repo}/issues/${pr}/comments --paginate --jq '.[] | select(.user.login == "claude[bot]" and (.body | startswith("<!-- claude-review-summary -->"))) | .id'\``;
+  return {
+    claudeMd:
+      "Read\nCLAUDE.md first for the architecture. (The checkout holds the base\nbranch's CLAUDE.md; what the PR changes in it is in the diff.)",
+    listCommands: `\`git diff --stat -M ${range}\`\n   and \`git diff --name-status -M ${range}\``,
+    diffCommand: `\`git diff -M ${range} -- <file>\``,
+    countRule:
+      ', and only a plain command counts: no loop,\n   variable, pipe or `&&` chain (a leading `cd <dir> &&` is fine)',
+    logCommand: `\`git log --reverse --no-merges --format='%h %an <%ae> %s' origin/${base}..HEAD\`,\n  and \`git show --stat <sha>\` for any that look related`,
+    prBody: `\`gh pr view ${pr} --json body\``,
+    summaryPost: [
+      'Keep a single summary per PR, updated on each push. Find yours (posted as',
+      '`claude[bot]`) with',
+      `${find}.`,
+      'Pass the body on stdin through a quoted heredoc, never inside a quoted',
+      'argument (backticks and `$` in it would be run by the shell). If an id came',
+      'back, replace that comment:',
+      `\`gh api -X PATCH repos/${repo}/issues/comments/<id> -F body=@- <<'EOF'\`,`,
+      'then the body, then a line holding only `EOF`. Otherwise create it the same',
+      `way with \`gh api repos/${repo}/issues/${pr}/comments -F body=@- <<'EOF'\`.`,
+    ].join('\n'),
+    followupRead: [
+      `Read CLAUDE.md and the shared rules (${CI_DIR}/claude-rules/CLAUDE.md),`,
+      'then read each of those diffs in full, one file per command, exactly',
+      `\`git diff -M ${range} -- <file>\`: no loop, variable, pipe or`,
+      "`&&` chain, or the check that sent you here can't see that you read it,",
+      'and the job fails.',
+    ].join('\n'),
+    followupSummary: [
+      "Then update the review's summary comment: find it with",
+      find,
+      'and replace it with',
+      `\`gh api -X PATCH repos/${repo}/issues/comments/<id> -F body=@- <<'EOF'\`, the`,
+      'body, then a line holding only `EOF`. Keep its first line and everything',
+      'still true; move these files from skimmed to read, and add what you found',
+      '(or that you found nothing).',
+    ].join('\n'),
+    carriedRead: `read it\n   (\`gh api repos/${repo}/issues/comments/<id> --jq .body\`)`,
+  };
+}
+
+/**
  * The follow-up's `--max-turns`, from the number of files left to read: a
  * few turns a file (its diff, the saved output of a long one, a comment)
  * plus the summary's, between a floor and a ceiling. A fixed 100 ran out on
@@ -52,10 +136,11 @@ export function followupTurns(unread) {
  * when there are none.
  *
  * @param {{ file: string, sha: string }[]} carried
- * @param {{ repo: string, base: string }} run
+ * @param {{ base: string }} run
+ * @param {string} readSummary how to read the earlier summary (engineText)
  * @returns {string}
  */
-export function carriedSection(carried, { repo, base }) {
+export function carriedSection(carried, { base }, readSummary) {
   if (carried.length === 0) return '';
   const list = bullets(
     carried.map(({ file, sha }) => `\`${file}\`, reviewed at ${sha.slice(0, 7)}`),
@@ -69,8 +154,7 @@ export function carriedSection(carried, { repo, base }) {
     `   again and the check doesn't ask you to; open any of them for context as`,
     `   you would code outside the diff. Their findings stand: the inline`,
     `   comments on them are still on the PR, and the notes on them are in your`,
-    `   summary comment. Before you replace that comment, read it`,
-    `   (\`gh api repos/${repo}/issues/comments/<id> --jq .body\`) and keep its notes`,
+    `   summary comment. Before you replace that comment, ${readSummary} and keep its notes`,
     `   on these files; list them in the summary as carried over, with the`,
     `   commit each was reviewed at.`,
     list,
@@ -109,7 +193,10 @@ export function renderPrompt(pass, settings, run) {
     settings.skip.length > 0
       ? `Lockfiles, images, fonts and the generated files ${settings.skip.map((g) => `\`${g}\``).join(', ')}`
       : 'Lockfiles, images and fonts';
+  const text = engineText(settings.engine, run);
+  const { carriedRead, ...lines } = text;
   return fill(template(pass), {
+    ...lines,
     repo: run.repo,
     pr: run.pr,
     base: run.base,
@@ -118,7 +205,7 @@ export function renderPrompt(pass, settings, run) {
     skippable,
     appGuide: appGuide(settings),
     unread: bullets(run.unread ?? [], '  '),
-    carried: carriedSection(run.carried ?? [], run),
+    carried: carriedSection(run.carried ?? [], run, carriedRead),
   });
 }
 

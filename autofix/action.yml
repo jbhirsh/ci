@@ -426,18 +426,13 @@ runs:
         CURSOR=null
         while : ; do
           PAGE=$(gh api graphql \
-            -f query='query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{isResolved comments(first:1){nodes{author{__typename login}}}}}}}}' \
+            -f query='query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{isResolved comments(first:1){nodes{body author{__typename login}}}}}}}}' \
             -F owner="$OWNER" \
             -F name="$NAME" \
             -F number="$PR" \
             -F after="$CURSOR")
-          # Only threads Claude Review or the owner opened: anyone can
-          # comment on a public PR, and this job turns a thread into a
-          # pushed commit that can then auto-merge.
-          COUNT=$(echo "$PAGE" | jq --arg owner "$OWNER" '[.data.repository.pullRequest.reviewThreads.nodes[]
-              | select(.isResolved==false)
-              | select(.comments.nodes[0].author as $a
-                       | ($a.__typename == "Bot" and $a.login == "claude") or $a.login == $owner)] | length')
+          # Only threads Claude Review or the owner opened (threads.mjs).
+          COUNT=$(echo "$PAGE" | node "$GITHUB_ACTION_PATH/threads.mjs" "$OWNER")
           UNRESOLVED=$((UNRESOLVED + COUNT))
           HAS_NEXT=$(echo "$PAGE" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')
           if [ "$HAS_NEXT" != "true" ]; then break; fi

@@ -5,9 +5,7 @@ BASE: origin/{{base}}
 SHARED_CI: {{ciDir}}
 
 Review this pull request for correctness, bugs, design and security, and
-for the project's conventions that no automated check enforces. Read
-CLAUDE.md first for the architecture. (The checkout holds the base
-branch's CLAUDE.md; what the PR changes in it is in the diff.) Then read
+for the project's conventions that no automated check enforces. {{claudeMd}} Then read
 the shared rules every repo here follows, SHARED_CI/claude-rules/CLAUDE.md:
 Claude sessions load them from the user's rules folder, which this run
 doesn't have, so read them here.
@@ -26,8 +24,7 @@ unverifiable. It's reference, not part of the diff.
 A review that passes a PR must have read all of its diff. Do this right
 after reading CLAUDE.md, however large the PR:
 
-1. See what changed and how much: `git diff --stat -M origin/{{base}}...HEAD`
-   and `git diff --name-status -M origin/{{base}}...HEAD`. {{skippable}} may
+1. See what changed and how much: {{listCommands}}. {{skippable}} may
    be skimmed or skipped; say which in the summary. A file the PR deletes
    (`D` in `--name-status`) is covered by that line: what it held is gone,
    so its old contents needn't be read whole. Still look at each deleted
@@ -38,14 +35,13 @@ after reading CLAUDE.md, however large the PR:
    Every other file must be read in full.
 {{carried}}
 2. Read each other file's diff on its own, tests included:
-   `git diff -M origin/{{base}}...HEAD -- <file>` (for a rename, give both
+   {{diffCommand}} (for a rename, give both
    paths). Tests, fixtures, end-to-end flows and snapshots are changed files
    like any other, and a changed or removed assertion is where a weakened
    test hides. Seeing a file only in `--stat` is not reading it (a deleted
    file's `--name-status` line aside). Don't ask for several files in one
    command: large output is cut to a preview. A check counts what you read
-   from your own tool calls, and only a plain command counts: no loop,
-   variable, pipe or `&&` chain (a leading `cd <dir> &&` is fine); a file it
+   from your own tool calls{{countRule}}; a file it
    can't see you read comes back to you in a second pass. To save turns,
    send several of these single-file diffs as parallel tool calls in one
    message; each gets its own output limit.
@@ -113,8 +109,7 @@ Treat violations of these as review issues and flag them inline:
   abstractions the task doesn't need. Don't add error handling or fallbacks
   for scenarios that can't happen; validate only at system boundaries.
 - **A branch holds only its final design.** List the PR's commits
-  (`git log --reverse --no-merges --format='%h %an <%ae> %s' origin/{{base}}..HEAD`,
-  and `git show --stat <sha>` for any that look related) and flag a commit
+  ({{logCommand}}) and flag a commit
   that reverts or replaces what an earlier commit in the same PR added, or
   fixes a mistake in it: a design tried and dropped, a fix on top, a
   revert. Each belongs folded into the commit it changes, so every commit
@@ -144,7 +139,7 @@ Treat violations of these as review issues and flag them inline:
 
 ## Visual evidence
 
-Read the PR description (`gh pr view {{pr}} --json body`). Skip this section
+Read the PR description ({{prBody}}). Skip this section
 on Dependabot's PRs. The "PR visuals" check already fails a UI change with
 no picture at all; your job is the judgment it can't make. If the diff
 changes how something on screen moves or responds (a transition or
@@ -254,13 +249,5 @@ what was checked. Its body starts with the line
   was read in full;
 - the non-blocking notes.
 
-Keep a single summary per PR, updated on each push. Find yours (posted as
-`claude[bot]`) with
-`gh api repos/{{repo}}/issues/{{pr}}/comments --paginate --jq '.[] | select(.user.login == "claude[bot]" and (.body | startswith("<!-- claude-review-summary -->"))) | .id'`.
-Pass the body on stdin through a quoted heredoc, never inside a quoted
-argument (backticks and `$` in it would be run by the shell). If an id came
-back, replace that comment:
-`gh api -X PATCH repos/{{repo}}/issues/comments/<id> -F body=@- <<'EOF'`,
-then the body, then a line holding only `EOF`. Otherwise create it the same
-way with `gh api repos/{{repo}}/issues/{{pr}}/comments -F body=@- <<'EOF'`.
+{{summaryPost}}
 This comment is not a review thread and blocks nothing.
