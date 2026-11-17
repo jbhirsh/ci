@@ -79,6 +79,36 @@ Claude Review runs on the Claude Agent SDK (`review/sdk.mjs`). An app's settings
   secrets, and its review stub passes `claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}`.
   Without it a stop isn't retried. A fork's PR gets no secrets, so a stop fails it.
 
+## PR changes
+
+`pr-changes/` fills each numbered change's commit and files in a PR's description, with the line counts as small coloured pictures (ci#79, ci#100). An app adopts it with a workflow of its own, `.github/workflows/pr-changes.yml`:
+
+```yaml
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited]
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: pr-changes-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+jobs:
+  pr-changes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: jbhirsh/ci/pr-changes@main
+        with:
+          number: ${{ github.event.pull_request.number }}
+          # A fork's PR gets no person's token: its counts are plain text.
+          token: ${{ github.event.pull_request.head.repo.full_name == github.repository && secrets.BOT_PR_TOKEN || '' }}
+```
+
+- **It runs on `pull_request_target`**, which runs the workflow as it is on the default branch, never the PR's copy, so it may hold `BOT_PR_TOKEN` (the apps' fine-grained token: attaching a file needs a person's token). That is safe because the job checks out and runs nothing from the PR: keep it that way. `pr-changes/action.yml`'s description lists the rules (no checkout, no cache, no PR text in a `run:` line or an expression, the token only on the attach call). A change to the workflow takes effect once it is on the default branch.
+- **Its own concurrency group**, not describe's: GitHub keeps one pending run per group, so sharing would let each cancel the other's pending run.
+- **`autofix.exempt`:** add an entry for it in `.github/ci.json`, with its reason ("PR changes: reads the PR as data, runs none of its code"), or `autofix/check-triggers.mjs` fails the app's CI for a `pull_request_target` workflow.
+- **Without a token** (a fork's PR, or no secret) the counts are plain text and the run says why. `BOT_PR_TOKEN` also needs Contents, Pull requests and Issues read and write on this repository to try the tool here.
+
 ## Claude autofix
 
 Claude autofix runs on the Claude Agent SDK too (`autofix/sdk.mjs`), signed in as the review

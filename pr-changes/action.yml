@@ -1,0 +1,112 @@
+name: PR changes
+description: >-
+  Fills a PR description's change slots from its commits (changes.mjs's
+  header says the rules): under each numbered change heading the author
+  places an empty `<!-- pr-changes:change:N -->` pair, and the Nth commit by
+  someone other than a bot (or a merge) goes in it, with its linked sha, its
+  subject and a closed list of its files, each linked to its diff. The line
+  counts are small coloured pictures, so they read in the GitHub app as well
+  as on the web (counts.mjs says what and why); run.mjs's header says how
+  they are attached. When the slots and the commits differ in number it writes
+  a warning line into every slot (and a workflow warning), so no stale commit
+  stays.
+
+  Run it from a workflow of its own on `pull_request_target`, types opened,
+  reopened, synchronize and edited (edited, so a slot the author adds by hand
+  is filled), in its own concurrency group `pr-changes-<repo>-<number>` with
+  cancel-in-progress false. It must not share describe's group: GitHub keeps
+  one pending run per group, so the two would cancel each other's pending
+  runs, and describe relies on its next run rewriting every section. The run
+  re-reads the description just before writing and works its edit out again if
+  a person changed it meanwhile. The job needs pull-requests write and
+  contents read.
+
+  READ THIS BEFORE CHANGING THE JOB. `pull_request_target` runs the workflow
+  as it is on the app's default branch, never the PR's copy, and it may hold a
+  person's token (`token`, below). That is safe only because this action
+  never checks out or runs the PR's code: it reads the PR's commits and
+  description as data through the API. Checking out the PR in this job would
+  make it unsafe. So, in the job and in everything it runs:
+    - check out nothing (if settings are ever needed, the default branch by
+      name, with `persist-credentials: false`);
+    - restore and save no cache: its scope is the base branch's;
+    - put no PR title, body, branch or commit field in a `run:` line or an
+      expression; only the PR's number, through `env:`;
+    - the person's token is `UPLOAD_TOKEN`, passed only to the `gh … --attach`
+      call (and to the step that reads its account name), and removed from the
+      run's environment once read; `GH_TOKEN` stays the Actions token for every
+      other call;
+    - an uploaded file's name comes only from its content hash and size.
+  A change to an app's workflow for it takes effect once it is on the default
+  branch. Dependabot's PRs get the token here too, which is harmless: their
+  descriptions place no slots, and bot commits are skipped.
+
+  What it can't do: a run woken by the token's own edit (the upload's) never
+  uploads, so that edit doesn't start a second upload. GitHub keeps one waiting
+  run per group, so if a push's run was waiting when an upload queued its own,
+  the push's new counts stay plain text until the next event; and where the
+  token is the owner's own account, the owner's hand edit of a description
+  doesn't upload either (the next push does).
+
+  An app's caller workflow, and the `autofix.exempt` entry it needs in
+  `.github/ci.json` (with its reason, or `autofix/check-triggers.mjs` fails the
+  app's CI), are in this repository's CONTRIBUTING.md, under "PR changes".
+
+inputs:
+  number:
+    description: The PR's number.
+    required: true
+  token:
+    description: >-
+      A person's token that may attach files (fine-grained: Contents, Pull
+      requests and Issues read and write on the app), such as the apps'
+      BOT_PR_TOKEN. GitHub refuses the Actions token for attachments. Empty:
+      the counts are plain text, and the run says why. Never pass it for a
+      fork's PR.
+    default: ""
+  github-token:
+    description: The Actions token, which reads the commits and writes the description.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        package-manager-cache: false
+
+    # `--attach` came in gh 2.99 (lib/gh.mjs). The runner's image installs gh
+    # from GitHub's own apt source, so an image whose gh lags upgrades from it.
+    - name: A gh that can attach
+      if: inputs.token != ''
+      shell: bash
+      run: |
+        node "$GITHUB_ACTION_PATH/../lib/gh.mjs" check || {
+          sudo apt-get update -q && sudo apt-get install -y -q --only-upgrade gh
+          node "$GITHUB_ACTION_PATH/../lib/gh.mjs" check
+        }
+
+    # The account the token posts as, so the edit an upload makes (shown as
+    # that account's) is told from a person's and starts no second upload.
+    - name: The token's account
+      id: login
+      if: inputs.token != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      # Assigned first, so a failed call fails the step.
+      run: |
+        login=$(gh api user --jq .login)
+        echo "login=$login" >> "$GITHUB_OUTPUT"
+
+    - name: Fill the change slots
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        UPLOAD_TOKEN: ${{ inputs.token }}
+        TOKEN_LOGIN: ${{ steps.login.outputs.login }}
+        EVENT_ACTION: ${{ github.event.action }}
+        SENDER: ${{ github.event.sender.login }}
+        NUMBER: ${{ inputs.number }}
+      run: node "$GITHUB_ACTION_PATH/run.mjs"

@@ -36,6 +36,7 @@ choices.
   visual-regression baselines rewritten from CI's own screenshots (`visual-baselines/`), README screenshots
   that refresh themselves (`readme-screenshots/`), and a CI run's pictures attached to an
   issue or a PR, so a plan's mockups reach its issue (`pictures/`).
+  A PR's description lists each change's commit and files under its heading (`pr-changes/`).
 - **Reports that remember.** Each job's summary, a report page on GitHub Pages and one PR
   comment, comparing the run with recent ones to show what got slower or flaky
   (`job-summary/`).
