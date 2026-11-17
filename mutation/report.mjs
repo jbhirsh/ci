@@ -24,7 +24,7 @@ import { readFileSync } from 'node:fs';
  * @typedef {{ start?: Position, end?: Position }} Location
  * @typedef {{ id?: string, status?: string, location?: Location, coveredBy?: string[],
  *   killedBy?: string[], [key: string]: unknown }} Mutant
- * @typedef {{ mutants?: Mutant[], [key: string]: unknown }} FileResult
+ * @typedef {{ mutants?: Mutant[], source?: unknown, [key: string]: unknown }} FileResult
  * @typedef {{ id: string, name: string, location?: Location, [key: string]: unknown }} Test
  * @typedef {{ tests?: Test[], [key: string]: unknown }} TestFileResult
  * @typedef {{ files?: Record<string, FileResult>, testFiles?: Record<string, TestFileResult>,
