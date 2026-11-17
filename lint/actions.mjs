@@ -18,18 +18,20 @@
 // inside an action, so it must come in as an input. A `jbhirsh/ci/<path>`
 // reference must name an action or workflow here. A caller may pass only
 // inputs (and, to a workflow, secrets) the target declares, and must pass
-// every required one that has no default. Exits 1 listing each problem.
+// every required one that has no default. An app's calls of the PR GIF
+// workflows also meet lint/gif-callers.mjs's rules. Exits 1 listing each problem.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parse } from 'yaml';
+import { lintGifCallers } from './gif-callers.mjs';
 
 /** @typedef {Record<string, unknown>} Doc */
 /** @typedef {{ inputs: Map<string, boolean>, secrets: Map<string, boolean> | null }} Target */
 
 const EXPRESSION = /\$\{\{([\s\S]*?)\}\}/g;
-const OWN = /^jbhirsh\/ci\/(.+?)@.+$/;
+const OWN = /^jbhirsh\/ci\/(.+?)@.+$/i;
 
 /** @param {unknown} value */
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -208,15 +210,17 @@ export function lintCall(where, target, given, secrets) {
  * @param {string} file
  * @param {unknown} doc
  * @param {(target: string) => Target | null} resolve
+ * @param {Set<string> | null} [appNames] the names of the app's workflows, to
+ *   check what a PR GIF attach caller waits for; null for this repo's own
  * @returns {string[]}
  */
-export function lintWorkflow(file, doc, resolve) {
+export function lintWorkflow(file, doc, resolve, appNames = null) {
   if (!isObject(doc)) return [`${file}: not a YAML mapping`];
   const jobs = isObject(/** @type {Doc} */ (doc).jobs)
     ? /** @type {Doc} */ (/** @type {Doc} */ (doc).jobs)
     : {};
   /** @type {string[]} */
-  const errors = [];
+  const errors = appNames ? lintGifCallers(file, /** @type {Doc} */ (doc), appNames) : [];
   for (const [id, raw] of Object.entries(jobs)) {
     const job = isObject(raw) ? /** @type {Doc} */ (raw) : {};
     /** @type {[string, Doc][]} */
@@ -289,8 +293,12 @@ export function main(root, app) {
   for (const file of workflows(root))
     errors.push(...lintWorkflow(rel(root, file), read(file), resolve));
   if (app) {
-    for (const file of workflows(app))
-      errors.push(...lintWorkflow(rel(app, file), read(file), resolve));
+    const mine = workflows(app).map((file) => [file, read(file)]);
+    // GitHub names a workflow with no `name:` by its path.
+    const names = new Set(mine.map(([file, doc]) => String(doc?.name ?? rel(app, file))));
+    for (const [file, doc] of mine) {
+      errors.push(...lintWorkflow(rel(app, file), doc, resolve, names));
+    }
   }
   return errors;
 }

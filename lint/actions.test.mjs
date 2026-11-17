@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -230,5 +230,42 @@ describe('main', () => {
     expect(main(root, app)).toEqual([
       '.github/workflows/ci.yml: job a step 1: passes undeclared input nope',
     ]);
+  });
+
+  it("holds an app's GIF callers to their rules, with the app's workflow names", () => {
+    const app = mkdtempSync(path.join(tmpdir(), 'app-'));
+    mkdirSync(path.join(app, '.github', 'workflows'), { recursive: true });
+    const put = (/** @type {string} */ name, /** @type {string} */ file) =>
+      writeFileSync(
+        path.join(app, '.github', 'workflows', name),
+        readFileSync(path.join(root, 'gif', 'callers', file), 'utf8'),
+      );
+    put('pr-gif.yml', 'pr-gif.yml');
+    put('pr-gif-attach.yml', 'pr-gif-attach.yml');
+    expect(main(root, app)).toEqual([]);
+    writeFileSync(
+      path.join(app, '.github', 'workflows', 'pr-gif.yml'),
+      readFileSync(path.join(root, 'gif', 'callers', 'pr-gif.yml'), 'utf8').replace(
+        /name: PR GIFs/,
+        'name: Renamed',
+      ),
+    );
+    expect(main(root, app).join('\n')).toMatch(/waits for "PR GIFs"/);
+    // A workflow with no `name:` is named by its path.
+    writeFileSync(
+      path.join(app, '.github', 'workflows', 'pr-gif.yml'),
+      readFileSync(path.join(root, 'gif', 'callers', 'pr-gif.yml'), 'utf8').replace(
+        /name: PR GIFs/,
+        '',
+      ),
+    );
+    writeFileSync(
+      path.join(app, '.github', 'workflows', 'pr-gif-attach.yml'),
+      readFileSync(path.join(root, 'gif', 'callers', 'pr-gif-attach.yml'), 'utf8').replace(
+        'workflows: [PR GIFs]',
+        'workflows: [.github/workflows/pr-gif.yml]',
+      ),
+    );
+    expect(main(root, app)).toEqual([]);
   });
 });
