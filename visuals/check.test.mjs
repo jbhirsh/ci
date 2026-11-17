@@ -302,6 +302,28 @@ describe('with no fromBaselines', () => {
   });
 });
 
+describe('with sharedTemplate', () => {
+  it('refuses a setting that is not true or false, and false is no setting', () => {
+    expect(() => settings({ sharedTemplate: 'yes' })).toThrow(
+      'visuals.sharedTemplate must be true or false',
+    );
+    expect(settings({ sharedTemplate: false })).toEqual(settings({}));
+  });
+
+  it('passes every PR, whatever the files and the description', () => {
+    const s = settings({ sharedTemplate: true });
+    for (const body of ['', 'no picture', undefined]) {
+      expect(checkPrVisuals({ files: ['src/App.tsx'], body, settings: s })).toEqual({
+        ok: true,
+        reason: 'visual review decides',
+      });
+    }
+    expect(checkPrVisuals({ files: ['src/App.tsx'], body: '', settings: settings({}) }).ok).toBe(
+      false,
+    );
+  });
+});
+
 describe('with fromBaselines', () => {
   const s = settings({ fromBaselines: true });
   const parsed = baselineSettings({

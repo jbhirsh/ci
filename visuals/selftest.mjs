@@ -3,7 +3,10 @@
 //   - the app's `visuals` settings parse (or the defaults, without them);
 //   - every `ui` glob the app sets still names a file git tracks, so a renamed folder
 //     can't quietly switch the check off;
-//   - the app's PR template (.github/pull_request_template.md), untouched,
+//   - with `visuals.sharedTemplate`, nothing of the box cases (the template has
+//     no box; pr-template/selftest.mjs checks it), but with `fromBaselines`
+//     still that the columns pair a baseline;
+//   - otherwise the app's PR template (.github/pull_request_template.md), untouched,
 //     fails a UI change, since its example pictures sit in a comment, and
 //     passes it once "No visible UI change" is ticked;
 //   - with `visuals.fromBaselines` on: the app's `visual-baselines.columns`
@@ -41,6 +44,15 @@ export function selftest(root) {
   if (ui.length === 0) throw new Error('visuals.notUi leaves no UI file');
   const lines = [`visuals: ${ui.length} of ${tracked.length} tracked files count as UI.`];
 
+  // The shared template has no box to tick: pr-template/selftest.mjs checks it.
+  if (s.sharedTemplate) {
+    lines.push(
+      'visuals: sharedTemplate: PR visuals passes every PR; pr-template checks the template.',
+    );
+    // The columns still pair the baselines comment.mjs shows: check that.
+    if (s.fromBaselines) lines.push(fromBaselines(root, tracked, '', [ui[0]], s));
+    return lines;
+  }
   const templatePath = path.join(root, TEMPLATE);
   if (!existsSync(templatePath)) return [...lines, `visuals: no ${TEMPLATE}; skipped.`];
   const template = readFileSync(templatePath, 'utf8');
@@ -77,6 +89,9 @@ function fromBaselines(root, tracked, template, files, s) {
   const inColumn = pairBaselines(all, columns).rows[0];
   if (!inColumn) throw new Error('visual-baselines.columns pairs no tracked baseline');
   const shot = /** @type {string} */ (Object.values(inColumn.cells)[0].after);
+  // PR visuals passes every PR then, so the cases below, which are of what it
+  // fails, have nothing to hold: the pairing above is what still matters.
+  if (s.sharedTemplate) return `visuals: with fromBaselines, ${shot} pairs into a column.`;
   /**
    * @param {string} body
    * @param {import('../lib/baselines.mjs').FileEntry[]} changed
