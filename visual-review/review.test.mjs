@@ -166,6 +166,20 @@ describe('review', () => {
     expect(f.edits[0].body).toContain('| Screen | Where | Zoom: before, after, diff |');
   });
 
+  it('passes a UI change no screenshot shows when the app uses the shared template', () => {
+    const own = { shots: { 1: { 'shots/a.png': testPng() }, 2: { 'shots/a.png': testPng() } } };
+    const plain = fake(own);
+    review(PR, { s, visuals, io: plain.io });
+    expect(plain.posted()?.state).toBe('failure');
+    const shared = fake(own);
+    review(PR, {
+      s,
+      visuals: visualsSettings({ ui: ['src/**'], sharedTemplate: true }),
+      io: shared.io,
+    });
+    expect(shared.posted()).toMatchObject({ state: 'success', description: 'No visual changes' });
+  });
+
   it('uploads nothing again for the same result, even on a new head', () => {
     const first = fake();
     review(PR, { s, visuals, io: first.io });

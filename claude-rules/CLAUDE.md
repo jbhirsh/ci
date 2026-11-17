@@ -34,6 +34,15 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
 
 ## Before opening a PR
 
+- **Describe the PR from the repo's own `.github/pull_request_template.md`**, which the
+  shared template in jbhirsh/ci is the master of for apps that have adopted it. `gh pr create
+--body` doesn't apply the template: read it and fill it in. A bug fix renames Goal to
+  Problem and Plan to Solution, as the template says. Findings from your own review
+  before the PR go to the owner in the chat, never in the description.
+- **A change that moves something needs a GIF**: a transition, a sheet or dialog opening or
+  closing, a drag, swipe or scroll, a multi-step flow. Commit a GIF scenario for it where the
+  repo's CONTRIBUTING says, so PR GIFs records it, and put an empty `pr-gif:<scenario>` marker
+  pair under the change in the description for the GIFs to fill. Stills alone don't show motion.
 - **Review the full diff first.** Once the local checks pass, spawn a code review agent on
   the diff, briefed with the issue (if any) and these rules rather than your conclusions,
   and fix what it finds. Then open the PR: review gates PR creation, rather than following

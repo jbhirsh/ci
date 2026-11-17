@@ -2,7 +2,8 @@ name: PR visuals
 description: >-
   Fails a pull request that changes the UI when its description shows none
   of it (check.mjs's header says what counts, and the app's `visuals`
-  settings in .github/ci.json say which files are UI). Run it from a workflow
+  settings in .github/ci.json say which files are UI); with `sharedTemplate`
+  on it passes every PR, visual review deciding instead. Run it from a workflow
   triggered on pull_request types opened, edited, synchronize, reopened and
   ready_for_review: it re-runs on description edits, so adding the pictures
   turns it green without a new push. The job needs contents and

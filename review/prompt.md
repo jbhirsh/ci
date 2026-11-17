@@ -163,14 +163,18 @@ Treat violations of these as review issues and flag them inline:
 Read the PR description (`mcp__review__pr`, which also holds its review
 comments and your earlier summary). Skip this section
 on Dependabot's PRs. The "PR visuals" check already fails a UI change with
-no picture at all; your job is the judgment it can't make. If the diff
+no picture at all (except where the app sets `visuals.sharedTemplate`, whose
+PRs it passes); your job is the judgment it can't make. If the diff
 changes how something on screen moves or responds (a transition or
 animation, drag, swipe or other gesture handling, a sheet, modal, dialog,
 dropdown or row opening, closing or collapsing, scroll behavior, or a
 multi-step flow) and the description has no GIF or video (an image ending
 in `.gif` or whose alt text starts `GIF:`, a `<video>`, or a
 `github.com/user-attachments/assets/` link), leave an inline comment on the
-main changed line asking for before/after GIFs. Still screenshots are enough
+main changed line asking for before/after GIFs, and where the repo records them
+automatically (a `pr-gif.yml` workflow, scenarios in `gif.scenarios` of
+`.github/ci.json`), saying to commit a GIF scenario for it so PR GIFs attaches them under
+the change, rather than to record by hand. Still screenshots are enough
 for changes to how things look. The review doesn't re-run when the
 description is edited, so whoever adds the GIFs resolves that thread. Where
 the app's `.github/ci.json` sets `visuals.fromBaselines`, its changed visual

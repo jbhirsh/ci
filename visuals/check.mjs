@@ -19,6 +19,12 @@
 //           points); default DEFAULT_NOT_UI
 //   advice  what to tell the author when it fails, after the list of files:
 //           how this app's pictures are taken; default DEFAULT_ADVICE
+//   sharedTemplate  true: the app uses the shared PR template (ci#79), which has
+//           no "No visible UI change" box, and visual review decides whether a
+//           screen changed. This check then passes every PR; set it only once
+//           the app has visual review and `Visual changes` is required.
+//           pr-template/selftest.mjs holds the app's template to the master's
+//           shape. Default false: the rules above, as before.
 //   fromBaselines  true: the PR's changed visual baselines are its pictures
 //           (default false, the rules above). comment.mjs then keeps a
 //           before/after table of them on the PR, from the
@@ -64,6 +70,7 @@ export const DEFAULT_ADVICE =
  * @property {string[]} ui
  * @property {string[]} notUi
  * @property {string} advice
+ * @property {true} [sharedTemplate] set only when on, as fromBaselines is
  * @property {true} [fromBaselines] set only when on, so the settings without it are
  *   what they were before it came in
  */
@@ -75,18 +82,22 @@ export const DEFAULT_ADVICE =
  * @returns {Settings}
  */
 export function settings(config) {
-  const { advice = DEFAULT_ADVICE, fromBaselines = false } = config;
+  const { advice = DEFAULT_ADVICE, fromBaselines = false, sharedTemplate = false } = config;
   if (typeof advice !== 'string' || advice.trim() === '') {
     throw new Error('.github/ci.json: visuals.advice must be text');
   }
   if (typeof fromBaselines !== 'boolean') {
     throw new Error('.github/ci.json: visuals.fromBaselines must be true or false');
   }
+  if (typeof sharedTemplate !== 'boolean') {
+    throw new Error('.github/ci.json: visuals.sharedTemplate must be true or false');
+  }
   return {
     ui: globList(config.ui, 'visuals.ui', DEFAULT_UI),
     notUi: globList(config.notUi, 'visuals.notUi', DEFAULT_NOT_UI),
     advice,
     ...(fromBaselines ? { fromBaselines } : {}),
+    ...(sharedTemplate ? { sharedTemplate } : {}),
   };
 }
 
@@ -210,6 +221,7 @@ export function baselinesShown(files, s) {
  */
 export function checkPrVisuals({ files, body, author, state, baselines, settings: s }) {
   if (author === 'dependabot[bot]') return { ok: true, reason: "Dependabot's PR" };
+  if (s.sharedTemplate) return { ok: true, reason: 'visual review decides' };
   if (s.fromBaselines && state === 'closed') return { ok: true, reason: 'closed PR' };
   const ui = pick(files, { include: s.ui, exclude: s.notUi });
   if (ui.length === 0) return { ok: true, reason: 'no UI files changed' };
