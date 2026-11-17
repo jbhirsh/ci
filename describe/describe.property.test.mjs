@@ -148,3 +148,73 @@ describe('withSections, for a section in parts and any description of slots', ()
     );
   });
 });
+
+describe('withSections, for tables in parts and any slots', () => {
+  const upload = (/** @type {string} */ section) =>
+    new Map([['visual-review', { id: 1, nodeId: 'N', bot: 'visual-review', sha: A, section }]]);
+  const HB = '| BIG | b |\n|---|---|';
+  const HM = '| MINOR | m |\n|---|---|';
+
+  it('writes every row once under one header a table, counts the fold, and is stable', () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(fc.stringMatching(/^[a-z0-9._-]{1,5}$/).filter(isScreenState), {
+          maxLength: 6,
+        }),
+        fc.array(fc.constantFrom('big', 'minor', 'both'), { minLength: 6, maxLength: 6 }),
+        fc.array(fc.boolean(), { minLength: 6, maxLength: 6 }),
+        fc.boolean(),
+        (states, kinds, slotted, withRows) => {
+          const lines = [partMarker('head'), 'HEAD0X'];
+          lines.push('', partMarker('header:big'), HB, '', partMarker('header:minor'), HM);
+          states.forEach((st, i) => {
+            if (kinds[i] !== 'minor') lines.push('', partMarker(`big:${st}`), `| BROW${i}X | 1 |`);
+            if (kinds[i] !== 'big') {
+              lines.push('', partMarker(`minor:${st}`), `| MROW${i}X | 1 |`);
+            }
+          });
+          if (withRows) lines.push('', partMarker('minor'), '| MROWSX | 1 |');
+          lines.push('', partMarker('fold:closed'), 'Minor edge differences (under 0.1%)');
+          const body = states
+            .filter((_, i) => slotted[i])
+            .map(
+              (st) =>
+                `<!-- describe:visual-review:${st} -->\n<!-- /describe:visual-review:${st} -->`,
+            )
+            .join('\n\ntext\n\n');
+          const out = withSections(body, upload(lines.join('\n')));
+          states.forEach((_, i) => {
+            if (kinds[i] !== 'minor') expect(out.split(`BROW${i}X`)).toHaveLength(2);
+            if (kinds[i] !== 'big') expect(out.split(`MROW${i}X`)).toHaveLength(2);
+          });
+          expect(out.split('MROWSX')).toHaveLength(withRows ? 2 : 1);
+          // A table's header is followed by its rows with no blank line between.
+          for (const [header, rowTag] of [
+            ['| BIG |', 'BROW'],
+            ['| MINOR |', 'MROW'],
+          ]) {
+            const blocksOfTable = out.split('\n\n').filter((b) => b.includes(header));
+            for (const b of blocksOfTable) {
+              expect(b.split('\n').filter((l) => l.startsWith(header))).toHaveLength(1);
+              expect(
+                b
+                  .split('\n')
+                  .filter((l) => l !== '' && !l.startsWith('<'))
+                  .every((l) => l.startsWith('|')),
+              ).toBe(true);
+              expect(b.includes(rowTag) || b.includes('MROWSX')).toBe(true);
+            }
+          }
+          const unplaced = states.filter((_, i) => !slotted[i] && kinds[i] !== 'big').length;
+          const count = unplaced + (withRows ? 1 : 0);
+          const fold = /Minor edge differences \(under 0\.1%\): (\d+) screen/.exec(out);
+          if (count > 0) expect(Number(fold?.[1])).toBe(count);
+          else expect(fold).toBeNull();
+          expect(out).not.toContain('describe-part');
+          expect(withSections(out, upload(lines.join('\n')))).toBe(out);
+        },
+      ),
+      { numRuns: 300 },
+    );
+  });
+});

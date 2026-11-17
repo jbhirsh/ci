@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -134,7 +135,7 @@ describe('review', () => {
     expect(f.uploads[0].body).toMatch(/fingerprint: [0-9a-f]{8}/);
     expect(f.uploads[0].files).toHaveLength(3);
     expect(f.edits[0].body).toContain(SECTION);
-    expect(f.edits[0].body).toContain('### Visual changes: 1 screen');
+    expect(f.edits[0].body).toContain('Visual changes: 1 screen changed');
     expect(f.edits[0].body).toContain('https://github.com/user-attachments/assets/0000aaaa-1111');
     expect(f.posted()).toEqual({
       state: 'success',
@@ -146,10 +147,30 @@ describe('review', () => {
     expect(f.enabled).toEqual([]);
   });
 
+  it('uploads where a small change is and a zoom of it, not the screens', () => {
+    const f = fake({
+      shots: {
+        1: { 'shots/a.png': testPng(200, 100) },
+        2: { 'shots/a.png': testPng(200, 100, 3) },
+      },
+    });
+    review(PR, { s, visuals, io: f.io });
+    // Each upload is a real PNG: the zoom's crop, 30x30 pixels, enlarged 7 times.
+    const sizes = f.uploads[0].files.map((file) => {
+      const png = PIXELS.read(readFileSync(file));
+      return [png.width, png.height];
+    });
+    expect(sizes).toContainEqual([642, 210]);
+    expect(sizes).toContainEqual([160, 80]);
+    expect(f.edits[0].body).toContain('<!-- describe-part:fold:open -->');
+    expect(f.edits[0].body).toContain('| Screen | Where | Zoom: before, after, diff |');
+  });
+
   it('uploads nothing again for the same result, even on a new head', () => {
     const first = fake();
     review(PR, { s, visuals, io: first.io });
     const hash = /fingerprint: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
+    const layout = /layout: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
     const f = fake({
       routes: {
         [`GET repos/${REPO}/issues/5/comments?per_page=100&page=1`]: [
@@ -157,7 +178,7 @@ describe('review', () => {
             id: 70,
             node_id: 'N',
             user: { login: 'jbhirsh' },
-            body: `${uploadMarker(BOT, MB)}\nfingerprint: ${hash}\nformat: 2\n\n${SECTION}\ntable`,
+            body: `${uploadMarker(BOT, MB)}\nfingerprint: ${hash}\nformat: 3\nlayout: ${layout}\n\n${SECTION}\ntable`,
           },
         ],
         [`GET repos/${REPO}/commits/${MB}/statuses?per_page=100&page=1`]: [],
@@ -171,7 +192,7 @@ describe('review', () => {
   it('uploads once more in the new form for a result whose last upload was in the old one', () => {
     const first = fake();
     review(PR, { s, visuals, io: first.io });
-    expect(first.uploads[0].body).toMatch(/^format: 2$/m);
+    expect(first.uploads[0].body).toMatch(/^format: 3$/m);
     const hash = /fingerprint: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
     const f = fake({
       routes: {
@@ -191,6 +212,32 @@ describe('review', () => {
     expect(f.uploads).toHaveLength(1);
   });
 
+  it('uploads again when the app changes what counts as minor, and trims a table too long', () => {
+    const first = fake();
+    review(PR, { s, visuals, io: first.io });
+    const hash = /fingerprint: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
+    const layout = /layout: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
+    const previous = (/** @type {string} */ l) => ({
+      routes: {
+        [`GET repos/${REPO}/issues/5/comments?per_page=100&page=1`]: [
+          {
+            id: 70,
+            node_id: 'N',
+            user: { login: 'jbhirsh' },
+            body: `${uploadMarker(BOT, MB)}\nfingerprint: ${hash}\nformat: 3\nlayout: ${l}\n\n${SECTION}\ntable`,
+          },
+        ],
+        [`GET repos/${REPO}/commits/${MB}/statuses?per_page=100&page=1`]: [],
+      },
+    });
+    const same = fake(previous(String(layout)));
+    review(PR, { s, visuals, io: same.io });
+    expect(same.uploads).toEqual([]);
+    const other = fake(previous('00000000'));
+    review(PR, { s, visuals, io: other.io });
+    expect(other.uploads).toHaveLength(1);
+  });
+
   it("keeps the owner's acceptance from an earlier head with the same result", () => {
     const first = fake();
     review(PR, { s, visuals, io: first.io });
@@ -204,7 +251,7 @@ describe('review', () => {
             id: 70,
             node_id: 'N',
             user: { login: 'jbhirsh' },
-            body: `${uploadMarker(BOT, MB)}\nfingerprint: ${hash}\nformat: 2\n\n${SECTION}\ntable`,
+            body: `${uploadMarker(BOT, MB)}\nfingerprint: ${hash}\nformat: 3\nlayout: ${/layout: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1]}\n\n${SECTION}\ntable`,
           },
         ],
         [`GET repos/${REPO}/commits/${MB}/statuses?per_page=100&page=1`]: [

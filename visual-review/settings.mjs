@@ -10,6 +10,9 @@
 //                ignores); visual-shots uploads them, paths kept
 //   ratio        the share of a shot's pixels that may differ before it
 //                counts as changed (default 0); for screens with motion
+//   minor        the share of a shot's pixels under which a change is a minor
+//                edge difference (default 0.001, 0.1%): the table zooms in on
+//                where it is, in a fold, rather than showing the screen
 //   columns      how the shots pair into the table's rows, as
 //                lib/baselines.mjs's parseColumns reads them (BoardGames:
 //                Phone and Desktop; sift: Light and Dark). None: a row per
@@ -31,6 +34,7 @@ import { parseColumns } from '../lib/baselines.mjs';
  * @property {string} job
  * @property {string[]} folders
  * @property {number} ratio
+ * @property {number} minor
  * @property {import('../lib/baselines.mjs').Column[]} columns
  * @property {string[]} mockupPaths
  */
@@ -72,12 +76,12 @@ function globs(value, name) {
  */
 export function settings(config) {
   if (Object.keys(config).length === 0) return null;
-  const known = ['workflow', 'job', 'folders', 'ratio', 'columns', 'mockupPaths'];
+  const known = ['workflow', 'job', 'folders', 'ratio', 'minor', 'columns', 'mockupPaths'];
   const unknown = Object.keys(config).filter((k) => !known.includes(k));
   if (unknown.length > 0) {
     throw new Error(`.github/ci.json: visual-review has an unknown key: ${unknown.join(', ')}`);
   }
-  const { workflow, job, ratio = 0 } = config;
+  const { workflow, job, ratio = 0, minor = 0.001 } = config;
   if (typeof workflow !== 'string' || !/^[\w.-]+\.ya?ml$/.test(workflow)) {
     throw new Error(
       ".github/ci.json: visual-review.workflow is the screenshot workflow's file name (e2e.yml)",
@@ -89,11 +93,15 @@ export function settings(config) {
   if (typeof ratio !== 'number' || !(ratio >= 0 && ratio < 1)) {
     throw new Error('.github/ci.json: visual-review.ratio must be a share from 0 up to 1');
   }
+  if (typeof minor !== 'number' || !(minor >= 0 && minor <= 1)) {
+    throw new Error('.github/ci.json: visual-review.minor must be a share from 0 up to 1');
+  }
   return {
     workflow,
     job,
     folders: globs(config.folders, 'folders'),
     ratio,
+    minor,
     columns: parseColumns(config.columns, 'visual-review.columns') ?? [],
     mockupPaths: config.mockupPaths === undefined ? [] : globs(config.mockupPaths, 'mockupPaths'),
   };

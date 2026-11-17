@@ -14,6 +14,7 @@ describe('settings', () => {
       job: 'visual',
       folders: ['tests/visual/*-snapshots'],
       ratio: 0,
+      minor: 0.001,
       columns: [],
       mockupPaths: [],
     });
@@ -25,6 +26,7 @@ describe('settings', () => {
     });
     expect(s?.columns).toEqual([{ label: 'Mobile', file: ['{state}-mobile-linux.png'] }]);
     expect(s?.ratio).toBe(0.01);
+    expect(settings({ ...ok, minor: 0.05 })?.minor).toBe(0.05);
   });
 
   it('refuses what it can not use', () => {
@@ -33,6 +35,8 @@ describe('settings', () => {
       [{ ...ok, workflow: 'CI' }, /workflow/],
       [{ ...ok, job: '' }, /job/],
       [{ ...ok, ratio: 1 }, /ratio/],
+      [{ ...ok, minor: 2 }, /minor/],
+      [{ ...ok, minor: 'x' }, /minor/],
       [{ ...ok, folders: [] }, /folders/],
       [{ ...ok, folders: ['../x'] }, /folders/],
       [{ ...ok, mockupPaths: ['/abs'] }, /mockupPaths/],
