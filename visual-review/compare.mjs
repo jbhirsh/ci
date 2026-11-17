@@ -14,6 +14,7 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { diff } from '../lib/pixels.mjs';
+import { lookAt } from './zoom.mjs';
 
 /** The most a shot may weigh, as GitHub caps an attached image. */
 export const MAX_SHOT_BYTES = 10 * 1024 * 1024;
@@ -67,18 +68,21 @@ export function shotsIn(root) {
  * @property {'changed' | 'added' | 'removed'} kind
  * @property {number} [ratio] the share of pixels that differ (1: resized)
  * @property {Buffer} [diff] pixelmatch's picture of the difference
+ * @property {true} [resized] the two shots differ in size
+ * @property {import('./zoom.mjs').Look} [look] where a change under `minor` is
  * @property {string} after the PR's shot's SHA-256, '' when it's gone
  */
 
 /**
  * The PR's shots against main's.
  *
- * @param {{ before: string, after: string, ratio: number,
+ * @param {{ before: string, after: string, ratio: number, minor?: number,
  *   pixels: import('../lib/pixels.mjs').Pixels }} options
- *   `before`: main's tree; `after`: the PR's
+ *   `before`: main's tree; `after`: the PR's; `minor`: the share under which
+ *   a change is small (0.001), and gets a look (zoom.mjs)
  * @returns {Change[]} in path order
  */
-export function compareShots({ before, after, ratio, pixels }) {
+export function compareShots({ before, after, ratio, minor = 0.001, pixels }) {
   const main = shotsIn(before);
   const pr = shotsIn(after);
   /**
@@ -104,14 +108,18 @@ export function compareShots({ before, after, ratio, pixels }) {
       changes.push({ file, kind: 'added', after: sha(b) });
       continue;
     }
-    const d = diff(read(before, file), b, pixels, { withImage: true });
+    const d = diff(read(before, file), b, pixels, { withImage: true, maskBelow: minor });
     if (d.ratio <= ratio) continue;
+    // Where a small change is comes with the first pass, but only for one.
+    const look = d.mask ? lookAt(d.mask, d.width ?? 0, d.height ?? 0) : null;
     changes.push({
       file,
       kind: 'changed',
       ratio: d.ratio,
       after: sha(b),
       ...(d.image ? { diff: d.image } : {}),
+      ...(d.resized ? { resized: true } : {}),
+      ...(look ? { look } : {}),
     });
   }
   return changes;

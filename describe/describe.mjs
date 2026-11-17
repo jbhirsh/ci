@@ -13,7 +13,8 @@
 //   - it starts with `<!-- describe-upload:<bot>:<sha> -->`, a bot name
 //     and the commit it's for;
 //   - its section, after `<!-- describe-section -->`, links only GitHub
-//     attachments (`https://github.com/user-attachments/assets/…`).
+//     attachments (`https://github.com/user-attachments/assets/…`) and
+//     commits (`https://github.com/<owner>/<repo>/commit/<sha>`).
 // Of a bot's comments, the newest wins. A bot posts nothing for a head the
 // PR has moved on from (visual-review checks before it uploads), and its
 // runs for one PR take turns, so the newest is the latest head's; ranking
@@ -29,10 +30,18 @@
 // worked out afresh if it changed meanwhile, so a person's edit is lost
 // only if it lands in the same moment. GitHub has no conditional edit.
 //
-// A section may come in parts (ci#80), so a bot's pictures sit under the
-// change that made them rather than in one block. The section is then lines
-// `<!-- describe-part:<key> -->` each followed by that part's text, the key
-// `head` (the heading), `rest` (rows no slot can take) or `screen:<state>`.
+// A section may come in parts (ci#80, ci#87), so a bot's pictures sit under
+// the change that made them rather than in one block. The section is then
+// lines `<!-- describe-part:<key> -->` each followed by that part's text, the
+// key `head` (the summary), `rest` (text no slot can take), `screen:<state>`
+// (a screen's whole text), or, for tables, `header:big` and `header:minor`
+// (a table's two header lines), `big:<state>` and `minor:<state>` (its rows;
+// no state for rows a slot can't name) and `fold:open` or `fold:closed` (the
+// label of the fold the minor rows no slot took go in, and whether it starts
+// open). A slot gets a screen's tables, each with its header; the bot's block
+// gets the rows no slot took in one table each, the minor ones in the fold
+// with their count, and a note that they wait for a place when the
+// description has any slot.
 // A section with no part line is one part, as before. The author puts
 // `<!-- describe:<bot>:<state> -->` … `<!-- /describe:<bot>:<state> -->`
 // (a slot) under a change, and the part of that state goes in it; every
@@ -65,7 +74,23 @@ export const isScreenState = (/** @type {string} */ state) =>
   /^[A-Za-z0-9._-]+$/.test(state) && !state.includes('--');
 /** The line that starts a part in an upload's section. */
 export const partMarker = (/** @type {string} */ key) => `<!-- describe-part:${key} -->`;
-const PART = /^<!-- describe-part:(head|rest|screen:([^\s<>]+)) -->$/;
+const PART = /^<!-- describe-part:([^\s<>]+) -->$/;
+
+/**
+ * What a part key says: its kind and, for a screen's, its state; null when
+ * it isn't one describe knows (a state it can't name included).
+ *
+ * @param {string} key
+ * @returns {{ kind: string, state?: string } | null}
+ */
+function parseKey(key) {
+  if (['head', 'rest', 'big', 'minor', 'header:big', 'header:minor'].includes(key)) {
+    return { kind: key };
+  }
+  if (key === 'fold:open' || key === 'fold:closed') return { kind: key };
+  const m = /^(screen|big|minor):(.+)$/.exec(key);
+  return m && isScreenState(m[2]) ? { kind: m[1], state: m[2] } : null;
+}
 
 /**
  * The key a line starts a part with, or null when it isn't a part line.
@@ -74,8 +99,7 @@ const PART = /^<!-- describe-part:(head|rest|screen:([^\s<>]+)) -->$/;
  */
 function partKey(line) {
   const m = PART.exec(line.trimEnd());
-  if (!m) return null;
-  return m[2] === undefined || isScreenState(m[2]) ? m[1] : null;
+  return m && parseKey(m[1]) ? m[1] : null;
 }
 
 /** Any tool's block marker (lib/blocks.mjs): `<!-- prefix:key -->` or `<!-- /prefix:key -->`. */
@@ -83,6 +107,8 @@ const ANY_MARKER = /<!-- \/?[a-z][a-z0-9-]*:[^\s<>]+ -->/;
 
 const UPLOAD = /^<!-- describe-upload:([a-z][a-z0-9-]{0,39}):([0-9a-f]{40}) -->/;
 const ATTACHMENT = /^https:\/\/github\.com\/user-attachments\/assets\/[0-9a-f-]{8,64}$/;
+/** A commit's page: a section may link the commit it was compared with. */
+const COMMIT = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/commit\/[0-9a-f]{40}$/;
 
 /**
  * A comment, as far as this reads it.
@@ -133,7 +159,7 @@ export function parseUpload(comment, login) {
     .filter((line) => partKey(line) === null)
     .join('\n');
   if (plain.includes('<!-- describe') || plain.includes('<!-- /describe')) return null;
-  if (!urlsIn(section).every((url) => ATTACHMENT.test(url))) return null;
+  if (!urlsIn(section).every((url) => ATTACHMENT.test(url) || COMMIT.test(url))) return null;
   return { id: comment.id, nodeId: comment.node_id, bot: m[1], sha: m[2], section };
 }
 
@@ -163,24 +189,29 @@ export function latest(comments, login) {
  * A section's parts, in order, or null when it has no part line.
  *
  * @param {string} section
- * @returns {{ key: string, state?: string, text: string }[] | null}
+ * @returns {{ key: string, kind: string, state?: string, text: string }[] | null}
  */
 function partsOf(section) {
-  /** @type {{ key: string, state?: string, lines: string[] }[]} */
+  /** @type {{ key: string, kind: string, state?: string, lines: string[] }[]} */
   const parts = [];
   let any = false;
   for (const line of section.split('\n')) {
     const key = partKey(line);
     if (key !== null) {
       any = true;
-      const state = key.startsWith('screen:') ? key.slice('screen:'.length) : undefined;
+      const { kind, state } = /** @type {{ kind: string, state?: string }} */ (parseKey(key));
       // A part named twice reads as two, and a slot takes both.
-      parts.push({ key, state, lines: [] });
+      parts.push({ key, kind, state, lines: [] });
     } else if (parts.length > 0) parts[parts.length - 1].lines.push(line);
-    else if (line.trim() !== '') parts.push({ key: 'rest', lines: [line] });
+    else if (line.trim() !== '') parts.push({ key: 'rest', kind: 'rest', lines: [line] });
   }
   if (!any) return null;
-  return parts.map(({ key, state, lines }) => ({ key, state, text: lines.join('\n').trim() }));
+  return parts.map(({ key, kind, state, lines }) => ({
+    key,
+    kind,
+    state,
+    text: lines.join('\n').trim(),
+  }));
 }
 
 /**
@@ -219,6 +250,14 @@ function placedSlots(body, bot) {
 }
 
 /**
+ * A table from its header and the rows of the parts that make it.
+ *
+ * @param {string} header
+ * @param {string[]} rows
+ */
+const table = (header, rows) => (rows.length > 0 ? `${header}\n${rows.join('\n')}` : '');
+
+/**
  * The description with one bot's section in it.
  *
  * @param {string} body
@@ -226,24 +265,66 @@ function placedSlots(body, bot) {
  * @param {string} section
  */
 function writeSection(body, bot, section) {
-  const parts = partsOf(section);
+  const parts = partsOf(section) ?? [];
+  const has = (/** @type {string} */ kind) => parts.find((p) => p.kind === kind)?.text ?? '';
   // The block is emptied first, and the slots that count are read from what
   // is left: writing it later can't destroy a marker that made a slot not
   // count, which would make the next run decide differently.
   let out = blocks.write(body, bot, '');
   const slots = placedSlots(out, bot);
+  /**
+   * The tables of one screen, or of the screens no slot took.
+   *
+   * @param {(p: { state?: string }) => boolean} takes
+   */
+  const tables = (takes) => ({
+    big: table(
+      has('header:big'),
+      parts.filter((p) => p.kind === 'big' && takes(p)).map((p) => p.text),
+    ),
+    minor: table(
+      has('header:minor'),
+      parts.filter((p) => p.kind === 'minor' && takes(p)).map((p) => p.text),
+    ),
+    // A screen's rows (its sizes) are one screen; a part with no state holds
+    // one screen a row.
+    minorScreens: parts
+      .filter((p) => p.kind === 'minor' && takes(p))
+      .reduce((n, p) => n + (p.state === undefined ? p.text.split('\n').length : 1), 0),
+  });
   for (const state of slots) {
-    const text = (parts ?? []).filter((p) => p.state === state).map((p) => p.text);
+    const mine = tables((p) => p.state === state);
+    const text = [
+      ...parts.filter((p) => p.kind === 'screen' && p.state === state).map((p) => p.text),
+      mine.big,
+      mine.minor,
+    ];
     out = blocks.write(out, `${bot}:${state}`, text.filter(Boolean).join('\n\n'));
   }
-  const rest = parts
-    ? parts
-        .filter((p) => p.state === undefined || !slots.has(p.state))
-        .map((p) => p.text)
-        .filter(Boolean)
-        .join('\n\n')
-    : section;
-  return blocks.write(out, bot, rest);
+  if (!partsOf(section)) return blocks.write(out, bot, section);
+  const left = tables((p) => p.state === undefined || !slots.has(p.state));
+  const fold = parts.find((p) => p.kind === 'fold:open' || p.kind === 'fold:closed');
+  // What's left for the bot's block: the heading and the rows no slot took.
+  // With slots in the description, say they're waiting for a place.
+  const waiting =
+    slots.size > 0 && (left.big || left.minor) ? '_Not placed under a change yet._' : '';
+  const rest = [
+    ...parts
+      .filter(
+        (p) =>
+          ['head', 'rest'].includes(p.kind) ||
+          (p.kind === 'screen' && !slots.has(/** @type {string} */ (p.state))),
+      )
+      .map((p) => p.text),
+    waiting,
+    left.big,
+    fold && !parts.some((p) => p.kind === 'minor')
+      ? `${fold.text}: none`
+      : left.minor && fold
+        ? `<details${fold.kind === 'fold:open' ? ' open' : ''}><summary>${fold.text}: ${left.minorScreens} screen${left.minorScreens === 1 ? '' : 's'}</summary>\n\n${left.minor}\n\n</details>`
+        : left.minor,
+  ];
+  return blocks.write(out, bot, rest.filter(Boolean).join('\n\n'));
 }
 
 /**

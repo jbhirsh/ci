@@ -78,6 +78,26 @@ describe('compareShots', () => {
     ]);
   });
 
+  it('says where a change under `minor` is, and only for one', () => {
+    const before = tree({ 'small.png': testPng(100, 100), 'big.png': testPng(100, 100) });
+    const after = tree({ 'small.png': testPng(100, 100, 3), 'big.png': testPng(100, 100, 500) });
+    const [big, small] = compareShots({ before, after, ratio: 0, minor: 0.01, pixels });
+    expect(big.look).toBeUndefined();
+    expect(small.look).toMatchObject({ large: false, width: 100, height: 100 });
+    expect(small.look?.places).toEqual([{ x: 0, y: 0, w: 3, h: 1 }]);
+  });
+
+  it('marks a resized shot, which has no look', () => {
+    const [c] = compareShots({
+      before: tree({ 'a.png': testPng() }),
+      after: tree({ 'a.png': testPng(8, 8) }),
+      ratio: 0,
+      pixels,
+    });
+    expect(c).toMatchObject({ ratio: 1, resized: true });
+    expect(c.look).toBeUndefined();
+  });
+
   it('refuses a shot that is not a PNG', () => {
     expect(() =>
       compareShots({ before: tree({}), after: tree({ 'a.png': 'not a png' }), ratio: 0, pixels }),

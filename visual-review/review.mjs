@@ -23,6 +23,7 @@
 //      changes".
 // A mockup does 1 to 4 on its issue, and sets no status.
 
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -32,7 +33,9 @@ import { parseUpload, SECTION, uploadMarker } from '../describe/describe.mjs';
 import { parseManifest, MANIFEST } from '../visual-shots/shots.mjs';
 import { compareShots } from './compare.mjs';
 import { CONTEXT, fingerprint, shownAt, status } from './status.mjs';
-import { keyOf, lines, pick, renderTable } from './table.mjs';
+import { isMinor, keyOf, lines, pick, renderTable, summary } from './table.mjs';
+import { crop, enlarge, outlined, sideBySide } from './zoom.mjs';
+import { MAX_CHARS } from '../lib/comment.mjs';
 
 /** The bot's name in its upload comments and its description block. */
 export const BOT = 'visual-review';
@@ -80,7 +83,7 @@ const fingerprintIn = (body) => /^fingerprint: ([0-9a-f]{8})$/m.exec(body)?.[1] 
  * the old form gets one new upload in the new form, though its pictures
  * didn't change: the fingerprint alone would leave it as it was.
  */
-const UPLOAD_FORMAT = 2;
+const UPLOAD_FORMAT = 3;
 
 /**
  * The format an upload comment records: 1 for one without the line.
@@ -228,25 +231,106 @@ function statusOn(io, sha) {
 }
 
 /**
+ * How many screens a table is allowed, in characters, so it fits a
+ * description (MAX_CHARS) beside the text around it.
+ */
+const SECTION_BUDGET = MAX_CHARS - 20_000;
+
+/**
+ * How many screens `all` has that `shown` doesn't.
+ *
+ * @param {readonly import('./table.mjs').Line[]} all
+ * @param {readonly import('./table.mjs').Line[]} shown
+ */
+const dropped = (all, shown) => {
+  const count = (/** @type {readonly import('./table.mjs').Line[]} */ rows) =>
+    new Set(rows.map((r) => r.state ?? r.label)).size;
+  return count(all) - count(shown);
+};
+
+/**
+ * What decides how a result is laid out, besides its pictures: the share
+ * that makes a change minor and which changes are. A `minor` setting changed
+ * in an app's config re-uploads the open PRs once.
+ *
+ * @param {readonly import('./table.mjs').Line[]} rows
+ * @param {number} minor
+ */
+const layoutOf = (rows, minor) =>
+  createHash('sha256')
+    .update(
+      `${minor}\n${rows.map((r) => `${r.change.file} ${isMinor(r) ? 'minor' : 'big'}`).join('\n')}`,
+    )
+    .digest('hex')
+    .slice(0, 8);
+
+/**
+ * The layout an upload comment records, or null.
+ *
+ * @param {string} body
+ */
+const layoutIn = (body) => /^layout: ([0-9a-f]{8})$/m.exec(body)?.[1] ?? null;
+
+/**
  * Posts the upload comment: the pictures, then the finished section.
  *
  * @param {Io} io
  * @param {{ kind: 'pr' | 'issue', number: number, sha: string, hash: string,
  *   rows: import('./table.mjs').Line[], changes: import('./compare.mjs').Change[],
- *   before: string, after: string, base: string }} upload
+ *   before: string, after: string, base: string, minor: number }} upload
  */
-function post(io, { kind, number, sha, hash, rows, changes, before, after, base }) {
+function post(io, { kind, number, sha, hash, rows, changes, before, after, base, minor }) {
   const dir = mkdtempSync(path.join(tmpdir(), 'upload-'));
   const pictures = pick(rows);
   const byFile = new Map(changes.map((c) => [c.file, c]));
+  /** @type {Map<string, import('../lib/pixels.mjs').Image>} */
+  const decoded = new Map();
+  /**
+   * A shot's pixels, decoded once.
+   *
+   * @param {string} root
+   * @param {string} file
+   */
+  const image = (root, file) => {
+    const key = `${root}\0${file}`;
+    if (!decoded.has(key)) decoded.set(key, io.pixels.read(readFileSync(path.join(root, file))));
+    return /** @type {import('../lib/pixels.mjs').Image} */ (decoded.get(key));
+  };
+  /** @param {import('../lib/pixels.mjs').Image} img */
+  const png = (img) => io.pixels.write(img);
+  /**
+   * The bytes of one picture: a shot as it is, pixelmatch's diff, or a
+   * picture made from them (zoom.mjs).
+   *
+   * @param {import('./table.mjs').Picture} p
+   * @param {import('./compare.mjs').Change} change
+   */
+  const bytes = (p, change) => {
+    const look = change.look;
+    if (p.side === 'diff') return /** @type {Buffer} */ (change.diff);
+    if (p.side === 'before' || p.side === 'after') {
+      return readFileSync(path.join(p.side === 'before' ? before : after, p.file));
+    }
+    const l = /** @type {import('./zoom.mjs').Look} */ (look);
+    if (p.side === 'where') return png(outlined(image(after, p.file), l.places));
+    // One picture of the three patches, side by side: the changed place in
+    // main's shot, the PR's, and pixelmatch's diff, each enlarged alike.
+    const patch = (/** @type {import('../lib/pixels.mjs').Image} */ img) =>
+      enlarge(crop(img, l.zoom), l.scale);
+    return png(
+      sideBySide([
+        patch(image(before, p.file)),
+        patch(image(after, p.file)),
+        patch(io.pixels.read(/** @type {Buffer} */ (change.diff))),
+      ]),
+    );
+  };
   const files = pictures.map((p, i) => {
     const file = path.join(dir, `${String(i + 1).padStart(2, '0')}.png`);
-    const change = /** @type {import('./compare.mjs').Change} */ (byFile.get(p.file));
-    const bytes =
-      p.side === 'diff'
-        ? /** @type {Buffer} */ (change.diff)
-        : readFileSync(path.join(p.side === 'before' ? before : after, p.file));
-    writeFileSync(file, bytes);
+    writeFileSync(
+      file,
+      bytes(p, /** @type {import('./compare.mjs').Change} */ (byFile.get(p.file))),
+    );
     return file;
   });
   const head = [
@@ -255,6 +339,7 @@ function post(io, { kind, number, sha, hash, rows, changes, before, after, base 
     '',
     `fingerprint: ${hash}`,
     `format: ${UPLOAD_FORMAT}`,
+    `layout: ${layoutOf(rows, minor)}`,
     '',
   ];
   const id = io.upload(
@@ -273,10 +358,29 @@ function post(io, { kind, number, sha, hash, rows, changes, before, after, base 
   )) {
     links.set(m[1], m[2]);
   }
-  const section =
-    rows.length === 0
-      ? `### Visual changes: none, compared with main at \`${base.slice(0, 7)}\``
-      : renderTable({ rows, links, base });
+  // GitHub refuses a description over 65,536 characters, and describe adds
+  // the section to the rest of it. A table over SECTION_BUDGET drops its last
+  // (smallest) screens and says how many.
+  let shown = rows;
+  /** @type {string} */
+  let section;
+  for (;;) {
+    section =
+      shown.length === 0
+        ? summary({ count: 0, base, repo: io.repo })
+        : renderTable({
+            rows: shown,
+            links,
+            base,
+            repo: io.repo,
+            minor,
+            omitted: dropped(rows, shown),
+          });
+    if (section.length <= SECTION_BUDGET || shown.length <= 1) break;
+    const last = shown[shown.length - 1];
+    const screen = last.state ?? last.label;
+    shown = shown.filter((r) => (r.state ?? r.label) !== screen);
+  }
   io.editComment(id, `${posted.trimEnd()}\n\n${SECTION}\n${section}`);
 }
 
@@ -351,6 +455,7 @@ export function review(target, { s, visuals, io }) {
       before: theirs,
       after: mine,
       ratio: s.ratio,
+      minor: s.minor,
       pixels: io.pixels,
     });
     const rows = lines(changes, s.columns);
@@ -374,7 +479,8 @@ export function review(target, { s, visuals, io }) {
     if (
       previous &&
       fingerprintIn(previous.body) === result.fingerprint &&
-      formatIn(previous.body) === UPLOAD_FORMAT
+      formatIn(previous.body) === UPLOAD_FORMAT &&
+      layoutIn(previous.body) === layoutOf(compared.rows, s.minor)
     ) {
       return;
     }
@@ -389,6 +495,7 @@ export function review(target, { s, visuals, io }) {
       before: theirs,
       after: mine,
       base: manifest.base,
+      minor: s.minor,
     });
   };
 

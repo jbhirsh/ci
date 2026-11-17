@@ -315,3 +315,60 @@ group('a section in parts', () => {
     }
   });
 });
+
+group('parseUpload, for the links a section may hold', () => {
+  const COMMIT_LINK = `https://github.com/jbhirsh/app/commit/${A}`;
+  it('takes a link to a commit and refuses any other page', () => {
+    expect(
+      parseUpload(upload(1, 'visual-review', A, `[\`abc\`](${COMMIT_LINK})`), BOT),
+    ).not.toBeNull();
+    for (const bad of [
+      'https://github.com/jbhirsh/app/commit/abc',
+      `https://github.com/jbhirsh/app/pull/1`,
+      `${COMMIT_LINK}/x`,
+      `https://evil.example/jbhirsh/app/commit/${A}`,
+      `http://github.com/jbhirsh/app/commit/${A}`,
+    ]) {
+      expect(parseUpload(upload(1, 'visual-review', A, `[x](${bad})`), BOT)).toBeNull();
+    }
+  });
+});
+
+group('withSections, for the table parts', () => {
+  const part = (/** @type {string} */ key, /** @type {string} */ text) =>
+    `${partMarker(key)}\n${text}`;
+  const write = (/** @type {string} */ body, /** @type {string[]} */ parts) =>
+    withSections(
+      body,
+      new Map([
+        [
+          'visual-review',
+          { id: 1, nodeId: 'N', bot: 'visual-review', sha: A, section: parts.join('\n\n') },
+        ],
+      ]),
+    );
+
+  it('says none when the upload has no minor row', () => {
+    const out = write('Body', [
+      part('head', 'HEAD'),
+      part('header:big', '| B |\n|---|'),
+      part('big:ok', '| ROWX |'),
+      part('fold:closed', 'Minor edge differences (under 0.1%)'),
+    ]);
+    expect(out).toContain('Minor edge differences (under 0.1%): none');
+    expect(out).toContain('| B |\n|---|\n| ROWX |');
+  });
+
+  it('counts a screen once however many sizes it has, and each row with no state', () => {
+    const out = write('Body', [
+      part('head', 'HEAD'),
+      part('header:minor', '| M |\n|---|'),
+      part('minor:a', '| R1 |\n| R2 |'),
+      part('minor', '| R3 |\n| R4 |'),
+      part('fold:open', 'Minor edge differences (under 0.1%)'),
+    ]);
+    expect(out).toContain(
+      '<details open><summary>Minor edge differences (under 0.1%): 3 screens</summary>',
+    );
+  });
+});
