@@ -53,10 +53,9 @@ title, then the text (GitHub's own [!NOTE] boxes can't carry a title of ours):
 ## Changes
 
 <!-- The tools below write between their markers; do not edit inside them. They
-write each change's commit and files (a green and red diff block with its totals,
-then the linked files: GitHub colours only a diff block, not a table or a heading)
-and the Revisions table: there is no totals line, as the PR's own header has the
-totals. -->
+write each change's commit and files (a dropdown of the linked files; the title
+and every file's counts are small green and red pictures) and the Revisions
+table: there is no totals line, as the PR's own header has the totals. -->
 <!-- describe:visual-review -->
 <!-- /describe:visual-review -->
 
