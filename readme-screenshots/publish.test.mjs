@@ -57,11 +57,16 @@ describe('prBody', () => {
 
   it('says where they came from and follows the PR template', () => {
     expect(body).toMatch(
-      /^The README's screenshots no longer matched the app at aaaaaaa, so they were taken again from a local production build \(\[run\]\(https:\/\/run\/7\)\)\. Only screenshots where over 0\.5% of the pixels changed are replaced\./,
+      /^## Goal\n\nThe README's screenshots no longer matched the app at aaaaaaa, so they were taken again from a local production build \(\[run\]\(https:\/\/run\/7\)\)\. Only screenshots where over 0\.5% of the pixels changed are replaced\./,
     );
-    expect(body).toContain('## Visual changes');
-    expect(body).toContain('- [ ] No visible UI change');
-    expect(body).toContain('## Validation');
+    expect(body).toContain('## Goal');
+    expect(body).toContain('## Changes');
+    expect(body).not.toContain('No visible UI change');
+    expect(body).toContain('## Checklist');
+    const at = (/** @type {string} */ h) => body.indexOf(h);
+    expect(at('## Goal')).toBeLessThan(at('## Changes'));
+    expect(at('## Changes')).toBeLessThan(at('| Screenshot |'));
+    expect(at('| Screenshot |')).toBeLessThan(at('## Checklist'));
   });
 
   it('names the PR they came from, and leaves out a run there is none of', () => {

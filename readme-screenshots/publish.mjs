@@ -82,11 +82,13 @@ export function prBody({ repo, dir, base, head, files, source, sourcePr, runUrl 
   const raw = (/** @type {string} */ sha, /** @type {string} */ file) =>
     `https://raw.githubusercontent.com/${repo}/${sha}/${dir}/${file}`;
   return [
+    '## Goal',
+    '',
     `The README's screenshots no longer matched the app at ${base.slice(0, 7)}, so they were ` +
       `taken again from ${origin(source, sourcePr)}${runUrl ? ` ([run](${runUrl}))` : ''}. Only ` +
       `screenshots where over ${CHANGED_RATIO * 100}% of the pixels changed are replaced.`,
     '',
-    '## Visual changes',
+    '## Changes',
     '',
     '| Screenshot | Before (`main`) | After |',
     '|---|---|---|',
@@ -95,11 +97,9 @@ export function prBody({ repo, dir, base, head, files, source, sourcePr, runUrl 
         `| \`${file}\` | <img src="${raw(base, file)}" width="300"> | <img src="${raw(head, file)}" width="300"> |`,
     ),
     '',
-    '- [ ] No visible UI change',
+    '## Checklist',
     '',
-    '## Validation',
-    '',
-    'Pictures only: no code changed. Merges itself once the required checks pass.',
+    '- [x] Pictures only: no code changed. Merges itself once the required checks pass.',
   ].join('\n');
 }
 
