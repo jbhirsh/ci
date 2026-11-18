@@ -21,8 +21,10 @@
 //           how this app's pictures are taken; default DEFAULT_ADVICE
 //   sharedTemplate  true: the app uses the shared PR template (ci#79), which has
 //           no "No visible UI change" box, and visual review decides whether a
-//           screen changed. This check then passes every PR; set it only once
-//           the app has visual review and `Visual changes` is required.
+//           screen changed. This check then passes every PR on the rules
+//           above; set it only once the app has visual review and `Visual
+//           changes` is required. The action's next step holds the PR's
+//           description to the shared shape (pr-template/check-body.mjs), and
 //           pr-template/selftest.mjs holds the app's template to the master's
 //           shape. Default false: the rules above, as before.
 //   fromBaselines  true: the PR's changed visual baselines are its pictures

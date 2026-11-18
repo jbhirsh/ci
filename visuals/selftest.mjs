@@ -4,8 +4,9 @@
 //   - every `ui` glob the app sets still names a file git tracks, so a renamed folder
 //     can't quietly switch the check off;
 //   - with `visuals.sharedTemplate`, nothing of the box cases (the template has
-//     no box; pr-template/selftest.mjs checks it), but with `fromBaselines`
-//     still that the columns pair a baseline;
+//     no box; pr-template/selftest.mjs checks it, and the description check,
+//     pr-template/check-body.mjs, holds each PR to the shape), but with
+//     `fromBaselines` still that the columns pair a baseline;
 //   - otherwise the app's PR template (.github/pull_request_template.md), untouched,
 //     fails a UI change, since its example pictures sit in a comment, and
 //     passes it once "No visible UI change" is ticked;
@@ -47,7 +48,7 @@ export function selftest(root) {
   // The shared template has no box to tick: pr-template/selftest.mjs checks it.
   if (s.sharedTemplate) {
     lines.push(
-      'visuals: sharedTemplate: PR visuals passes every PR; pr-template checks the template.',
+      'visuals: sharedTemplate: the UI check passes every PR, and the description check holds each to the shape; pr-template checks the template.',
     );
     // The columns still pair the baselines comment.mjs shows: check that.
     if (s.fromBaselines) lines.push(fromBaselines(root, tracked, '', [ui[0]], s));
@@ -89,8 +90,8 @@ function fromBaselines(root, tracked, template, files, s) {
   const inColumn = pairBaselines(all, columns).rows[0];
   if (!inColumn) throw new Error('visual-baselines.columns pairs no tracked baseline');
   const shot = /** @type {string} */ (Object.values(inColumn.cells)[0].after);
-  // PR visuals passes every PR then, so the cases below, which are of what it
-  // fails, have nothing to hold: the pairing above is what still matters.
+  // The UI check passes every PR then, so the cases below, which are of what
+  // it fails, have nothing to hold: the pairing above is what still matters.
   if (s.sharedTemplate) return `visuals: with fromBaselines, ${shot} pairs into a column.`;
   /**
    * @param {string} body

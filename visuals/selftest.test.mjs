@@ -68,7 +68,7 @@ describe('selftest with sharedTemplate', () => {
       '.github/ci.json': JSON.stringify({ visuals: { sharedTemplate: true } }),
       [TEMPLATE]: '## Goal\n',
     });
-    expect(selftest(root).at(-1)).toMatch(/sharedTemplate: PR visuals passes every PR/);
+    expect(selftest(root).at(-1)).toMatch(/sharedTemplate: the UI check passes every PR/);
   });
 });
 
