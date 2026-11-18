@@ -158,3 +158,23 @@ describe('renderedLines', () => {
     expect(bodyProblems(`## a${' '.repeat(400000)}b`)).toHaveLength(4);
   });
 });
+
+describe("the template's Example", () => {
+  const start = master.indexOf('\n**Example**\n') + 1;
+  const example = master.slice(start, master.indexOf('_Real case'));
+
+  it('is hidden: a reader of the template sees none of it, not even its last lines', () => {
+    const seen = renderedLines(master).join('\n');
+    for (const text of ['In one line', 'What it does now', 'Real case', 'BoardGames#343', '```']) {
+      expect(seen).not.toContain(text);
+    }
+    expect(bodyProblems(master).join()).toMatch(/write the goal/);
+  });
+
+  it('is a description that passes once it is written in', () => {
+    expect(example.startsWith('**Example**\n')).toBe(true);
+    expect(example).toContain('```diff');
+    const written = GOOD.replace('Make it work.', () => `Make it work.\n\n${example}`);
+    expect(bodyProblems(written)).toEqual([]);
+  });
+});

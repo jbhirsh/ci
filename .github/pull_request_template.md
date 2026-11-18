@@ -11,6 +11,47 @@ comment's advice with the text it was for.
 
 For a bug fix, rename this heading "Problem": what is wrong, who sees it and
 what causes it, ending "Closes #N" when there is an issue.
+
+A bug fix or a change in behaviour (not a cosmetic change, a rename, a chore or a
+bot's PR) also gets an Example: the simplest case that shows it, in code, as long
+as it needs and no longer. Write it here as a bold "**Example**" paragraph, or, in
+a PR with several changes, under the change it belongs to; never as a heading.
+Use made-up code where the real code is long, a diff block where lines change
+(GitHub colours it), and input and output for a call that now returns something
+else. This one, for the PR that fixed a mutation check, shows the shape:
+
+**Example**
+
+**In one line:** a PR that only added a comment was scored on code it never touched.
+
+Main's file, where a mutant survived on line 2:
+
+```tsx
+1  export function Icon() {
+2    return <svg style={{ overflow: 'visible' }} />;   // survived here
+3  }
+```
+
+The PR adds a two-line comment above it and changes nothing else:
+
+```diff
++ 1  /** The rules icon. */
++ 2  /** Drawn at 24px. */
+  3  export function Icon() {
+  4    return <svg style={{ overflow: 'visible' }} />;   // same code, now line 4
+  5  }
+```
+
+What happened, in order:
+
+1. The PR's changed lines are 1-2.
+2. Main's result is stored as "line 2", inside 1-2, so it was kept.
+3. It then moved to line 4, outside the changed lines, and still counted.
+
+**What it does now:** a stored line number is trusted only if the file reads the
+same from line 1 down to it.
+
+_Real case: BoardGames#343, the unchanged svg moved from line 83 to line 90._
 -->
 
 ## Plan
@@ -76,6 +117,9 @@ markers above are, under the change it belongs to, and the GIFs fill it in
 place; without one they are added at the very end. `<scenario>` is the
 scenario's own name (the `name` it exports, else its file's name without the
 extension).
+
+In a PR with several changes, a change that fixes a bug or changes behaviour takes
+its own bold "**Example**" paragraph under its heading, as the one under Goal does.
 -->
 
 ### 1. The first change, as a goal
