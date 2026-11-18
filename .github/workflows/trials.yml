@@ -31,13 +31,14 @@ jobs:
           PR: "103"
         run: |
           set -u
+          [ -n "$GH_TOKEN" ] || { echo "::error::BOT_PR_TOKEN is not set in this repository: add it as a secret (the token the apps use, with Contents, Pull requests and Issues read and write on ci), then push again"; exit 1; }
           cd trials
           L12=./z12-81-37.svg
           L14=./z14-81-37.svg
 
           echo "::group::Trial 1: attach an SVG with gh pr edit --attach"
           printf 'Trial 1\n\n![a](%s) and ![b](%s)\n' "$L12" "$L14" > body1.md
-          gh pr edit "$PR" --body-file body1.md --attach "$L12" "$L14"; echo "RESULT trial1 exit=$?"
+          gh pr edit "$PR" --body-file body1.md --attach "$L12" --attach "$L14"; echo "RESULT trial1 exit=$?"
           gh pr view "$PR" --json body -q .body > read1.md
           cat read1.md
           echo "::endgroup::"
@@ -47,11 +48,11 @@ jobs:
 
           echo "::group::Trial 3: fetch each link signed out, compare bytes"
           i=0
-          for url in $(grep -o 'https://github.com/user-attachments/assets/[0-9a-f-]*' read1.md); do
+          while IFS= read -r url; do
             i=$((i+1))
             code=$(curl -sS -L -o "fetched$i" -w '%{http_code} %{content_type} %{size_download}' "$url"); echo "RESULT trial3 link$i $url -> $code"
             sha256sum "fetched$i" z12-81-37.svg z14-81-37.svg | sed 's/^/RESULT trial3 /'
-          done
+          done <<< "$LINKS"
           echo "::endgroup::"
 
           echo "::group::Trial 4: does --attach rewrite a reference inside an HTML comment"
@@ -71,7 +72,7 @@ jobs:
             printf '<picture><source media="(min-width: 768px)" srcset="%s"><img src="%s" alt="+81 −37"></picture>' "$B" "$A"
             echo ' after, and in a list:'
             echo
-            printf -- '- `a/file.mjs` <picture><source media="(min-width: 768px)" srcset="%s"><img src="%s" alt="+3 −1"></picture>\n' "$B" "$A"
+            printf -- '- a/file.mjs <picture><source media="(min-width: 768px)" srcset="%s"><img src="%s" alt="+3 −1"></picture>\n' "$B" "$A"
             echo
             echo 'The same two images as plain Markdown, for comparison:'
             echo
