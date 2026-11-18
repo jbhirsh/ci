@@ -21,13 +21,20 @@ linked. A State is one of: "✅ merged (#N)", "👉 this PR",
 "next (#N)", "later". For a single-feature PR delete this heading and the table, but keep the
 comment below.
 
+The table is HTML, so that GitHub shades only this PR's row: it shades the
+even rows of each <tbody>, so each step is a <tbody> of its own, and only this
+PR's starts with an empty <tr></tr>. Cells take HTML, not Markdown (<a href>,
+<b>, <code>). Every other step is a plain row, like
+<tbody><tr><td>1</td><td><a href="…/pull/12">#12</a></td><td>…</td><td>✅ merged (#12)</td></tr></tbody>
+
 For a bug fix, rename this heading "Solution" and replace what is below with
 what the fix does and why it removes the cause.
 -->
 
-| Step  | Where       | What | State      |
-| ----- | ----------- | ---- | ---------- |
-| **1** | **this PR** |      | 👉 this PR |
+<table>
+<thead><tr><th>Step</th><th>Where</th><th>What</th><th>State</th></tr></thead>
+<tbody><tr></tr><tr><td><b>1</b></td><td><b>this PR</b></td><td><b></b></td><td><b>👉 this PR</b></td></tr></tbody>
+</table>
 
 <!--
 Add these two boxes here, after the plan table when there is one, only when
