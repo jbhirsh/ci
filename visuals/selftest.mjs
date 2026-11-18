@@ -4,7 +4,8 @@
 //   - every `ui` glob the app sets still names a file git tracks, so a renamed folder
 //     can't quietly switch the check off;
 //   - with `visuals.sharedTemplate`, nothing of the box cases (the template has
-//     no box; pr-template/selftest.mjs checks it);
+//     no box; pr-template/selftest.mjs checks it, and the description check,
+//     pr-template/check-body.mjs, holds each PR to the shape);
 //   - otherwise the app's PR template (.github/pull_request_template.md), untouched,
 //     fails a UI change, since its example pictures sit in a comment, and
 //     passes it once "No visible UI change" is ticked.

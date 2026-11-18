@@ -88,8 +88,8 @@ Why this change.
 
 <!--
 Only what CI doesn't show: "- [x] done" for what you did, and, for anything the
-owner has to do, an open box that starts "**You:**". Delete this comment's box
-example with the section if there is nothing to list.
+owner has to do, an open box that starts "**You:**". Keep the heading: the
+description check needs it. Write "Nothing to do." when there is nothing to list.
 -->
 
 ## Revisions
