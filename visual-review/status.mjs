@@ -12,8 +12,9 @@
 //   - turned on before that: failure, until it's turned off and on again.
 // With no changed screen, PR visuals' old rule holds: a PR that changes UI
 // files shows pictures or ticks "No visible UI change". An app with
-// `visuals.sharedTemplate` has no such rule (PR visuals passes its PRs, so the
-// caller reports no UI change here): visual review alone decides.
+// `visuals.sharedTemplate` has no such rule (the UI check passes its PRs, so the
+// caller reports no UI change here): visual review alone decides. Whether its
+// description has the shared shape is another step of PR visuals, never read here.
 //
 // Each result has a fingerprint, a short hash of what changed (the screens'
 // names and their "after" pictures), and the time it was first shown. Both

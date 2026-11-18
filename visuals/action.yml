@@ -3,7 +3,9 @@ description: >-
   Fails a pull request that changes the UI when its description shows none
   of it (check.mjs's header says what counts, and the app's `visuals`
   settings in .github/ci.json say which files are UI); with `sharedTemplate`
-  on it passes every PR, visual review deciding instead. Run it from a workflow
+  on it passes every PR on that rule, visual review deciding instead, and
+  instead holds the PR's description to the shared shape
+  (pr-template/check-body.mjs says what passes). Run it from a workflow
   triggered on pull_request types opened, edited, synchronize, reopened and
   ready_for_review: it re-runs on description edits, so adding the pictures
   turns it green without a new push. The job needs contents and
@@ -47,3 +49,16 @@ runs:
         PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         PR_FILES: ${{ runner.temp }}/pr-visuals-files.txt
       run: node "$GITHUB_ACTION_PATH/check.mjs" < "$PR_FILES"
+
+    # Only with the app's `visuals.sharedTemplate`: the description's shape
+    # (headings, a numbered change), apart from the UI check above, which
+    # visual review's status also reads.
+    - name: Check the description is in the shared shape
+      shell: bash
+      env:
+        PR_BODY: ${{ github.event.pull_request.body }}
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        PR_STATE: ${{ github.event.pull_request.state }}
+        PR_DRAFT: ${{ github.event.pull_request.draft }}
+        PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      run: node "$GITHUB_ACTION_PATH/../pr-template/check-body.mjs"
