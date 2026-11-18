@@ -1,0 +1,82 @@
+# One-off: the upload and rendering trials for ci#100, run on a push to this
+# branch only (workflow_dispatch needs the file on the default branch). Never
+# merged: the branch is deleted and PR #103 closed once the results are on the
+# issue. It attaches two SVGs to PR #103 with BOT_PR_TOKEN, as pr-gif's attach
+# does, and prints each trial's result as a RESULT line.
+name: Trials
+on:
+  push:
+    branches: [pr-changes-trials]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  trials:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: A gh that can attach
+        run: |
+          node lib/gh.mjs check || {
+            sudo apt-get update -q && sudo apt-get install -y -q --only-upgrade gh
+            node lib/gh.mjs check
+          }
+          gh --version | head -1
+      - name: The trials
+        env:
+          GH_TOKEN: ${{ secrets.BOT_PR_TOKEN }}
+          PR: "103"
+        run: |
+          set -u
+          cd trials
+          L12=./z12-81-37.svg
+          L14=./z14-81-37.svg
+
+          echo "::group::Trial 1: attach an SVG with gh pr edit --attach"
+          printf 'Trial 1\n\n![a](%s) and ![b](%s)\n' "$L12" "$L14" > body1.md
+          gh pr edit "$PR" --body-file body1.md --attach "$L12" "$L14"; echo "RESULT trial1 exit=$?"
+          gh pr view "$PR" --json body -q .body > read1.md
+          cat read1.md
+          echo "::endgroup::"
+          LINKS=$(grep -o 'https://github.com/user-attachments/assets/[0-9a-f-]*' read1.md | sort -u)
+          echo "RESULT trial1 links=$(echo "$LINKS" | wc -l)"
+          echo "RESULT trial1 local-references-left=$(grep -c '\./z1' read1.md)"
+
+          echo "::group::Trial 3: fetch each link signed out, compare bytes"
+          i=0
+          for url in $(grep -o 'https://github.com/user-attachments/assets/[0-9a-f-]*' read1.md); do
+            i=$((i+1))
+            code=$(curl -sS -L -o "fetched$i" -w '%{http_code} %{content_type} %{size_download}' "$url"); echo "RESULT trial3 link$i $url -> $code"
+            sha256sum "fetched$i" z12-81-37.svg z14-81-37.svg | sed 's/^/RESULT trial3 /'
+          done
+          echo "::endgroup::"
+
+          echo "::group::Trial 4: does --attach rewrite a reference inside an HTML comment"
+          printf 'Trial 4\n\n<!-- staging ![c](%s) -->\n\nvisible text\n' "$L14" > body4.md
+          gh pr edit "$PR" --body-file body4.md --attach "$L14"; echo "RESULT trial4 exit=$?"
+          gh pr view "$PR" --json body -q .body > read4.md
+          cat read4.md
+          echo "RESULT trial4 local-reference-left=$(grep -c '\./z14' read4.md)"
+          echo "RESULT trial4 link-in-comment=$(grep -c '<!-- staging.*user-attachments' read4.md)"
+          echo "::endgroup::"
+
+          echo "::group::Trial 2 (setup): a picture element with the attached links, for the web and the app"
+          A=$(grep -o 'https://github.com/user-attachments/assets/[0-9a-f-]*' read1.md | sed -n 1p)
+          B=$(grep -o 'https://github.com/user-attachments/assets/[0-9a-f-]*' read1.md | sed -n 2p)
+          {
+            echo 'Trial 2: a picture element, 14px at 768px wide and up, 12px otherwise. Inline in a sentence: before'
+            printf '<picture><source media="(min-width: 768px)" srcset="%s"><img src="%s" alt="+81 −37"></picture>' "$B" "$A"
+            echo ' after, and in a list:'
+            echo
+            printf -- '- `a/file.mjs` <picture><source media="(min-width: 768px)" srcset="%s"><img src="%s" alt="+3 −1"></picture>\n' "$B" "$A"
+            echo
+            echo 'The same two images as plain Markdown, for comparison:'
+            echo
+            printf '![+81 −37](%s) and ![+81 −37](%s)\n' "$A" "$B"
+          } > body2.md
+          gh pr edit "$PR" --body-file body2.md; echo "RESULT trial2setup exit=$?"
+          echo "RESULT trial2 links: A=$A B=$B"
+          echo "::endgroup::"
