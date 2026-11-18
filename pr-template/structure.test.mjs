@@ -60,4 +60,17 @@ describe('problems', () => {
     const pair = '<!-- describe:visual-review -->\n<!-- /describe:visual-review -->';
     expect(problems(`${master}\n${pair}`).join()).toMatch(/more than one/);
   });
+
+  it("keeps the Example's guidance inside its comment, with every fence closed", () => {
+    // GitHub ends an HTML comment at the first `-->`, even inside a code fence,
+    // so a marker in the example would let the guidance show in the description.
+    const comment = master.slice(master.indexOf('<!--', master.indexOf('## Goal')));
+    const guidance = comment.slice(0, comment.indexOf('-->'));
+    expect(guidance).toContain('\n**Example**\n');
+    expect(guidance).toContain('_Real case: BoardGames#343');
+    // An unclosed fence would blind the "no picture outside a comment" rule.
+    expect((master.match(/```/g) ?? []).length % 2).toBe(0);
+    expect((master.match(/~~~/g) ?? []).length % 2).toBe(0);
+    expect(problems(master)).toEqual([]);
+  });
 });

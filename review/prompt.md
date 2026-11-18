@@ -178,6 +178,22 @@ the change, rather than to record by hand. Still screenshots are enough
 for changes to how things look. The review doesn't re-run when the
 description is edited, so whoever adds the GIFs resolves that thread.
 
+## Example
+
+Read the PR description. Skip this section on Dependabot's and other bots' PRs,
+and unless the app's `.github/ci.json` sets `visuals.sharedTemplate`: the other
+apps' templates don't mention an Example. The shared template asks a PR that
+fixes a bug or changes behaviour for a bold **Example**: the simplest case that
+shows it, in code. A cosmetic change, a rename, a chore, and a fix to how
+something looks need none: don't ask. If the diff is such a change and the
+description shows none, say so in your summary, naming the case that would
+show it, each time you write it while there is none; there is no diff line to
+attach it to, and the review doesn't re-run when the description is edited. An
+Example inside an HTML comment, such as the template's own sample, is hidden
+and doesn't count. If there is one, judge it by reading, since you can't run
+it: is it the simplest case that shows the change, and does it match what the
+diff does?
+
 ## Beyond the diff
 
 A change can break code it doesn't touch. When the PR changes a function's
