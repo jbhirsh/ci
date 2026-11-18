@@ -1,23 +1,28 @@
-Round 12: muted colours, centred on the line. Open in the **GitHub app** and screenshot.
+Round 13: smaller, not bold (colours #348947 / #bf5a57). Open in the **GitHub app** and screenshot.
 
-### A. A little muted (#348947 / #bf5a57)
+### 14px
 
-<details open><summary>10 files changed <img alt="+892 −3" src="https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m45-892-3.svg?sanitize=true"></summary>
+<details open><summary>10 files changed <img alt="+892 −3" src="https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/s14-892-3.svg?sanitize=true"></summary>
 
-- [`pr-changes/changes.mjs`](#) ![+81 −37](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m45-81-37.svg?sanitize=true)
-- [`a.mjs`](#) ![+3 −1](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m45-3-1.svg?sanitize=true)
-
-</details>
-
-### B. More muted (#3d874d / #b6605d)
-
-<details open><summary>10 files changed <img alt="+892 −3" src="https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m38-892-3.svg?sanitize=true"></summary>
-
-- [`pr-changes/changes.mjs`](#) ![+81 −37](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m38-81-37.svg?sanitize=true)
-- [`a.mjs`](#) ![+3 −1](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m38-3-1.svg?sanitize=true)
+- [`pr-changes/changes.mjs`](#) ![+81 −37](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/s14-81-37.svg?sanitize=true)
+- [`a.mjs`](#) ![+3 −1](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/s14-3-1.svg?sanitize=true) and plain: +3 −1
 
 </details>
 
-### Plain, for size and line
+### 13px
 
-- [`a.mjs`](#) +3 −1
+<details open><summary>10 files changed <img alt="+892 −3" src="https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/s13-892-3.svg?sanitize=true"></summary>
+
+- [`pr-changes/changes.mjs`](#) ![+81 −37](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/s13-81-37.svg?sanitize=true)
+- [`a.mjs`](#) ![+3 −1](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/s13-3-1.svg?sanitize=true) and plain: +3 −1
+
+</details>
+
+### 12px
+
+<details open><summary>10 files changed <img alt="+892 −3" src="https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/s12-892-3.svg?sanitize=true"></summary>
+
+- [`pr-changes/changes.mjs`](#) ![+81 −37](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/s12-81-37.svg?sanitize=true)
+- [`a.mjs`](#) ![+3 −1](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/s12-3-1.svg?sanitize=true) and plain: +3 −1
+
+</details>
