@@ -1,27 +1,23 @@
-Round 11, posted by a workflow so its images survive: coloured counts drawn as images. Open in the **GitHub app** and screenshot.
+Round 12: muted colours, centred on the line. Open in the **GitHub app** and screenshot.
 
-### A. One image per count, after a link
+### A. A little muted (#348947 / #bf5a57)
 
-- [`pr-changes/changes.mjs`](#) ![+81](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/p81.svg?sanitize=true) ![−37](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m37.svg?sanitize=true)
-- [`a.mjs`](#) ![+3](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/p3.svg?sanitize=true) ![−1](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m1.svg?sanitize=true)
+<details open><summary>10 files changed <img alt="+892 −3" src="https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m45-892-3.svg?sanitize=true"></summary>
 
-### B. Both counts in one image
-
-- [`pr-changes/changes.mjs`](#) ![+81 −37](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/pair-81-37.svg?sanitize=true)
-- [`a.mjs`](#) ![+3 −1](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/pair-3-1.svg?sanitize=true)
-
-### C. In a dropdown's title
-
-<details><summary>10 files changed <img alt="+892 −3" src="https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/pair-892-3.svg?sanitize=true"></summary>
-
-- [`a.mjs`](#) ![+3 −1](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/pair-3-1.svg?sanitize=true)
+- [`pr-changes/changes.mjs`](#) ![+81 −37](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m45-81-37.svg?sanitize=true)
+- [`a.mjs`](#) ![+3 −1](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m45-3-1.svg?sanitize=true)
 
 </details>
 
-### D. shields.io badges, for comparison
+### B. More muted (#3d874d / #b6605d)
 
-- [`a.mjs`](#) ![+3](https://img.shields.io/badge/%2B3-238b3a?style=flat-square) ![−1](https://img.shields.io/badge/%E2%88%921-e33535?style=flat-square)
+<details open><summary>10 files changed <img alt="+892 −3" src="https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m38-892-3.svg?sanitize=true"></summary>
 
-### E. Plain, for comparison
+- [`pr-changes/changes.mjs`](#) ![+81 −37](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m38-81-37.svg?sanitize=true)
+- [`a.mjs`](#) ![+3 −1](https://raw.githubusercontent.com/jbhirsh/ci/mobile-colour-test/colour-test/m38-3-1.svg?sanitize=true)
+
+</details>
+
+### Plain, for size and line
 
 - [`a.mjs`](#) +3 −1
