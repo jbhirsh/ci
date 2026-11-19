@@ -1,5 +1,4 @@
-// The description check, as the PR description action runs it (and, until
-// ci#112 retires it, the PR visuals action too; ci#79):
+// The description check, as the PR description action runs it (ci#79, ci#112):
 // `node pr-template/check-body.mjs`, with the PR in the environment (PR_BODY,
 // PR_AUTHOR, PR_STATE, PR_HEAD_REF, PR_HEAD_SHA). It holds a PR's description to
 // the shared shape (body.mjs says what that is), in every app: there is no
