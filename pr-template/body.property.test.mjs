@@ -81,4 +81,25 @@ describe('bodyProblems', () => {
       ),
     );
   });
+
+  it('keeps a good description good when a valid GIF block is put under its change', () => {
+    fc.assert(
+      fc.property(fc.stringMatching(/^[a-z][a-z0-9-]{0,20}$/), harmless, (name, text) => {
+        const block = `<!-- pr-gif:${name} -->\n${text.replace(/\]\(\./g, ' ')}\n<!-- /pr-gif:${name} -->`;
+        const body = GOOD.replace('Why.', `Why.\n\n${block}`);
+        // What the tool wrote may say anything but a stale phrase or a local path.
+        fc.pre(!/^\*\*Not updated for/.test(text.trim()));
+        expect(bodyProblems(body)).toEqual([]);
+      }),
+    );
+  });
+
+  it('always flags a GIF block put at the very end, whatever it says', () => {
+    fc.assert(
+      fc.property(fc.stringMatching(/^[a-z][a-z0-9-]{0,20}$/), harmless, (name, text) => {
+        const body = `${GOOD}\n<!-- pr-gif:${name} -->\n${text}\n<!-- /pr-gif:${name} -->\n`;
+        expect(bodyProblems(body).join('\n')).toContain(`put the GIF block \`pr-gif:${name}\``);
+      }),
+    );
+  });
 });
