@@ -6,12 +6,12 @@ Every PR in the three apps says its goal, where it fits in a plan, and what it c
 
 ## Plan
 
-| Step  | Where       | What                                                                        | State                           |
-| ----- | ----------- | --------------------------------------------------------------------------- | ------------------------------- |
-| **1** | **this PR** | **The master template, `visuals.sharedTemplate`, its self-test, the rules** | **👉 this PR**                  |
-| 2     | next PR     | `pr-changes`: each change's commit and files                                | next                            |
-| 3     | later PR    | Revisions, once the GitHub link formats are tested on a real PR             | later                           |
-| 4     | each app    | Copy the template, set `sharedTemplate`, drop `visuals.advice`              | after the app has visual review |
+<table>
+<thead><tr><th>Step</th><th>Where</th><th>What</th><th>State</th></tr></thead>
+<tbody><tr></tr><tr><td><b>1</b></td><td><b>this PR</b></td><td><b>The master template, <code>visuals.sharedTemplate</code>, its self-test, the rules</b></td><td><b>👉 this PR</b></td></tr></tbody>
+<tbody><tr><td>2</td><td>next PR</td><td><code>pr-changes</code>: each change's commit and files</td><td>next</td></tr></tbody>
+<tbody><tr><td>3</td><td>later PR</td><td>Revisions, once the GitHub link formats are tested on a real PR</td><td>later</td></tr></tbody>
+</table>
 
 > ℹ️ **Not in this PR**
 >
