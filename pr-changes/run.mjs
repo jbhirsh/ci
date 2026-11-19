@@ -76,7 +76,14 @@ const BLOCK_CHARS = 140;
  *   log: (line: string) => void, upload?: Io['upload'], verify?: Io['verify'] }} options
  * @returns {Io}
  */
-export function gitHubIo({ api, repo, number, log, upload = null, verify = fetchVerify }) {
+export function gitHubIo({
+  api,
+  repo,
+  number,
+  log,
+  upload = null,
+  verify = (link, sha) => fetchVerify(link, sha, log),
+}) {
   const issue = `repos/${repo}/issues/${number}`;
   return {
     body: () => String(/** @type {{ body?: string | null }} */ (api('GET', issue)).body ?? ''),
@@ -104,15 +111,27 @@ export function gitHubIo({ api, repo, number, log, upload = null, verify = fetch
 /**
  * Whether a link answers, signed out, with bytes that hash to `sha`. Asked
  * once, never retried or waited on: a link not yet live just isn't reused.
+ * Why a link failed is logged, as a notice.
  *
- * @type {Io['verify']}
+ * @param {string} link
+ * @param {string} sha
+ * @param {(line: string) => void} [log]
+ * @returns {Promise<boolean>}
  */
-export async function fetchVerify(link, sha) {
+export async function fetchVerify(link, sha, log = () => {}) {
   try {
     const response = await fetch(link, { redirect: 'follow', signal: AbortSignal.timeout(10_000) });
-    if (response.status !== 200) return false;
-    return hashOf(new Uint8Array(await response.arrayBuffer())) === sha;
-  } catch {
+    if (response.status !== 200) {
+      log(`::notice::pr-changes: ${link} answered ${response.status}, not its bytes`);
+      return false;
+    }
+    const same = hashOf(new Uint8Array(await response.arrayBuffer())) === sha;
+    if (!same) log(`::notice::pr-changes: ${link} answered with other bytes than were attached`);
+    return same;
+  } catch (error) {
+    log(
+      `::notice::pr-changes: ${link} did not answer (${error instanceof Error ? error.message : error})`,
+    );
     return false;
   }
 }
@@ -202,7 +221,15 @@ async function resolve(io, body, pairs) {
     for (const image of images(...pair)) {
       const link = claimed.get(image.sha);
       if (link !== undefined && (await io.verify(link, image.sha))) known.set(image.sha, link);
-      else missing.push(image);
+      // A run that may not upload must not take away a picture the description already
+      // shows because one fetch of it failed: it would have nothing to put back. The
+      // description is the author's, so what it shows is theirs to show.
+      else if (link !== undefined && !io.upload && body.includes(`"${link}"`)) {
+        io.log(
+          '::notice::pr-changes: kept a picture the description shows, which could not be checked again',
+        );
+        known.set(image.sha, link);
+      } else missing.push(image);
     }
     if (missing.length > 0) wanted.push({ pair, missing });
   }
