@@ -159,7 +159,6 @@ export function reference(io, s, base, dir) {
  * @property {{ login: string, __typename: string } | null} author
  * @property {string} headRefName
  * @property {string} body
- * @property {string} state
  * @property {{ enabledAt: string, enabledBy: { login: string } | null } | null} autoMergeRequest
  */
 
@@ -176,7 +175,7 @@ function pullFacts(io, number) {
       `query($owner: String!, $name: String!, $number: Int!) {
         repository(owner: $owner, name: $name) {
           pullRequest(number: $number) {
-            author { login __typename } headRefName body state
+            author { login __typename } headRefName body
             autoMergeRequest { enabledAt enabledBy { login } }
           }
         }
@@ -198,7 +197,6 @@ function pullFacts(io, number) {
     },
     headRefName: pr.headRefName,
     body: pr.body,
-    state: pr.state.toLowerCase(),
     author,
   };
 }
@@ -512,7 +510,6 @@ export function review(target, { s, visuals, io }) {
     ),
     body: facts.body,
     author: facts.author,
-    state: facts.state,
     settings: visuals,
   });
   const before = statusOn(io, run.head_sha) ?? (previous ? statusOn(io, previous.sha) : null);

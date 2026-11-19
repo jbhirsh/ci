@@ -1,22 +1,18 @@
-// The cases check.test.mjs's golden test runs through report() with no
-// `fromBaselines`, whose output was taken from the check before ci#33's
-// table came in (check.golden.txt): an app that doesn't opt in must see the
-// same lines, byte for byte. Not part of the tool.
+// The cases check.test.mjs's golden test runs through report() with the default
+// rules, whose output was taken from the check before ci#33's table came in
+// (check.golden.txt): an app that doesn't opt in must see the same lines, byte
+// for byte. Not part of the tool.
 
 import { report, settings } from './check.mjs';
 
-/** @type {[string, string, { body: string | undefined, author?: string, state?: string, advice?: string }][]} */
+/** @type {[string, string, { body: string | undefined, author?: string, advice?: string }][]} */
 export const CASES = [
   ['no UI files', 'README.md\napi/x.ts\n', { body: '' }],
   ['Dependabot', 'src/App.tsx\n', { body: undefined, author: 'dependabot[bot]' }],
   ['ticked', 'src/App.tsx\n', { body: '- [x] No visible UI change' }],
   ['an image', 'src/App.tsx\n', { body: '![after](https://example.com/a.png)' }],
   ['a bare video', 'src/App.tsx\n', { body: 'https://github.com/user-attachments/assets/1' }],
-  [
-    'a closed PR, no pictures',
-    ' src/App.tsx \n\nsrc/index.css\n',
-    { body: 'Nothing to see.', state: 'closed' },
-  ],
+  ['padded file lines, no pictures', ' src/App.tsx \n\nsrc/index.css\n', { body: 'Nothing.' }],
   ['an unlabelled still', 'src/App.tsx\n', { body: '<img src="x.png" width="300">' }],
   ['custom advice', 'src/a.tsx\n', { body: '<!-- ![x](y) -->', advice: 'Take shots.' }],
 ];

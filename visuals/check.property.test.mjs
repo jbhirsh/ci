@@ -69,29 +69,3 @@ describe('the description, for any input', () => {
     );
   });
 });
-
-describe('with fromBaselines, for any description', () => {
-  const on = settings({ fromBaselines: true });
-  const off = settings({});
-  const files = ['src/A.tsx'];
-
-  it('counts no more than the check without it, unless baselines show the change', () => {
-    fc.assert(
-      fc.property(body, (text) => {
-        const strict = checkPrVisuals({ files, body: text, baselines: { shown: 0 }, settings: on });
-        if (strict.ok) expect(checkPrVisuals({ files, body: text, settings: off }).ok).toBe(true);
-      }),
-    );
-  });
-
-  it('passes whenever a changed baseline lands in a column, and any closed PR', () => {
-    fc.assert(
-      fc.property(body, fc.integer({ min: 1, max: 50 }), (text, shown) => {
-        expect(checkPrVisuals({ files, body: text, baselines: { shown }, settings: on }).ok).toBe(
-          true,
-        );
-        expect(checkPrVisuals({ files, body: text, state: 'closed', settings: on }).ok).toBe(true);
-      }),
-    );
-  });
-});

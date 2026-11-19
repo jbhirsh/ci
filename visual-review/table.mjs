@@ -33,8 +33,25 @@
 import path from 'node:path';
 import { isScreenState, partMarker } from '../describe/describe.mjs';
 import { pairBaselines } from '../lib/baselines.mjs';
-import { html } from '../visuals/table.mjs';
 import { WHERE_WIDTH, zoomWidth } from './zoom.mjs';
+
+/**
+ * Text as HTML, safe in a table cell: a `|` would end the cell, and GitHub
+ * still reads Markdown inside HTML, so its marks (code, emphasis, links,
+ * escapes) are entities too, and an `@` can't mention anyone.
+ *
+ * @param {string} text
+ */
+function html(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/\|/g, '&#124;')
+    .replace(/[@`*_[\]\\~]/g, (c) => `&#${c.charCodeAt(0)};`)
+    .replace(/[\r\n]/g, ' ');
+}
 
 /** The most pictures one result uploads. */
 const UPLOAD_LIMIT = 50;

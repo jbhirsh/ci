@@ -72,91 +72,14 @@ describe('selftest with sharedTemplate', () => {
   });
 });
 
-describe('selftest with sharedTemplate and fromBaselines', () => {
-  const config = (/** @type {unknown} */ columns) =>
-    JSON.stringify({
-      visuals: { fromBaselines: true, sharedTemplate: true },
-      'visual-baselines': { folders: ['shots'], columns },
-    });
-
-  it('still checks that the columns pair a baseline, and skips the cases', () => {
-    const ok = app({
-      'src/App.tsx': '',
-      'shots/a.png': '',
-      '.github/ci.json': config([{ label: 'All', file: '{state}.png' }]),
-    });
-    expect(selftest(ok).at(-1)).toBe(
-      'visuals: with fromBaselines, shots/a.png pairs into a column.',
-    );
-    const bad = app({
-      'src/App.tsx': '',
-      'shots/a.png': '',
-      '.github/ci.json': config([{ label: 'A', file: 'x-{state}.png' }]),
-    });
-    expect(() => selftest(bad)).toThrow('pairs no tracked baseline');
-  });
-});
-
-describe('selftest with fromBaselines', () => {
-  const config = (/** @type {unknown} */ columns) =>
-    JSON.stringify({
-      visuals: { fromBaselines: true },
-      'visual-baselines': { folders: ['shots'], columns },
-    });
-
-  it("checks the cases against the app's own baselines", () => {
+describe('selftest with a leftover fromBaselines', () => {
+  it('ignores it', () => {
     const root = app({
       'src/App.tsx': '',
-      'shots/light-01-home.png': '',
-      'shots/dark-01-home.png': '',
-      [TEMPLATE]: GOOD_TEMPLATE,
-      '.github/ci.json': config([
-        { label: 'Light', file: 'light-{state}.png' },
-        { label: 'Dark', file: 'dark-{state}.png' },
-      ]),
+      '.github/ci.json': JSON.stringify({ visuals: { fromBaselines: true, sharedTemplate: true } }),
+      [TEMPLATE]: '## Goal\n',
     });
-    expect(selftest(root).at(-1)).toBe(
-      'visuals: with fromBaselines, 6 cases hold (shots/light-01-home.png in a column passes).',
-    );
-  });
-
-  it('skips the no-column case when every name lands in one', () => {
-    const root = app({
-      'src/App.tsx': '',
-      'shots/a.png': '',
-      [TEMPLATE]: GOOD_TEMPLATE,
-      '.github/ci.json': config([{ label: 'All', file: '{state}.png' }]),
-    });
-    expect(selftest(root).at(-1)).toMatch(/5 cases hold/);
-  });
-
-  it('fails without columns, with columns that pair nothing, or a template that shows a still', () => {
-    const files = { 'src/App.tsx': '', 'shots/a.png': '', [TEMPLATE]: GOOD_TEMPLATE };
-    expect(() =>
-      selftest(
-        app({
-          ...files,
-          '.github/ci.json': JSON.stringify({
-            visuals: { fromBaselines: true },
-            'visual-baselines': { folders: ['shots'] },
-          }),
-        }),
-      ),
-    ).toThrow('needs visual-baselines.columns');
-    expect(() =>
-      selftest(
-        app({ ...files, '.github/ci.json': config([{ label: 'A', file: 'x-{state}.png' }]) }),
-      ),
-    ).toThrow('pairs no tracked baseline');
-    expect(() =>
-      selftest(
-        app({
-          ...files,
-          [TEMPLATE]: `${GOOD_TEMPLATE}\nhttps://github.com/user-attachments/assets/1\n`,
-          '.github/ci.json': config([{ label: 'A', file: '{state}.png' }]),
-        }),
-      ),
-    ).toThrow(/untouched .* passes a UI change/);
+    expect(selftest(root).at(-1)).toMatch(/sharedTemplate: PR visuals passes every PR/);
   });
 });
 

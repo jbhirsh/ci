@@ -18,9 +18,8 @@
 // lib/attach.mjs's, both shared with pictures/). The description is read
 // just before each edit, so an edit made meanwhile by someone else is kept
 // unless it lands in those seconds.
-// The alt text's `GIF:` is what PR visuals counts when its pictures come
-// from the visual baselines (ci#33), since the URL can't say what it
-// holds. Markdown images can't take a width, so `cellWidth` doesn't apply
+// The alt text's `GIF:` is what PR visuals counts as a picture of motion,
+// since the URL can't say what it holds. Markdown images can't take a width, so `cellWidth` doesn't apply
 // there. Needs gh ≥ 2.99 (lib/gh.mjs), and a token that may attach: a
 // person's, such as the apps' BOT_PR_TOKEN; GitHub refuses the Actions
 // token ("attaching files requires write access to the repository").
