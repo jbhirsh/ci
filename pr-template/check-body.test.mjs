@@ -6,7 +6,8 @@ import { writeFiles } from '../review/testApp.mjs';
 import { report, run } from './check-body.mjs';
 
 const BAD = '## Goal\n\nOnly this.';
-const GOOD = '## Goal\n\nx\n\n## Changes\n\n### 1. y\n\n## Checklist\n\n## Revisions\n';
+const GOOD =
+  '## Goal\n\nx. Closes #1.\n\n## Changes\n\n### 1. y\n\n<!-- pr-changes:change:1 -->\n<!-- /pr-changes:change:1 -->\n\n## Checklist\n\n## Revisions\n';
 
 describe('report', () => {
   it('leaves an app without sharedTemplate alone, whatever the description', () => {
@@ -35,6 +36,14 @@ describe('report', () => {
     );
   });
 
+  it("fails a description whose Revisions name another commit than the PR's head", () => {
+    const body = `${GOOD}| Rev | Head |\n| --- | --- |\n| 1 (current) | [\`1111111\`](https://x) |\n`;
+    expect(report({ body, headSha: '1111111aaaa' }, true).code).toBe(0);
+    const out = report({ body, headSha: '2222222bbbb' }, true);
+    expect(out.code).toBe(1);
+    expect(out.message).toContain('update Revisions');
+  });
+
   it('checks a PR with no description', () => {
     expect(report({ body: undefined }, true).code).toBe(1);
   });
@@ -52,6 +61,10 @@ describe('run', () => {
     expect(run(env, app({})).code).toBe(0);
     expect(run(env, app({ sharedTemplate: true })).code).toBe(1);
     expect(run({ ...env, PR_DRAFT: 'true' }, app({ sharedTemplate: true })).code).toBe(0);
+    const stale = `${GOOD}| Rev | Head |\n| --- | --- |\n| 1 (current) | [\`1111111\`](https://x) |\n`;
+    const open = { ...env, PR_BODY: stale };
+    expect(run({ ...open, PR_HEAD_SHA: '1111111aa' }, app({ sharedTemplate: true })).code).toBe(0);
+    expect(run({ ...open, PR_HEAD_SHA: '2222222bb' }, app({ sharedTemplate: true })).code).toBe(1);
     expect(run({ ...env, PR_HEAD_REF: 'bot/x' }, app({ sharedTemplate: true })).code).toBe(0);
   });
 });
