@@ -288,13 +288,12 @@ runs:
         fi
         # Every failed check on this head, not just this run's, so a
         # workflow whose run got dropped from the queue still counts. Claude
-        # Review failing is never a code problem to fix, and neither are PR
-        # visuals and PR description: they want pictures or a different
-        # description, not a code change.
+        # Review failing is never a code problem to fix, and neither is PR
+        # description: it wants a different description, not a code change.
         FAILED=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RUN_SHA/check-runs" --paginate \
-          --jq '.check_runs[] | select((.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "startup_failure") and .name != "Claude Review" and .name != "PR visuals" and .name != "PR description") | .name' | sort -u | paste -sd, -)
+          --jq '.check_runs[] | select((.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "startup_failure") and .name != "Claude Review" and .name != "PR description") | .name' | sort -u | paste -sd, -)
         if [ -z "$FAILED" ]; then
-          echo "No failed checks besides Claude Review, PR visuals and PR description — nothing to fix"
+          echo "No failed checks besides Claude Review and PR description — nothing to fix"
           exit 0
         fi
         # Two attempts per PR, so a fix that keeps failing can't loop.
