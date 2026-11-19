@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { PIXELS } from '../lib/pixels.mjs';
 import { testPng } from '../lib/test-pixels.mjs';
 import { SECTION, uploadMarker } from '../describe/describe.mjs';
-import { settings as visualsSettings } from '../visuals/check.mjs';
 import { BOT, checkBase, review } from './review.mjs';
 import { settings } from './settings.mjs';
 
@@ -16,7 +15,6 @@ const MB = 'c'.repeat(40);
 const s = /** @type {import('./settings.mjs').Settings} */ (
   settings({ workflow: 'visual.yml', job: 'visual', folders: ['shots'] })
 );
-const visuals = visualsSettings({ ui: ['src/**'] });
 
 /**
  * A fake GitHub: routes answer by "METHOD route", the shots each run's
@@ -24,7 +22,7 @@ const visuals = visualsSettings({ ui: ['src/**'] });
  *
  * @param {{ routes?: Record<string, unknown>, shots?: Record<number, Record<string, Buffer> | null>,
  *   manifest?: Record<string, unknown>, author?: string, typename?: string, autoMerge?: unknown,
- *   headRef?: string, files?: string[], body?: string, conclusion?: string, prHead?: string,
+ *   headRef?: string, conclusion?: string, prHead?: string,
  *   statuses?: unknown[], expired?: boolean }} [o]
  */
 function fake(o = {}) {
@@ -61,9 +59,6 @@ function fake(o = {}) {
     [`GET repos/${REPO}/actions/workflows/visual.yml/runs?event=push&branch=main&head_sha=${BASE}&per_page=10`]:
       { workflow_runs: [{ id: 2, status: 'completed' }] },
     [`GET repos/${REPO}/issues/5/comments?per_page=100&page=1`]: [],
-    [`GET repos/${REPO}/pulls/5/files?per_page=100&page=1`]: (o.files ?? ['src/a.tsx']).map(
-      (filename) => ({ filename }),
-    ),
     [`GET repos/${REPO}/commits/${HEAD}/statuses?per_page=100&page=1`]: o.statuses ?? [],
     [`GET repos/${REPO}/issues/comments/77`]: {
       body: `${uploadMarker(BOT, HEAD)}\n![after:shots/a.png](https://github.com/user-attachments/assets/0000aaaa-1111)`,
@@ -87,7 +82,6 @@ function fake(o = {}) {
         pullRequest: {
           author: { login: o.author ?? 'jbhirsh', __typename: o.typename ?? 'User' },
           headRefName: o.headRef ?? 'claude/x',
-          body: o.body ?? 'Mine.',
           state: 'OPEN',
           autoMergeRequest: o.autoMerge ?? null,
         },
@@ -129,7 +123,7 @@ const PR = /** @type {const} */ ({ kind: 'pr', number: 5, run: 1 });
 describe('review', () => {
   it('compares, uploads the table, and passes a change a person will merge', () => {
     const f = fake();
-    expect(review(PR, { s, visuals, io: f.io })).toBe(5);
+    expect(review(PR, { s, io: f.io })).toBe(5);
     expect(f.uploads).toHaveLength(1);
     expect(f.uploads[0].body).toMatch(/^<!-- describe-upload:visual-review:a{40} -->/);
     expect(f.uploads[0].body).toMatch(/fingerprint: [0-9a-f]{8}/);
@@ -154,7 +148,7 @@ describe('review', () => {
         2: { 'shots/a.png': testPng(200, 100, 3) },
       },
     });
-    review(PR, { s, visuals, io: f.io });
+    review(PR, { s, io: f.io });
     // Each upload is a real PNG: the zoom's crop, 30x30 pixels, enlarged 7 times.
     const sizes = f.uploads[0].files.map((file) => {
       const png = PIXELS.read(readFileSync(file));
@@ -166,23 +160,9 @@ describe('review', () => {
     expect(f.edits[0].body).toContain('| Screen | Where | Zoom: before, after, diff |');
   });
 
-  it('passes a UI change no screenshot shows when the app uses the shared template', () => {
-    const own = { shots: { 1: { 'shots/a.png': testPng() }, 2: { 'shots/a.png': testPng() } } };
-    const plain = fake(own);
-    review(PR, { s, visuals, io: plain.io });
-    expect(plain.posted()?.state).toBe('failure');
-    const shared = fake(own);
-    review(PR, {
-      s,
-      visuals: visualsSettings({ ui: ['src/**'], sharedTemplate: true }),
-      io: shared.io,
-    });
-    expect(shared.posted()).toMatchObject({ state: 'success', description: 'No visual changes' });
-  });
-
   it('uploads nothing again for the same result, even on a new head', () => {
     const first = fake();
-    review(PR, { s, visuals, io: first.io });
+    review(PR, { s, io: first.io });
     const hash = /fingerprint: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
     const layout = /layout: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
     const f = fake({
@@ -198,14 +178,14 @@ describe('review', () => {
         [`GET repos/${REPO}/commits/${MB}/statuses?per_page=100&page=1`]: [],
       },
     });
-    review(PR, { s, visuals, io: f.io });
+    review(PR, { s, io: f.io });
     expect(f.uploads).toEqual([]);
     expect(f.posted()?.state).toBe('success');
   });
 
   it('uploads once more in the new form for a result whose last upload was in the old one', () => {
     const first = fake();
-    review(PR, { s, visuals, io: first.io });
+    review(PR, { s, io: first.io });
     expect(first.uploads[0].body).toMatch(/^format: 3$/m);
     const hash = /fingerprint: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
     const f = fake({
@@ -222,13 +202,13 @@ describe('review', () => {
         [`GET repos/${REPO}/commits/${MB}/statuses?per_page=100&page=1`]: [],
       },
     });
-    review(PR, { s, visuals, io: f.io });
+    review(PR, { s, io: f.io });
     expect(f.uploads).toHaveLength(1);
   });
 
   it('uploads again when the app changes what counts as minor, and trims a table too long', () => {
     const first = fake();
-    review(PR, { s, visuals, io: first.io });
+    review(PR, { s, io: first.io });
     const hash = /fingerprint: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
     const layout = /layout: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
     const previous = (/** @type {string} */ l) => ({
@@ -245,16 +225,16 @@ describe('review', () => {
       },
     });
     const same = fake(previous(String(layout)));
-    review(PR, { s, visuals, io: same.io });
+    review(PR, { s, io: same.io });
     expect(same.uploads).toEqual([]);
     const other = fake(previous('00000000'));
-    review(PR, { s, visuals, io: other.io });
+    review(PR, { s, io: other.io });
     expect(other.uploads).toHaveLength(1);
   });
 
   it("keeps the owner's acceptance from an earlier head with the same result", () => {
     const first = fake();
-    review(PR, { s, visuals, io: first.io });
+    review(PR, { s, io: first.io });
     const hash = /fingerprint: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
     const mark = `1 screen changed: see the table [vr:${hash}@500]`;
     const f = fake({
@@ -279,13 +259,13 @@ describe('review', () => {
         ],
       },
     });
-    review(PR, { s, visuals, io: f.io });
+    review(PR, { s, io: f.io });
     expect(f.posted()?.description).toMatch(/accepted by turning on auto-merge/);
   });
 
   it('takes no mark from a status anyone else posted', () => {
     const first = fake();
-    review(PR, { s, visuals, io: first.io });
+    review(PR, { s, io: first.io });
     const hash = /fingerprint: ([0-9a-f]{8})/.exec(first.uploads[0].body)?.[1];
     const f = fake({
       autoMerge: { enabledAt: '1970-01-01T00:10:00Z', enabledBy: { login: 'jbhirsh' } },
@@ -299,22 +279,22 @@ describe('review', () => {
         },
       ],
     });
-    review(PR, { s, visuals, io: f.io });
+    review(PR, { s, io: f.io });
     // Shown now (1000), so auto-merge turned on at 600 came before it.
     expect(f.posted()?.state).toBe('failure');
   });
 
   it('posts nothing for a head the PR has moved on from', () => {
     const f = fake({ prHead: MB });
-    expect(review(PR, { s, visuals, io: f.io })).toBe(5);
+    expect(review(PR, { s, io: f.io })).toBe(5);
     expect(f.uploads).toEqual([]);
     expect(f.posted()).toBeUndefined();
   });
 
   it('posts no upload when nothing changed and nothing was shown before', () => {
     const same = { 'shots/a.png': testPng() };
-    const f = fake({ shots: { 1: same, 2: same }, files: [] });
-    review(PR, { s, visuals, io: f.io });
+    const f = fake({ shots: { 1: same, 2: same } });
+    review(PR, { s, io: f.io });
     expect(f.uploads).toEqual([]);
     expect(f.posted()?.description).toBe('No visual changes');
   });
@@ -326,7 +306,7 @@ describe('review', () => {
       headRef: 'dependabot/npm_and_yarn/x',
       autoMerge: { enabledAt: '2026-01-01T00:00:00Z', enabledBy: { login: 'github-actions' } },
     });
-    review(PR, { s, visuals, io: f.io });
+    review(PR, { s, io: f.io });
     expect(f.posted()?.state).toBe('failure');
     expect(f.enabled).toEqual([5]);
   });
@@ -338,26 +318,26 @@ describe('review', () => {
           { workflow_runs: [{ id: 2, status: 'in_progress' }] },
       },
     });
-    review(PR, { s, visuals, io: f.io });
+    review(PR, { s, io: f.io });
     expect(f.posted()).toMatchObject({ state: 'pending' });
     expect(f.uploads).toEqual([]);
   });
 
   it("fails when main's run has no shots", () => {
     const f = fake({ shots: { 1: { 'shots/a.png': testPng() }, 2: null } });
-    review(PR, { s, visuals, io: f.io });
+    review(PR, { s, io: f.io });
     expect(f.posted()?.description).toMatch(/^Main has no screenshots/);
   });
 
   it('passes "no screens taken" only from a run that succeeded with no artifact', () => {
-    const none = fake({ shots: { 1: null }, files: [] });
-    review(PR, { s, visuals, io: none.io });
+    const none = fake({ shots: { 1: null } });
+    review(PR, { s, io: none.io });
     expect(none.posted()?.description).toBe('No screens taken');
     const failed = fake({ shots: { 1: null }, conclusion: 'failure' });
-    review(PR, { s, visuals, io: failed.io });
+    review(PR, { s, io: failed.io });
     expect(failed.posted()?.description).toBe('No screenshots: visual failed');
     const expired = fake({ shots: { 1: null }, expired: true });
-    review(PR, { s, visuals, io: expired.io });
+    review(PR, { s, io: expired.io });
     expect(expired.posted()?.state).toBe('failure');
   });
 
@@ -368,7 +348,7 @@ describe('review', () => {
           { workflow_runs: [] },
       },
     });
-    review(PR, { s, visuals, io: f.io });
+    review(PR, { s, io: f.io });
     expect(f.posted()?.description).toMatch(/^Main has no screenshots/);
   });
 
@@ -384,7 +364,7 @@ describe('review', () => {
       }
       return api(method, r, body);
     };
-    review(PR, { s, visuals, io: f.io });
+    review(PR, { s, io: f.io });
     const posts = f.calls
       .filter((c) => c.method === 'POST')
       .map((c) => /** @type {{ state: string }} */ (c.body).state);
@@ -397,14 +377,13 @@ describe('review', () => {
     f.io.enable = () => {
       throw new Error('403');
     };
-    expect(review(PR, { s, visuals, io: f.io })).toBe(5);
+    expect(review(PR, { s, io: f.io })).toBe(5);
   });
 
   it("refuses shots of another commit, and a base that isn't on main or is too old", () => {
     expect(() =>
       review(PR, {
         s,
-        visuals,
         io: fake({
           manifest: { version: 1, sha: MB, base: BASE, event: 'pull_request', mockupIssue: null },
         }).io,
@@ -413,7 +392,6 @@ describe('review', () => {
     expect(() =>
       review(PR, {
         s,
-        visuals,
         io: fake({
           routes: { [`GET repos/${REPO}/compare/${BASE}...main`]: { status: 'diverged' } },
         }).io,
@@ -422,7 +400,6 @@ describe('review', () => {
     expect(() =>
       review(PR, {
         s,
-        visuals,
         io: fake({
           routes: { [`GET repos/${REPO}/compare/${MB}...${BASE}`]: { status: 'behind' } },
         }).io,
@@ -441,7 +418,7 @@ describe('review', () => {
         [`GET repos/${REPO}/issues/9/comments?per_page=100&page=1`]: [],
       },
     });
-    expect(review({ kind: 'issue', run: 1 }, { s, visuals, io: f.io })).toBe(9);
+    expect(review({ kind: 'issue', run: 1 }, { s, io: f.io })).toBe(9);
     expect(f.uploads[0]).toMatchObject({ kind: 'issue', number: 9 });
     expect(f.posted()).toBeUndefined();
   });
@@ -453,7 +430,6 @@ describe('review', () => {
         { kind: 'issue', run: 1 },
         {
           s,
-          visuals,
           io: fake({
             manifest: m,
             routes: { [`GET repos/${REPO}/issues/9`]: { state: 'open', pull_request: {} } },
@@ -462,7 +438,7 @@ describe('review', () => {
       ),
     ).toThrow(/isn't an open issue/);
     const none = fake({ manifest: { ...m, mockupIssue: null } });
-    expect(review({ kind: 'issue', run: 1 }, { s, visuals, io: none.io })).toBeNull();
+    expect(review({ kind: 'issue', run: 1 }, { s, io: none.io })).toBeNull();
   });
 });
 

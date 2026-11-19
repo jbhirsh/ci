@@ -28,7 +28,6 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { newest, pages, statusFrom } from '../lib/github.mjs';
-import { checkPrVisuals } from '../visuals/check.mjs';
 import { parseUpload, SECTION, uploadMarker } from '../describe/describe.mjs';
 import { parseManifest, MANIFEST } from '../visual-shots/shots.mjs';
 import { compareShots } from './compare.mjs';
@@ -158,12 +157,11 @@ export function reference(io, s, base, dir) {
  * @typedef {object} PullData
  * @property {{ login: string, __typename: string } | null} author
  * @property {string} headRefName
- * @property {string} body
  * @property {{ enabledAt: string, enabledBy: { login: string } | null } | null} autoMergeRequest
  */
 
 /**
- * The PR, as the status rule and the UI rule read it.
+ * The PR, as the status rule reads it.
  *
  * @param {Io} io
  * @param {number} number
@@ -175,7 +173,7 @@ function pullFacts(io, number) {
       `query($owner: String!, $name: String!, $number: Int!) {
         repository(owner: $owner, name: $name) {
           pullRequest(number: $number) {
-            author { login __typename } headRefName body
+            author { login __typename } headRefName
             autoMergeRequest { enabledAt enabledBy { login } }
           }
         }
@@ -196,8 +194,6 @@ function pullFacts(io, number) {
         : null,
     },
     headRefName: pr.headRefName,
-    body: pr.body,
-    author,
   };
 }
 
@@ -387,11 +383,10 @@ function post(io, { kind, number, sha, hash, rows, changes, before, after, base,
  * null when there was nothing to do.
  *
  * @param {Target} target
- * @param {{ s: import('./settings.mjs').Settings,
- *   visuals: import('../visuals/check.mjs').Settings, io: Io }} context
+ * @param {{ s: import('./settings.mjs').Settings, io: Io }} context
  * @returns {number | null}
  */
-export function review(target, { s, visuals, io }) {
+export function review(target, { s, io }) {
   const run = /** @type {{ id: number, head_sha: string, conclusion: string | null }} */ (
     io.api('GET', `repos/${io.repo}/actions/runs/${target.run}`)
   );
@@ -504,14 +499,6 @@ export function review(target, { s, visuals, io }) {
   }
 
   const facts = pullFacts(io, number);
-  const verdict = checkPrVisuals({
-    files: pages(io.api, `repos/${io.repo}/pulls/${number}/files`).map((f) =>
-      String(/** @type {{ filename: string }} */ (f).filename),
-    ),
-    body: facts.body,
-    author: facts.author,
-    settings: visuals,
-  });
   const before = statusOn(io, run.head_sha) ?? (previous ? statusOn(io, previous.sha) : null);
   const postStatus = () => {
     const shown =
@@ -521,7 +508,6 @@ export function review(target, { s, visuals, io }) {
       pull: facts.pull,
       owner: io.owner,
       shown,
-      ui: verdict.ok ? { changed: false, shown: true } : { changed: true, shown: false },
     });
     io.api('POST', `repos/${io.repo}/statuses/${run.head_sha}`, {
       state: st.state,

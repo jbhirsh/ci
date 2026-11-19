@@ -27,18 +27,11 @@ const pull = fc.record({
 describe('status, for any facts', () => {
   it('never throws, and always fits a status description', () => {
     fc.assert(
-      fc.property(
-        result,
-        pull,
-        login,
-        epoch,
-        fc.record({ changed: fc.boolean(), shown: fc.boolean() }),
-        (r, p, owner, shown, ui) => {
-          const s = status({ result: r, pull: p, owner, shown, ui });
-          expect(['success', 'failure', 'pending']).toContain(s.state);
-          expect(s.description.length).toBeLessThanOrEqual(MAX_DESCRIPTION);
-        },
-      ),
+      fc.property(result, pull, login, epoch, (r, p, owner, shown) => {
+        const s = status({ result: r, pull: p, owner, shown });
+        expect(['success', 'failure', 'pending']).toContain(s.state);
+        expect(s.description.length).toBeLessThanOrEqual(MAX_DESCRIPTION);
+      }),
     );
   });
 
@@ -55,7 +48,6 @@ describe('status, for any facts', () => {
             pull: p,
             owner,
             shown,
-            ui: { changed: false, shown: false },
           });
           const am = p.autoMerge;
           const accepted =

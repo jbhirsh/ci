@@ -7,8 +7,17 @@ import { TEMPLATE, cli, selftest } from './selftest.mjs';
 
 const GOOD_TEMPLATE = '<!--\n<img src="x">\n-->\n\n- [ ] No visible UI change\n';
 
-/** A git checkout holding these files (path → contents). */
+const CALLER = {
+  '.github/workflows/pr-visuals.yml': 'steps:\n  - uses: jbhirsh/ci/visuals@main\n',
+};
+
+/** A git checkout of an app that uses the check, holding these files (path → contents). */
 function app(/** @type {Record<string, string>} */ files) {
+  return checkout({ ...CALLER, ...files });
+}
+
+/** A git checkout holding exactly these files. */
+function checkout(/** @type {Record<string, string>} */ files) {
   const root = mkdtempSync(path.join(tmpdir(), 'visuals-app-'));
   for (const [file, text] of Object.entries(files)) {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
@@ -20,10 +29,33 @@ function app(/** @type {Record<string, string>} */ files) {
 }
 
 describe('selftest', () => {
+  it('skips an app with no visuals key and no workflow calling the check', () => {
+    expect(selftest(checkout({ 'README.md': '' }))).toEqual([
+      'visuals: not used by this app; skipped.',
+    ]);
+    expect(
+      selftest(
+        checkout({ '.github/workflows/ci.yml': 'steps:\n  - uses: jbhirsh/ci/pins@main\n' }),
+      ),
+    ).toEqual(['visuals: not used by this app; skipped.']);
+  });
+
+  it('still tests an app that has the key but no caller, or a caller but no key', () => {
+    expect(() =>
+      selftest(
+        checkout({
+          'README.md': '',
+          '.github/ci.json': JSON.stringify({ visuals: { notUi: ['**'] } }),
+        }),
+      ),
+    ).toThrow('leaves no UI file');
+    expect(() => selftest(app({ 'README.md': '' }))).toThrow('leaves no UI file');
+  });
+
   it('passes an app on the defaults with a good template', () => {
     const lines = selftest(app({ 'src/App.tsx': '', [TEMPLATE]: GOOD_TEMPLATE }));
     expect(lines).toEqual([
-      'visuals: 1 of 2 tracked files count as UI.',
+      'visuals: 1 of 3 tracked files count as UI.',
       `visuals: ${TEMPLATE} fails untouched and passes ticked.`,
     ]);
   });
