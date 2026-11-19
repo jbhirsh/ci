@@ -1,0 +1,32 @@
+# Fills each numbered change's commit and files in a PR's description, with the
+# line counts as small coloured pictures (ci#79, ci#100): this repo's own copy
+# of the caller an app adopts (CONTRIBUTING.md's "PR changes" says why each part
+# is the way it is). It runs on pull_request_target, so always the default
+# branch's copy of this file, and holds BOT_PR_TOKEN (attaching a picture needs
+# a person's token): safe because the job checks out and runs nothing from the
+# PR. Keep it so. Its own concurrency group, not another workflow's: GitHub
+# keeps one pending run per group.
+name: PR changes
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-changes-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  pr-changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: jbhirsh/ci/pr-changes@main
+        with:
+          number: ${{ github.event.pull_request.number }}
+          # A fork's PR gets no person's token: its counts are plain text.
+          token: ${{ github.event.pull_request.head.repo.full_name == github.repository && secrets.BOT_PR_TOKEN || '' }}
