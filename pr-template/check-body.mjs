@@ -1,9 +1,8 @@
 // The description check, as the PR visuals action runs it (ci#79):
 // `node pr-template/check-body.mjs`, with the PR in the environment (PR_BODY,
 // PR_AUTHOR, PR_STATE, PR_DRAFT, PR_HEAD_REF, PR_HEAD_SHA). It holds a PR's description to
-// the shared shape (body.mjs says what that is) when the app sets
-// `visuals.sharedTemplate`, and passes without looking otherwise, so an app
-// that hasn't adopted the template is unchanged. It passes, saying why:
+// the shared shape (body.mjs says what that is), in every app: there is no
+// setting to turn it off. It passes, saying why:
 //   - a draft, which is still being written (`ready_for_review` re-runs it);
 //   - a closed PR, since rewriting old descriptions edits closed PRs;
 //   - Dependabot's PRs, and a PR from a `bot/` branch (the README screenshots
@@ -12,8 +11,6 @@
 // description's shape isn't a UI picture.
 
 import { pathToFileURL } from 'node:url';
-import { appConfig, appRoot } from '../lib/app.mjs';
-import { settings } from '../visuals/check.mjs';
 import { bodyProblems } from './body.mjs';
 
 /**
@@ -30,15 +27,13 @@ import { bodyProblems } from './body.mjs';
  * The check's exit code and what to print.
  *
  * @param {Pr} pr
- * @param {boolean} enabled the app's `visuals.sharedTemplate`
  * @returns {{ code: number, message: string }}
  */
-export function report(pr, enabled) {
+export function report(pr) {
   const pass = (/** @type {string} */ why) => ({
     code: 0,
     message: `PR description: ok (${why}).`,
   });
-  if (!enabled) return pass('the app has not set visuals.sharedTemplate');
   if (pr.author === 'dependabot[bot]') return pass("Dependabot's PR");
   if (pr.headRef?.startsWith('bot/')) return pass("a bot's PR");
   if (pr.state === 'closed') return pass('closed PR');
@@ -56,27 +51,34 @@ export function report(pr, enabled) {
 }
 
 /**
- * The check for the PR in `env`, with the app at `root`.
+ * The check for the PR in `env`.
  *
  * @param {Record<string, string | undefined>} env
- * @param {string} root
  */
-export function run(env, root) {
-  return report(
-    {
-      body: env.PR_BODY,
-      author: env.PR_AUTHOR,
-      state: env.PR_STATE,
-      draft: env.PR_DRAFT === 'true',
-      headRef: env.PR_HEAD_REF,
-      headSha: env.PR_HEAD_SHA,
-    },
-    Boolean(settings(appConfig('visuals', root)).sharedTemplate),
-  );
+export function run(env) {
+  return report({
+    body: env.PR_BODY,
+    author: env.PR_AUTHOR,
+    state: env.PR_STATE,
+    draft: env.PR_DRAFT === 'true',
+    headRef: env.PR_HEAD_REF,
+    headSha: env.PR_HEAD_SHA,
+  });
+}
+
+/**
+ * Runs the check for the PR in `env` and returns the exit code.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @param {(line: string) => void} [log]
+ * @returns {number}
+ */
+export function main(env, log = console.log) {
+  const { code, message } = run(env);
+  log(message);
+  return code;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { code, message } = run(process.env, appRoot());
-  console.log(message);
-  process.exitCode = code;
+  process.exitCode = main(process.env);
 }
