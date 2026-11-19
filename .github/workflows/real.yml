@@ -1,0 +1,22 @@
+# One-off: runs the real pr-changes action (from this branch, as
+# pull_request_target would run main's copy) on PR #105, so its real output
+# can be looked at (ci#100). On a push to this branch only; never merged.
+name: Real output
+on:
+  push:
+    branches: [pr-changes-real]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ./pr-changes
+        with:
+          number: "105"
+          token: ${{ secrets.BOT_PR_TOKEN }}
