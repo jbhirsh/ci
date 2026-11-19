@@ -1,0 +1,44 @@
+# One-off (ci#118): attaches the two photos of its Example to the PR's description with the
+# pictures tool, since a session can't upload. Runs from its own branch only; never merged.
+name: PR 118 photos
+on:
+  push:
+    branches: [pr-118-photos]
+permissions: {}
+jobs:
+  files:
+    name: Photos
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: photos
+          path: photos
+  attach:
+    name: Attach
+    needs: files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+    concurrency:
+      group: pr-gif-attach-${{ github.repository }}-118
+      cancel-in-progress: false
+    steps:
+      - uses: jbhirsh/ci/pictures/attach@main
+        with:
+          target: "118"
+          host-pr: "118"
+          run-id: ${{ github.run_id }}
+          artifact: photos
+          files: |
+            before.png | Before: sift#249's change summary, plain text
+            after.png | After: BoardGames#346's change summary, drawn
+          block: before-after
+          columns: "1"
+          width: "500"
+          token: ${{ secrets.BOT_PR_TOKEN }}
