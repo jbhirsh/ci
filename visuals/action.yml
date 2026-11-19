@@ -60,7 +60,6 @@ runs:
         PR_BODY: ${{ github.event.pull_request.body }}
         PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         PR_STATE: ${{ github.event.pull_request.state }}
-        PR_DRAFT: ${{ github.event.pull_request.draft }}
         PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       run: node "$GITHUB_ACTION_PATH/../pr-template/check-body.mjs"

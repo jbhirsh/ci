@@ -16,8 +16,8 @@ describe('report', () => {
     expect(out.message).toContain('re-runs this check');
   });
 
-  it('passes a draft, a closed PR, Dependabot and a bot branch, saying why', () => {
-    expect(report({ body: BAD, draft: true }).message).toMatch(/a draft/);
+  it('checks a draft like any other PR, and passes a closed PR, Dependabot and a bot branch, saying why', () => {
+    expect(report({ body: BAD, state: 'open' }).code).toBe(1);
     expect(report({ body: BAD, state: 'closed' }).message).toMatch(/closed PR/);
     expect(report({ body: BAD, author: 'dependabot[bot]' }).message).toMatch(/Dependabot/);
     expect(report({ body: BAD, headRef: 'bot/readme-screenshots' }).message).toMatch(/bot's PR/);
@@ -40,7 +40,7 @@ describe('run', () => {
   it('reads the PR from the environment', () => {
     const env = { PR_BODY: BAD, PR_AUTHOR: 'me', PR_STATE: 'open', PR_DRAFT: 'false' };
     expect(run(env).code).toBe(1);
-    expect(run({ ...env, PR_DRAFT: 'true' }).code).toBe(0);
+    expect(run({ ...env, PR_DRAFT: 'true' }).code).toBe(1);
     const stale = `${GOOD}| Rev | Head |\n| --- | --- |\n| 1 (current) | [\`1111111\`](https://x) |\n`;
     const open = { ...env, PR_BODY: stale };
     expect(run({ ...open, PR_HEAD_SHA: '1111111aa' }).code).toBe(0);

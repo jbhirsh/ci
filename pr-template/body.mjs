@@ -35,7 +35,7 @@
 // local path, a recording the tool marked stale, a marker pair twice.
 //
 // Pure: a description in, what is wrong with it out. check-body.mjs decides
-// which PRs this holds (not a draft, a closed PR, Dependabot's, a bot's).
+// which PRs this holds (not a closed PR, Dependabot's, a bot's).
 
 import { HEADINGS } from './structure.mjs';
 
