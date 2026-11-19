@@ -33,9 +33,9 @@ description: >-
     - put no PR title, body, branch or commit field in a `run:` line or an
       expression; only the PR's number, through `env:`;
     - the person's token is `UPLOAD_TOKEN`, passed only to the `gh … --attach`
-      call (and to the step that reads its account name), and removed from the
-      run's environment once read; `GH_TOKEN` stays the Actions token for every
-      other call;
+      call, the one description edit the Revisions step builds (and to the step
+      that reads its account name), and removed from the run's environment once
+      read; `GH_TOKEN` stays the Actions token for every other call;
     - an uploaded file's name comes only from its content hash and size.
   A change to an app's workflow for it takes effect once it is on the default
   branch. Dependabot's PRs get the token here too, which is harmless: their
@@ -47,6 +47,18 @@ description: >-
   the push's new counts stay plain text until the next event; and where the
   token is the owner's own account, the owner's hand edit of a description
   doesn't upload either (the next push does).
+
+  It also keeps the Revisions table (`revisions`, below; revisions.mjs says
+  the rules): once a push or a force-push has moved the PR's head, it adds a
+  row for the new head inside the description's `<!-- pr-changes:revisions -->`
+  pair (with `## Revisions` and row 1 for the head the PR opened at, the first
+  time); a PR with one head gets nothing. The row is written after the change
+  slots, with the person's token (`token`), because an edit by the Actions
+  token starts no workflow: the description check, which reads the table's
+  current row for the PR's head, runs again on the edit and supersedes the run
+  for the push, which read the old description. A same-repo PR that needs a row
+  and has no token fails this job (never a required check), saying why; a
+  fork's PR only gets a notice.
 
   An app's caller workflow, and the `autofix.exempt` entry it needs in
   `.github/ci.json` (with its reason, or `autofix/check-triggers.mjs` fails the
@@ -67,6 +79,11 @@ inputs:
   github-token:
     description: The Actions token, which reads the commits and writes the description.
     default: ${{ github.token }}
+  revisions:
+    description: >-
+      "true" keeps the Revisions table as described above; "false" leaves it
+      to the author, as before this existed.
+    default: "true"
 
 runs:
   using: composite
@@ -110,3 +127,15 @@ runs:
         SENDER: ${{ github.event.sender.login }}
         NUMBER: ${{ inputs.number }}
       run: node "$GITHUB_ACTION_PATH/run.mjs"
+
+    # After the slots, so the one edit event the description check sees carries
+    # the finished description. `!cancelled()`: a failed fill doesn't skip it.
+    - name: Write the Revisions row
+      if: ${{ !cancelled() && inputs.revisions == 'true' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        UPLOAD_TOKEN: ${{ inputs.token }}
+        BEFORE: ${{ github.event.before }}
+        NUMBER: ${{ inputs.number }}
+      run: node "$GITHUB_ACTION_PATH/revisions-run.mjs"

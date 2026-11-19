@@ -31,6 +31,8 @@
 //     and a link is used only in GitHub's attachment form;
 //   - at most MAX_PAIRS pairs are uploaded in a run;
 //   - nothing waits on a timer: a link is checked once, when reused.
+// (revisions-run.mjs, the Revisions table's step of the same action, may also
+// use the person's token, for the one description edit it builds.)
 
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -38,7 +40,7 @@ import { pathToFileURL } from 'node:url';
 import { attachToDescription } from '../lib/attach.mjs';
 import { ghApi } from '../lib/comment.mjs';
 import { ghIn } from '../lib/gh.mjs';
-import { pages } from '../lib/github.mjs';
+import { pages, prTarget } from '../lib/github.mjs';
 import { chooseLevel, dropBlock, fill, ownBlock, placed, plain, putBlock } from './changes.mjs';
 import { ENTRY_CHARS, hashOf, images, indexText, picture, readIndex } from './counts.mjs';
 
@@ -365,11 +367,7 @@ export function uploadAllowed(env) {
 
 /** @param {Record<string, string | undefined>} env */
 export async function main(env) {
-  const repo = env.GITHUB_REPOSITORY ?? '';
-  const number = Number(env.NUMBER);
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || !Number.isInteger(number) || number < 1) {
-    throw new Error('pr-changes needs GITHUB_REPOSITORY and NUMBER');
-  }
+  const { repo, number } = prTarget(env);
   const log = console.log;
   const verdict = uploadAllowed(env);
   if (!verdict.ok) log(`::notice::pr-changes: ${verdict.why}`);

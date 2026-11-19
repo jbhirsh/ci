@@ -4,15 +4,67 @@
 // does must see a slot filled in its own template without the rest of the
 // description moving (changes.mjs's header says the rules), so a template
 // edit that tore a slot, or put another tool's marker inside it, fails here
-// and not on a PR.
+// and not on a PR. A template with a `pr-changes:revisions` pair must also
+// get its Revisions table written (revisions.mjs), read back by the description
+// check as naming the PR's head and no other, and left alone by a second run.
 
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { fill, placed } from './changes.mjs';
+import { bodyProblems } from '../pr-template/body.mjs';
+import { fill, ownBlock, placed } from './changes.mjs';
+import { revisions } from './revisions-run.mjs';
 
 const TEMPLATE = '.github/pull_request_template.md';
 const SHA = 'a'.repeat(40);
+
+/**
+ * Writes the Revisions table into the template as a push would, and checks it.
+ *
+ * @param {string} template
+ * @returns {string} what to print; throws on the first problem
+ */
+function revisionsSelftest(template) {
+  if (!ownBlock(template, 'revisions')) {
+    return `pr-changes: ${TEMPLATE} has no revisions pair; Revisions not used.`;
+  }
+  const [opened, head] = ['b'.repeat(40), 'c'.repeat(40)];
+  let body = template;
+  /** @type {import('./revisions-run.mjs').Io} */
+  const io = {
+    pull: () => ({
+      state: 'open',
+      author: 'a',
+      headRef: 'f',
+      headSha: head,
+      headRepo: 'owner/app',
+    }),
+    body: () => body,
+    commits: () => [{ sha: head, subject: 'Second push', skipped: false }],
+    compare: () => ({ status: 'ahead', behindBy: 0, base: opened, shas: [head] }),
+    write: (text) => {
+      body = text;
+    },
+    canWrite: true,
+    log: () => {},
+  };
+  if (!revisions(io, { repo: 'owner/app', before: opened })) {
+    throw new Error(`${TEMPLATE}: the Revisions table was not written for a pushed head`);
+  }
+  /** @param {string} sha */
+  const problems = (sha) => bodyProblems(body, sha).filter((p) => /Revisions/.test(p));
+  if (problems(head).length > 0) {
+    throw new Error(`${TEMPLATE}: the check rejects the Revisions table for its own head`);
+  }
+  if (problems(opened).length === 0) {
+    throw new Error(`${TEMPLATE}: the check accepts the Revisions table for another head`);
+  }
+  const written = body;
+  if (revisions(io, { repo: 'owner/app', before: opened }) || body !== written) {
+    throw new Error(`${TEMPLATE}: running the Revisions step twice changed the description`);
+  }
+  return `pr-changes: ${TEMPLATE} gets its Revisions table, read back as current.`;
+}
 
 /**
  * @param {string} root
@@ -39,7 +91,10 @@ export function selftest(root) {
     throw new Error(`${TEMPLATE}: filling the slots twice changed the description`);
   if (placed(body).length !== slots.length)
     throw new Error(`${TEMPLATE}: a filled slot is no longer a clean pair`);
-  return [`pr-changes: ${TEMPLATE} places ${slots.length} change slot(s) and they fill.`];
+  return [
+    `pr-changes: ${TEMPLATE} places ${slots.length} change slot(s) and they fill.`,
+    revisionsSelftest(template),
+  ];
 }
 
 /**

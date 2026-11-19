@@ -137,11 +137,10 @@ description check needs it. Write "Nothing to do." when there is nothing to list
 -->
 
 <!--
-Revisions: add a "## Revisions" section only once the PR has a revision (a push
-after it opened, or a force-push): a table, newest first, of the revision, its
-head, what changed and why, inside the markers below. Until then there is
-nothing here. Nothing writes it for you yet; ci#111 plans for the changes tool
-to.
+Revisions: leave the markers below empty. Once the PR has a revision (a push
+after it opened, or a force-push), the changes tool writes the "## Revisions"
+heading and a table inside them, newest first: the revision, its head and what
+changed. Write each row's Why; the rest is written for you.
 -->
 
 <!-- pr-changes:revisions -->
