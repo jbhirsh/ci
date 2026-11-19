@@ -1,0 +1,411 @@
+import { describe, expect, it } from 'vitest';
+import { MAX_CHARS } from '../lib/comment.mjs';
+import { bodyProblems } from '../pr-template/body.mjs';
+import { gitHubIo, headingBefore, main, revisions } from './revisions-run.mjs';
+
+const REPO = 'o/r';
+const A = 'a'.repeat(40);
+const B = 'b'.repeat(40);
+const C = 'c'.repeat(40);
+const PAIR = '<!-- pr-changes:revisions -->\n<!-- /pr-changes:revisions -->';
+const BODY = `## Goal\n\nMake it work. More.\n\n## Changes\n\n### 1. c\n\nwhy\n\n## Checklist\n\nNothing to do.\n\n${PAIR}\n`;
+
+/**
+ * A fake io: a description that writes replace, and a PR at a head.
+ *
+ * @param {Partial<Omit<import('./revisions-run.mjs').Io, 'body' | 'pull'>> & { body?: string, pull?: Partial<import('./revisions-run.mjs').Pull>, heads?: string[] }} [over]
+ */
+function fake({ body: first, pull, heads: queued, ...over } = {}) {
+  let body = first ?? BODY;
+  const heads = [...(queued ?? [])];
+  /** @type {string[]} */
+  const logs = [];
+  /** @type {string[]} */
+  const writes = [];
+  /** @type {import('./revisions-run.mjs').Io} */
+  const io = {
+    pull: () => ({
+      state: 'open',
+      author: 'person',
+      headRef: 'feature',
+      headSha: heads.length > 0 ? /** @type {string} */ (heads.shift()) : B,
+      headRepo: REPO,
+      ...pull,
+    }),
+    body: () => body,
+    commits: () => [
+      { sha: '1', subject: 'First', skipped: false },
+      { sha: '2', subject: 'Second', skipped: false },
+      { sha: 'm', subject: 'Merge main', skipped: true },
+    ],
+    compare: () => ({ status: 'ahead', behindBy: 0, base: A, shas: ['2', 'm', 'other'] }),
+    write: (b) => {
+      writes.push(b);
+      body = b;
+    },
+    canWrite: true,
+    log: (l) => logs.push(l),
+    ...over,
+  };
+  return { io, logs, writes, body: () => body };
+}
+
+const run = (/** @type {ReturnType<typeof fake>} */ f, /** @type {string | null} */ before = A) =>
+  revisions(f.io, { repo: REPO, before });
+
+describe('revisions', () => {
+  it('writes nothing for a PR with one head and no table (no push says otherwise)', () => {
+    const f = fake();
+    expect(run(f, null)).toBe(false);
+    expect(f.writes).toEqual([]);
+  });
+
+  it('on the first push writes the heading, row 1 for the opening head and the current row', () => {
+    const f = fake();
+    expect(run(f)).toBe(true);
+    const out = f.body();
+    expect(out).toContain('## Revisions');
+    expect(out).toContain(`| 1 | [\`aaaaaaa\`]`);
+    expect(out).toContain('Make it work.');
+    expect(out).toContain('| 2 (current) | [`bbbbbbb`]');
+    expect(out).toContain(`compare/${A}...${B}`);
+    expect(out).toContain('Second');
+    expect(out).not.toContain('First');
+    expect(out).toContain('+ 1 bot or merge commit');
+    // Only the block changed.
+    expect(
+      out.replace(/<!-- pr-changes:revisions -->[\s\S]*<!-- \/pr-changes:revisions -->/, PAIR),
+    ).toBe(BODY);
+    expect(bodyProblems(out, B).filter((p) => /Revisions/.test(p))).toEqual([]);
+  });
+
+  it('is idempotent: the same head again changes nothing, whatever the event', () => {
+    const f = fake();
+    run(f);
+    const after = f.body();
+    expect(run(f, null)).toBe(false);
+    expect(run(f, C)).toBe(false);
+    expect(f.body()).toBe(after);
+    expect(f.writes).toHaveLength(1);
+  });
+
+  it('adds a row for a later head, keeping the author’s Why', () => {
+    const f = fake();
+    run(f);
+    f.writes.length = 0;
+    const edited = f.body().replace(/\| +\|\n/, '| My why |\n');
+    const g = fake({
+      body: edited,
+      pull: { headSha: C },
+      compare: () => ({ status: 'ahead', behindBy: 0, base: B, shas: ['1'] }),
+    });
+    expect(run(g, B)).toBe(true);
+    const out = g.body();
+    expect(out).toContain('| 3 (current) | [`ccccccc`]');
+    expect(out).toContain('| 2 | [`bbbbbbb`]');
+    expect(out.match(/\(current\)/g)).toHaveLength(1);
+    expect(out).toContain('My why');
+  });
+
+  it('does not repeat the heading an app’s template has before the markers', () => {
+    const f = fake({ body: BODY.replace(PAIR, `## Revisions\n\n${PAIR}`) });
+    run(f);
+    expect(f.body().match(/## Revisions/g)).toHaveLength(1);
+    expect(headingBefore('x\n\n## Revisions\n\n', 100)).toBe(true);
+    expect(headingBefore('x\n\ny\n', 100)).toBe(false);
+    // the apps' templates keep a comment between the heading and the pair
+    expect(headingBefore('x\n\n## Revisions\n\n<!-- note\nmore -->\n\n', 100)).toBe(true);
+  });
+
+  it('shows a force-push as rewritten, with the commits that left', () => {
+    const f = fake({ compare: () => ({ status: 'diverged', behindBy: 2, base: C, shas: ['1'] }) });
+    run(f);
+    expect(f.body()).toContain(
+      'rewritten (force-push or rebase) from `aaaaaaa`, merge base `ccccccc`, 2 earlier commits no longer on the branch',
+    );
+    expect(f.body()).toContain('First');
+  });
+
+  it('shows a head GitHub can no longer compare to as gone, and an identical compare as nothing', () => {
+    const f = fake({ compare: () => null });
+    run(f);
+    expect(f.body()).toContain('rewritten, the old head `aaaaaaa` is gone');
+    const g = fake({ compare: () => ({ status: 'identical', behindBy: 0, base: A, shas: [] }) });
+    expect(run(g)).toBe(false);
+  });
+
+  it.each([
+    ['closed', { state: 'closed' }],
+    ['Dependabot’s', { author: 'dependabot[bot]' }],
+    ['a bot/ branch', { headRef: 'bot/refresh' }],
+  ])('leaves a %s PR alone', (_name, pull) => {
+    const f = fake({ pull });
+    expect(run(f)).toBe(false);
+    expect(f.writes).toEqual([]);
+  });
+
+  it('leaves a description with no pair alone, quietly, and warns about a torn one', () => {
+    const none = fake({ body: BODY.replace(PAIR, '') });
+    expect(run(none)).toBe(false);
+    expect(none.logs).toEqual([]);
+    const torn = fake({ body: BODY.replace('<!-- /pr-changes:revisions -->', '') });
+    expect(run(torn)).toBe(false);
+    expect(torn.logs[0]).toMatch(/torn or repeated/);
+    const doubled = fake({ body: `${BODY}\n${PAIR}\n` });
+    expect(run(doubled)).toBe(false);
+  });
+
+  it('leaves a pair inside a code fence alone', () => {
+    const f = fake({ body: `\`\`\`\n${PAIR}\n\`\`\`\n` });
+    expect(run(f)).toBe(false);
+  });
+
+  it('warns about a line that is no row and keeps it below the table', () => {
+    const f = fake({
+      body: BODY.replace(
+        PAIR,
+        `<!-- pr-changes:revisions -->\nnotes (current)\n<!-- /pr-changes:revisions -->`,
+      ),
+    });
+    run(f);
+    expect(f.logs.some((l) => /no row/.test(l))).toBe(true);
+    expect(f.body()).toContain('notes (current​)');
+  });
+
+  it('a fork’s PR gets a notice, not a failure', () => {
+    const f = fake({ pull: { headRepo: 'fork/r' }, canWrite: false });
+    expect(run(f)).toBe(false);
+    expect(f.logs[0]).toMatch(/fork/);
+  });
+
+  it('a same-repo PR that needs a row without a token fails, naming BOT_PR_TOKEN', () => {
+    const f = fake({ canWrite: false });
+    expect(() => run(f)).toThrow(/BOT_PR_TOKEN/);
+    expect(f.writes).toEqual([]);
+  });
+
+  it('but with nothing to write it needs no token', () => {
+    const f = fake({ canWrite: false });
+    expect(run(f, null)).toBe(false);
+  });
+
+  it('skips the write when the head moved on while it worked', () => {
+    const f = fake({ heads: [B, C] });
+    expect(run(f)).toBe(false);
+    expect(f.writes).toEqual([]);
+    expect(f.logs.at(-1)).toMatch(/head moved on/);
+  });
+
+  it('works the row out again when the description changed, and gives up after 3 reads', () => {
+    let reads = 0;
+    const f = fake();
+    const real = f.io.body;
+    f.io.body = () => (reads++ >= 1 ? `${real()}\nedited meanwhile` : real());
+    expect(run(f)).toBe(true);
+    expect(f.writes[0]).toContain('edited meanwhile');
+
+    let n = 0;
+    const g = fake();
+    const base = g.io.body;
+    g.io.body = () => `${base()}${' '.repeat(n++)}`;
+    expect(() => run(g)).toThrow(/gave up after 3 reads/);
+  });
+
+  it('writes nothing when the description would pass GitHub’s limit', () => {
+    const f = fake({ body: `${BODY}${'x'.repeat(MAX_CHARS)}` });
+    expect(run(f)).toBe(false);
+    expect(f.logs.at(-1)).toMatch(/not written/);
+  });
+
+  it('survives hostile subjects and a hostile old table', () => {
+    const f = fake({
+      commits: () => [
+        { sha: '2', subject: '| <!-- --> @x [a](b) `c` \n(current)', skipped: false },
+      ],
+      body: BODY.replace(
+        PAIR,
+        `<!-- pr-changes:revisions -->\n| 1 (current) | ${'x'.repeat(5000)} | | |\n<!-- /pr-changes:revisions -->`,
+      ),
+    });
+    expect(run(f)).toBe(true);
+    const block = f.body().slice(f.body().indexOf('<!-- pr-changes:revisions -->'));
+    expect(block.match(/<!-- \/pr-changes:revisions -->/g)).toHaveLength(1);
+    expect(block.match(/^\| [^|]*\(current\)/gm)).toHaveLength(1);
+  });
+});
+
+describe('gitHubIo', () => {
+  /** @param {Record<string, unknown>} answers */
+  const api = (answers, calls = /** @type {unknown[][]} */ ([])) =>
+    /** @type {import('../lib/comment.mjs').Api} */ (
+      (method, route, body, options) => {
+        calls.push([method, route, body, options]);
+        const key = Object.keys(answers).find((k) => route.startsWith(k));
+        if (key === undefined) throw new Error(`unexpected ${route}`);
+        const answer = answers[key];
+        if (answer instanceof Error) throw answer;
+        return answer;
+      }
+    );
+
+  it('reads the PR, the description and the commits; the token reaches the write alone', () => {
+    /** @type {unknown[][]} */
+    const calls = [];
+    const io = gitHubIo({
+      api: api(
+        {
+          [`repos/${REPO}/pulls/5/commits`]: [
+            {
+              sha: '1',
+              commit: { message: 'One\n\nbody' },
+              parents: [{}],
+              author: { login: 'me' },
+              committer: null,
+            },
+            {
+              sha: '2',
+              commit: { message: 'Merge' },
+              parents: [{}, {}],
+              author: null,
+              committer: { login: 'me' },
+            },
+            {
+              sha: '3',
+              commit: { message: 'Bot' },
+              parents: [{}],
+              author: { login: 'x[bot]' },
+              committer: null,
+            },
+          ],
+          [`repos/${REPO}/pulls/5`]: {
+            state: 'open',
+            user: { login: 'me' },
+            head: { ref: 'f', sha: A, repo: { full_name: REPO } },
+          },
+          [`repos/${REPO}/issues/5`]: { body: null },
+        },
+        calls,
+      ),
+      repo: REPO,
+      number: 5,
+      token: 'secret',
+      log: () => {},
+    });
+    expect(io.pull()).toEqual({
+      state: 'open',
+      author: 'me',
+      headRef: 'f',
+      headSha: A,
+      headRepo: REPO,
+    });
+    expect(io.body()).toBe('');
+    expect(io.commits()).toEqual([
+      { sha: '1', subject: 'One', skipped: false },
+      { sha: '2', subject: 'Merge', skipped: true },
+      { sha: '3', subject: 'Bot', skipped: true },
+    ]);
+    io.write('new');
+    expect(io.canWrite).toBe(true);
+    const withToken = calls.filter(
+      (c) => /** @type {{ token?: string } | undefined} */ (c[3])?.token !== undefined,
+    );
+    expect(withToken).toEqual([
+      ['PATCH', `repos/${REPO}/issues/5`, { body: 'new' }, { token: 'secret' }],
+    ]);
+  });
+
+  it('reads a PR whose head repo was deleted, and has no write without a token', () => {
+    const io = gitHubIo({
+      api: api({
+        [`repos/${REPO}/pulls/5`]: {
+          state: 'open',
+          user: null,
+          head: { ref: 'f', sha: A, repo: null },
+        },
+      }),
+      repo: REPO,
+      number: 5,
+      token: '',
+      log: () => {},
+    });
+    expect(io.pull()).toMatchObject({ author: '', headRepo: '' });
+    expect(io.canWrite).toBe(false);
+  });
+
+  it('compares: the status, the merge base and the commits; null for a 404 or 422; other errors throw', () => {
+    const ok = gitHubIo({
+      api: api({
+        [`repos/${REPO}/compare/`]: {
+          status: 'diverged',
+          behind_by: 2,
+          merge_base_commit: { sha: C },
+          commits: [{ sha: '9' }],
+        },
+      }),
+      repo: REPO,
+      number: 5,
+      token: 't',
+      log: () => {},
+    });
+    expect(ok.compare(A, B)).toEqual({ status: 'diverged', behindBy: 2, base: C, shas: ['9'] });
+    for (const status of [404, 422]) {
+      const gone = gitHubIo({
+        api: api({ [`repos/${REPO}/compare/`]: new Error(`gh: Not Found (HTTP ${status})`) }),
+        repo: REPO,
+        number: 5,
+        token: 't',
+        log: () => {},
+      });
+      expect(gone.compare(A, B)).toBeNull();
+    }
+    const broken = gitHubIo({
+      api: api({ [`repos/${REPO}/compare/`]: new Error('HTTP 500') }),
+      repo: REPO,
+      number: 5,
+      token: 't',
+      log: () => {},
+    });
+    expect(() => broken.compare(A, B)).toThrow(/500/);
+    const noBase = gitHubIo({
+      api: api({ [`repos/${REPO}/compare/`]: { status: 'ahead', behind_by: 0, commits: [] } }),
+      repo: REPO,
+      number: 5,
+      token: 't',
+      log: () => {},
+    });
+    expect(noBase.compare(A, B)?.base).toBeNull();
+  });
+
+  it('reads more than 250 compared commits without trouble', () => {
+    const page = Array.from({ length: 100 }, (_, i) => ({ sha: `${i}` }));
+    const io = gitHubIo({
+      api: api({ [`repos/${REPO}/compare/`]: { status: 'ahead', behind_by: 0, commits: page } }),
+      repo: REPO,
+      number: 5,
+      token: 't',
+      log: () => {},
+    });
+    expect(io.compare(A, B)?.shas.length).toBeGreaterThanOrEqual(100);
+  });
+});
+
+describe('main', () => {
+  it('needs the repo and the number', () => {
+    expect(() => main({ GITHUB_REPOSITORY: 'nope', NUMBER: '1' })).toThrow(
+      /needs GITHUB_REPOSITORY/,
+    );
+    expect(() => main({ GITHUB_REPOSITORY: REPO, NUMBER: '0' })).toThrow(/needs GITHUB_REPOSITORY/);
+  });
+
+  it('takes the person’s token out of the environment before anything is called', () => {
+    /** @type {Record<string, string | undefined>} */
+    const env = { GITHUB_REPOSITORY: REPO, NUMBER: '5', UPLOAD_TOKEN: 'secret', BEFORE: A };
+    // No gh here: the first call fails, after the token has gone.
+    try {
+      main(env);
+    } catch {
+      // gh is not installed or not logged in: the environment is what matters.
+    }
+    expect(env.UPLOAD_TOKEN).toBeUndefined();
+  });
+});

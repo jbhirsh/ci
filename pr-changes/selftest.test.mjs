@@ -26,6 +26,20 @@ describe('selftest', () => {
     expect(selftest(app({ [TEMPLATE]: master }))[0]).toMatch(/places 1 change slot/);
   });
 
+  it("writes the master template's Revisions table and reads it back as current", () => {
+    expect(selftest(app({ [TEMPLATE]: master }))[1]).toMatch(/gets its Revisions table/);
+  });
+
+  it('leaves Revisions unused for a template with a slot but no revisions pair', () => {
+    const slot = '<!-- pr-changes:change:1 -->\n<!-- /pr-changes:change:1 -->\n';
+    expect(selftest(app({ [TEMPLATE]: slot }))[1]).toMatch(/Revisions not used/);
+  });
+
+  it('leaves Revisions unused for a torn pair, which the tool never writes into', () => {
+    const torn = master.replace('<!-- /pr-changes:revisions -->', '');
+    expect(selftest(app({ [TEMPLATE]: torn }))[1]).toMatch(/Revisions not used/);
+  });
+
   it('fails a template whose slots are not numbered from 1', () => {
     const odd = '<!-- pr-changes:change:2 -->\n<!-- /pr-changes:change:2 -->\n';
     expect(() => selftest(app({ [TEMPLATE]: odd }))).toThrow(/numbered from 1/);
