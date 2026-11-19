@@ -2,7 +2,7 @@
 // test on this repo's master (`.github/pull_request_template.md`) and by the
 // self-test on an app's copy:
 //   - the headings Goal (Problem, for a bug fix), Plan (Solution, for a bug
-//     fix), Changes, Checklist and Revisions, in that order;
+//     fix), Changes, Checklist and, optionally, Revisions, in that order;
 //   - no `No visible UI change` box: visual review decides whether a screen
 //     changed, so the template has nothing to tick;
 //   - the empty marker pair visual review's summary goes in
@@ -40,9 +40,13 @@ export function problems(template) {
   /** @type {string[]} */
   const found = [];
   const seen = [...template.matchAll(/^## (.+?)\s*$/gm)].map((m) => m[1]);
-  if (seen.length !== HEADINGS.length || !HEADINGS.every((names, i) => names.includes(seen[i]))) {
+  // Revisions is optional: a PR has the section once it has a revision (ci#111: the changes tool writes it).
+  const wanted = seen.includes('Revisions') ? HEADINGS : HEADINGS.slice(0, -1);
+  if (seen.length !== wanted.length || !wanted.every((names, i) => names.includes(seen[i]))) {
     const want = HEADINGS.map((names) => names.join(' or ')).join(', ');
-    found.push(`its "##" headings must be ${want} in that order, not ${seen.join(', ') || 'none'}`);
+    found.push(
+      `its "##" headings must be ${want} (Revisions optional) in that order, not ${seen.join(', ') || 'none'}`,
+    );
   }
   if (/No visible UI change/i.test(template)) {
     found.push('it has a "No visible UI change" box: visual review decides, so drop it');

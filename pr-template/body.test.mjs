@@ -52,9 +52,8 @@ describe('bodyProblems', () => {
     expect(bodyProblems('')).toEqual([
       'add the heading `## Goal` or `## Problem`',
       'add the heading `## Changes`',
-      'add the heading `## Revisions`',
     ]);
-    expect(bodyProblems(undefined)).toHaveLength(3);
+    expect(bodyProblems(undefined)).toHaveLength(2);
     expect(
       bodyProblems(
         GOOD.replace('## Goal', '## Problem\n\n**Example**\n').replace(
@@ -291,6 +290,15 @@ describe('bodyProblems', () => {
     });
   });
 
+  it('does not want Revisions until the PR has a revision, but holds a table that is there', () => {
+    const without = GOOD.slice(0, GOOD.indexOf('## Revisions')).trimEnd();
+    expect(bodyProblems(without)).toEqual([]);
+    expect(bodyProblems(GOOD)).toEqual([]);
+    const row = '| 1 (current) | [`2222222`](https://x/2222222) | Opened | Why |';
+    const stale = `${without}\n\n## Revisions\n\n| Rev | Head | What | Why |\n| --- | --- | --- | --- |\n${row}\n`;
+    expect(bodyProblems(stale, 'abcdef0123')[0]).toMatch(/update Revisions/);
+  });
+
   it('flags the "No visible UI change" box', () => {
     expect(bodyProblems(`${GOOD}\n\n- [x] No visible UI change`).join()).toMatch(
       /No visible UI change/,
@@ -298,12 +306,12 @@ describe('bodyProblems', () => {
   });
 
   it("reads what a reader sees, not code, comments or tools' blocks", () => {
-    const noRevisions = GOOD.replace('## Revisions', '```\n## Revisions\n```');
-    expect(bodyProblems(noRevisions)).toEqual(['add the heading `## Revisions`']);
-    expect(bodyProblems(GOOD.replace('## Revisions', '<!-- ## Revisions -->'))).toHaveLength(1);
-    const block = '<!-- pr-changes:revisions -->\n## Revisions\n<!-- /pr-changes:revisions -->';
-    expect(bodyProblems(GOOD.replace('## Revisions', block))).toEqual([
-      'add the heading `## Revisions`',
+    const noChanges = GOOD.replace('## Changes', '```\n## Changes\n```');
+    expect(bodyProblems(noChanges)).toEqual(['add the heading `## Changes`']);
+    expect(bodyProblems(GOOD.replace('## Changes', '<!-- ## Changes -->'))).toHaveLength(1);
+    const block = '<!-- pr-changes:revisions -->\n## Changes\n<!-- /pr-changes:revisions -->';
+    expect(bodyProblems(GOOD.replace('## Changes', block))).toEqual([
+      'add the heading `## Changes`',
     ]);
   });
 
@@ -332,9 +340,7 @@ describe('renderedLines', () => {
 
   it('reads an unclosed <!-- mid-line as text, and one that starts a line as hiding the rest', () => {
     expect(bodyProblems(GOOD.replace('Why.', 'a <!-- b'))).toEqual([]);
-    expect(bodyProblems(GOOD.replace('Why.', '<!-- never closed'))).toEqual([
-      'add the heading `## Revisions`',
-    ]);
+    expect(bodyProblems(GOOD.replace('Why.', '<!-- never closed'))).toEqual([]);
   });
 
   it('takes a block comment that closes on a later line, and text after its end', () => {
@@ -349,7 +355,7 @@ describe('renderedLines', () => {
     bodyProblems(`## Changes\n### 1.${' '.repeat(400000)}b`);
     bodyProblems('<!-- x:y -->\n'.repeat(5000));
     bodyProblems(`${GOOD}\n${'<!-- pr-gif:a -->\n'.repeat(5000)}`);
-    expect(bodyProblems(`## a${' '.repeat(400000)}b`)).toHaveLength(3);
+    expect(bodyProblems(`## a${' '.repeat(400000)}b`)).toHaveLength(2);
   });
 });
 
