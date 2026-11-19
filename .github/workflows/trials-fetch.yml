@@ -1,0 +1,35 @@
+# One-off, the second part of the trials for ci#100: fetch the attachment
+# links now in PR #103's description, signed out, minutes after they were
+# attached, and compare the bytes with the files uploaded. Reads only, never
+# edits. On a push to this branch only; never merged, deleted with the branch.
+name: Trials, fetch
+on:
+  push:
+    branches: [pr-changes-trials]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Fetch each link signed out
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          gh pr view 103 --json body -q .body > body.md
+          LINKS=$(grep -o 'https://github.com/user-attachments/assets/[0-9a-f-]*' body.md | sort -u)
+          echo "RESULT fetch links=$(echo "$LINKS" | wc -l)"
+          sha256sum trials/z12-81-37.svg trials/z14-81-37.svg | sed 's/^/RESULT fetch local /'
+          i=0
+          while IFS= read -r url; do
+            i=$((i+1))
+            code=$(curl -sS -L -o "fetched$i" -w '%{http_code} %{content_type} %{size_download}' "$url"); echo "RESULT fetch link$i $url -> $code"
+            sha256sum "fetched$i" | sed 's/^/RESULT fetch got /'
+            head -c 120 "fetched$i" | sed 's/^/RESULT fetch head /'; echo
+          done <<< "$LINKS"
