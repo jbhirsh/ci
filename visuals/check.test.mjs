@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ADVICE, checkPrVisuals, report, settings, visibleText } from './check.mjs';
+import { DEFAULT_ADVICE, checkPrVisuals, report, settings } from './check.mjs';
 import { goldenText } from './golden.mjs';
 
 // The three apps' settings, as their .github/ci.json give them.
@@ -224,13 +224,6 @@ describe('checkPrVisuals', () => {
     expect(ok('- [ ] No visible UI change')).toBe(false);
     expect(ok('Screenshots: <img> to follow')).toBe(false);
     expect(ok('see ![]() later')).toBe(false);
-  });
-});
-
-describe('visibleText', () => {
-  it('keeps text around comments and code and treats a missing body as empty', () => {
-    expect(visibleText('a <!-- hidden --> b `code` c')).toBe('a  b  c');
-    expect(visibleText(undefined)).toBe('');
   });
 });
 

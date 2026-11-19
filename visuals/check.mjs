@@ -37,6 +37,7 @@ import { pathToFileURL } from 'node:url';
 import { readAll } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
 import { globList, pick } from '../lib/match.mjs';
+import { visibleText } from '../pr-template/structure.mjs';
 
 export const DEFAULT_UI = ['src/**/*.{tsx,css}'];
 export const DEFAULT_NOT_UI = ['**/*.test.*', '**/__tests__/**', 'src/test/**'];
@@ -86,43 +87,6 @@ const VISUAL = [
 ];
 // A ticked box in any list or quote: "- [x] No visible UI change (refactor)".
 const OPT_OUT = /^[\s>]*(?:[-*+]|\d+[.)])\s*\[x\]\s*No visible UI change\b/im;
-
-/**
- * Drops HTML comments the way GitHub's renderer hides them: from each `<!--`
- * to the next `-->`, and an unclosed one hides the rest. A scan, not a regex
- * replace, so no `<!--` can survive the removal.
- *
- * @param {string} text
- */
-function withoutComments(text) {
-  let out = '';
-  let from = 0;
-  for (;;) {
-    const start = text.indexOf('<!--', from);
-    if (start === -1) return out + text.slice(from);
-    out += text.slice(from, start);
-    const end = text.indexOf('-->', start + 4);
-    if (end === -1) return out;
-    from = end + 3;
-  }
-}
-
-/**
- * What renders: the template's example table sits in an HTML comment, and a
- * tag quoted in code isn't a picture, so neither may count. Code goes first,
- * as in GitHub's renderer, so a `<!--` quoted in it can't hide the rest of
- * the description; an unclosed fence runs to the end.
- *
- * @param {string | undefined} body
- */
-export function visibleText(body) {
-  return withoutComments(
-    (body ?? '')
-      .replace(/```[\s\S]*?(```|$)/g, '')
-      .replace(/~~~[\s\S]*?(~~~|$)/g, '')
-      .replace(/`[^`]*`/g, ''),
-  );
-}
 
 /**
  * @typedef {{ ok: true, reason: string } | { ok: false, ui: string[] }} Verdict
