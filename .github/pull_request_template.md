@@ -18,7 +18,9 @@ as it needs and no longer. Write it here as a bold "**Example**" paragraph, or, 
 a PR with several changes, under the change it belongs to; never as a heading.
 Use made-up code where the real code is long, a diff block where lines change
 (GitHub colours it), and input and output for a call that now returns something
-else. This one, for the PR that fixed a mutation check, shows the shape:
+else. When the bug is something someone sees (a screen, a rendered page), add a picture of
+it as it is on main, and in the Solution one of it fixed. This one, for the PR that fixed a
+mutation check, shows the shape:
 
 **Example**
 
