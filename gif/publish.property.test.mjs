@@ -1,5 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { blocksFor } from '../lib/blocks.mjs';
 import {
   blockKeys,
   blockMarkers,
@@ -17,7 +18,16 @@ import {
 const key = fc.stringMatching(/^[\w.]{1,12}$/);
 const piece = fc.oneof(
   fc.string({ maxLength: 20 }),
-  fc.constantFrom('<!-- pr-gif:a -->', '<!-- /pr-gif:a -->', '<!--', '-->', '\n', '\n\n'),
+  fc.constantFrom(
+    '<!-- pr-gif:a -->',
+    '<!-- /pr-gif:a -->',
+    '<!--',
+    '-->',
+    '\n',
+    '\n\n',
+    '<!-- pr-gif:a -->\n<!-- /pr-gif:a -->',
+    '<!-- pr-gif:a -->\nRecorded automatically at `abc1234`.\nx\n<!-- /pr-gif:a -->',
+  ),
 );
 const body = fc.array(piece, { maxLength: 20 }).map((parts) => parts.join(''));
 // A table never holds its own markers (attachmentTable writes Markdown).
@@ -32,6 +42,62 @@ describe('withBlock, for any description', () => {
         expect(once).toContain(`${start}\n${b}\n${end}`);
         expect(withBlock(once, k, b)).toBe(once);
       }),
+    );
+  });
+
+  it('finds the block it wrote, last, whatever the description held', () => {
+    fc.assert(
+      fc.property(body, key, block, (text, k, b) => {
+        const once = withBlock(text, k, b);
+        const found = findBlock(once, k);
+        const { start, end } = blockMarkers(k);
+        expect(found).not.toBeNull();
+        expect(once.slice(found?.from, found?.to)).toBe(`${start}\n${b}\n${end}`);
+      }),
+    );
+  });
+
+  it('keeps every other word of a description when it moves a block, and ends with one block of the new text', () => {
+    const { start, end } = blockMarkers('a');
+    const pairs = new RegExp(`${start}[\\s\\S]*?${end}`, 'g');
+    const empty = `${start}\n${end}`;
+    const auto = `${start}\nRecorded automatically at \`abcdef1\`.\nold\n${end}`;
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom(empty, auto, 'text', 'more words', '\n\n', '\r\n'), {
+          maxLength: 10,
+        }),
+        // A table, never a block with nothing in it (that reads as an empty pair).
+        block.filter((b) => b.trim() !== ''),
+        (parts, b) => {
+          const held = parts.join('\n');
+          const once = withBlock(held, 'a', b);
+          const words = (/** @type {string} */ t) => t.replace(pairs, '').replace(/\s+/g, '');
+          expect(words(once)).toBe(words(held));
+          const found = findBlock(once, 'a');
+          expect(once.slice(found?.from, found?.to)).toBe(`${start}\n${b}\n${end}`);
+          expect(withBlock(once, 'a', b)).toBe(once);
+        },
+      ),
+    );
+  });
+
+  it('writes as it always did when the description has at most one pair of the scenario', () => {
+    const plain = blocksFor('pr-gif');
+    fc.assert(
+      fc.property(
+        fc.array(fc.string({ maxLength: 12 }), { maxLength: 4 }),
+        key,
+        block,
+        fc.constantFrom('', '\n', '\r\n\r\n', 'Recorded automatically at `abc1234`.\nx', 'mine'),
+        (parts, k, b, inner) => {
+          const { start, end } = blockMarkers(k);
+          const text = parts.join('\n').replaceAll('pr-gif', 'x');
+          for (const held of [text, `${text}\n\n${start}\n${inner}\n${end}\n\n${text}`]) {
+            expect(withBlock(held, k, b)).toBe(plain.write(held, k, b));
+          }
+        },
+      ),
     );
   });
 
