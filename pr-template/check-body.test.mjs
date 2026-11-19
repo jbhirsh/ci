@@ -3,7 +3,7 @@ import { main, report, run } from './check-body.mjs';
 
 const BAD = '## Goal\n\nOnly this.';
 const GOOD =
-  '## Goal\n\nx. Closes #1.\n\n## Changes\n\n### 1. y\n\n<!-- pr-changes:change:1 -->\n<!-- /pr-changes:change:1 -->\n\n## Checklist\n\n## Revisions\n';
+  '## Goal\n\nx. Closes #1.\n\n## Changes\n\n### 1. y\n\n<!-- pr-changes:change:1 -->\n[`abc1234`](https://x/commit/abc1234)\n<!-- /pr-changes:change:1 -->\n\n## Checklist\n\n## Revisions\n';
 
 describe('report', () => {
   it('passes a description in the shape, and fails one that is not, saying how to fix it', () => {
