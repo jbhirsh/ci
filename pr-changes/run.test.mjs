@@ -88,13 +88,14 @@ const linkFor = (sha) =>
  * `--attach` does: it rewrites each `](./file)` to a link.
  *
  * @param {{ body: string, files?: [string, number, number][][], verify?: (link: string, sha: string) => boolean,
- *   upload?: boolean, rewrite?: (file: string) => string | null, fail?: boolean }} options
+ *   upload?: boolean, ownEdit?: boolean, rewrite?: (file: string) => string | null, fail?: boolean }} options
  */
 function fakeIo({
   body,
   files = [[['src/a.ts', 3, 1]]],
   verify = () => true,
   upload = true,
+  ownEdit = false,
   rewrite,
   fail = false,
 }) {
@@ -136,6 +137,7 @@ function fakeIo({
           return state.body;
         }
       : null,
+    ownEdit,
     log: (line) => state.log.push(line),
   };
   return { io, state };
@@ -217,6 +219,62 @@ describe('changes', () => {
     expect(second.state.writes).toEqual([]);
     expect(second.state.body).toBe(first.state.body);
     expect(second.state.log.join('\n')).toMatch(/kept a picture the description shows/);
+  });
+
+  it("draws the counts for an edit from the token's own account, and its own edit then does nothing", async () => {
+    // An author's edit, made with the token's account, before anything was uploaded.
+    const first = fakeIo({ body: DESC, ownEdit: true });
+    await changes(first.io, WHERE);
+    expect(first.state.uploads).toHaveLength(1);
+    expect(first.state.body).toContain('<picture>');
+    // The upload's own edit wakes a run that finds the index: nothing to upload or write,
+    // whatever its fetch of a link says.
+    const second = fakeIo({ body: first.state.body, verify: () => false, ownEdit: true });
+    await changes(second.io, WHERE);
+    expect(second.state.uploads).toHaveLength(0);
+    expect(second.state.writes).toEqual([]);
+    expect(second.state.body).toBe(first.state.body);
+  });
+
+  it.each([
+    ['throws', { fail: true }],
+    ['returns no link', { rewrite: () => null }],
+  ])(
+    "marks a failed upload, so the run its edit wakes under the token's account tries nothing (%s)",
+    async (_name, options) => {
+      // The attempt may have edited the description before it failed, which wakes an own-edit run.
+      const first = fakeIo({ body: DESC, ...options });
+      await changes(first.io, WHERE);
+      expect(first.state.uploads.length).toBeLessThanOrEqual(1);
+      expect(first.state.body).toContain('pr-changes:index');
+      expect(first.state.body).not.toContain('<picture>');
+      const second = fakeIo({ body: first.state.body, ownEdit: true, ...options });
+      await changes(second.io, WHERE);
+      expect(second.state.uploads).toHaveLength(0);
+      expect(second.state.writes).toEqual([]);
+      // A push's run, which isn't an own edit, tries again.
+      const third = fakeIo({ body: first.state.body });
+      await changes(third.io, WHERE);
+      expect(third.state.uploads).toHaveLength(1);
+      expect(third.state.body).toContain('<picture>');
+    },
+  );
+
+  it('leaves pairs a hand edit added to a description with an index plain, and says so', async () => {
+    const drawn = fakeIo({ body: DESC });
+    await changes(drawn.io, WHERE);
+    const edited = drawn.state.body.replace(
+      '<!-- /pr-changes:change:1 -->',
+      `<!-- /pr-changes:change:1 -->\n\n${SLOT.replace(/1/g, '2')}`,
+    );
+    const more = fakeIo({
+      body: edited,
+      files: [[['src/a.ts', 3, 1]], [['src/b.ts', 5, 0]]],
+      ownEdit: true,
+    });
+    await changes(more.io, WHERE);
+    expect(more.state.uploads).toHaveLength(0);
+    expect(more.state.log.join('\n')).toMatch(/may not upload/);
   });
 
   it('still re-attaches a shown picture that fails its check, when the run may upload', async () => {
@@ -591,13 +649,17 @@ describe('uploadAllowed', () => {
     expect(uploadAllowed({ UPLOAD_TOKEN: 't' }).ok).toBe(true);
   });
 
-  it("refuses the run woken by the token's own edit, and only that one", () => {
+  it("marks the run woken by the token's own edit, and only that one", () => {
     const base = { UPLOAD_TOKEN: 't', TOKEN_LOGIN: 'owner' };
-    expect(uploadAllowed({ ...base, EVENT_ACTION: 'edited', SENDER: 'owner' }).ok).toBe(false);
-    expect(uploadAllowed({ ...base, EVENT_ACTION: 'edited', SENDER: 'someone' }).ok).toBe(true);
-    expect(uploadAllowed({ ...base, EVENT_ACTION: 'synchronize', SENDER: 'owner' }).ok).toBe(true);
-    expect(uploadAllowed({ ...base, EVENT_ACTION: 'opened', SENDER: 'owner' }).ok).toBe(true);
-    expect(uploadAllowed({ ...base, EVENT_ACTION: 'edited' }).ok).toBe(true);
+    const own = (/** @type {Record<string, string>} */ env) => {
+      const verdict = uploadAllowed({ ...base, ...env });
+      return verdict.ok && verdict.ownEdit;
+    };
+    expect(own({ EVENT_ACTION: 'edited', SENDER: 'owner' })).toBe(true);
+    expect(own({ EVENT_ACTION: 'edited', SENDER: 'someone' })).toBe(false);
+    expect(own({ EVENT_ACTION: 'synchronize', SENDER: 'owner' })).toBe(false);
+    expect(own({ EVENT_ACTION: 'opened', SENDER: 'owner' })).toBe(false);
+    expect(own({ EVENT_ACTION: 'edited' })).toBe(false);
   });
 });
 

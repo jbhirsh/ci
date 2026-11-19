@@ -41,12 +41,15 @@ description: >-
   branch. Dependabot's PRs get the token here too, which is harmless: their
   descriptions place no slots, and bot commits are skipped.
 
-  What it can't do: a run woken by the token's own edit (the upload's) never
-  uploads, so that edit doesn't start a second upload. GitHub keeps one waiting
-  run per group, so if a push's run was waiting when an upload queued its own,
-  the push's new counts stay plain text until the next event; and where the
-  token is the owner's own account, the owner's hand edit of a description
-  doesn't upload either (the next push does).
+  A run woken by the token's own edit (the upload's own, or a hand edit where
+  the token is a person's) uploads only while the description has no index block of
+  pictures yet (an upload that failed leaves it empty), so the upload's own edit finds the index and does nothing, and
+  an author's first edit still gets its pictures. What it can't do: GitHub
+  keeps one waiting run per group, so if a push's run was waiting when an
+  upload queued its own, the push's new counts stay plain text until the next
+  event; and where the token is the owner's own account, a hand edit that adds
+  pairs to a description that already has an index doesn't upload (the next
+  push does).
 
   It also keeps the Revisions table (`revisions`, below; revisions.mjs says
   the rules): once a push or a force-push has moved the PR's head, it adds a
@@ -104,8 +107,8 @@ runs:
           node "$GITHUB_ACTION_PATH/../lib/gh.mjs" check
         }
 
-    # The account the token posts as, so the edit an upload makes (shown as
-    # that account's) is told from a person's and starts no second upload.
+    # The account the token posts as, so a run woken by an edit from that account
+    # (an upload's own, or a hand edit under a person's token) can be told.
     - name: The token's account
       id: login
       if: inputs.token != ''

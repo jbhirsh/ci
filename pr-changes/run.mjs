@@ -67,7 +67,12 @@ const BLOCK_CHARS = 140;
  * @property {((files: { file: string, svg: string }[], body: string, was: string) => string) | null} upload
  *   attaches the files to the description, which is `body`, a staging block
  *   added to `was`, and returns the description as it is then; null when the
- *   run may not upload (no token, or the edit is the upload's own)
+ *   run may not upload (no token)
+ * @property {boolean} ownEdit the run was woken by an edit from the token's own
+ *   account: the upload's own, or a hand edit where the token is a person's.
+ *   Such a run uploads only while the description has no index block yet (no
+ *   upload was ever tried for it; a failed attempt leaves the block empty), so
+ *   the upload's own edit finds nothing to do
  * @property {(line: string) => void} log
  */
 
@@ -75,7 +80,8 @@ const BLOCK_CHARS = 140;
  * The io for one PR.
  *
  * @param {{ api: import('../lib/comment.mjs').Api, repo: string, number: number,
- *   log: (line: string) => void, upload?: Io['upload'], verify?: Io['verify'] }} options
+ *   log: (line: string) => void, upload?: Io['upload'], ownEdit?: boolean,
+ *   verify?: Io['verify'] }} options
  * @returns {Io}
  */
 export function gitHubIo({
@@ -84,6 +90,7 @@ export function gitHubIo({
   number,
   log,
   upload = null,
+  ownEdit = false,
   verify = (link, sha) => fetchVerify(link, sha, log),
 }) {
   const issue = `repos/${repo}/issues/${number}`;
@@ -106,6 +113,7 @@ export function gitHubIo({
         })),
     verify,
     upload,
+    ownEdit,
     log,
   };
 }
@@ -209,12 +217,18 @@ export function pairsAt(commits, level) {
  * @param {Io} io
  * @param {string} body
  * @param {readonly [number, number][]} pairs
- * @returns {Promise<Map<string, string>>} image hash → link
+ * @returns {Promise<{ known: Map<string, string>, tried: boolean }>} image hash →
+ *   link, and whether an upload was attempted (it may have edited the
+ *   description, whatever it returned)
  */
 async function resolve(io, body, pairs) {
   /** @type {Map<string, string>} */
   const known = new Map();
   const claimed = readIndex(body);
+  // An own-edit run with an index has nothing of its own to upload: the pictures
+  // it finds are the ones the last upload put there.
+  // The empty index an attempt that failed leaves counts too: see `changes`.
+  const mayUpload = io.upload !== null && !(io.ownEdit && ownBlock(body, 'index') !== null);
   /** @type {{ pair: [number, number], missing: { file: string, svg: string, sha: string }[] }[]} */
   const wanted = [];
   for (const pair of pairs) {
@@ -226,7 +240,7 @@ async function resolve(io, body, pairs) {
       // A run that may not upload must not take away a picture the description already
       // shows because one fetch of it failed: it would have nothing to put back. The
       // description is the author's, so what it shows is theirs to show.
-      else if (link !== undefined && !io.upload && body.includes(`"${link}"`)) {
+      else if (link !== undefined && !mayUpload && body.includes(`"${link}"`)) {
         io.log(
           '::notice::pr-changes: kept a picture the description shows, which could not be checked again',
         );
@@ -235,12 +249,12 @@ async function resolve(io, body, pairs) {
     }
     if (missing.length > 0) wanted.push({ pair, missing });
   }
-  if (wanted.length === 0) return known;
-  if (!io.upload) {
+  if (wanted.length === 0) return { known, tried: false };
+  if (!mayUpload || !io.upload) {
     io.log(
       `::notice::pr-changes: ${wanted.length} pair(s) of counts have no picture and this run may not upload: they stay plain text`,
     );
-    return known;
+    return { known, tried: false };
   }
   const uploading = wanted.slice(0, MAX_PAIRS);
   if (wanted.length > MAX_PAIRS) {
@@ -262,7 +276,7 @@ async function resolve(io, body, pairs) {
     io.log(
       `::warning::pr-changes: attaching the pictures failed (${error instanceof Error ? error.message : error}): their counts stay plain text`,
     );
-    return known;
+    return { known, tried: true };
   }
   const uploaded = readIndex(after);
   for (const f of files) {
@@ -271,7 +285,7 @@ async function resolve(io, body, pairs) {
     else
       io.log(`::warning::pr-changes: no link came back for a picture; its counts stay plain text`);
   }
-  return known;
+  return { known, tried: true };
 }
 
 /**
@@ -300,7 +314,8 @@ export async function changes(io, where) {
     reserve: reserve(pairsAt(commits, 'full').length),
   });
   const pairs = level === null ? [] : pairsAt(commits, level);
-  const known = pairs.length > 0 ? await resolve(io, first, pairs) : new Map();
+  const { known, tried } =
+    pairs.length > 0 ? await resolve(io, first, pairs) : { known: new Map(), tried: false };
 
   /**
    * @param {number} a
@@ -325,8 +340,14 @@ export async function changes(io, where) {
       reserve: ask === '' ? 0 : ask.length + BLOCK_CHARS,
     });
     const index = idx(filled.body);
+    // An upload was tried: an index block stays, even empty, as the mark that makes the
+    // edit the attempt made (it may have failed after editing) find nothing to upload
+    // in a run woken by the token's own account.
+    const marked = ownBlock(clean, 'index') !== null && readIndex(clean).size === 0;
     const out =
-      index === '' ? dropBlock(filled.body, 'index') : putBlock(filled.body, 'index', index);
+      index === '' && !tried && !marked
+        ? dropBlock(filled.body, 'index')
+        : putBlock(filled.body, 'index', index);
     if (filled.problem) io.log(`::warning::pr-changes: ${filled.problem}`);
     if (out === current) return false;
     const now = io.body();
@@ -343,26 +364,26 @@ export async function changes(io, where) {
 }
 
 /**
- * Whether this run may upload, and why not: it needs a token that may attach,
- * and it isn't woken by the upload's own edit (an `edited` event whose sender
- * is the token's own account), which would only find what was just uploaded.
- * Known limits of that rule: when a push's run is waiting and an upload's
- * edit queues a run behind it, GitHub keeps only the newer, so the push's
- * pairs stay plain until the next event; and where the token is the owner's
- * own account, the owner's hand edit of a description doesn't upload either.
+ * Whether this run may upload, and why not: it needs a token that may attach.
+ * A run woken by an edit from the token's own account (`ownEdit`) may too, but
+ * `resolve` lets it upload only while the description has no index block: the upload's
+ * own edit, which finds what was just uploaded, then does nothing, and an
+ * author's edit before any upload still gets its pictures. Known limits: when a
+ * push's run is waiting and an upload's edit queues a run behind it, GitHub
+ * keeps only the newer, so the push's pairs stay plain until the next event;
+ * and where the token is the owner's own account, a hand edit that adds pairs
+ * to a description that already has an index stays plain until the next push.
  *
  * @param {Record<string, string | undefined>} env
- * @returns {{ ok: true } | { ok: false, why: string }}
+ * @returns {{ ok: true, ownEdit: boolean } | { ok: false, why: string }}
  */
 export function uploadAllowed(env) {
   if ((env.UPLOAD_TOKEN ?? '') === '') {
     return { ok: false, why: 'no token that may attach, so the counts are plain text' };
   }
-  const own =
+  const ownEdit =
     env.EVENT_ACTION === 'edited' && env.SENDER !== undefined && env.SENDER === env.TOKEN_LOGIN;
-  if (own)
-    return { ok: false, why: "this run was woken by the token's own edit, so it uploads nothing" };
-  return { ok: true };
+  return { ok: true, ownEdit };
 }
 
 /** @param {Record<string, string | undefined>} env */
@@ -390,7 +411,11 @@ export async function main(env) {
         log,
       })
     : null;
-  return changes(gitHubIo({ api: ghApi, repo, number, log, upload }), { repo, number });
+  const ownEdit = verdict.ok && verdict.ownEdit;
+  return changes(gitHubIo({ api: ghApi, repo, number, log, upload, ownEdit }), {
+    repo,
+    number,
+  });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
