@@ -42,10 +42,11 @@ describe('bodyProblems', () => {
 
   it('fails the template as it comes: a goal, a change and a plan row still to write', () => {
     const found = bodyProblems(master);
-    expect(found).toHaveLength(3);
+    expect(found).toHaveLength(4);
     expect(found[0]).toMatch(/write the goal/);
-    expect(found[1]).toMatch(/replace the template's sample change/);
-    expect(found[2]).toMatch(/plan table's template row/);
+    expect(found[1]).toMatch(/under change 1, its `<!-- pr-changes:change:1 -->` pair is empty/);
+    expect(found[2]).toMatch(/replace the template's sample change/);
+    expect(found[3]).toMatch(/plan table's template row/);
   });
 
   it('says each missing heading, and takes Problem for Goal and Solution for Plan', () => {
@@ -155,10 +156,26 @@ describe('bodyProblems', () => {
     expect(bodyProblems(solved)).toEqual([]);
   });
 
-  it('wants each change to have its commit: a marker pair or a commit link', () => {
+  it('wants each change to have its commit: a commit link, or a pair the tool has filled', () => {
     const link = '[`abc1234`](https://github.com/o/r/commit/abc1234)';
-    const pair = '<!-- pr-changes:change:1 -->\n<!-- /pr-changes:change:1 -->';
-    expect(bodyProblems(GOOD.replace(link, pair))).toEqual([]);
+    const filled = `<!-- pr-changes:change:1 -->\n${link}\n<!-- /pr-changes:change:1 -->`;
+    expect(bodyProblems(GOOD.replace(link, filled))).toEqual([]);
+    // The empty pair is where the tool writes it, not a commit.
+    const empty = '<!-- pr-changes:change:1 -->\n<!-- /pr-changes:change:1 -->';
+    expect(bodyProblems(GOOD.replace(link, empty))[0]).toMatch(
+      /its `<!-- pr-changes:change:1 -->` pair is empty/,
+    );
+    expect(
+      bodyProblems(
+        GOOD.replace(link, `<!-- pr-changes:change:1 -->\n \n<!-- /pr-changes:change:1 -->`),
+      ),
+    ).toHaveLength(1);
+    // A pair of another change doesn't fill this one.
+    const another = GOOD.replace(link, empty).replace(
+      'Why.',
+      `Why.\n\n### 2. More\n\n<!-- pr-changes:change:2 -->\n${link}\n<!-- /pr-changes:change:2 -->`,
+    );
+    expect(bodyProblems(another)).toHaveLength(1);
     const without = GOOD.replace(link, '');
     expect(bodyProblems(without)[0]).toMatch(/under change 1, add its commit/);
     const two = without.replace('Why.', `Why.\n\n### 2. More\n\n${link}`);
@@ -206,7 +223,7 @@ describe('bodyProblems', () => {
     expect(bodyProblems(body)).toEqual([]);
     const stray = GOOD.replace(
       link,
-      '`a\n<!-- pr-changes:change:1 -->\n<!-- /pr-changes:change:1 -->\nb`',
+      `\`a\n<!-- pr-changes:change:1 -->\n${link}\n<!-- /pr-changes:change:1 -->\nb\``,
     );
     expect(bodyProblems(stray)).toEqual([]);
     // A marker typed by hand is only text.

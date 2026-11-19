@@ -19,7 +19,9 @@
 //     only this PR's starting with an empty `<tr></tr>`, so that GitHub shades
 //     only this PR's row (a Markdown table shades every other row);
 //   - under Changes, at least one numbered change: `### 1. The change`, each
-//     with its commit: a `pr-changes:change:N` marker pair or a commit link;
+//     with its commit: a commit link, or the `pr-changes:change:N` pair the
+//     changes tool has filled (an empty pair is not a commit, only the place
+//     the tool writes it);
 //   - Revisions' current row (its Rev cell says `(current)`) naming the PR's
 //     head, when the head is given: a push makes it stale, and the check fails
 //     until the row is updated (a description with no current row passes). It
@@ -51,8 +53,10 @@ const ISSUE =
 const EXAMPLE = /^ {0,3}\*\*Example:?\*\*/m;
 /** Revisions' current row: its Rev cell says `(current)`; the next cell is its head. */
 const CURRENT_ROW = /^\|[^|\n]*\(current\)[^|\n]*\|([^|\n]*)\|/m;
-/** A change's commit, as a tool's marker pair or a link. */
-const COMMIT = /@@tool:pr-changes:change:\d+@@|\/commit\/[0-9a-f]{7,40}/;
+/** A change's commit, as a link a reader sees. */
+const COMMIT = /\/commit\/[0-9a-f]{7,40}/;
+/** A change's slot, the pair the changes tool fills with its commit and files. */
+const CHANGE_SLOT = /^pr-changes:change:\d+$/;
 /** What the template's example change says. */
 const SAMPLE_HEADING = /^The first change, as a goal\b/i;
 const SAMPLE_WHY = /^Why this change\.\s*$/im;
@@ -428,12 +432,21 @@ export function bodyProblems(body, head) {
     kept.forEach((l, i) => {
       if (/^ {0,3}### +\d+\.[ \t]+\S/.test(l)) starts.push(i);
     });
+    // `at` and the lines here index alike, from the line after the Changes heading.
+    const base = (found.find((f) => f.at === 2)?.line ?? -1) + 1;
     starts.forEach((from, i) => {
-      const part = kept.slice(from, starts[i + 1]);
-      if (!COMMIT.test(part.join('\n'))) {
+      const to = starts[i + 1];
+      const part = kept.slice(from, to);
+      const slots = blocks.filter(
+        (b) => CHANGE_SLOT.test(b.key) && b.at >= base + from && b.at < base + (to ?? kept.length),
+      );
+      const filled = slots.some((b) => b.inner.join('').trim() !== '');
+      if (!filled && !COMMIT.test(part.join('\n'))) {
         const n = /\d+/.exec(part[0])?.[0];
         problems.push(
-          `under change ${n}, add its commit: the empty marker pair \`<!-- pr-changes:change:${n} -->\` with \`<!-- /pr-changes:change:${n} -->\`, or a link to the commit`,
+          slots.length > 0
+            ? `under change ${n}, its \`<!-- pr-changes:change:${n} -->\` pair is empty: the changes tool fills it with the commit and files on the next push, or link the commit yourself`
+            : `under change ${n}, add its commit: the empty marker pair \`<!-- pr-changes:change:${n} -->\` with \`<!-- /pr-changes:change:${n} -->\` (the changes tool fills it), or a link to the commit`,
         );
       }
     });
