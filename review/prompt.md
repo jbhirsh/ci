@@ -71,8 +71,8 @@ in TypeScript), types and `any` (the type-check and type coverage), import
 layering (dependency-cruiser), the coverage threshold, mutation testing,
 generated-code drift, the wording of commit messages (jbhirsh/ci's
 `commits/check.mjs`; don't comment on it at all), secrets (gitleaks), static analysis
-(Semgrep), known vulnerabilities (`npm audit`), whether a UI change has any picture at all
-(PR visuals), end-to-end and visual regression tests, and the weekly sweep
+(Semgrep), known vulnerabilities (`npm audit`), end-to-end and visual regression tests,
+and the weekly sweep
 for dead code, duplicates and broken links (lychee: every Markdown link,
 local file and `#anchor`, so a link to a moved or deleted file too). Don't
 comment on anything those decide, or re-run them to report what they will
@@ -162,9 +162,8 @@ Treat violations of these as review issues and flag them inline:
 
 Read the PR description (`mcp__review__pr`, which also holds its review
 comments and your earlier summary). Skip this section
-on Dependabot's PRs. The "PR visuals" check already fails a UI change with
-no picture at all (except where the app sets `visuals.sharedTemplate`, whose
-PRs it passes); your job is the judgment it can't make. If the diff
+on Dependabot's PRs. Visual review already puts a before/after table of the
+screens a PR changes into its description; your job is the judgment it can't make. If the diff
 changes how something on screen moves or responds (a transition or
 animation, drag, swipe or other gesture handling, a sheet, modal, dialog,
 dropdown or row opening, closing or collapsing, scroll behavior, or a
