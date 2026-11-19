@@ -17,10 +17,10 @@ const APP = [
   wf('ci.yml', 'CI', ['pull_request', 'push']),
   wf('claude-review.yml', 'Claude Review', ['pull_request']),
   wf('e2e.yml', 'E2E', ['pull_request']),
-  wf('pr-visuals.yml', 'PR visuals', ['pull_request']),
+  wf('pr-pictures.yml', 'PR pictures', ['pull_request']),
   wf('weekly.yml', 'Weekly', ['schedule']),
 ];
-const EXEMPT = { 'PR visuals': 'wants pictures' };
+const EXEMPT = { 'PR pictures': 'wants pictures' };
 
 describe('describeWorkflow', () => {
   it('reads each form `on:` takes', () => {
@@ -61,7 +61,7 @@ describe('triggerProblems', () => {
   });
   it('fails a pull-request workflow neither listed nor exempt', () => {
     expect(triggerProblems(APP, {})).toEqual([
-      expect.stringContaining('pr-visuals.yml ("PR visuals") runs on pull requests'),
+      expect.stringContaining('pr-pictures.yml ("PR pictures") runs on pull requests'),
     ]);
   });
   it('fails a listed or exempt name no workflow has, or one both listed and exempt', () => {
@@ -133,12 +133,12 @@ describe('checkTriggers', () => {
         on: { workflow_run: { workflows: ['CI'] } },
       }),
       '.github/workflows/ci.yml': yaml({ name: 'CI', on: 'pull_request' }),
-      '.github/workflows/pr-visuals.yaml': yaml({ name: 'PR visuals', on: 'pull_request' }),
+      '.github/workflows/pr-pictures.yaml': yaml({ name: 'PR pictures', on: 'pull_request' }),
       '.github/workflows/README.md': '# not a workflow',
       '.github/ci.json': JSON.stringify({ autofix: { exempt: EXEMPT } }),
     });
     const { workflows, problems } = await checkTriggers(root, { parse: JSON.parse });
-    expect(workflows.map((w) => w.file)).toEqual(['ci.yml', STUB, 'pr-visuals.yaml']);
+    expect(workflows.map((w) => w.file)).toEqual(['ci.yml', STUB, 'pr-pictures.yaml']);
     expect(problems).toEqual([]);
   });
   it("uses the app's own yaml package by default", async () => {

@@ -7,7 +7,7 @@
 //   - github-actions[bot]'s carrying REVIEW_MARKER (Claude Review on the
 //     Agent SDK, which posts with the job's token, review/tools.mjs). Only a
 //     workflow run with write access posts as github-actions[bot], and the
-//     app's other workflows (job reports, visuals) never write the marker;
+//     app's other workflows (job reports, visual review) never write the marker;
 //     or
 //   - the owner's.
 //

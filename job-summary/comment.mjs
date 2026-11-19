@@ -72,7 +72,7 @@ import { pagesBase } from './report.mjs';
 /** The marker the comment starts with, to find it again. */
 export const MARKER = '<!-- job-reports -->';
 // Who posts it (lib/comment.mjs), the most it may hold, how many pages are
-// read looking for it, and the status of a failed call: shared with visuals'
+// read looking for it, and the status of a failed call: shared with visual review's
 // table.
 export { AUTHOR, MAX_CHARS, PAGES, statusOf } from '../lib/comment.mjs';
 /** Where a section ends. */

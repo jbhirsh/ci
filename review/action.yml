@@ -60,8 +60,8 @@
 # The prompts ask only for what no automated check of the apps decides:
 # each app's CI already runs lint, Prettier, the type-check and type
 # coverage, dependency-cruiser, tests with a coverage gate, mutation
-# testing, the commit-message check, secret scanning, Semgrep, npm audit, PR
-# visuals and its end-to-end and visual tests, and the review is told to
+# testing, the commit-message check, secret scanning, Semgrep, npm audit, the
+# end-to-end and visual tests, and the review is told to
 # leave all of that alone. Don't add an instruction a check already covers.
 #
 # How the layout keeps a PR from steering its own review:

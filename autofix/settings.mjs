@@ -6,7 +6,7 @@
 //     "ciFixChecks": ["`npm run lint`", "`npm run typecheck`", ...],
 //     "reviewFixChecks": ["`npm run lint`", ...],
 //     "cannotRun": ["visual regression", "deployment smoke tests"],
-//     "exempt": { "PR visuals": "wants pictures in the description" },
+//     "exempt": { "PR pictures": "wants pictures in the description" },
 //     "engine": "sdk",
 //     "advisor": "opus"
 //   }

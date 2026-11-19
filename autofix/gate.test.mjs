@@ -75,7 +75,7 @@ describe('latestRuns', () => {
 });
 
 describe('pendingWorkflows', () => {
-  const skip = { self: SELF, exempt: ['PR visuals'] };
+  const skip = { self: SELF, exempt: ['PR pictures'] };
   it('names every pull-request workflow still running, by name', () => {
     const runs = [
       run({ id: 1, name: 'CI', status: 'completed', conclusion: 'failure' }),
@@ -101,8 +101,8 @@ describe('pendingWorkflows', () => {
       run({ id: 1, name: 'Claude autofix', path: SELF, status: 'in_progress', conclusion: null }),
       run({
         id: 2,
-        name: 'PR visuals',
-        path: '.github/workflows/pr-visuals.yml',
+        name: 'PR pictures',
+        path: '.github/workflows/pr-pictures.yml',
         status: 'queued',
         conclusion: null,
       }),
@@ -153,7 +153,7 @@ describe('main', () => {
 
   it("answers pending from the head's runs, less the exemptions on the default branch", () => {
     const root = testApp({
-      '.github/ci.json': JSON.stringify({ autofix: { exempt: { 'PR visuals': 'pictures' } } }),
+      '.github/ci.json': JSON.stringify({ autofix: { exempt: { 'PR pictures': 'pictures' } } }),
     });
     /** @type {string[]} */
     const asked = [];
@@ -165,7 +165,13 @@ describe('main', () => {
           {
             workflow_runs: [
               run({ name: 'Smoke gate', status: 'queued', conclusion: null }),
-              run({ id: 2, name: 'PR visuals', path: 'v.yml', status: 'queued', conclusion: null }),
+              run({
+                id: 2,
+                name: 'PR pictures',
+                path: 'v.yml',
+                status: 'queued',
+                conclusion: null,
+              }),
             ],
           },
         ];
@@ -192,7 +198,7 @@ describe('main', () => {
       'owner/name',
     );
     expect(() => main(['pending'], { ...env, WORKFLOW_REF: '' }, io)).toThrow('is not set');
-    const bad = testApp({ '.github/ci.json': '{"autofix": {"exempt": ["PR visuals"]}}' });
+    const bad = testApp({ '.github/ci.json': '{"autofix": {"exempt": ["PR pictures"]}}' });
     expect(() => main(['pending'], env, { ...io, root: bad })).toThrow('"autofix.exempt" must map');
   });
 });
