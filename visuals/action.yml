@@ -80,7 +80,8 @@ runs:
         jq -r .filename "$PR_FILES" | node "$GITHUB_ACTION_PATH/check.mjs"
 
     # Only with the app's `visuals.sharedTemplate`: the description's shape
-    # (headings, a numbered change), apart from the UI check above, which
+    # (headings, the goal's issue, the plan table's shading, each change's commit,
+    # Revisions naming the head), apart from the UI check above, which
     # visual review's status also reads.
     - name: Check the description is in the shared shape
       shell: bash
@@ -90,4 +91,5 @@ runs:
         PR_STATE: ${{ github.event.pull_request.state }}
         PR_DRAFT: ${{ github.event.pull_request.draft }}
         PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       run: node "$GITHUB_ACTION_PATH/../pr-template/check-body.mjs"

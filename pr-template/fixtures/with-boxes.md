@@ -6,11 +6,12 @@ A PR that moves something gets its before/after GIFs without the author recordin
 
 ## Plan
 
-| Step  | Where                                                            | What                                                      | State                                                              |
-| ----- | ---------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------ |
-| 1     | [ci#94](https://github.com/jbhirsh/ci/pull/94)                   | The canonical callers and the rules every copy is held to | ✅ merged ([#94](https://github.com/jbhirsh/ci/pull/94))           |
-| 2     | [BoardGames#340](https://github.com/jbhirsh/BoardGames/pull/340) | BoardGames' copy                                          | ✅ merged ([#340](https://github.com/jbhirsh/BoardGames/pull/340)) |
-| **3** | **this PR**                                                      | **fog-and-frontier's copy**                               | **👉 this PR**                                                     |
+<table>
+<thead><tr><th>Step</th><th>Where</th><th>What</th><th>State</th></tr></thead>
+<tbody><tr><td>1</td><td><a href="https://github.com/jbhirsh/ci/pull/94">ci#94</a></td><td>The canonical callers and the rules every copy is held to</td><td>✅ merged (<a href="https://github.com/jbhirsh/ci/pull/94">#94</a>)</td></tr></tbody>
+<tbody><tr><td>2</td><td><a href="https://github.com/jbhirsh/BoardGames/pull/340">BoardGames#340</a></td><td>BoardGames' copy</td><td>✅ merged (<a href="https://github.com/jbhirsh/BoardGames/pull/340">#340</a>)</td></tr></tbody>
+<tbody><tr></tr><tr><td><b>3</b></td><td><b>this PR</b></td><td><b>fog-and-frontier's copy</b></td><td><b>👉 this PR</b></td></tr></tbody>
+</table>
 
 > ⚠️ **Before this merges**
 >

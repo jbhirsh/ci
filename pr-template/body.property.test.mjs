@@ -7,9 +7,13 @@ const GOOD = [
   '',
   'Make it work.',
   '',
+  'Closes #1.',
+  '',
   '## Changes',
   '',
   '### 1. The change',
+  '',
+  '[`abc1234`](https://github.com/o/r/commit/abc1234)',
   '',
   'Why.',
   '',
@@ -38,7 +42,7 @@ describe('bodyProblems', () => {
           { nil: undefined },
         ),
         (body) => {
-          for (const p of bodyProblems(body)) expect(p.length).toBeGreaterThan(5);
+          for (const p of bodyProblems(body, 'abcdef0123')) expect(p.length).toBeGreaterThan(5);
         },
       ),
     );

@@ -1,6 +1,6 @@
 // The description check, as the PR visuals action runs it (ci#79):
 // `node pr-template/check-body.mjs`, with the PR in the environment (PR_BODY,
-// PR_AUTHOR, PR_STATE, PR_DRAFT, PR_HEAD_REF). It holds a PR's description to
+// PR_AUTHOR, PR_STATE, PR_DRAFT, PR_HEAD_REF, PR_HEAD_SHA). It holds a PR's description to
 // the shared shape (body.mjs says what that is) when the app sets
 // `visuals.sharedTemplate`, and passes without looking otherwise, so an app
 // that hasn't adopted the template is unchanged. It passes, saying why:
@@ -23,6 +23,7 @@ import { bodyProblems } from './body.mjs';
  * @property {string} [state] open or closed
  * @property {boolean} [draft]
  * @property {string} [headRef]
+ * @property {string} [headSha] Revisions' current row must name it
  */
 
 /**
@@ -42,7 +43,7 @@ export function report(pr, enabled) {
   if (pr.headRef?.startsWith('bot/')) return pass("a bot's PR");
   if (pr.state === 'closed') return pass('closed PR');
   if (pr.draft) return pass('a draft, checked when it is ready for review');
-  const problems = bodyProblems(pr.body);
+  const problems = bodyProblems(pr.body, pr.headSha);
   if (problems.length === 0) return pass('in the shared shape');
   return {
     code: 1,
@@ -68,6 +69,7 @@ export function run(env, root) {
       state: env.PR_STATE,
       draft: env.PR_DRAFT === 'true',
       headRef: env.PR_HEAD_REF,
+      headSha: env.PR_HEAD_SHA,
     },
     Boolean(settings(appConfig('visuals', root)).sharedTemplate),
   );
