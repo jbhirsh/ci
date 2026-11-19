@@ -214,6 +214,83 @@ describe('bodyProblems', () => {
     expect(bodyProblems(GOOD.replace(link, '@@tool:pr-changes:change:1@@'))[0]).toMatch(/change 1/);
   });
 
+  describe('the GIF and screen blocks the tools write', () => {
+    const gif = (
+      /** @type {string} */ name,
+      /** @type {string} */ text = 'Recorded automatically at `abc1234`.\n\n![GIF: x after](https://github.com/user-attachments/assets/1)',
+    ) => `<!-- pr-gif:${name} -->\n${text}\n<!-- /pr-gif:${name} -->`;
+    const under = (/** @type {string} */ block) => GOOD.replace('Why.', `Why.\n\n${block}`);
+    const atEnd = (/** @type {string} */ block) => `${GOOD}\n${block}\n`;
+
+    it('passes a GIF or a screen under a change, and an empty pair waiting for one', () => {
+      expect(bodyProblems(under(gif('rules')))).toEqual([]);
+      expect(bodyProblems(under('<!-- pr-gif:rules -->\n<!-- /pr-gif:rules -->'))).toEqual([]);
+      expect(
+        bodyProblems(
+          under(
+            '<!-- describe:visual-review:home -->\ntable\n<!-- /describe:visual-review:home -->',
+          ),
+        ),
+      ).toEqual([]);
+      expect(
+        bodyProblems(under(gif('a')).replace('## Checklist', `${gif('b')}\n\n## Checklist`)),
+      ).toEqual([]);
+    });
+
+    it('wants a block under a change, not at the top of Changes or the very end, and says how to move it', () => {
+      for (const body of [
+        atEnd(gif('rules')),
+        GOOD.replace('### 1.', `${gif('rules')}\n\n### 1.`),
+      ]) {
+        const found = bodyProblems(body);
+        expect(found).toHaveLength(1);
+        expect(found[0]).toMatch(/put the GIF block `pr-gif:rules` under the change it belongs to/);
+        expect(found[0]).toMatch(/empty `<!-- pr-gif:rules -->`/);
+      }
+      const slot = '<!-- describe:visual-review:home -->\n<!-- /describe:visual-review:home -->';
+      expect(bodyProblems(atEnd(slot))[0]).toMatch(/screen block `describe:visual-review:home`/);
+    });
+
+    it("says a GIF didn't attach: a local path is left in its block", () => {
+      const local = gif('rules', '![GIF: rules after](./pr-gif/rules-after.gif)');
+      expect(bodyProblems(under(local))[0]).toMatch(/didn't attach.*re-run PR GIFs/);
+      // A relative link of the author's in a GIF block isn't a GIF.
+      expect(bodyProblems(under(gif('rules', 'See [the doc](./docs/x.md).')))).toEqual([]);
+      // Only in a GIF's block, and not as quoted code or a comment.
+      expect(bodyProblems(under('```\n![x](./a.gif)\n```\n<!-- ![x](./a.gif) -->'))).toEqual([]);
+    });
+
+    it('says a GIF is stale when the tool marked it, by its exact phrase at the block start', () => {
+      const stale = gif(
+        'rules',
+        '**Not updated for `abc1234`: recording failed ([run](https://x)).** Recorded automatically at `abc1234`.',
+      );
+      expect(bodyProblems(under(stale))[0]).toMatch(/marked "Not updated".*Re-run PR GIFs/);
+      expect(
+        bodyProblems(under(gif('rules', 'Recorded.\n\nNot updated for `abc1234`: x'))),
+      ).toEqual([]);
+    });
+
+    it('flags one marker pair twice, but not a lone unpaired marker', () => {
+      const twice = under(`${gif('rules')}\n\n${gif('rules')}`);
+      expect(bodyProblems(twice)).toHaveLength(1);
+      expect(bodyProblems(twice)[0]).toMatch(/keep one `pr-gif:rules` block/);
+      expect(bodyProblems(under(`<!-- pr-gif:rules -->\n\n${gif('rules')}`))).toEqual([]);
+      expect(bodyProblems(under(`${gif('a')}\n\n${gif('b')}`))).toEqual([]);
+    });
+
+    it("leaves visual review's own block, a block in code or a comment, and CRLF alone", () => {
+      expect(
+        bodyProblems(
+          atEnd('<!-- describe:visual-review -->\ntable\n<!-- /describe:visual-review -->'),
+        ),
+      ).toEqual([]);
+      expect(bodyProblems(atEnd(`\`\`\`\n${gif('rules')}\n\`\`\``))).toEqual([]);
+      expect(bodyProblems(atEnd(`<!--\n${gif('rules')}\n-->`))).toEqual([]);
+      expect(bodyProblems(under(gif('rules')).replace(/\n/g, '\r\n'))).toEqual([]);
+    });
+  });
+
   it('flags the "No visible UI change" box', () => {
     expect(bodyProblems(`${GOOD}\n\n- [x] No visible UI change`).join()).toMatch(
       /No visible UI change/,
@@ -271,6 +348,7 @@ describe('renderedLines', () => {
     bodyProblems(`## a${' '.repeat(400000)}b`);
     bodyProblems(`## Changes\n### 1.${' '.repeat(400000)}b`);
     bodyProblems('<!-- x:y -->\n'.repeat(5000));
+    bodyProblems(`${GOOD}\n${'<!-- pr-gif:a -->\n'.repeat(5000)}`);
     expect(bodyProblems(`## a${' '.repeat(400000)}b`)).toHaveLength(3);
   });
 });

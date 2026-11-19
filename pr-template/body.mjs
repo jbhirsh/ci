@@ -29,8 +29,11 @@
 //   - none of the template's own placeholders left in: the sample change
 //     heading, its "Why this change." line, the plan table's empty row;
 //   - no `No visible UI change` box, which this template doesn't have.
-// Text after Revisions is fine: visual review's fingerprint and PR GIFs'
-// blocks go at the very end.
+// Text after Revisions is fine: visual review's fingerprint goes at the very
+// end. A GIF or a screen is not: pictureProblems holds the blocks the tools
+// write (`pr-gif:<scenario>`, `describe:visual-review:<screen>`) to a place
+// under a change, and to what a failed upload leaves: a GIF that is still a
+// local path, a recording the tool marked stale, a marker pair twice.
 //
 // Pure: a description in, what is wrong with it out. check-body.mjs decides
 // which PRs this holds (not a draft, a closed PR, Dependabot's, a bot's).
@@ -99,10 +102,13 @@ function withoutFences(body) {
  * check can tell a slot is there without reading what a tool wrote in it.
  *
  * @param {string | null | undefined} body
- * @param {{ keepTools?: boolean }} [options]
+ * `onBlock` hears each complete tool block as it is skipped: its key, the
+ * lines between its markers, as written, and the line it stands at.
+ *
+ * @param {{ keepTools?: boolean, onBlock?: (key: string, inner: string[], at: number) => void }} [options]
  * @returns {string[]}
  */
-export function renderedLines(body, { keepTools = false } = {}) {
+export function renderedLines(body, { keepTools = false, onBlock } = {}) {
   const lines = (body ?? '').replace(/\r\n?/g, '\n').split('\n');
   /** @type {string[]} */
   const kept = [];
@@ -123,6 +129,7 @@ export function renderedLines(body, { keepTools = false } = {}) {
       let j = i + 1;
       while (j < lines.length && lines[j].trim() !== end) j++;
       if (j < lines.length) {
+        onBlock?.(tool[1], lines.slice(i + 1, j), kept.length);
         i = j;
         kept.push(keepTools ? `@@tool:${tool[1]}@@` : '');
         continue;
@@ -280,6 +287,73 @@ function planTableProblems(plan) {
   return found;
 }
 
+/** A GIF's block: the tool wrote a recording for this scenario. */
+const GIF_KEY = /^pr-gif:/;
+/** A screen's slot, put under a change for visual review (never its main block). */
+const SLOT_KEY = /^describe:visual-review:/;
+/** A GIF still a local path: gh didn't attach it. */
+const LOCAL_GIF = /\]\(\.\/pr-gif\//;
+/** The first line of a block PR GIFs marked stale. */
+const STALE_BLOCK = /^\*\*Not updated for `[0-9a-f]{7,40}`: /;
+/** A numbered change's heading. */
+const NUMBERED = /^ {0,3}### +\d+\.[ \t]+\S/;
+
+/**
+ * What is wrong with the GIF and screen blocks the tools wrote: a GIF that
+ * didn't attach, a recording marked stale, a block outside the changes, a
+ * marker pair twice. Visual review's own block (`describe:visual-review`)
+ * isn't judged: its edits start no run of this check, and what it holds
+ * can't be told from its summary line.
+ *
+ * @param {{ key: string, inner: string[], at: number }[]} blocks every complete tool block
+ * @param {{ at: number, line: number }[]} found the known headings
+ * @param {string[]} lines what a reader sees
+ * @returns {string[]}
+ */
+function pictureProblems(blocks, found, lines) {
+  /** @type {string[]} */
+  const problems = [];
+  const changes = found.find((f) => f.at === 2);
+  const after = changes ? found.find((f) => f.line > changes.line && f.at !== 2) : undefined;
+  const end = after ? after.line : lines.length;
+  const first = changes ? lines.findIndex((l, i) => i > changes.line && NUMBERED.test(l)) : -1;
+  const own = blocks.filter((b) => GIF_KEY.test(b.key) || SLOT_KEY.test(b.key));
+  for (const { key, inner, at } of own) {
+    const gif = GIF_KEY.test(key);
+    const what = gif ? 'GIF' : 'screen';
+    if (gif && inner.some((l) => LOCAL_GIF.test(l))) {
+      problems.push(
+        `the GIF for \`${key.slice(7)}\` didn't attach, so it is still a local path: re-run PR GIFs for it`,
+      );
+    }
+    if (gif && STALE_BLOCK.test(inner.find((l) => l.trim() !== '') ?? '')) {
+      problems.push(
+        `the GIF for \`${key.slice(7)}\` is marked "Not updated": its latest recording failed, so it shows old behaviour. Re-run PR GIFs for it`,
+      );
+    }
+    if (changes === undefined || first === -1 || at < first || at >= end) {
+      problems.push(
+        `put the ${what} block \`${key}\` under the change it belongs to: add an empty \`<!-- ${key} -->\` and \`<!-- /${key} -->\` pair there (a ${what} at the top or the very end belongs to no change), then ${
+          gif
+            ? 'push or re-run PR GIFs: it moves its own block in (a block you attached by hand is left, so move that one yourself)'
+            : 'push: visual review fills it on its next run'
+        }`,
+      );
+    }
+  }
+  const seen = new Set();
+  for (const { key } of own) {
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (own.filter((b) => b.key === key).length > 1) {
+      problems.push(
+        `keep one \`${key}\` block: it appears twice, and the tool fills only one of them (an empty pair next to the tool's own block is moved into on the next run of PR GIFs)`,
+      );
+    }
+  }
+  return problems;
+}
+
 /**
  * What is wrong with a description, each as a sentence that says how to fix it.
  *
@@ -288,7 +362,11 @@ function planTableProblems(plan) {
  * @returns {string[]}
  */
 export function bodyProblems(body, head) {
-  const lines = renderedLines(body);
+  /** @type {{ key: string, inner: string[], at: number }[]} */
+  const blocks = [];
+  const lines = renderedLines(body, {
+    onBlock: (key, inner, at) => blocks.push({ key, inner, at }),
+  });
   // The same lines with each tool's block kept as a marker, line for line.
   const withTools = renderedLines(body, { keepTools: true });
   /** @type {{ at: number, line: number, name: string }[]} the known headings, in the order written */
@@ -341,6 +419,7 @@ export function bodyProblems(body, head) {
       'add an `**Example**` paragraph to this bug fix, under the problem or under the change it belongs to: the simplest case that shows it (or `**Example**` and why there is none)',
     );
   }
+  problems.push(...pictureProblems(blocks, found, lines));
   if (found.some((f) => f.at === 2)) {
     const changes = section(2);
     const kept = section(2, withTools);
