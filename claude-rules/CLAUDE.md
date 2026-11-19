@@ -39,6 +39,12 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
 --body` doesn't apply the template: read it and fill it in. A bug fix renames Goal to
   Problem and Plan to Solution, as the template says. Findings from your own review
   before the PR go to the owner in the chat, never in the description.
+- **A bug someone can see gets a photo, before and after.** When the Problem's Example is
+  something on a screen or in a rendered page (a blank card, a misplaced control, a
+  description that shows plain text where pictures belong), the Example carries a picture of
+  the bug as it is on `main`, and the Solution one of it fixed. Take them from the app's own
+  visual review or a screenshot of the real page, never a sketch. Where the tools can't attach
+  one, say where the file is and the owner hosts it.
 - **A change that moves something needs a GIF**: a transition, a sheet or dialog opening or
   closing, a drag, swipe or scroll, a multi-step flow. Commit a GIF scenario for it where the
   repo's CONTRIBUTING says, so PR GIFs records it, and put an empty `pr-gif:<scenario>` marker
