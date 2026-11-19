@@ -8,7 +8,10 @@
 // Or the GIFs go up as the PR's attachments, and nothing is committed: the
 // pr-gif.yml workflow's attach job (workflow.mjs) calls attachToPr, which
 // writes each scenario's table into the PR's description between
-// `<!-- pr-gif:<scenario> -->` markers (replacing an earlier one), each GIF
+// `<!-- pr-gif:<scenario> -->` markers (replacing an earlier one; an author's
+// empty pair under a change wins over a block of the tool's own elsewhere,
+// which is removed, unless a block attached by hand follows it: withBlock says),
+// each GIF
 // referenced by its local path (`![GIF: <scenario> after](./pr-gif/…)`), and
 // runs `gh pr edit --body-file … --attach ./pr-gif/…`. gh uploads each file
 // and rewrites the reference to it in place with the uploaded URL
@@ -262,14 +265,75 @@ export function blockMarkers(key) {
 }
 
 /**
+ * Every complete pair of a scenario's markers, in order: a start and the
+ * first end after it, as `findBlock` takes them, so a start left without its
+ * end is no pair, and a pair never reaches into a later one.
+ *
+ * @param {string} body
+ * @param {string} key
+ * @returns {{ from: number, to: number, inner: string }[]}
+ */
+function pairsOf(body, key) {
+  const { start, end } = blockMarkers(key);
+  /** @type {{ from: number, to: number, inner: string }[]} */
+  const found = [];
+  let limit = body.length;
+  for (let from = body.lastIndexOf(start); from !== -1;) {
+    const at = body.indexOf(end, from);
+    if (at !== -1 && at + end.length <= limit) {
+      found.push({ from, to: at + end.length, inner: body.slice(from + start.length, at) });
+      limit = from;
+    }
+    from = from === 0 ? -1 : body.lastIndexOf(start, from - 1);
+  }
+  return found.reverse();
+}
+
+/** What a pair holds when an author has put it there and nothing has filled it yet. */
+const EMPTY = /^[ \t\r\n]*$/;
+
+/**
  * The description with the scenario's block in it: in place of an earlier
  * one, or after the rest.
+ *
+ * An author's empty pair under a change wins over a block of the tool's own
+ * elsewhere (the last one is where `findBlock`, and so every other caller,
+ * looks, so a pair added after the block was written would stay empty): the
+ * block goes into the last empty pair, and every automatic block of the
+ * scenario is removed, whether it stands before or after that pair. Only when
+ * every pair after the empty one is automatic; a block attached by hand is
+ * never dropped, and then the block replaces the last pair, as always. The
+ * pair is last once the others are gone, so `findBlock` returns what was
+ * written.
  *
  * @param {string} body
  * @param {string} key
  * @param {string} block the table, without its markers
  */
 export function withBlock(body, key, block) {
+  const { start, end } = blockMarkers(key);
+  const pairs = pairsOf(body, key);
+  const target = pairs.findLast((p) => EMPTY.test(p.inner));
+  if (target) {
+    const autos = pairs.filter((p) => p !== target && automaticInner(p.inner));
+    if (
+      autos.length > 0 &&
+      pairs.every((p) => p.from < target.from || p === target || automaticInner(p.inner))
+    ) {
+      // From the last range to the first, so each one's place still holds.
+      let out = body;
+      for (const p of [...autos, target].sort((a, b) => b.from - a.from)) {
+        if (p === target) {
+          out = `${out.slice(0, p.from)}${start}\n${block}\n${end}${out.slice(p.to)}`;
+        } else {
+          const head = out.slice(0, p.from).trimEnd();
+          const tail = out.slice(p.to).replace(/^(?:\r?\n)+/, '');
+          out = head && tail ? `${head}\n\n${tail}` : head || tail;
+        }
+      }
+      return out;
+    }
+  }
   return blocks.write(body, key, block);
 }
 
@@ -321,10 +385,19 @@ export function isAutomatic(body, key) {
   const found = findBlock(body, key);
   if (!found) return false;
   const { start } = blockMarkers(key);
-  const line = body
-    .slice(found.from + start.length)
-    .replace(/^\n/, '')
-    .split('\n')[0]
+  return automaticInner(body.slice(found.from + start.length));
+}
+
+/**
+ * Whether what follows a block's start marker is an automatic block's first
+ * line: "Recorded automatically at …", after any stale note.
+ *
+ * @param {string} text
+ */
+function automaticInner(text) {
+  const line = text
+    .replace(/^\r?\n/, '')
+    .split(/\r?\n/)[0]
     .replace(STALE, '');
   return /^Recorded automatically at `[0-9a-f]{7,40}`\./.test(line);
 }
@@ -342,7 +415,8 @@ export function staleNote(body, key, note) {
   const found = findBlock(body, key);
   if (!found) return body;
   const { start } = blockMarkers(key);
-  const at = found.from + start.length + (body[found.from + start.length] === '\n' ? 1 : 0);
+  const after = found.from + start.length;
+  const at = after + (/^\r?\n/.exec(body.slice(after, after + 2))?.[0].length ?? 0);
   const rest = body.slice(at, found.to).replace(STALE, '');
   return body.slice(0, at) + (note ? `${note} ` : '') + rest + body.slice(found.to);
 }

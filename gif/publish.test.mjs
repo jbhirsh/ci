@@ -13,6 +13,7 @@ import {
   attachmentTable,
   blockKeys,
   blockMarkers,
+  findBlock,
   gifNames,
   gitIn,
   markdownTable,
@@ -294,6 +295,84 @@ describe('publishFiles', () => {
     ).toThrow(
       /pushing [0-9a-f]+ to pics failed \(denied\); push it with: git push origin [0-9a-f]+:refs\/heads\/pics/,
     );
+  });
+});
+
+describe("withBlock, with an author's empty pair and a block of the tool's own", () => {
+  const S = '<!-- pr-gif:a -->';
+  const E = '<!-- /pr-gif:a -->';
+  const empty = `${S}\n${E}`;
+  const auto = (/** @type {string} */ text = 'old') =>
+    `${S}\nRecorded automatically at \`abc1234\`.\n${text}\n${E}`;
+  const filled = `${S}\nNEW\n${E}`;
+
+  it('moves the GIF into the pair, whichever side the block of its own is on', () => {
+    expect(withBlock(`A\n\n${empty}\n\nB\n\n${auto()}\n`, 'a', 'NEW')).toBe(`A\n\n${filled}\n\nB`);
+    expect(withBlock(`A\n\n${auto()}\n\nB\n\n${empty}\n\nC`, 'a', 'NEW')).toBe(
+      `A\n\nB\n\n${filled}\n\nC`,
+    );
+  });
+
+  it('fills the pair nearest the block, so every lookup finds what was written', () => {
+    const out = withBlock(`${empty}\n\nMid\n\n${empty}\n\n${auto()}`, 'a', 'NEW');
+    expect(out).toBe(`${empty}\n\nMid\n\n${filled}`);
+    expect(findBlock(out, 'a')).not.toBeNull();
+    expect(out.slice(findBlock(out, 'a')?.from)).toBe(filled);
+    expect(withBlock(out, 'a', 'NEW')).toBe(out);
+  });
+
+  it('moves a block marked stale too, and drops every block of its own, not only the last', () => {
+    const stale = `${S}\n**Not updated for \`abc1234\`: recording failed (x).** Recorded automatically at \`abc1234\`.\n${E}`;
+    expect(withBlock(`${empty}\n\n${stale}`, 'a', 'NEW')).toBe(filled);
+    expect(withBlock(`${auto('1')}\n\n${empty}\n\n${auto('2')}`, 'a', 'NEW')).toBe(filled);
+  });
+
+  it('keeps a block attached by hand, and writes where it always did', () => {
+    const hand = `${S}\nMy GIF.\n${E}`;
+    expect(withBlock(`${empty}\n\n${hand}`, 'a', 'NEW')).toBe(`${empty}\n\n${filled}`);
+    expect(withBlock(`${empty}\n\n${auto()}\n\n${hand}`, 'a', 'NEW')).toBe(
+      `${empty}\n\n${auto()}\n\n${filled}`,
+    );
+  });
+
+  it('leaves other cases as they were: one pair, none, a pair that holds something', () => {
+    expect(withBlock(`A\n\n${empty}\n`, 'a', 'NEW')).toBe(`A\n\n${filled}\n`);
+    expect(withBlock(`A\n\n${auto()}\n`, 'a', 'NEW')).toBe(`A\n\n${filled}\n`);
+    const commented = `${S}\n<!-- note -->\n${E}`;
+    expect(withBlock(`${commented}\n\n${auto()}`, 'a', 'NEW')).toBe(`${commented}\n\n${filled}`);
+    expect(withBlock(`${empty}\n\n${auto()}`, 'b', 'NEW')).toContain('<!-- pr-gif:b -->');
+  });
+
+  it('sees a block of its own written with Windows line endings, and marks it stale', () => {
+    const crlf = `${S}\r\nRecorded automatically at \`abcdef1\`.\r\n${E}`;
+    expect(isAutomatic(crlf, 'a')).toBe(true);
+    expect(withBlock(`x\r\n\r\n${crlf}\r\n\r\n${empty}\r\n`, 'a', 'NEW')).toBe(
+      `x\n\n${filled}\r\n`,
+    );
+    const noted = staleNote(crlf, 'a', '**Not updated for `abcdef1`: x.**');
+    expect(noted).toBe(
+      `${S}\r\n**Not updated for \`abcdef1\`: x.** Recorded automatically at \`abcdef1\`.\r\n${E}`,
+    );
+    expect(staleNote(noted, 'a', null)).toBe(crlf);
+  });
+
+  it('reads an empty pair with Windows line endings, and not a torn start', () => {
+    const crlf = `${S}\r\n\r\n${E}`;
+    expect(withBlock(`${crlf}\r\n\r\n${auto()}`, 'a', 'NEW')).toBe(filled);
+    // A start with no end before the pair is no pair, and keeps what follows it.
+    const torn = `${S}\nunfinished\n\n${empty}\n\n${auto()}`;
+    expect(withBlock(torn, 'a', 'NEW')).toBe(`${S}\nunfinished\n\n${filled}`);
+  });
+
+  it('leaves another scenario alone, and what is left reads back: lookups, stale note, removal', () => {
+    const other = '<!-- pr-gif:b -->\nB\n<!-- /pr-gif:b -->';
+    const out = withBlock(`${empty}\n\n${other}\n\n${auto()}`, 'a', 'NEW');
+    expect(out).toBe(`${filled}\n\n${other}`);
+    expect(isAutomatic(out, 'a')).toBe(false);
+    expect(staleNote(out, 'a', 'x')).toContain('x');
+    expect(withoutBlock(out, 'a')).toBe(other);
+    // A retry on its own output is the same text.
+    expect(withBlock(out, 'a', 'NEW')).toBe(out);
   });
 });
 
