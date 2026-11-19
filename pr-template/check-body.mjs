@@ -1,4 +1,5 @@
-// The description check, as the PR visuals action runs it (ci#79):
+// The description check, as the PR description action runs it (and, until
+// ci#112 retires it, the PR visuals action too; ci#79):
 // `node pr-template/check-body.mjs`, with the PR in the environment (PR_BODY,
 // PR_AUTHOR, PR_STATE, PR_HEAD_REF, PR_HEAD_SHA). It holds a PR's description to
 // the shared shape (body.mjs says what that is), in every app: there is no
@@ -8,8 +9,6 @@
 //   - a closed PR, since rewriting old descriptions edits closed PRs;
 //   - Dependabot's PRs, and a PR from a `bot/` branch (the README screenshots
 //     and baseline refreshes): their text is a tool's, not an author's.
-// It is not part of checkPrVisuals: visual review reads that verdict, and a
-// description's shape isn't a UI picture.
 
 import { pathToFileURL } from 'node:url';
 import { bodyProblems } from './body.mjs';
