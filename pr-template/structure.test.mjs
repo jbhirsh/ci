@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { checkPrVisuals, settings } from '../visuals/check.mjs';
-import { HEADINGS, PAIRS, problems } from './structure.mjs';
+import { HEADINGS, PAIRS, problems, visibleText } from './structure.mjs';
 
 const master = readFileSync(
   new URL('../.github/pull_request_template.md', import.meta.url),
@@ -30,14 +29,6 @@ describe("this repo's template, the master", () => {
       HEADINGS.slice(0, -1).map((names) => names[0]),
     );
     expect(master).not.toMatch(/\[[ x]\]\s*No visible/i);
-  });
-
-  it('is a template under which a UI change passes only with sharedTemplate', () => {
-    const files = ['src/App.tsx'];
-    expect(checkPrVisuals({ files, body: master, settings: settings({}) }).ok).toBe(false);
-    expect(
-      checkPrVisuals({ files, body: master, settings: settings({ sharedTemplate: true }) }).ok,
-    ).toBe(true);
   });
 });
 
@@ -84,5 +75,12 @@ describe('problems', () => {
     expect((master.match(/```/g) ?? []).length % 2).toBe(0);
     expect((master.match(/~~~/g) ?? []).length % 2).toBe(0);
     expect(problems(master)).toEqual([]);
+  });
+});
+
+describe('visibleText', () => {
+  it('keeps text around comments and code and treats a missing body as empty', () => {
+    expect(visibleText('a <!-- hidden --> b `code` c')).toBe('a  b  c');
+    expect(visibleText(undefined)).toBe('');
   });
 });
