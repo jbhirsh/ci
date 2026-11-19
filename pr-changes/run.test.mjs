@@ -198,6 +198,56 @@ describe('changes', () => {
     expect(state.body).toContain('<picture>');
   });
 
+  it('keeps a picture the description shows when a run that may not upload cannot verify it', async () => {
+    const [small, large] = images(3, 1);
+    const links = new Map([
+      [small.sha, linkFor(small.sha)],
+      [large.sha, linkFor(large.sha)],
+    ]);
+    const body = `${DESC}\n${putBlock('', 'index', indexText(links))}`;
+    // The first run draws and indexes them.
+    const first = fakeIo({ body, verify: () => true });
+    await changes(first.io, WHERE);
+    expect(first.state.body).toContain('<picture>');
+    // The run the upload's own edit wakes may not upload, and the link's fetch fails.
+    const second = fakeIo({ body: first.state.body, verify: () => false, upload: false });
+    await changes(second.io, WHERE);
+    expect(second.state.uploads).toHaveLength(0);
+    // Nothing is written: the description, pictures and index, is what it was.
+    expect(second.state.writes).toEqual([]);
+    expect(second.state.body).toBe(first.state.body);
+    expect(second.state.log.join('\n')).toMatch(/kept a picture the description shows/);
+  });
+
+  it('still re-attaches a shown picture that fails its check, when the run may upload', async () => {
+    const [small, large] = images(3, 1);
+    const links = new Map([
+      [small.sha, linkFor(small.sha)],
+      [large.sha, linkFor(large.sha)],
+    ]);
+    const first = fakeIo({
+      body: `${DESC}\n${putBlock('', 'index', indexText(links))}`,
+      verify: () => true,
+    });
+    await changes(first.io, WHERE);
+    const again = fakeIo({ body: first.state.body, verify: () => false });
+    await changes(again.io, WHERE);
+    expect(again.state.uploads).toHaveLength(1);
+  });
+
+  it('still drops, to plain text, a link no picture of the description uses, when it cannot verify it', async () => {
+    const [small, large] = images(3, 1);
+    const links = new Map([
+      [small.sha, linkFor(small.sha)],
+      [large.sha, linkFor(large.sha)],
+    ]);
+    const body = `${DESC}\n${putBlock('', 'index', indexText(links))}`;
+    const { io, state } = fakeIo({ body, verify: () => false, upload: false });
+    await changes(io, WHERE);
+    expect(state.body).not.toContain('<picture>');
+    expect(state.body).toContain('+3 −1');
+  });
+
   it('draws only the missing size of a pair that is half there', async () => {
     const [small, large] = images(3, 1);
     const body = `${DESC}\n${putBlock('', 'index', indexText(new Map([[small.sha, linkFor(small.sha)]])))}`;
@@ -458,6 +508,33 @@ describe('fetchVerify', () => {
       globalThis.fetch = real;
     };
   };
+  it('says why a link failed, as a notice', async () => {
+    /** @type {string[]} */
+    const lines = [];
+    const real = globalThis.fetch;
+    try {
+      let restore = stub(404, 'x');
+      expect(await fetchVerify('https://x/y', sha, (l) => lines.push(l))).toBe(false);
+      restore();
+      restore = stub(200, 'abd');
+      expect(await fetchVerify('https://x/y', sha, (l) => lines.push(l))).toBe(false);
+      restore();
+      globalThis.fetch = /** @type {typeof fetch} */ (
+        async () => {
+          throw new Error('timed out');
+        }
+      );
+      expect(await fetchVerify('https://x/y', sha, (l) => lines.push(l))).toBe(false);
+    } finally {
+      globalThis.fetch = real;
+    }
+    expect(lines).toEqual([
+      '::notice::pr-changes: https://x/y answered 404, not its bytes',
+      '::notice::pr-changes: https://x/y answered with other bytes than were attached',
+      '::notice::pr-changes: https://x/y did not answer (timed out)',
+    ]);
+  });
+
   it('is true for a 200 whose bytes hash to the image, false for another body or status or a failure', async () => {
     let restore = stub(200, 'abc');
     expect(await fetchVerify('https://x/y', sha)).toBe(true);
