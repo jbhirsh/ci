@@ -83,7 +83,7 @@ describe('renderPrompt', () => {
   it("exempts only bots' commits, by exact author name, never an AI session's", () => {
     const prompt = renderPrompt('review', none, run);
     expect(prompt).toContain(
-      'a commit whose author name is exactly `github-actions[bot]` (autofix,\n    visual baselines, README screenshots) or `claude[bot]` (autofix before\n    it moved to the Agent SDK)',
+      'a commit whose author name is exactly `github-actions[bot]` (autofix,\n    README screenshots) or `claude[bot]` (autofix before\n    it moved to the Agent SDK)',
     );
     expect(prompt).toContain(
       "A commit authored\n    `Claude <noreply@anthropic.com>` is an AI session's, not a bot's: the\n    rule applies to it in full",

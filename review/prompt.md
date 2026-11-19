@@ -128,7 +128,7 @@ Treat violations of these as review issues and flag them inline:
   commits. Bots' commits are exempt, as committing on top is how they work,
   and nothing else is:
   - a commit whose author name is exactly `github-actions[bot]` (autofix,
-    visual baselines, README screenshots) or `claude[bot]` (autofix before
+    README screenshots) or `claude[bot]` (autofix before
     it moved to the Agent SDK). A commit authored
     `Claude <noreply@anthropic.com>` is an AI session's, not a bot's: the
     rule applies to it in full, as to a person's;
@@ -176,12 +176,7 @@ automatically (a `pr-gif.yml` workflow, scenarios in `gif.scenarios` of
 `.github/ci.json`), saying to commit a GIF scenario for it so PR GIFs attaches them under
 the change, rather than to record by hand. Still screenshots are enough
 for changes to how things look. The review doesn't re-run when the
-description is edited, so whoever adds the GIFs resolves that thread. Where
-the app's `.github/ci.json` sets `visuals.fromBaselines`, its changed visual
-baselines are its stills, and an attached still must say why no visual test
-can draw it, in alt text starting `No test draws:`; if the reason doesn't
-hold (the state is one of the app's own screens, which a visual scenario
-could show), ask for the scenario instead.
+description is edited, so whoever adds the GIFs resolves that thread.
 
 ## Beyond the diff
 

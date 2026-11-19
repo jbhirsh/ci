@@ -32,8 +32,7 @@ choices.
   description on their own whenever a push changes a GIF scenario (`gif/`), each PR's
   screenshots compared with main's, as an inline before/after table in its description and a
   `Visual changes` status that holds only a PR that merges itself (`visual-review/`, with
-  `visual-shots/` in the app's screenshot job and `describe/` writing the bots' sections),
-  visual-regression baselines rewritten from CI's own screenshots (`visual-baselines/`), README screenshots
+  `visual-shots/` in the app's screenshot job and `describe/` writing the bots' sections), README screenshots
   that refresh themselves (`readme-screenshots/`), and a CI run's pictures attached to an
   issue or a PR, so a plan's mockups reach its issue (`pictures/`).
   A PR's description lists each change's commit and files under its heading (`pr-changes/`).

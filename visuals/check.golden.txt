@@ -13,7 +13,7 @@ PR visuals: ok (description shows the change).
 ## a bare video (exit 0)
 PR visuals: ok (description shows the change).
 
-## a closed PR, no pictures (exit 1)
+## padded file lines, no pictures (exit 1)
 ::error::This PR changes the UI but its description shows none of it.
 Changed UI files:
   src/App.tsx

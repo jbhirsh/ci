@@ -22,9 +22,9 @@ const review = { workflow: 'v.yml', job: 'v', folders: ['shots'] };
 describe('selftest', () => {
   it('leaves an app without sharedTemplate alone', () => {
     expect(selftest(app({}))[0]).toMatch(/sharedTemplate is off/);
-    expect(
-      selftest(app({ '.github/ci.json': ci({ visuals: { fromBaselines: true } }) }))[0],
-    ).toMatch(/off/);
+    expect(selftest(app({ '.github/ci.json': ci({ visuals: { advice: 'x' } }) }))[0]).toMatch(
+      /off/,
+    );
   });
 
   it('passes an app whose template is the master and which has visual review', () => {
