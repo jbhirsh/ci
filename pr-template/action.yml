@@ -1,0 +1,31 @@
+name: PR description
+description: >-
+  Holds a pull request's description to the shared shape (check-body.mjs
+  and body.mjs say what passes): goal, changes and each change's commit or
+  filled tool block, the plan table, the Revisions row naming the head. It
+  reads only the pull request's event, so the job needs no checkout and no
+  token: give the workflow `permissions: {}`. Run it from a workflow triggered
+  on pull_request, with the types opened, edited, synchronize, reopened and
+  ready_for_review, a per-PR concurrency group with `cancel-in-progress:
+  true` (an edit's run, which carries the fresh description, must supersede the
+  run of the push before it), and no path filter: the check passes closed PRs,
+  Dependabot's and `bot/` branches on its own, so it can be a required check.
+  Name both the workflow and the job `PR description`.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Check the description is in the shared shape
+      shell: bash
+      env:
+        # Passed through the environment, never interpolated into the script.
+        PR_BODY: ${{ github.event.pull_request.body }}
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        PR_STATE: ${{ github.event.pull_request.state }}
+        PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: node "$GITHUB_ACTION_PATH/check-body.mjs"
