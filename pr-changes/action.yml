@@ -33,9 +33,10 @@ description: >-
     - put no PR title, body, branch or commit field in a `run:` line or an
       expression; only the PR's number, through `env:`;
     - the person's token is `UPLOAD_TOKEN`, passed only to the `gh … --attach`
-      call, the one description edit the Revisions step builds (and to the step
-      that reads its account name), and removed from the run's environment once
-      read; `GH_TOKEN` stays the Actions token for every other call;
+      call, the final description write of the change slots, the one description
+      edit the Revisions step builds (and to the step that reads its account
+      name), and removed from the run's environment once read; `GH_TOKEN` stays
+      the Actions token for every other call;
     - an uploaded file's name comes only from its content hash and size.
   A change to an app's workflow for it takes effect once it is on the default
   branch. Dependabot's PRs get the token here too, which is harmless: their
@@ -46,10 +47,21 @@ description: >-
   pictures yet (an upload that failed leaves it empty), so the upload's own edit finds the index and does nothing, and
   an author's first edit still gets its pictures. What it can't do: GitHub
   keeps one waiting run per group, so if a push's run was waiting when an
-  upload queued its own, the push's new counts stay plain text until the next
-  event; and where the token is the owner's own account, a hand edit that adds
+  upload's edit, or the final write's, queued its own, the push's run is
+  replaced: its new counts stay plain text until the next event (and its
+  Revisions row is not written when the table doesn't exist yet); and where the token is the owner's own account, a hand edit that adds
   pairs to a description that already has an index doesn't upload (the next
   push does).
+
+  The final write of the change slots uses the person's token too, when there
+  is one: an edit by the Actions token starts no workflow, so the app's
+  description check, which ran on the description from before the fill, would
+  stay red on a correct one until the next edit. The person's edit starts it
+  again on the final text. The edit queues at most one more run of this action,
+  which finds nothing to change and writes nothing. If the person's token
+  cannot write the description, the run says so and writes it with the Actions
+  token once, so the fill is not lost (the check may then stay red until the
+  description is edited).
 
   It also keeps the Revisions table (`revisions`, below; revisions.mjs says
   the rules): once a push or a force-push has moved the PR's head, it adds a
