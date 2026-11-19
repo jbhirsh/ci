@@ -1,5 +1,4 @@
-// Whether a PR's description is in the shared shape (ci#79), for an app with
-// `visuals.sharedTemplate`. The master is `.github/pull_request_template.md`;
+// Whether a PR's description is in the shared shape (ci#79), in every app. The master is `.github/pull_request_template.md`;
 // structure.mjs checks a template against it, and this reads a description the
 // author, or a tool, has written from it. Shape only, never the words: a
 // description passes with any text in its sections.

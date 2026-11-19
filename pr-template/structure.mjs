@@ -1,6 +1,6 @@
 // What a PR template of the shared shape holds (ci#79), checked by the unit
 // test on this repo's master (`.github/pull_request_template.md`) and by the
-// self-test on an app's copy once it sets `visuals.sharedTemplate`:
+// self-test on an app's copy:
 //   - the headings Goal (Problem, for a bug fix), Plan (Solution, for a bug
 //     fix), Changes, Checklist and Revisions, in that order;
 //   - no `No visible UI change` box: visual review decides whether a screen
