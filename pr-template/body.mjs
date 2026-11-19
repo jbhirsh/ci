@@ -6,10 +6,11 @@
 // What it requires, in what a reader sees (code, HTML comments and the
 // blocks other tools keep between their markers are not read, so a heading
 // quoted in a fence or a table a tool wrote counts for nothing):
-//   - the headings Goal (or Problem) and Changes, then Revisions, each once,
-//     in the template's order, with Plan (or Solution) after Goal and
-//     Checklist before Revisions where a PR has them: both are optional, Plan
-//     for a PR that is not a step of a plan;
+//   - the headings Goal (or Problem) and Changes, each once, in the template's
+//     order, with Plan (or Solution) after Goal, and Checklist and Revisions
+//     after Changes where a PR has them: all three are optional (Plan for a PR
+//     that is not a step of a plan, Revisions until the PR has a revision, a
+//     push after it opened; ci#111 has the changes tool write it then);
 //   - words under Goal or Problem that say `Closes #N` or `Part of #N` (or a
 //     link to the issue), or that there is no issue;
 //   - under a Problem (a bug fix), an `**Example**` paragraph, there or under
@@ -42,7 +43,7 @@ import { HEADINGS } from './structure.mjs';
 /** A tool's marker alone on its line: `<!-- x:y -->`, and `<!-- /x:y -->` ends its block. */
 const TOOL_START = /^ *<!-- ([a-z][a-z0-9-]*:[^\s<>]+) -->\s*$/;
 /** The headings a description may leave out, by their first name. */
-const OPTIONAL = ['Plan', 'Checklist'];
+const OPTIONAL = ['Plan', 'Checklist', 'Revisions'];
 /** The goal's last words: an issue it closes or is part of, or that there is none. */
 const ISSUE =
   /\b(?:closes|part of)\s+\[?(?:(?:[\w.-]{1,100}\/[\w.-]{1,100})?#\d+|https?:\/\/\S{1,200}\/issues\/\d+)|\bno issues?\b/i;

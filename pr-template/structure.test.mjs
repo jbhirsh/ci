@@ -13,9 +13,21 @@ describe("this repo's template, the master", () => {
     expect(problems(master)).toEqual([]);
   });
 
+  it('takes a template with or without a Revisions heading, and no other order', () => {
+    expect(problems(master)).toEqual([]);
+    const withRevisions = master.replace(
+      '<!-- pr-changes:revisions -->',
+      '## Revisions\n\n<!-- pr-changes:revisions -->',
+    );
+    expect(problems(withRevisions)).toEqual([]);
+    const swapped = master.replace('## Checklist', '## Zzz').replace('## Changes', '## Checklist');
+    expect(problems(swapped.replace('## Zzz', '## Changes'))[0]).toMatch(/Revisions optional/);
+  });
+
   it('has its headings in order and no box to tick', () => {
+    // Revisions is optional: a PR has the section once it has a revision.
     expect([...master.matchAll(/^## (.+)$/gm)].map((m) => m[1])).toEqual(
-      HEADINGS.map((names) => names[0]),
+      HEADINGS.slice(0, -1).map((names) => names[0]),
     );
     expect(master).not.toMatch(/\[[ x]\]\s*No visible/i);
   });
