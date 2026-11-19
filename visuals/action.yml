@@ -52,8 +52,7 @@ runs:
 
     # In every app: the description's shape
     # (headings, the goal's issue, the plan table's shading, each change's commit,
-    # Revisions naming the head), apart from the UI check above, which
-    # visual review's status also reads.
+    # Revisions naming the head), apart from the UI check above.
     - name: Check the description is in the shared shape
       shell: bash
       env:

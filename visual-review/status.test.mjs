@@ -4,20 +4,19 @@ import { fingerprint, mark, MAX_DESCRIPTION, readMark, shownAt, status } from '.
 const OWNER = 'jbhirsh';
 const changed = { kind: /** @type {const} */ ('compared'), screens: 3, fingerprint: 'abcdef12' };
 const none = { kind: /** @type {const} */ ('compared'), screens: 0, fingerprint: '00000000' };
-const quiet = { changed: false, shown: false };
 /** @param {Partial<import('./status.mjs').Pull>} over */
 const pull = (over = {}) => ({ author: OWNER, bot: false, autoMerge: null, ...over });
 
 describe('status', () => {
   it('passes when nothing changed', () => {
-    expect(status({ result: none, pull: pull(), owner: OWNER, shown: 10, ui: quiet })).toEqual({
+    expect(status({ result: none, pull: pull(), owner: OWNER, shown: 10 })).toEqual({
       state: 'success',
       description: 'No visual changes',
     });
   });
 
   it('passes a change a person will merge, with the mark', () => {
-    const s = status({ result: changed, pull: pull(), owner: OWNER, shown: 10, ui: quiet });
+    const s = status({ result: changed, pull: pull(), owner: OWNER, shown: 10 });
     expect(s.state).toBe('success');
     expect(s.description).toBe('3 screens changed: see the table [vr:abcdef12@10]');
   });
@@ -29,7 +28,6 @@ describe('status', () => {
         pull: pull({ author: 'dependabot[bot]', bot: true, autoMerge: { by, at: 99 } }),
         owner: OWNER,
         shown: 10,
-        ui: quiet,
       });
       expect(s.state).toBe('failure');
       expect(s.description).toMatch(/merges itself/);
@@ -42,7 +40,6 @@ describe('status', () => {
       pull: pull({ bot: true, autoMerge: { by: OWNER, at: 99 } }),
       owner: OWNER,
       shown: 10,
-      ui: quiet,
     });
     expect(s.state).toBe('failure');
   });
@@ -53,7 +50,6 @@ describe('status', () => {
       pull: pull({ autoMerge: { by: 'github-actions[bot]', at: 99 } }),
       owner: OWNER,
       shown: 10,
-      ui: quiet,
     });
     expect(s.state).toBe('failure');
   });
@@ -64,7 +60,6 @@ describe('status', () => {
       pull: pull({ autoMerge: { by: OWNER, at: 11 } }),
       owner: OWNER,
       shown: 10,
-      ui: quiet,
     });
     expect(s).toEqual({
       state: 'success',
@@ -79,7 +74,6 @@ describe('status', () => {
         pull: pull({ autoMerge: { by: OWNER, at } }),
         owner: OWNER,
         shown: 10,
-        ui: quiet,
       });
       expect(s.state).toBe('failure');
       expect(s.description).toMatch(/turn it off and on to accept/);
@@ -92,45 +86,8 @@ describe('status', () => {
       pull: pull(),
       owner: OWNER,
       shown: 10,
-      ui: quiet,
     });
     expect(s.description).toMatch(/^1 screen changed/);
-  });
-
-  it('asks for pictures of UI no screenshot shows', () => {
-    for (const result of [none, { kind: /** @type {const} */ ('no-shots') }]) {
-      const s = status({
-        result,
-        pull: pull(),
-        owner: OWNER,
-        shown: 10,
-        ui: { changed: true, shown: false },
-      });
-      expect(s.state).toBe('failure');
-      expect(s.description).toMatch(/no screenshot shows/);
-    }
-  });
-
-  it('passes UI no screenshot shows once the description shows it', () => {
-    const s = status({
-      result: none,
-      pull: pull(),
-      owner: OWNER,
-      shown: 10,
-      ui: { changed: true, shown: true },
-    });
-    expect(s.state).toBe('success');
-  });
-
-  it('passes a changed screen whatever the UI rule says: the table is the pictures', () => {
-    const s = status({
-      result: changed,
-      pull: pull(),
-      owner: OWNER,
-      shown: 10,
-      ui: { changed: true, shown: false },
-    });
-    expect(s.state).toBe('success');
   });
 
   it('says no screens were taken', () => {
@@ -139,7 +96,6 @@ describe('status', () => {
       pull: pull(),
       owner: OWNER,
       shown: 10,
-      ui: quiet,
     });
     expect(s).toEqual({ state: 'success', description: 'No screens taken' });
   });
@@ -150,7 +106,6 @@ describe('status', () => {
       pull: pull(),
       owner: OWNER,
       shown: 10,
-      ui: quiet,
     });
     expect(s.state).toBe('failure');
     expect(s.description.length).toBe(MAX_DESCRIPTION);
@@ -164,7 +119,6 @@ describe('status', () => {
         pull: pull(),
         owner: OWNER,
         shown: 1,
-        ui: quiet,
       }),
     ).toEqual({ state: 'pending', description: "Waiting for main's screenshots of 0123456" });
     expect(
@@ -173,7 +127,6 @@ describe('status', () => {
         pull: pull(),
         owner: OWNER,
         shown: 1,
-        ui: quiet,
       }).state,
     ).toBe('failure');
   });

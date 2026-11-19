@@ -10,11 +10,9 @@
 //   - auto-merge turned on by the owner, on the owner's own PR, after this
 //     result was first shown: the owner accepted it: success;
 //   - turned on before that: failure, until it's turned off and on again.
-// With no changed screen, PR visuals' old rule holds: a PR that changes UI
-// files shows pictures or ticks "No visible UI change". An app with
-// `visuals.sharedTemplate` has no such rule (the UI check passes its PRs, so the
-// caller reports no UI change here): visual review alone decides. Whether its
-// description has the shared shape is another step of PR visuals, never read here.
+// Visual review alone decides whether a screen changed. Whether the
+// description has the shared shape is the description check's job
+// (pr-template/check-body.mjs), never read here.
 //
 // Each result has a fingerprint, a short hash of what changed (the screens'
 // names and their "after" pictures), and the time it was first shown. Both
@@ -112,12 +110,9 @@ const screens = (n) => `${n} screen${n === 1 ? '' : 's'}`;
  * @param {string} facts.owner the repository owner's login
  * @param {number} facts.shown when this result was first shown, epoch
  *   seconds: from the previous status with the same fingerprint, else now
- * @param {{ changed: boolean, shown: boolean }} facts.ui whether the PR
- *   changes UI files, and whether its description has pictures or ticks
- *   "No visible UI change"
  * @returns {Status}
  */
-export function status({ result, pull, owner, shown, ui }) {
+export function status({ result, pull, owner, shown }) {
   switch (result.kind) {
     case 'waiting':
       return {
@@ -139,13 +134,6 @@ export function status({ result, pull, owner, shown, ui }) {
       break;
   }
   if (result.kind === 'no-shots' || result.screens === 0) {
-    if (ui.changed && !ui.shown) {
-      return {
-        state: 'failure',
-        description:
-          'This PR changes UI that no screenshot shows: add pictures, or tick No visible UI change',
-      };
-    }
     return {
       state: 'success',
       description: result.kind === 'no-shots' ? 'No screens taken' : 'No visual changes',

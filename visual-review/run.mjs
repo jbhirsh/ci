@@ -15,7 +15,6 @@ import { ghApi } from '../lib/comment.mjs';
 import { pages } from '../lib/github.mjs';
 import { PIXELS } from '../lib/pixels.mjs';
 import { enable } from '../dependabot-merge/enable.mjs';
-import { settings as visualsSettings } from '../visuals/check.mjs';
 import { review } from './review.mjs';
 import { settings } from './settings.mjs';
 import { CONTEXT, MAX_DESCRIPTION } from './status.mjs';
@@ -149,7 +148,7 @@ export function main(env, { gh = realGh, api = ghApi } = {}) {
     const login = gh(upload, ['api', 'user', '--jq', '.login']).trim();
     if (!login) throw new Error("BOT_PR_TOKEN's account couldn't be read");
     const io = gitHubIo({ env: { ...env, UPLOAD_LOGIN: login }, repo, token, upload, gh, api });
-    const number = review(target, { s, visuals: visualsSettings(appConfig('visuals', root)), io });
+    const number = review(target, { s, io });
     setOutput('number', number === null ? '' : String(number));
     setOutput('login', login);
     return number;

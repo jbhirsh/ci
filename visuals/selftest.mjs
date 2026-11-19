@@ -1,5 +1,8 @@
 // Self-test of the PR visuals check against an app's checkout:
-// `node visuals/selftest.mjs <app dir>`. Checks that
+// `node visuals/selftest.mjs <app dir>`. An app that no longer uses the check
+// (no `visuals` key and no workflow calling jbhirsh/ci/visuals, as once
+// ci#112 retires it from the app) has nothing to test and is skipped. Otherwise
+// it checks that
 //   - the app's `visuals` settings parse (or the defaults, without them);
 //   - every `ui` glob the app sets still names a file git tracks, so a renamed folder
 //     can't quietly switch the check off;
@@ -11,7 +14,7 @@
 //     passes it once "No visible UI change" is ticked.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
@@ -21,11 +24,27 @@ import { checkPrVisuals, settings } from './check.mjs';
 export const TEMPLATE = '.github/pull_request_template.md';
 
 /**
+ * Whether one of the app's workflows still calls the PR visuals action.
+ *
+ * @param {string} root
+ */
+function callsVisuals(root) {
+  const dir = path.join(root, '.github', 'workflows');
+  if (!existsSync(dir)) return false;
+  return readdirSync(dir)
+    .filter((name) => /\.ya?ml$/.test(name))
+    .some((name) => /jbhirsh\/ci\/visuals@/.test(readFileSync(path.join(dir, name), 'utf8')));
+}
+
+/**
  * @param {string} root
  * @returns {string[]} what to print; throws on the first problem
  */
 export function selftest(root) {
   const config = appConfig('visuals', root);
+  if (Object.keys(config).length === 0 && !callsVisuals(root)) {
+    return ['visuals: not used by this app; skipped.'];
+  }
   const s = settings(config);
   const tracked = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' })
     .split('\n')
