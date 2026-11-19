@@ -6,7 +6,7 @@
 // no workflow, and the description check must run again on the description it
 // now reads (its current row names the new head). The check's run for the
 // push read the old description, was red, and is superseded by the run this
-// edit starts (the apps' PR visuals workflows cancel an older run per PR).
+// edit starts (the apps' PR description workflows cancel an older run per PR).
 //
 //   node revisions-run.mjs   (env: GH_TOKEN, GITHUB_REPOSITORY, NUMBER;
 //                             optional: UPLOAD_TOKEN, BEFORE)

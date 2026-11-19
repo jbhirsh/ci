@@ -5,7 +5,7 @@ description: >-
   header says which count), between `<!-- describe:<bot> -->` markers, or,
   for a section in parts, a part under each slot an author placed
   (`<!-- describe:<bot>:<state> -->`, the header says which count). It
-  writes with the Actions token, so its edits start no workflow (PR visuals
+  writes with the Actions token, so its edits start no workflow (PR description
   doesn't run again), and hides the uploads it supersedes as outdated,
   never deleting them. Use it as the last job of a bot's workflow, in the
   concurrency group `describe-<repo>-<number>` with cancel-in-progress

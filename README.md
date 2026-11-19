@@ -26,7 +26,7 @@ choices.
   passes whatever the code does fails here.
 - **Gates no linter has.** Commit messages (`commits/`), version pins and type-coverage
   ignores without a reason (`pins/`), source files the coverage gate doesn't measure, with no
-  reason (`unmeasured/`), UI changes without pictures (`visuals/`), a PR description out of the
+  reason (`unmeasured/`), a PR description out of the
   shared shape (`pr-template/`), secrets ([gitleaks](https://gitleaks.io),
   `gitleaks/`) and static analysis ([Semgrep](https://semgrep.dev), `semgrep/`).
 - **Pictures of every change.** Before/after GIFs for a PR, recorded and attached to its

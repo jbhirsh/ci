@@ -409,7 +409,7 @@ describe('publishing to attachments', () => {
     expect(blockMarkers('x')).toEqual({ start: '<!-- pr-gif:x -->', end: '<!-- /pr-gif:x -->' });
   });
 
-  it('labels each GIF for PR visuals, referenced by its local path', () => {
+  it('labels each GIF for the review, referenced by its local path', () => {
     expect(attachmentTable(pair, { base: 'main' })).toBe(
       [
         '| Scenario | Before (`main`) | After |',

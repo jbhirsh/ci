@@ -28,12 +28,12 @@ describe('autofixSettings', () => {
     expect(autofixSettings({ root: both }).reviewFixChecks).toEqual(['`make check`']);
   });
   it('takes exemptions with their reasons, and refuses one without', () => {
-    expect(autofixSettings({ root: app({ exempt: { 'PR visuals': 'pictures' } }) }).exempt).toEqual(
-      {
-        'PR visuals': 'pictures',
-      },
-    );
-    for (const exempt of [['PR visuals'], { 'PR visuals': ' ' }, null]) {
+    expect(
+      autofixSettings({ root: app({ exempt: { 'PR pictures': 'pictures' } }) }).exempt,
+    ).toEqual({
+      'PR pictures': 'pictures',
+    });
+    for (const exempt of [['PR pictures'], { 'PR pictures': ' ' }, null]) {
       expect(() => autofixSettings({ root: app({ exempt }) })).toThrow('"autofix.exempt" must map');
     }
   });

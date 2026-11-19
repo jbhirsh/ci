@@ -4,7 +4,7 @@
 // only kind of token GitHub lets attach files, and ends that comment with
 // its finished section. This copies each bot's newest section into the
 // description, between `<!-- describe:<bot> -->` markers, with the Actions
-// token: GitHub starts no workflow for that token's edits, so PR visuals and
+// token: GitHub starts no workflow for that token's edits, so PR description and
 // the like don't run again. Runs share one concurrency group per PR
 // (action.yml), so edits take turns.
 //
