@@ -1,7 +1,13 @@
 // changes.mjs against GitHub: the PR's description and commits through the
 // REST API with the Actions token (GH_TOKEN), whose edits start no workflow,
 // and the pictures of the counts (counts.mjs) attached with a person's token
-// (UPLOAD_TOKEN), which GitHub requires for an attachment. A commit by a bot
+// (UPLOAD_TOKEN), which GitHub requires for an attachment. The final write of
+// the description uses the person's token too, when there is one: an edit by
+// the Actions token starts no workflow, so the app's description check would
+// stay on the description from before the fill, red on a correct one; the
+// person's edit makes it run again on the final text (and, as it queues a run
+// of its own, it can replace a push's run that was waiting: that push's new
+// counts then stay plain until the next event). A commit by a bot
 // (a baseline refresh, say) or a merge (Update branch) isn't one of the
 // author's changes and is left out. Each commit's files come from its own
 // commit endpoint, a page of 100 at a time.
@@ -23,8 +29,9 @@
 // `pull_request_target`, with a token, for a PR it doesn't trust):
 //   - it checks out nothing and runs none of the PR's code: the PR is read as
 //     data through the API;
-//   - UPLOAD_TOKEN reaches only the `gh … --attach` call; GH_TOKEN, the
-//     Actions token, makes every other call;
+//   - UPLOAD_TOKEN reaches only the `gh … --attach` call and the one final
+//     description write, whose body this tool built; GH_TOKEN, the Actions
+//     token, makes every other call;
 //   - an uploaded file's name is its content hash and size, never anything
 //     from the PR;
 //   - the index and the staging block are read only inside their own markers,
@@ -32,7 +39,9 @@
 //   - at most MAX_PAIRS pairs are uploaded in a run;
 //   - nothing waits on a timer: a link is checked once, when reused.
 // (revisions-run.mjs, the Revisions table's step of the same action, may also
-// use the person's token, for the one description edit it builds.)
+// use the person's token, for the one description edit it builds. Neither edit
+// loops: the run it wakes is woken by the token's own account, finds the index
+// or nothing to upload, and writes nothing, as its description is already final.)
 
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -81,7 +90,10 @@ const BLOCK_CHARS = 140;
  *
  * @param {{ api: import('../lib/comment.mjs').Api, repo: string, number: number,
  *   log: (line: string) => void, upload?: Io['upload'], ownEdit?: boolean,
- *   verify?: Io['verify'] }} options
+ *   writeToken?: string, verify?: Io['verify'] }} options
+ *   `writeToken`: the person's token for the final description write, which then
+ *   starts the workflows an edit by the Actions token doesn't; if that write
+ *   fails, the Actions token writes it once
  * @returns {Io}
  */
 export function gitHubIo({
@@ -91,13 +103,29 @@ export function gitHubIo({
   log,
   upload = null,
   ownEdit = false,
+  writeToken = '',
   verify = (link, sha) => fetchVerify(link, sha, log),
 }) {
   const issue = `repos/${repo}/issues/${number}`;
   return {
     body: () => String(/** @type {{ body?: string | null }} */ (api('GET', issue)).body ?? ''),
     write: (body) => {
-      api('PATCH', issue, { body });
+      if (writeToken === '') {
+        api('PATCH', issue, { body });
+        return;
+      }
+      try {
+        api('PATCH', issue, { body }, { token: writeToken });
+      } catch (error) {
+        // A token that may attach but not edit (scoped away from the repository, or
+        // without Pull requests and Issues write) must not lose the fill: once, at
+        // once, with the Actions token. The check may then stay red until the
+        // description is edited.
+        log(
+          `::warning::pr-changes: the final write with the token failed (${error instanceof Error ? error.message : error}): writing with the Actions token, so the check may stay red until the description is edited`,
+        );
+        api('PATCH', issue, { body });
+      }
     },
     commits: () =>
       /** @type {{ sha: string, commit: { message: string }, parents: unknown[], author: { login: string } | null, committer: { login: string } | null }[]} */ (
@@ -412,7 +440,7 @@ export async function main(env) {
       })
     : null;
   const ownEdit = verdict.ok && verdict.ownEdit;
-  return changes(gitHubIo({ api: ghApi, repo, number, log, upload, ownEdit }), {
+  return changes(gitHubIo({ api: ghApi, repo, number, log, upload, ownEdit, writeToken: token }), {
     repo,
     number,
   });

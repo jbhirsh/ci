@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { ghApi } from '../lib/comment.mjs';
 import { hashOf, images, indexText, readIndex } from './counts.mjs';
 import { putBlock } from './changes.mjs';
 import {
@@ -12,6 +13,12 @@ import {
   uploadAllowed,
 } from './run.mjs';
 
+// main reaches GitHub through ghApi (the real `gh`): the main test stubs it.
+vi.mock('../lib/comment.mjs', async (importOriginal) => ({
+  ...(await importOriginal()),
+  ghApi: vi.fn(),
+}));
+
 const REPO = 'jbhirsh/app';
 const A = 'a'.repeat(40);
 const B = 'b'.repeat(40);
@@ -21,11 +28,16 @@ const SLOT = '<!-- pr-changes:change:1 -->\n<!-- /pr-changes:change:1 -->';
 
 /** @param {Record<string, unknown>} routes */
 function fakeApi(routes) {
-  /** @type {{ method: string, route: string, body?: unknown }[]} */
+  /** @type {{ method: string, route: string, body?: unknown, token?: string }[]} */
   const calls = [];
   /** @type {import('../lib/comment.mjs').Api} */
-  const api = (method, route, body) => {
-    calls.push({ method, route, body });
+  const api = (method, route, body, options) => {
+    calls.push({
+      method,
+      route,
+      body,
+      ...(options?.token === undefined ? {} : { token: options.token }),
+    });
     const key = `${method} ${route}`;
     if (!(key in routes)) throw new Error(`unexpected ${key}`);
     return routes[key];
@@ -71,6 +83,56 @@ describe('gitHubIo', () => {
       route: `repos/${REPO}/issues/5`,
       body: { body: 'new' },
     });
+  });
+
+  it("writes the description with the person's token only when there is one", () => {
+    // An edit by the Actions token starts no workflow, so the description check
+    // would stay on the description from before the fill.
+    const { api, calls } = fakeApi(routes);
+    gitHubIo({ api, repo: REPO, number: 5, log: () => {}, writeToken: 'person' }).write('x');
+    expect(calls.at(-1)).toMatchObject({ method: 'PATCH', token: 'person' });
+    gitHubIo({ api, repo: REPO, number: 5, log: () => {} }).write('y');
+    expect(calls.at(-1)).not.toHaveProperty('token');
+    gitHubIo({ api, repo: REPO, number: 5, log: () => {}, writeToken: '' }).write('z');
+    expect(calls.at(-1)).not.toHaveProperty('token');
+    // Reads never carry it.
+    const io = gitHubIo({ api, repo: REPO, number: 5, log: () => {}, writeToken: 'person' });
+    io.body();
+    io.commits();
+    for (const c of calls.slice(-3)) expect(c).not.toHaveProperty('token');
+  });
+
+  it("writes with the Actions token, once and at once, when the person's token can't write", () => {
+    /** @type {{ token?: string }[]} */
+    const patches = [];
+    /** @type {string[]} */
+    const log = [];
+    /** @type {import('../lib/comment.mjs').Api} */
+    const api = (_method, _route, _body, options) => {
+      patches.push({ token: options?.token });
+      if (options?.token !== undefined) throw new Error('403 Resource not accessible');
+      return {};
+    };
+    gitHubIo({
+      api,
+      repo: REPO,
+      number: 5,
+      log: (line) => log.push(line),
+      writeToken: 'person',
+    }).write('x');
+    expect(patches).toEqual([{ token: 'person' }, { token: undefined }]);
+    expect(log.join('\n')).toMatch(
+      /^::warning::pr-changes: the final write with the token failed \(403 Resource not accessible\): writing with the Actions token, so the check may stay red/,
+    );
+  });
+
+  it('surfaces the error when the Actions token cannot write either', () => {
+    /** @type {import('../lib/comment.mjs').Api} */
+    const api = () => {
+      throw new Error('403 no');
+    };
+    const io = gitHubIo({ api, repo: REPO, number: 5, log: () => {}, writeToken: 'person' });
+    expect(() => io.write('x')).toThrow('403 no');
   });
 });
 
@@ -275,6 +337,30 @@ describe('changes', () => {
     await changes(more.io, WHERE);
     expect(more.state.uploads).toHaveLength(0);
     expect(more.state.log.join('\n')).toMatch(/may not upload/);
+  });
+
+  it('ends in two runs when the token is a person and the final write wakes an own-edit run', async () => {
+    // A push's run (no index yet) uploads and writes the final description; the edit
+    // wakes a run under the token's own account, which finds the index and writes nothing.
+    const first = fakeIo({ body: DESC });
+    await changes(first.io, WHERE);
+    expect(first.state.writes).toHaveLength(1);
+    const woken = fakeIo({ body: first.state.body, ownEdit: true, verify: () => false });
+    await changes(woken.io, WHERE);
+    expect(woken.state.writes).toEqual([]);
+    expect(woken.state.uploads).toEqual([]);
+    // Without a token the first run only fills plain text and no index. A run woken by
+    // an own edit then uploads once; the run its edit wakes finds the index and stops.
+    const plain = fakeIo({ body: DESC, upload: false });
+    await changes(plain.io, WHERE);
+    expect(plain.state.body).not.toContain('pr-changes:index');
+    const draws = fakeIo({ body: plain.state.body, ownEdit: true });
+    await changes(draws.io, WHERE);
+    expect(draws.state.uploads).toHaveLength(1);
+    const stops = fakeIo({ body: draws.state.body, ownEdit: true, verify: () => false });
+    await changes(stops.io, WHERE);
+    expect(stops.state.writes).toEqual([]);
+    expect(stops.state.uploads).toEqual([]);
   });
 
   it('still re-attaches a shown picture that fails its check, when the run may upload', async () => {
@@ -666,5 +752,37 @@ describe('uploadAllowed', () => {
 describe('main', () => {
   it('refuses a missing repository or number', async () => {
     await expect(main({})).rejects.toThrow(/needs GITHUB_REPOSITORY and NUMBER/);
+  });
+
+  it("writes the description with the person's token alone, after taking it out of the environment", async () => {
+    // An own-edit run on a description with an index block uploads nothing, so no `gh`
+    // runs: it fills plain counts and writes.
+    const indexed = `## Changes\n\n${SLOT}\n\n<!-- pr-changes:index -->\n\n<!-- /pr-changes:index -->\n`;
+    const env = {
+      GITHUB_REPOSITORY: REPO,
+      NUMBER: '5',
+      UPLOAD_TOKEN: 'person',
+      TOKEN_LOGIN: 'owner',
+      EVENT_ACTION: 'edited',
+      SENDER: 'owner',
+    };
+    /** @type {{ method: string, route: string, token?: string, tokenInEnv: boolean }[]} */
+    const calls = [];
+    vi.mocked(ghApi).mockImplementation((method, route, _body, options) => {
+      calls.push({ method, route, token: options?.token, tokenInEnv: 'UPLOAD_TOKEN' in env });
+      const key = `${method} ${route}`;
+      if (key === `GET repos/${REPO}/issues/5`) return { body: indexed };
+      if (!(key in routes)) throw new Error(`unexpected ${key}`);
+      return routes[key];
+    });
+    await main(env);
+    const patch = calls.filter((c) => c.method === 'PATCH');
+    expect(patch).toHaveLength(1);
+    expect(patch[0]).toMatchObject({ token: 'person', tokenInEnv: false });
+    for (const c of calls.filter((x) => x.method !== 'PATCH')) {
+      expect(c.token).toBeUndefined();
+      expect(c.tokenInEnv).toBe(false);
+    }
+    expect('UPLOAD_TOKEN' in env).toBe(false);
   });
 });
