@@ -1,6 +1,6 @@
 // The description check, as the PR description action runs it (ci#79, ci#112):
 // `node pr-template/check-body.mjs`, with the PR in the environment (PR_BODY,
-// PR_AUTHOR, PR_STATE, PR_HEAD_REF, PR_HEAD_SHA). It holds a PR's description to
+// PR_AUTHOR, PR_STATE, PR_HEAD_REF, PR_HEAD_SHA, PR_ACTION). It holds a PR's description to
 // the shared shape (body.mjs says what that is), in every app: there is no
 // setting to turn it off, and a draft is checked like any other PR (PRs are
 // opened as drafts, and a red draft blocks nothing, so the author hears at
@@ -19,6 +19,7 @@ import { bodyProblems } from './body.mjs';
  * @property {string} [state] open or closed
  * @property {string} [headRef]
  * @property {string} [headSha] Revisions' current row must name it
+ * @property {string} [action] the event's action: `synchronize` is a push
  */
 
 /**
@@ -35,7 +36,9 @@ export function report(pr) {
   if (pr.author === 'dependabot[bot]') return pass("Dependabot's PR");
   if (pr.headRef?.startsWith('bot/')) return pass("a bot's PR");
   if (pr.state === 'closed') return pass('closed PR');
-  const problems = bodyProblems(pr.body, pr.headSha);
+  const problems = bodyProblems(pr.body, pr.headSha, {
+    pushed: pr.action === 'synchronize',
+  });
   if (problems.length === 0) return pass('in the shared shape');
   return {
     code: 1,
@@ -59,6 +62,7 @@ export function run(env) {
     state: env.PR_STATE,
     headRef: env.PR_HEAD_REF,
     headSha: env.PR_HEAD_SHA,
+    action: env.PR_ACTION,
   });
 }
 

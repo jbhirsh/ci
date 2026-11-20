@@ -15,7 +15,7 @@ describe('the PR description action', () => {
     expect(wanted.size).toBeGreaterThan(0);
     expect(new Set(Object.keys(checkStep?.env ?? {}))).toEqual(wanted);
     for (const value of Object.values(checkStep?.env ?? {})) {
-      expect(value).toMatch(/^\$\{\{ github\.event\.pull_request\.[a-z_.]+ \}\}$/);
+      expect(value).toMatch(/^\$\{\{ github\.event\.(pull_request\.)?[a-z_.]+ \}\}$/);
     }
   });
 

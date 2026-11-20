@@ -28,8 +28,9 @@ The checks CI runs: `npm run lint`, `npm run typecheck`, `npm run format:check`,
 `Check` (this repo's commit messages, lint, formatting, types, tests at 80% lines per file,
 pins and actionlint) and `Against fog-and-frontier`, `Against sift` and `Against BoardGames`
 (each tool's self-test against that app's `main`, with its dependencies installed), and
-`PR description` (a PR's description held to the shared shape, as in the apps;
-`.github/workflows/pr-description.yml` says how). `.github/workflows/ci.yml` says what the others run.
+`PR description` (a PR's description held to the shared shape, as in the apps, including the
+Revisions marker pair once a push has moved the PR's head;
+`.github/workflows/pr-description.yml` and `pr-template/body.mjs`'s header say how). `.github/workflows/ci.yml` says what the others run.
 
 ## The shared Claude rules
 

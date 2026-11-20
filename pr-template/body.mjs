@@ -28,6 +28,18 @@
 //     reads the raw description, fenced code aside, since the table sits in a
 //     tool's block; the tool must write it with a person's token, or its edit
 //     starts no new run of this check.
+//   - Revisions' marker pair, once a push has moved the PR's head: a
+//     description without `<!-- pr-changes:revisions -->` and its closing
+//     marker never gets a table, silently, since the changes tool writes only
+//     inside them. The event is the proof of a second head: a push
+//     (`synchronize`), not a PR's commit count (a PR opened with several
+//     commits, or edited, reopened or marked ready, has had one head). A
+//     marker is the whole of its line and outside fenced code (`revisionsPair`:
+//     the tool counts them the same way, so the two agree). On a push the
+//     tool puts a missing pair back and writes the row, and the edit it makes
+//     starts a run that supersedes this one; a push whose description has the
+//     pair but no current row yet is red the same way a stale row is, until the
+//     tool's edit (a fork's author adds the row by hand);
 //   - none of the template's own placeholders left in: the sample change
 //     heading, its "Why this change." line, the plan table's empty row;
 //   - no `No visible UI change` box, which this template doesn't have.
@@ -423,13 +435,52 @@ function pictureProblems(blocks, found, lines) {
 }
 
 /**
+ * What the PR event says about the PR's heads.
+ *
+ * @typedef {object} PrEvent
+ * @property {boolean} [pushed] a push moved the head (`synchronize`)
+ */
+
+/**
+ * What is wrong with the description's Revisions marker pair, for a PR that has
+ * had more than one head.
+ *
+ * @param {string | null | undefined} body
+ * @param {PrEvent} event
+ * @returns {string[]}
+ */
+function revisionsProblems(body, { pushed = false }) {
+  // A push is the proof of a second head the event gives: a PR opened, edited,
+  // reopened or marked ready has one, whatever its commits.
+  if (!pushed) return [];
+  const found = revisionsPair(body ?? '');
+  if (found.starts.length === 0 && found.ends.length === 0) {
+    return [
+      'this PR has had more than one head, but its description has no `<!-- pr-changes:revisions -->` and `<!-- /pr-changes:revisions -->` pair, each marker alone on its line and outside code (the template has it, after the checklist): keep it, empty. The changes tool writes the Revisions table only inside it, and puts a missing pair back when a push moves the head',
+    ];
+  }
+  if (!found.at) {
+    return [
+      'keep exactly one `<!-- pr-changes:revisions -->` and `<!-- /pr-changes:revisions -->` pair, in that order, each marker alone on its line and outside code: the changes tool writes the Revisions table only inside a clean pair',
+    ];
+  }
+  if (!CURRENT_ROW.test(withoutFences(body))) {
+    return [
+      "update Revisions: this push moved the PR's head and the table has no current row for it yet (the changes tool writes it, and its edit runs this check again; a fork's author adds the row by hand)",
+    ];
+  }
+  return [];
+}
+
+/**
  * What is wrong with a description, each as a sentence that says how to fix it.
  *
  * @param {string | null | undefined} body
  * @param {string} [head] the PR's head sha, when known: Revisions' current row must name it
+ * @param {PrEvent} [event] what the PR event says about the PR's heads
  * @returns {string[]}
  */
-export function bodyProblems(body, head) {
+export function bodyProblems(body, head, event = {}) {
   /** @type {{ key: string, inner: string[], at: number }[]} */
   const blocks = [];
   const lines = renderedLines(body, {
@@ -542,6 +593,7 @@ export function bodyProblems(body, head) {
       `update Revisions: its current row names another commit than this PR's head, \`${head.slice(0, 7)}\` (add a row for the head, or fix the row)`,
     );
   }
+  problems.push(...revisionsProblems(body, event));
   if (BOX.test(lines.join('\n'))) {
     problems.push(
       'delete the "No visible UI change" box: visual review decides whether a screen changed',

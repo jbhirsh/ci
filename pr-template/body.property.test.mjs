@@ -48,6 +48,28 @@ describe('bodyProblems', () => {
     );
   });
 
+  it('never throws for any description and PR event, and a clean pair is never asked for twice', () => {
+    const event = fc.record({ pushed: fc.boolean() }, { requiredKeys: [] });
+    fc.assert(
+      fc.property(
+        fc.array(anything).map((a) => a.join('\n')),
+        event,
+        (body, ev) => {
+          for (const p of bodyProblems(body, 'abcdef0123', ev)) expect(p.length).toBeGreaterThan(5);
+          const pair = '<!-- pr-changes:revisions -->\n<!-- /pr-changes:revisions -->';
+          const asked = (/** @type {string} */ b) =>
+            bodyProblems(b, undefined, ev).filter((x) => /pr-changes:revisions/.test(x));
+          // A description that shows the pair once, outside code, never gets a pair problem.
+          if (!/pr-changes:revisions|```|~~~/.test(body)) {
+            expect(asked(`${body}\n\n${pair}\n`).filter((x) => /exactly one|no `/.test(x))).toEqual(
+              [],
+            );
+          }
+        },
+      ),
+    );
+  });
+
   it('keeps a good description good after more text at the end and inside the goal', () => {
     fc.assert(
       fc.property(harmless, harmless, (inGoal, after) => {
