@@ -1,0 +1,89 @@
+{
+  "files": [
+    {
+      "path": ".github/pull_request_template.md",
+      "source": ".github/pull_request_template.md",
+      "apps": ["BoardGames", "fog-and-frontier", "sift"]
+    },
+    {
+      "path": ".github/workflows/pr-changes.yml",
+      "source": ".github/workflows/pr-changes.yml",
+      "apps": ["BoardGames", "fog-and-frontier", "sift"],
+      "companions": [
+        {
+          "key": ["autofix", "exempt", "PR changes"],
+          "value": "PR changes: reads the PR as data, runs none of its code."
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/pr-description.yml",
+      "source": "sync/callers/pr-description.yml",
+      "apps": ["BoardGames", "fog-and-frontier", "sift"],
+      "companions": [
+        {
+          "key": ["autofix", "exempt", "PR description"],
+          "value": "A description is text, not code: a failure is the author's to fix in the PR's description, not a change autofix can make."
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/pr-gif.yml",
+      "source": "gif/callers/pr-gif.yml",
+      "apps": ["BoardGames", "fog-and-frontier", "sift"],
+      "variants": {
+        "fog-and-frontier": {
+          "source": "sync/variants/fog-and-frontier/pr-gif.yml",
+          "why": "fog-and-frontier's header and `scenarios` description name its own scenarios folder (scripts/gif-scenarios/) and its production build, which the canonical says generically."
+        },
+        "sift": {
+          "source": "sync/variants/sift/pr-gif.yml",
+          "why": "sift's CI is the recording, so its caller is the dispatch half only (workflow_dispatch, no pull_request), with `actions: write` on the job and `scenarios` defaulting to empty."
+        }
+      },
+      "companions": [
+        {
+          "key": ["autofix", "exempt", "PR GIFs"],
+          "value": "Records the PR's GIF scenarios; a failed recording is a scenario or the app to look at, not code autofix can fix."
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/pr-gif-attach.yml",
+      "source": "gif/callers/pr-gif-attach.yml",
+      "apps": ["BoardGames", "fog-and-frontier", "sift"],
+      "variants": {
+        "sift": {
+          "source": "sync/variants/sift/pr-gif-attach.yml",
+          "why": "sift's CI is the recording, so its attach caller waits for the workflow \"CI\" (not \"PR GIFs\"), runs only for a pull_request run, and has `actions: write` on the job."
+        }
+      }
+    }
+  ],
+  "unsynced": [
+    {
+      "source": ".github/workflows/pr-gif.yml",
+      "why": "A reusable workflow the apps call at @main; their callers are synced above (gif/callers/pr-gif.yml)."
+    },
+    {
+      "source": ".github/workflows/pr-gif-attach.yml",
+      "why": "A reusable workflow the apps call at @main; their callers are synced above (gif/callers/pr-gif-attach.yml)."
+    },
+    {
+      "source": ".github/workflows/visual-review.yml",
+      "why": "A reusable workflow the apps call at @main from a visual-review.yml of their own, which names the workflows each app's screenshots come from, so the callers differ by design."
+    },
+    {
+      "source": ".github/workflows/audit.yml",
+      "why": "A reusable workflow the apps call at @main from a weekly-audit.yml of their own; no canonical caller exists yet."
+    },
+    {
+      "source": ".github/workflows/mutation-sweep.yml",
+      "why": "A reusable workflow the apps call at @main from a mutation-sweep.yml of their own, on the app's own schedule; no canonical caller exists yet."
+    },
+    {
+      "source": ".github/workflows/job-reports.yml",
+      "why": "A reusable workflow the apps call at @main as a job of their own workflows (ci.yml and others), so no file of an app is a copy of it."
+    }
+  ]
+}
