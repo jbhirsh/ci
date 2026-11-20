@@ -8,27 +8,77 @@ repeated here.
 
 Every new feature request, in this order:
 
-1. **Ticket.** Open a GitHub issue in this repo (none is needed when the request already is
-   an issue, or an open one covers it): Problem / What to add / Scope / Coordinates with /
-   Acceptance criteria, linking related issues.
-2. **Plan.** Add the implementation plan to the issue: the approach and why, the files and
-   modules it touches, new settings and their defaults, what it could break and how that's
-   avoided, and the tests. For a change anyone will see (a new or changed screen, page, or
-   state of one), the plan adds mockups of each screen and state it touches, linked from the
-   issue. Mock up phone size first where the app is phone first, then each wider size it
-   looks different at, in both themes where the app has two. Make them from the app's own
-   styles and components, so they show what will ship rather than a sketch: a throwaway
-   build of the screen, never committed. Where the app has a mockup run (none yet; sift's is
-   coming), run its `ci.yml` by hand with the change as `mockup_patch`, then its
-   `.github/workflows/attach-pictures.yml` to attach the screenshots to the issue. Where it
-   doesn't, take the screenshots, say where they are, and the owner hosts them.
-3. **Plan review.** Spawn a reviewer agent on the plan, briefed with the issue (its mockups
-   too) and these rules but not your reasoning, so its read is independent. Fix what it
-   finds, and note in the issue what changed.
-4. **Approval.** Show the user the reviewed plan (what the review changed, and the issue's
-   link) with its mockups, and wait for their approval of both before writing code.
-5. **Implement** against the approved plan. If the plan or its mockups change, update the
-   issue and tell the user.
+1. **Ticket.** Open a GitHub issue in this repo (none is needed when an open one covers the
+   request).
+   - The body holds only:
+     - a first section: Goal for a feature, Problem for a bug, with no sub-label inside it
+       (a Goal is one "make X so that Y" sentence, then the why as bullets; a Problem is what
+       is wrong and why it matters);
+     - Acceptance criteria, as a checkbox list (`- [ ]`);
+     - Examples and Out of scope, where they help;
+     - Coordinates with (linking related issues).
+   - The body never holds the approach.
+   - Link wherever you can, in the body, the Plan comment and Revisions alike: issues and
+     PRs (with a few words on what they are or why), the comments a decision came from,
+     source files (blob links) and repos.
+   - Put anything copied, run or read verbatim in a fenced code block with a language (`sh`,
+     `json`, `text`), in the body and the Plan comment alike: commands, error and log
+     messages, commit messages, config snippets, file trees. Names and paths inside a
+     sentence stay inline code.
+   - Once the plan exists (step 2), edit "The plan, with its revisions, is in
+     [the Plan comment](URL)" into that first section.
+   - An existing issue whose body holds the approach, or that has no Plan comment:
+     - Move the approach into a Plan comment.
+     - Rewrite the body as the Goal (Problem for a bug), Acceptance criteria (checkboxes) and
+       Out of scope: old Problem becomes Goal; old What to add and Scope become criteria and
+       out of scope.
+     - Add a Revisions row ("**Restructured.** Approach moved from the body into this plan").
+     - Don't paste the old body anywhere (GitHub keeps its edit history).
+     - The owner asked for this structure: edit the body without asking.
+2. **Plan.** Put the plan in ONE comment on the issue, titled "Plan (current)", edited in
+   place, so it always holds the latest plan.
+   - Write for a reader who only reads the top:
+     - the top stands alone and lines are short;
+     - bullets, numbered steps, checkbox lists and tables beat paragraphs, in the issue body
+       (Goal, Examples, Out of scope, Coordinates too) as much as here.
+   - `.github/ISSUE_TEMPLATE/feature.md` in jbhirsh/ci has the layout to copy. Keep its
+     Status line in step with these steps.
+   - Its Revisions table (What changed, Why, Who suggested it) has one row for each change:
+     - Newest first, with no numbers.
+     - "What changed" opens with a short bold title, then the change (a numbered list when
+       several).
+     - The last column says who (the owner, a review agent, or you) and states the question
+       asked or the decision in plain words, never a bare quote ("You, asked whether X:
+       yes"); quote them only when the quote stands alone, and link the source.
+   - Earlier plan and review comments:
+     - Fold what is still true into the plan, and note any decision one carried in a
+       Revisions row.
+     - Collapse one under a `Superseded` note that links the Plan comment (inside
+       `<details>`, text unchanged, blank lines around its Markdown so tables still render)
+       only when it holds something the plan lacks.
+     - Never delete one (jbhirsh/ci#109 is the example).
+   - A change anyone will see (a new or changed screen, page, or state of one) gets mockups
+     of each screen and state it touches:
+     - Phone size first where the app is phone first, then each wider size it looks different
+       at, in both themes where the app has two.
+     - Made from the app's own styles and components, so they show what will ship rather
+       than a sketch: a throwaway build of the screen, never committed.
+     - Where the app has a mockup run, run it (its `CLAUDE.md` gives the command, with
+       `mockup_patch` and `mockup_issue`): visual review writes the before/after table into
+       the issue's body, the one addition the body allows, and the Plan comment links it.
+     - Where it has none, take the screenshots, say where they are, and the owner hosts them.
+3. **Plan review.** Spawn a reviewer agent on the plan, briefed with the issue, its Plan
+   comment (link) and its mockups, and these rules but not your reasoning, so its read is
+   independent. Record its findings only as Revisions rows, the ones you reject too, with the
+   reason, and a clean review too ("review: no findings"): no separate comment for a review.
+   An owner's answer to a question is a Revisions row as well (the question and the
+   decision).
+4. **Approval.** Show the user the Plan comment's link (and the Revisions rows for the review)
+   with its mockups, and wait for their approval of both before writing code.
+5. **Implement** against the approved plan, ticking each acceptance criterion as it is met.
+   If the plan or its mockups change, edit the Plan comment, add a Revisions row, and tell the
+   user. A PR that is one of several leaves the issue open: tick what it meets, and set the
+   Status to implemented when every criterion is ticked.
 
 Bug fixes and chores skip the ticket and the plan. Every PR still gets the review below.
 
@@ -38,7 +88,10 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
   shared template in jbhirsh/ci is the master of for apps that have adopted it. `gh pr create
 --body` doesn't apply the template: read it and fill it in. A bug fix renames Goal to
   Problem and Plan to Solution, as the template says. Findings from your own review
-  before the PR go to the owner in the chat, never in the description.
+  before the PR go to the owner in the chat, never in the description. When you edit the
+  description later, keep its empty marker pairs (`pr-changes:change`, `pr-changes:revisions`,
+  `pr-gif`) and the `pr-changes:index` block: the tools fill only inside them, and a
+  description rewritten without them gets no table.
 - **A bug someone can see gets a photo, before and after.** When the Problem's Example is
   something on a screen or in a rendered page (a blank card, a misplaced control, a
   description that shows plain text where pictures belong), the Example carries a picture of
@@ -52,13 +105,14 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
 - **Review the full diff first.** Once the local checks pass, spawn a code review agent on
   the diff, briefed with the issue (if any) and these rules rather than your conclusions,
   and fix what it finds. Then open the PR: review gates PR creation, rather than following
-  it. The PR says `Closes #<issue>` when it has one.
+  it. The PR says `Closes #<issue>` when it finishes the issue, `Part of #<issue>` when it is
+  one of several.
 
 ## Issues
 
-- **Issues are the source of truth.** Check `gh issue list` (and `gh issue view <n>`, and
-  the issues it references) before designing or implementing a feature: issues carry
-  rationale the code doesn't.
+- **Issues are the source of truth.** Check `gh issue list` (and `gh issue view <n> --comments`,
+  which shows the Plan comment, and the issues it references) before designing or
+  implementing a feature: issues carry rationale the code doesn't.
 
 ## Commits
 
