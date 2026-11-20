@@ -116,6 +116,10 @@ jobs:
       - run: npm ci --omit=dev --ignore-scripts
         working-directory: ci
       - name: Self-tests
+        # The app's name, for the self-tests that check only what concerns it
+        # (this repo's GITHUB_REPOSITORY is no app's).
+        env:
+          APP_NAME: ${{ matrix.app }}
         run: |
           shopt -s nullglob
           status=0
