@@ -68,6 +68,70 @@ const SAMPLE_ROW = /<td>\s*<b>\s*<\/b>\s*<\/td>|^\|[^|\n]*\|\s*\*\*this PR\*\*\s
 const BOX = /\[[ xX]\]\s*No visible UI change/i;
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
+/** The revisions marker pair: each marker is the whole of its line (spaces aside), a line ending allowed. */
+const REVISIONS_END = '<!-- /pr-changes:revisions -->';
+const REVISIONS_START_LINE = /^([ \t]*)<!-- pr-changes:revisions -->[ \t]*\r?$/gm;
+const REVISIONS_END_LINE = /^([ \t]*)<!-- \/pr-changes:revisions -->[ \t]*\r?$/gm;
+
+/**
+ * The description with every line of fenced code blanked and the rest kept as
+ * it was, line endings and offsets included, so a position found in it is a
+ * position in the description (CRLF too: a `\r` stays).
+ *
+ * @param {string} body
+ */
+export function maskFences(body) {
+  const lines = body.split('\n');
+  /** @type {string[]} */
+  const out = [];
+  const blank = (/** @type {string} */ line) => line.replace(/[^\r]/g, ' ');
+  for (let i = 0; i < lines.length; i++) {
+    const fence = FENCE.exec(lines[i]);
+    if (!fence) {
+      out.push(lines[i]);
+      continue;
+    }
+    // The closing fence: its own character, at least as long, nothing after it. No
+    // pattern is built from the opening fence, so nothing in a description is ever
+    // read as part of one.
+    const closes = (/** @type {string} */ line) => {
+      const m = /^ {0,3}(`{3,}|~{3,}) *\r?$/.exec(line);
+      return m !== null && m[1][0] === fence[1][0] && m[1].length >= fence[1].length;
+    };
+    out.push(blank(lines[i]));
+    i++;
+    while (i < lines.length && !closes(lines[i])) out.push(blank(lines[i++]));
+    if (i < lines.length) out.push(blank(lines[i]));
+  }
+  return out.join('\n');
+}
+
+/**
+ * Where the revisions marker pair is in a description, as the changes tool
+ * and the description check both read it, so that they agree: a marker is the
+ * whole of its line (spaces aside) and outside fenced code; a marker quoted
+ * in a sentence or shown in a fence is no marker. `at` is the pair, from its
+ * start marker to the end of its end marker, when there is exactly one of
+ * each in that order, else null (none, or torn or repeated).
+ *
+ * @param {string} body
+ * @returns {{ starts: number[], ends: number[], at: { from: number, to: number } | null }}
+ */
+export function revisionsPair(body) {
+  const masked = maskFences(body);
+  /** @param {RegExp} line */
+  const find = (line) =>
+    [...masked.matchAll(line)].map((m) => /** @type {number} */ (m.index) + m[1].length);
+  const starts = find(REVISIONS_START_LINE);
+  const ends = find(REVISIONS_END_LINE);
+  const clean = starts.length === 1 && ends.length === 1 && starts[0] < ends[0];
+  return {
+    starts,
+    ends,
+    at: clean ? { from: starts[0], to: ends[0] + REVISIONS_END.length } : null,
+  };
+}
+
 /**
  * A description without its fenced code, and nothing else taken out: the
  * Revisions table is inside a tool's block, which renderedLines drops, and

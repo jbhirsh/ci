@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { bodyProblems } from './body.mjs';
+import { bodyProblems, maskFences, revisionsPair } from './body.mjs';
 
 const GOOD = [
   '## Goal',
@@ -99,6 +99,48 @@ describe('bodyProblems', () => {
       fc.property(fc.stringMatching(/^[a-z][a-z0-9-]{0,20}$/), harmless, (name, text) => {
         const body = `${GOOD}\n<!-- pr-gif:${name} -->\n${text}\n<!-- /pr-gif:${name} -->\n`;
         expect(bodyProblems(body).join('\n')).toContain(`put the GIF block \`pr-gif:${name}\``);
+      }),
+    );
+  });
+});
+
+describe('revisionsPair and maskFences', () => {
+  const text = fc
+    .array(
+      fc.oneof(
+        fc.string(),
+        fc.constantFrom(
+          '\\',
+          '\\\\',
+          '`',
+          '```',
+          '~~~',
+          '\n',
+          '\r\n',
+          ' ',
+          '<!-- pr-changes:revisions -->',
+          '<!-- /pr-changes:revisions -->',
+        ),
+      ),
+      { maxLength: 30 },
+    )
+    .map((parts) => parts.join(''));
+
+  it('never throws, keeps every offset, and finds a pair exactly where its markers are', () => {
+    fc.assert(
+      fc.property(text, (body) => {
+        expect(maskFences(body)).toHaveLength(body.length);
+        const { starts, ends, at } = revisionsPair(body);
+        for (const i of starts)
+          expect(body.startsWith('<!-- pr-changes:revisions -->', i)).toBe(true);
+        for (const i of ends)
+          expect(body.startsWith('<!-- /pr-changes:revisions -->', i)).toBe(true);
+        if (at) {
+          expect(starts).toHaveLength(1);
+          expect(ends).toHaveLength(1);
+          expect(body.slice(at.from, at.to).startsWith('<!-- pr-changes:revisions -->')).toBe(true);
+          expect(body.slice(at.from, at.to).endsWith('<!-- /pr-changes:revisions -->')).toBe(true);
+        }
       }),
     );
   });

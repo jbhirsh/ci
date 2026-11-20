@@ -17,8 +17,14 @@
 // alone.
 //
 // What it writes, and when:
-//   - nothing for a PR with one head, with no pair of revisions markers in
-//     its description, a closed PR, Dependabot's, or one from a `bot/` branch;
+//   - nothing for a PR with one head, a closed PR, Dependabot's, or one from a
+//     `bot/` branch; and nothing for a PR whose description has a torn or
+//     repeated pair of revisions markers (a warning says so);
+//   - the empty pair itself, when a push has moved the head and the
+//     description has no revisions marker at all (an author or a tool
+//     rewrote it without the template's pair): `withPair` puts it where the
+//     template does, and the table goes in as below, so a rewritten
+//     description doesn't leave a PR with no Revisions, silently;
 //   - nothing when the table's current row already names the PR's head, so a
 //     rerun, the run the tool's own edit wakes and an author's edit of a Why
 //     all leave the description alone;
@@ -40,8 +46,8 @@
 import { pathToFileURL } from 'node:url';
 import { MAX_CHARS, ghApi } from '../lib/comment.mjs';
 import { pages, prTarget } from '../lib/github.mjs';
-import { renderedLines } from '../pr-template/body.mjs';
-import { blocks, ownBlock, putBlock } from './changes.mjs';
+import { renderedLines, revisionsPair } from '../pr-template/body.mjs';
+import { blocks, shielded } from './changes.mjs';
 import {
   addRevision,
   budgeted,
@@ -49,6 +55,7 @@ import {
   goalSentence,
   parseTable,
   previousHead,
+  withPair,
 } from './revisions.mjs';
 
 /** How many times the row is worked out again because the description moved under it. */
@@ -177,16 +184,20 @@ export function headingBefore(body, at) {
  */
 function plan(io, body, { repo, head, before }) {
   const { start, end } = blocks.markers('revisions');
-  if (body.split(start).length !== 2 || body.split(end).length !== 2) {
-    if (body.includes(start)) {
+  // The pair as the description check counts it (revisionsPair): a marker in a
+  // fence or a sentence is none, so the tool and the check never disagree.
+  const found = revisionsPair(body);
+  const at = found.at;
+  if (!at) {
+    if (found.starts.length + found.ends.length > 0) {
       io.log(
         '::warning::pr-changes: the revisions markers are torn or repeated, so Revisions is left alone',
       );
     }
     return null;
   }
-  const at = ownBlock(body, 'revisions');
-  if (!at) return null;
+  // Not inside another tool's block, which that tool rewrites.
+  if (shielded(body).some((r) => r.from <= at.from && at.to <= r.to)) return null;
   const table = parseTable(body.slice(at.from + start.length, at.to - end.length), repo);
   const kept = table.rest.length;
   if (kept > 0) {
@@ -236,6 +247,21 @@ function plan(io, body, { repo, head, before }) {
 }
 
 /**
+ * The description with the block's content set to `text`, in the
+ * description's own line endings.
+ *
+ * @param {string} body
+ * @param {{ from: number, to: number }} at the pair, from its start marker to the end of its end marker
+ * @param {string} text
+ */
+function putPair(body, at, text) {
+  const { start, end } = blocks.markers('revisions');
+  const nl = body.includes('\r\n') ? '\r\n' : '\n';
+  const marked = `${start}${nl}${text.replace(/\r?\n/g, nl)}${nl}${end}`;
+  return body.slice(0, at.from) + marked + body.slice(at.to);
+}
+
+/**
  * Adds the row for the PR's head to its Revisions block when it is missing.
  *
  * @param {Io} io
@@ -253,7 +279,11 @@ export function revisions(io, { repo, before }) {
   }
   let current = io.body();
   for (let attempt = 1; ; attempt++) {
-    const planned = plan(io, current, { repo, head: pull.headSha, before });
+    // The pair is made only for a push that moved the head: a PR at one head,
+    // or an `edited` run that has no BEFORE, is left as it is.
+    const moved = before !== null && before !== pull.headSha;
+    const base = moved ? withPair(current) : current;
+    const planned = plan(io, base, { repo, head: pull.headSha, before });
     if (planned === null) return false;
     if (pull.headRepo !== repo) {
       io.log(
@@ -266,7 +296,7 @@ export function revisions(io, { repo, before }) {
         "pr-changes: Revisions needs BOT_PR_TOKEN (a person's token, Pull requests write): an edit by the Actions token starts no run of the description check, so the check would stay red until a hand edit",
       );
     }
-    const out = putBlock(current, 'revisions', planned.text);
+    const out = putPair(base, planned.at, planned.text);
     if (out.length > MAX_CHARS) {
       io.log(
         `::warning::pr-changes: the description would be over ${MAX_CHARS} characters with the Revisions row: not written`,

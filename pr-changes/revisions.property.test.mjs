@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { bodyProblems } from '../pr-template/body.mjs';
+import { bodyProblems, revisionsPair } from '../pr-template/body.mjs';
 import {
   REVISIONS_BUDGET,
   addRevision,
@@ -9,6 +9,7 @@ import {
   goalSentence,
   parseTable,
   renderTable,
+  withPair,
 } from './revisions.mjs';
 
 const REPO = 'o/r';
@@ -150,6 +151,48 @@ describe('goalSentence', () => {
         const out = goalSentence(['## Goal', ...lines]);
         expect([...out].length).toBeLessThanOrEqual(400);
         expect(out).not.toMatch(/[<>\r\n]/);
+      }),
+    );
+  });
+});
+
+describe('withPair (property)', () => {
+  const PAIR = '<!-- pr-changes:revisions -->\n<!-- /pr-changes:revisions -->';
+  const body = fc
+    .array(
+      fc.oneof(
+        fc.string(),
+        fc.constantFrom(
+          '\n',
+          '\n\n',
+          '---',
+          '_footer_',
+          '`',
+          '```',
+          '<!-- pr-changes:index -->',
+          '<!-- /pr-changes:index -->',
+          '<!-- pr-changes:revisions -->',
+          '<!-- /pr-changes:revisions -->',
+          '<!-- pr-changes:change:1 -->',
+        ),
+      ),
+      { maxLength: 30 },
+    )
+    .map((parts) => parts.join(''));
+  const squash = (/** @type {string} */ t) => t.replace(/\s+/g, '');
+
+  it('never throws, is idempotent, and only ever adds the one empty pair', () => {
+    fc.assert(
+      fc.property(body, (b) => {
+        const out = withPair(b);
+        expect(withPair(out)).toBe(out);
+        if (out === b) return;
+        // One clean pair, as the description check counts it, and nothing else added.
+        const at = revisionsPair(out).at;
+        expect(at).not.toBeNull();
+        const { from, to } = /** @type {{ from: number, to: number }} */ (at);
+        expect(out.slice(from, to).replace(/\r?\n/, '\n')).toBe(PAIR);
+        expect(squash(out.slice(0, from) + out.slice(to))).toBe(squash(b));
       }),
     );
   });

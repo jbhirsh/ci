@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { bodyProblems, renderedLines } from './body.mjs';
+import { bodyProblems, maskFences, renderedLines, revisionsPair } from './body.mjs';
 
 const fixture = (/** @type {string} */ name) =>
   readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
@@ -393,5 +393,42 @@ describe("the template's Example", () => {
     expect(example).toContain('```diff');
     const written = GOOD.replace('Make it work.', () => `Make it work.\n\n${example}`);
     expect(bodyProblems(written)).toEqual([]);
+  });
+});
+
+describe('revisionsPair and maskFences, with backslashes in the description', () => {
+  const START = '<!-- pr-changes:revisions -->';
+  const END = '<!-- /pr-changes:revisions -->';
+
+  it('finds the pair whatever backslashes the text around it holds', () => {
+    const body = `C:\\dir\\file \\\\ \\n\n\\\\\n${START}\n${END}\n\\`;
+    const { at } = revisionsPair(body);
+    expect(at).not.toBeNull();
+    expect(body.slice(at?.from, at?.to)).toBe(`${START}\n${END}`);
+  });
+
+  it('does not take a backslash for part of a marker, or as an escape inside one', () => {
+    for (const body of [
+      `\\${START}\n${END}\n`,
+      `${START}\\\n${END}\n`,
+      `${START}\n\\${END}\n`,
+      `${START.replace('<!--', '<\\!--')}\n${END}\n`,
+      `${START.replace('pr-changes', 'pr\\-changes')}\n${END}\n`,
+    ]) {
+      expect(revisionsPair(body).at).toBeNull();
+    }
+  });
+
+  it('closes a fence by its own character and length, backslashes in the info string or not', () => {
+    const body = ['```js \\`\\\\', START, '````', START, '```', END, ''].join('\n');
+    // The four-backtick line closes the three-backtick fence, so the second start is outside;
+    // the last ``` then opens a fence that never closes, which hides the end marker.
+    expect(maskFences(body)).toHaveLength(body.length);
+    const { starts, ends } = revisionsPair(body);
+    expect(starts).toHaveLength(1);
+    expect(ends).toHaveLength(0);
+    const tilde = ['~~~ \\', START, '```', END, '~~~', START, ''].join('\n');
+    expect(revisionsPair(tilde).starts).toHaveLength(1);
+    expect(revisionsPair(tilde).ends).toHaveLength(0);
   });
 });

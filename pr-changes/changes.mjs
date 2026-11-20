@@ -158,7 +158,7 @@ export function renderChange(commit, { repo, number, level = 'full', pair = plai
  * @param {string} body
  * @returns {{ from: number, to: number }[]}
  */
-function shielded(body) {
+export function shielded(body) {
   /** @type {{ from: number, to: number }[]} */
   const out = [];
   let open = -1;
