@@ -5,8 +5,11 @@ import {
   REVISIONS_BUDGET,
   addRevision,
   budgeted,
+  capChain,
   describeRange,
   goalSentence,
+  headChain,
+  headHistory,
   parseTable,
   renderTable,
   withPair,
@@ -194,6 +197,79 @@ describe('withPair (property)', () => {
         expect(out.slice(from, to).replace(/\r?\n/, '\n')).toBe(PAIR);
         expect(squash(out.slice(0, from) + out.slice(to))).toBe(squash(b));
       }),
+    );
+  });
+});
+
+describe('headChain and capChain (property)', () => {
+  const heads = fc.array(sha, { maxLength: 40 });
+  const noise = fc.array(
+    fc.oneof(
+      fc.record({ event: fc.constant('committed'), sha }),
+      fc.record({ event: fc.string(), commit_id: fc.oneof(sha, fc.string(), fc.integer()) }),
+    ),
+    { maxLength: 10 },
+  );
+
+  it('lists heads in order, without a repeat in a row, ending at the head', () => {
+    fc.assert(
+      fc.property(heads, noise, sha, fc.option(sha, { nil: null }), (ids, extra, head, before) => {
+        const events = [
+          ...extra,
+          ...ids.map((commit_id) => ({ event: 'head_ref_force_pushed', commit_id })),
+        ];
+        const chain = headChain(events, { head, before });
+        if (chain.length === 0) return;
+        expect(chain.length).toBeGreaterThanOrEqual(2);
+        expect(chain[chain.length - 1]).toBe(head);
+        for (let i = 1; i < chain.length; i++) expect(chain[i]).not.toBe(chain[i - 1]);
+        // every head but the last two came from a force-push, in the order they were made
+        const fromPushes = ids.filter((id, i) => id !== ids[i - 1]);
+        expect(fromPushes.join()).toContain(chain.slice(0, -2).join());
+      }),
+    );
+  });
+
+  it('keeps the first head and the latest, each with its true place, in order', () => {
+    fc.assert(
+      fc.property(
+        fc.array(sha, { minLength: 2, maxLength: 60 }),
+        fc.integer({ min: 2, max: 25 }),
+        (chain, max) => {
+          const { kept, omitted } = capChain(chain, max);
+          expect(kept.length).toBeLessThanOrEqual(max);
+          expect(kept.length + omitted).toBe(chain.length);
+          expect(kept[0].rev).toBe(1);
+          expect(kept[kept.length - 1].rev).toBe(chain.length);
+          for (let i = 0; i < kept.length; i++) {
+            expect(kept[i].sha).toBe(chain[kept[i].rev - 1]);
+            if (i > 0) expect(kept[i].rev).toBeGreaterThan(kept[i - 1].rev);
+          }
+        },
+      ),
+    );
+  });
+});
+
+describe('headHistory (property)', () => {
+  it('says the first head came from a force-push only when one did, apart from the head', () => {
+    fc.assert(
+      fc.property(
+        fc.array(sha, { maxLength: 20 }),
+        sha,
+        fc.option(sha, { nil: null }),
+        (ids, head, before) => {
+          const events = ids.map((commit_id) => ({ event: 'head_ref_force_pushed', commit_id }));
+          const { chain, fromTimeline } = headHistory(events, { head, before });
+          expect(chain).toEqual(headChain(events, { head, before }));
+          if (chain.length === 0) {
+            expect(fromTimeline).toBe(false);
+            return;
+          }
+          if (fromTimeline) expect(ids).toContain(chain[0]);
+          else expect(chain[0] === before || ids.every((id) => id === head)).toBe(true);
+        },
+      ),
     );
   });
 });

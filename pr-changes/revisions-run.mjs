@@ -45,14 +45,21 @@
 
 import { pathToFileURL } from 'node:url';
 import { MAX_CHARS, ghApi } from '../lib/comment.mjs';
-import { pages, prTarget } from '../lib/github.mjs';
+import { PAGES, pages, prTarget } from '../lib/github.mjs';
 import { renderedLines, revisionsPair } from '../pr-template/body.mjs';
 import { blocks, shielded } from './changes.mjs';
 import {
+  FIRST_KNOWN,
+  HISTORY_HEADS,
+  NO_LONGER,
+  REPLACED,
+  UNREAD,
   addRevision,
   budgeted,
+  capChain,
   describeRange,
   goalSentence,
+  headHistory,
   parseTable,
   previousHead,
   withPair,
@@ -84,6 +91,7 @@ const ATTEMPTS = 3;
  * @property {() => string} body
  * @property {() => import('./revisions.mjs').Subject[]} commits every commit of the PR, oldest first
  * @property {(prev: string, head: string) => Compare | null} compare null when GitHub can't compare (the old head is gone)
+ * @property {() => import('./revisions.mjs').TimelineEvent[]} timeline the PR's timeline events, oldest first
  * @property {(body: string) => void} write with the person's token
  * @property {boolean} canWrite whether a person's token is at hand
  * @property {(line: string) => void} log
@@ -122,19 +130,38 @@ export function gitHubIo({ api, repo, number, token, log }) {
         skipped:
           c.parents.length > 1 || Boolean((c.author ?? c.committer)?.login.endsWith('[bot]')),
       })),
+    timeline: () =>
+      /** @type {import('./revisions.mjs').TimelineEvent[]} */ (
+        pages(api, `repos/${repo}/issues/${number}/timeline`, undefined, () =>
+          log(
+            `::warning::pr-changes: the PR's timeline is longer than ${PAGES * 100} events: only the first are read, so the table may miss the latest heads`,
+          ),
+        )
+      ),
     compare: (prev, head) => {
       try {
         const route = `repos/${repo}/compare/${prev}...${head}`;
-        const c =
-          /** @type {{ status: string, behind_by: number, merge_base_commit?: { sha: string } }} */ (
-            api('GET', `${route}?per_page=1`)
-          );
-        return {
-          status: c.status,
-          behindBy: c.behind_by,
-          base: c.merge_base_commit?.sha ?? null,
-          shas: /** @type {{ sha: string }[]} */ (pages(api, route, 'commits')).map((x) => x.sha),
-        };
+        // One request answers the status and the first 100 commits; more pages only for more commits.
+        /** @type {Compare | null} */
+        let out = null;
+        for (let page = 1; page <= PAGES; page++) {
+          const c =
+            /** @type {{ status: string, behind_by: number, merge_base_commit?: { sha: string }, commits?: { sha: string }[] }} */ (
+              api('GET', `${route}?per_page=100&page=${page}`)
+            );
+          const list = c.commits ?? [];
+          if (out === null) {
+            out = {
+              status: c.status,
+              behindBy: c.behind_by,
+              base: c.merge_base_commit?.sha ?? null,
+              shas: [],
+            };
+          }
+          out.shas.push(...list.map((x) => x.sha));
+          if (list.length < 100) break;
+        }
+        return out;
       } catch (error) {
         // 404: the old head was garbage collected; 422: GitHub can't compare the two.
         if (/HTTP (404|422)/.test(String(error instanceof Error ? error.message : error))) {
@@ -174,6 +201,104 @@ export function headingBefore(body, at) {
   return false;
 }
 
+/** @param {unknown} error */
+const message = (error) => (error instanceof Error ? error.message : String(error));
+
+/**
+ * The table for a PR's first write, from GitHub's timeline of its heads
+ * (revisions.mjs's header says what that gives): one row per head, the
+ * first and the latest HISTORY_HEADS - 1 at most, each with what changed from
+ * the head before it where GitHub still has the commits, else REPLACED. A
+ * `build(subjects)` for `budgeted`, or null when the timeline names no
+ * earlier head (or can't be read), and the caller starts from `before`.
+ *
+ * @param {Io} io
+ * @param {string} body
+ * @param {import('./revisions.mjs').Table} table the block as it is: empty of rows, with what the author typed in it
+ * @param {{ repo: string, head: string, before: string }} where
+ * @returns {((subjects: number) => import('./revisions.mjs').Table) | null}
+ */
+function history(io, body, table, { repo, head, before }) {
+  /** @type {import('./revisions.mjs').TimelineEvent[]} */
+  let events;
+  try {
+    events = io.timeline();
+  } catch (error) {
+    io.log(
+      `::warning::pr-changes: the PR's timeline couldn't be read (${message(error)}), so Revisions starts from the head before this push`,
+    );
+    return null;
+  }
+  const { chain, fromTimeline } = headHistory(events, { head, before });
+  if (chain.length < 2) return null;
+  const { kept, omitted } = capChain(chain, HISTORY_HEADS);
+  /** @type {import('./revisions.mjs').Subject[]} */
+  let commits = [];
+  try {
+    commits = io.commits();
+  } catch (error) {
+    io.log(
+      `::warning::pr-changes: the PR's commits couldn't be read (${message(error)}), so the rows list no commit subjects`,
+    );
+  }
+  const why = goalSentence(renderedLines(body));
+  const newest = chain.length;
+  // A failed read of one range (a rate limit, a 5xx) costs that row its detail, not the table.
+  const ranges = new Map(
+    kept
+      .filter((k) => k.rev > 1)
+      .map((k) => {
+        try {
+          return [k.rev, io.compare(chain[k.rev - 2], k.sha)];
+        } catch (error) {
+          io.log(
+            `::warning::pr-changes: the commits of revision ${k.rev} couldn't be compared (${message(error)}): its row says so`,
+          );
+          return [k.rev, undefined];
+        }
+      }),
+  );
+  /**
+   * @param {number} rev
+   * @param {number} subjects
+   */
+  const what = (rev, subjects) => {
+    if (rev === 1) return fromTimeline ? FIRST_KNOWN : 'Opened';
+    const found = ranges.get(rev);
+    if (found === undefined) return UNREAD;
+    if (found === null) return REPLACED;
+    const asked = new Set(found.shas);
+    const here = commits.filter((c) => asked.has(c.sha));
+    const row = describeRange(
+      {
+        repo,
+        prev: chain[rev - 2],
+        head: chain[rev - 1],
+        how: found.status === 'ahead' ? 'ahead' : 'rewritten',
+        commits: here,
+        dropped: found.behindBy,
+        base: found.base,
+      },
+      subjects,
+    );
+    // None of its commits is on the PR now (later rewritten): the row says so.
+    return here.length === 0 ? `${row}<br>${NO_LONGER}` : row;
+  };
+  return (subjects) => ({
+    rows: kept.map((k) => ({
+      rev: k.rev,
+      current: k.rev === newest,
+      sha: k.sha,
+      what: what(k.rev, subjects),
+      why: k.rev === 1 ? why : '',
+    })),
+    // What the author typed in the block stays below the table.
+    rest: table.rest,
+    omitted: table.omitted,
+    capped: omitted,
+  });
+}
+
 /**
  * The block's content for the PR's head, or null when nothing is to be written.
  *
@@ -207,6 +332,12 @@ function plan(io, body, { repo, head, before }) {
   }
   const prev = previousHead(table.rows) ?? before;
   if (prev === null || prev === head) return null;
+  if (table.rows.length === 0) {
+    const build = history(io, body, table, { repo, head, before: prev });
+    if (build) {
+      return { text: budgeted(build, repo, { heading: !headingBefore(body, at.from) }), at };
+    }
+  }
   const opened =
     table.rows.length === 0 ? { sha: prev, why: goalSentence(renderedLines(body)) } : null;
   const commits = io.commits();

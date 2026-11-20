@@ -39,6 +39,7 @@ function fake({ body: first, pull, heads: queued, ...over } = {}) {
       { sha: 'm', subject: 'Merge main', skipped: true },
     ],
     compare: () => ({ status: 'ahead', behindBy: 0, base: A, shas: ['2', 'm', 'other'] }),
+    timeline: () => [],
     write: (b) => {
       writes.push(b);
       body = b;
@@ -119,6 +120,217 @@ describe('revisions', () => {
       const f = fake({ body: bare, pull: { headRepo: 'x/y' } });
       expect(run(f)).toBe(false);
       expect(f.writes).toEqual([]);
+    });
+  });
+
+  describe('the first write, from the PR’s timeline', () => {
+    const sha = (/** @type {number} */ n) => n.toString(16).padStart(2, '0').repeat(20);
+    const short = (/** @type {number} */ n) => sha(n).slice(0, 7);
+    const forced = (/** @type {string} */ id) => ({
+      event: 'head_ref_force_pushed',
+      commit_id: id,
+    });
+    const revs = (/** @type {string} */ out) =>
+      [...out.matchAll(/^\| (\d+)(?: \(current\))? \| \[`([0-9a-f]{7})`\]/gm)].map((m) => [
+        Number(m[1]),
+        m[2],
+      ]);
+
+    it('writes one row per head a force-push made, in order, the newest current', () => {
+      const [h1, h2, h3] = [sha(1), sha(2), sha(3)];
+      const f = fake({
+        pull: { headSha: h3 },
+        timeline: () => [{ event: 'committed' }, forced(h1), forced(h2), forced(h3)],
+        compare: (prev) =>
+          prev === h1 ? null : { status: 'diverged', behindBy: 2, base: sha(9), shas: ['2'] },
+      });
+      expect(run(f, h2)).toBe(true);
+      const out = f.body();
+      expect(revs(out)).toEqual([
+        [3, short(3)],
+        [2, short(2)],
+        [1, short(1)],
+      ]);
+      expect(out).toContain('| 3 (current)');
+      expect(out).toContain("the first head GitHub's record of the PR names");
+      expect(out).toContain('Make it work.');
+      // h1 -> h2 can't be compared: its commits are gone.
+      expect(out).toContain('| (commits replaced by a force-push) |');
+      // h2 -> h3 was rewritten, 2 commits no longer on the branch.
+      expect(out).toMatch(
+        new RegExp(`rewritten \\(force-push or rebase\\) from \`${short(2)}\`.*2 earlier commits`),
+      );
+      expect(bodyProblems(out, h3).filter((p) => /Revisions/.test(p))).toEqual([]);
+    });
+
+    it('adds the head of a plain push after the last force-push, and the head before this push', () => {
+      const [h1, h2, h3] = [sha(1), sha(2), sha(3)];
+      const f = fake({
+        pull: { headSha: h3 },
+        timeline: () => [forced(h1), forced(h2)],
+        compare: () => ({ status: 'ahead', behindBy: 0, base: h2, shas: ['2'] }),
+      });
+      run(f, h2);
+      expect(revs(f.body())).toEqual([
+        [3, short(3)],
+        [2, short(2)],
+        [1, short(1)],
+      ]);
+      expect(f.body()).toContain(`compare/${h2}...${h3}`);
+      const g = fake({
+        pull: { headSha: h3 },
+        timeline: () => [forced(h1), forced(h2)],
+        compare: () => ({ status: 'ahead', behindBy: 0, base: h2, shas: ['2'] }),
+      });
+      run(g, sha(7));
+      expect(revs(g.body()).map(([n]) => n)).toEqual([4, 3, 2, 1]);
+    });
+
+    it('starts from the head before the push when the timeline has no force-push', () => {
+      const f = fake({
+        timeline: () => [{ event: 'committed', sha: sha(5) }, { event: 'labeled' }],
+      });
+      expect(run(f)).toBe(true);
+      expect(revs(f.body())).toEqual([
+        [2, 'bbbbbbb'],
+        [1, 'aaaaaaa'],
+      ]);
+      expect(f.body()).toContain('Opened');
+      expect(f.logs).toEqual([]);
+    });
+
+    it('does the same, with a warning, when the timeline can’t be read', () => {
+      const f = fake({
+        timeline: () => {
+          throw new Error('HTTP 500');
+        },
+      });
+      expect(run(f)).toBe(true);
+      expect(revs(f.body())).toEqual([
+        [2, 'bbbbbbb'],
+        [1, 'aaaaaaa'],
+      ]);
+      expect(f.logs[0]).toMatch(/timeline couldn't be read \(HTTP 500\)/);
+    });
+
+    it('lists at most the first head and the latest ones, with the true numbers, and says so', () => {
+      const heads = Array.from({ length: 30 }, (_, i) => sha(i + 1));
+      const f = fake({
+        pull: { headSha: heads[29] },
+        timeline: () => heads.map(forced),
+        compare: () => ({ status: 'ahead', behindBy: 0, base: A, shas: [] }),
+      });
+      run(f, heads[28]);
+      const numbers = revs(f.body()).map(([n]) => n);
+      expect(numbers).toHaveLength(20);
+      expect(numbers[0]).toBe(30);
+      expect(numbers[19]).toBe(1);
+      expect(numbers[18]).toBe(12);
+      expect(f.body()).toContain('10 earlier heads are not listed');
+      expect(f.body().match(/\(current\)/g)).toHaveLength(1);
+    });
+
+    it('says Opened for row 1 when the only force-push is the one being recorded', () => {
+      const f = fake({ pull: { headSha: B }, timeline: () => [forced(B)] });
+      run(f, A);
+      expect(revs(f.body())).toEqual([
+        [2, 'bbbbbbb'],
+        [1, 'aaaaaaa'],
+      ]);
+      expect(f.body()).toContain('| Opened |');
+      expect(f.body()).not.toContain("the first head GitHub's record");
+      // With an earlier force-push, row 1 is that one, and says its earlier heads were replaced.
+      const g = fake({ pull: { headSha: B }, timeline: () => [forced(sha(1)), forced(B)] });
+      run(g, sha(1));
+      expect(g.body()).toContain("the first head GitHub's record of the PR names");
+    });
+
+    it('keeps what the author typed in the block, below the table', () => {
+      const typed = 'My own note about these revisions.';
+      const f = fake({
+        body: BODY.replace(
+          PAIR,
+          `<!-- pr-changes:revisions -->\n${typed}\n<!-- /pr-changes:revisions -->`,
+        ),
+        pull: { headSha: sha(3) },
+        timeline: () => [forced(sha(1)), forced(sha(2)), forced(sha(3))],
+      });
+      run(f, sha(2));
+      const out = f.body();
+      expect(out).toContain(typed);
+      expect(out.indexOf(typed)).toBeGreaterThan(out.indexOf('| 1 |'));
+      expect(f.logs.some((l) => /no row/.test(l))).toBe(true);
+    });
+
+    it('does not fail the table when GitHub fails on a range or the commits, saying so', () => {
+      const [h1, h2, h3] = [sha(1), sha(2), sha(3)];
+      const f = fake({
+        pull: { headSha: h3 },
+        timeline: () => [forced(h1), forced(h2), forced(h3)],
+        commits: () => {
+          throw new Error('HTTP 500');
+        },
+        compare: (prev) => {
+          if (prev === h1) throw new Error('gh: API rate limit exceeded (HTTP 403)');
+          return null;
+        },
+      });
+      expect(run(f, h2)).toBe(true);
+      const out = f.body();
+      expect(out).toContain('(its commits could not be read just now)');
+      expect(out).toContain('(commits replaced by a force-push)');
+      expect(f.logs.filter((l) => /^::warning::/.test(l))).toHaveLength(2);
+      expect(f.logs.join('\n')).toMatch(/commits couldn't be read \(HTTP 500\)/);
+      expect(f.logs.join('\n')).toMatch(/revision 2 couldn't be compared/);
+    });
+
+    it('marks a row none of whose commits is on the PR any more', () => {
+      const [h1, h2] = [sha(1), sha(2)];
+      const f = fake({
+        pull: { headSha: h2 },
+        timeline: () => [forced(h1), forced(h2)],
+        compare: () => ({ status: 'ahead', behindBy: 0, base: h1, shas: ['gone1', 'gone2'] }),
+      });
+      run(f, h1);
+      expect(f.body()).toContain(`compare/${h1}...${h2}`);
+      expect(f.body()).toContain('(none of its commits is on the PR now)');
+    });
+
+    it('keeps the “not listed” note on a later push, once, without calling it a stray line', () => {
+      const heads = Array.from({ length: 30 }, (_, i) => sha(i + 1));
+      const f = fake({
+        pull: { headSha: heads[29] },
+        timeline: () => heads.map(forced),
+        compare: () => ({ status: 'ahead', behindBy: 0, base: A, shas: [] }),
+      });
+      run(f, heads[28]);
+      f.writes.length = 0;
+      const g = fake({
+        body: f.body(),
+        pull: { headSha: C },
+        compare: () => ({ status: 'ahead', behindBy: 0, base: A, shas: ['1'] }),
+      });
+      expect(run(g, heads[29])).toBe(true);
+      const out = g.body();
+      expect(out.match(/earlier heads are not listed/g)).toHaveLength(1);
+      expect(out).toContain('10 earlier heads are not listed');
+      expect(out).toContain('| 31 (current)');
+      expect(g.logs.filter((l) => /no row/.test(l))).toEqual([]);
+    });
+
+    it('does not rebuild once the table has a row, and only reads GitHub, never waits', () => {
+      const f = fake({ timeline: () => [forced(sha(1)), forced(sha(2))] });
+      run(f);
+      f.writes.length = 0;
+      const g = fake({
+        body: f.body(),
+        pull: { headSha: C },
+        timeline: () => {
+          throw new Error('must not be read');
+        },
+      });
+      expect(run(g, B)).toBe(true);
+      expect(g.body()).toContain('| 5 (current)');
     });
   });
 
@@ -422,6 +634,54 @@ describe('gitHubIo', () => {
       log: () => {},
     });
     expect(noBase.compare(A, B)?.base).toBeNull();
+  });
+
+  it('compares with one request, which answers the status and the commits', () => {
+    /** @type {unknown[][]} */
+    const calls = [];
+    const io = gitHubIo({
+      api: api(
+        {
+          [`repos/${REPO}/compare/`]: {
+            status: 'ahead',
+            behind_by: 0,
+            merge_base_commit: { sha: C },
+            commits: [{ sha: '1' }, { sha: '2' }],
+          },
+        },
+        calls,
+      ),
+      repo: REPO,
+      number: 5,
+      token: 't',
+      log: () => {},
+    });
+    expect(io.compare(A, B)).toEqual({ status: 'ahead', behindBy: 0, base: C, shas: ['1', '2'] });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('says when a long timeline is cut short', () => {
+    /** @type {string[]} */
+    const logs = [];
+    const full = Array.from({ length: 100 }, () => ({ event: 'labeled' }));
+    const io = gitHubIo({
+      api: api({ [`repos/${REPO}/issues/5/timeline`]: full }),
+      repo: REPO,
+      number: 5,
+      token: 't',
+      log: (l) => logs.push(l),
+    });
+    expect(io.timeline()).toHaveLength(3000);
+    expect(logs[0]).toMatch(/timeline is longer than 3000 events/);
+    const short = gitHubIo({
+      api: api({ [`repos/${REPO}/issues/5/timeline`]: [{ event: 'labeled' }] }),
+      repo: REPO,
+      number: 5,
+      token: 't',
+      log: (l) => logs.push(l),
+    });
+    expect(short.timeline()).toHaveLength(1);
+    expect(logs).toHaveLength(1);
   });
 
   it('reads more than 250 compared commits without trouble', () => {

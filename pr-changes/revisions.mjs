@@ -33,6 +33,25 @@
 // older rows' What cut to a note (never row 1's, nor the newest's); the oldest
 // rows after row 1 left out, said in a line under the table.
 //
+// The first write of a table rebuilds the heads before it from GitHub's
+// timeline of the PR (revisions-run.mjs reads it; `headChain` and `capChain`
+// decide which heads and which rows). The timeline's `head_ref_force_pushed`
+// events each carry the head after a force-push, in order: those are the heads
+// a force-push made, and the only heads the record names. What it does not
+// give: the head a PR opened at, once a force-push has replaced it (the first
+// head listed is then the first one a force-push made), the heads of plain
+// pushes (a plain push adds commits, and `committed` events carry no push
+// boundary, so the commits of several plain pushes between two force-pushes
+// are one row, which the row's compare range covers), and any head
+// that was force-pushed away and never fetched (its row says its commits
+// were replaced; a row whose commits are all gone from the PR says that too, and one
+// whose range GitHub failed to read says so). At most HISTORY_HEADS heads are
+// written: the first and the latest ones, with the true revision numbers, and a
+// line saying how many are not listed (parseTable reads it back, so a later
+// push keeps it). Row 1 says `Opened` when no force-push came before the head
+// it names, else that it is the first head the record names. What the author
+// typed in the block stays below the table.
+//
 // A description with no revisions markers at all (an author, or a tool that
 // rewrote it, left the template's pair out) would never get a table, and
 // nothing would say so: `withPair` puts the empty pair back, so that the
@@ -59,6 +78,8 @@ const HEADER = '| Rev | Head | What changed | Why |';
 const SEPARATOR = '| --- | --- | --- | --- |';
 const REV = /^([1-9]\d{0,5})( \(current\))?$/;
 const OMITTED = /^_(\d{1,6}) earlier revisions? left out to stay under GitHub's limit\._$/;
+const CAPPED =
+  /^_(\d{1,6}) earlier heads? (?:is|are) not listed: the table keeps the first head and the latest ones\._$/;
 const CUT = 'older revision: its commits are cut to keep this table short';
 
 /**
@@ -71,6 +92,78 @@ const CUT = 'older revision: its commits are cut to keep this table short';
  * @property {string} what
  * @property {string} why
  */
+
+/** The most heads the first write of a table lists (the first, and the latest of the rest). */
+export const HISTORY_HEADS = 20;
+/** What a row says when the commits between its head and the one before are gone. */
+export const REPLACED = '(commits replaced by a force-push)';
+/** What a row says when a range of commits could not be read just now (a rate limit, say). */
+export const UNREAD = '(its commits could not be read just now)';
+/** What a row adds when none of its commits is on the PR any more. */
+export const NO_LONGER = '(none of its commits is on the PR now)';
+/** What row 1 says when a force-push replaced the head the PR opened at. */
+export const FIRST_KNOWN =
+  "the first head GitHub's record of the PR names (earlier heads were replaced)";
+
+/** @typedef {Record<string, unknown>} TimelineEvent  one event of a PR's timeline: only `event` and `commit_id` are read */
+
+/**
+ * The heads a PR has had, oldest first, as far as its timeline says (the
+ * header says what it can't): the head each force-push made, then the head
+ * before the push that is being recorded (`before`, when a plain push) and the
+ * current head. Empty when the timeline names no force-push (the caller then
+ * starts from `before`), and when fewer than two distinct heads come out.
+ * Consecutive repeats are one head.
+ *
+ * @param {readonly TimelineEvent[]} events
+ * @param {{ head: string, before: string | null }} now
+ * @returns {string[]}
+ */
+export function headChain(events, { head, before }) {
+  return headHistory(events, { head, before }).chain;
+}
+
+/**
+ * `headChain`, and whether its first head is one a force-push made (so that
+ * earlier heads were replaced before it) rather than `before`, the head the PR
+ * had before this push, which is its opening head when no force-push came
+ * earlier.
+ *
+ * @param {readonly TimelineEvent[]} events
+ * @param {{ head: string, before: string | null }} now
+ * @returns {{ chain: string[], fromTimeline: boolean }}
+ */
+export function headHistory(events, { head, before }) {
+  const sha = /^[0-9a-f]{40}$/;
+  /** @type {string[]} */
+  const ids = [];
+  for (const e of events) {
+    if (e?.event !== 'head_ref_force_pushed' || typeof e.commit_id !== 'string') continue;
+    const id = e.commit_id.toLowerCase();
+    if (sha.test(id) && ids[ids.length - 1] !== id) ids.push(id);
+  }
+  if (ids.length === 0 || !sha.test(head)) return { chain: [], fromTimeline: false };
+  const chain = ids[ids.length - 1] === head ? ids.slice(0, -1) : ids;
+  const fromTimeline = chain.length > 0;
+  if (before !== null && sha.test(before) && chain[chain.length - 1] !== before) chain.push(before);
+  if (chain[chain.length - 1] !== head) chain.push(head);
+  return chain.length >= 2 ? { chain, fromTimeline } : { chain: [], fromTimeline: false };
+}
+
+/**
+ * Which heads of a chain are written, each with its true revision number (its
+ * place in the whole chain, from 1): all of them up to `max`, else the first
+ * and the latest `max - 1`.
+ *
+ * @param {readonly string[]} chain
+ * @param {number} [max]
+ * @returns {{ kept: { sha: string, rev: number }[], omitted: number }}
+ */
+export function capChain(chain, max = HISTORY_HEADS) {
+  const all = chain.map((sha, i) => ({ sha, rev: i + 1 }));
+  if (all.length <= max) return { kept: all, omitted: 0 };
+  return { kept: [all[0], ...all.slice(all.length - (max - 1))], omitted: all.length - max };
+}
 
 /** A footer a tool or an author closes a description with: a rule, then one italic line. */
 const FOOTER = /\r?\n---[ \t]*(?:\r?\n)+_[^\r\n]*_[ \t]*(?:\r?\n)*$/;
@@ -119,6 +212,7 @@ export function withPair(body) {
  * @property {Row[]} rows the valid rows
  * @property {string[]} rest lines that are no valid row, kept below the table
  * @property {number} omitted how many earlier revisions a past run left out
+ * @property {number} [capped] how many earlier heads the first write didn't list (HISTORY_HEADS)
  */
 
 /**
@@ -154,6 +248,7 @@ export function parseTable(inner, repo) {
   /** @type {string[]} */
   const rest = [];
   let omitted = 0;
+  let capped = 0;
   for (const raw of inner.split(/\r?\n/)) {
     const line = raw.trim();
     if (line === '' || line === HEADING || /^\|\s*Rev\s*\|/.test(line)) continue;
@@ -161,6 +256,11 @@ export function parseTable(inner, repo) {
     const note = OMITTED.exec(line);
     if (note) {
       omitted += Number(note[1]);
+      continue;
+    }
+    const cap = CAPPED.exec(line);
+    if (cap) {
+      capped += Number(cap[1]);
       continue;
     }
     const c = line.startsWith('|') ? cells(line) : [];
@@ -181,7 +281,7 @@ export function parseTable(inner, repo) {
       rest.push(inert(line.slice(0, CELL_CHARS * 4)).replace(/\(current\)/g, '(current\u200b)'));
     }
   }
-  return { rows, rest, omitted };
+  return { rows, rest, omitted, capped };
 }
 
 /**
@@ -214,7 +314,7 @@ const rowLine = (row, repo) =>
  * @param {string} repo
  * @param {{ heading: boolean }} options
  */
-export function renderTable({ rows, rest, omitted }, repo, { heading }) {
+export function renderTable({ rows, rest, omitted, capped = 0 }, repo, { heading }) {
   const sorted = [...rows].sort((a, b) => b.rev - a.rev);
   return [
     ...(heading ? [HEADING, ''] : []),
@@ -225,6 +325,12 @@ export function renderTable({ rows, rest, omitted }, repo, { heading }) {
       ? [
           '',
           `_${omitted} earlier revision${omitted === 1 ? '' : 's'} left out to stay under GitHub's limit._`,
+        ]
+      : []),
+    ...(capped > 0
+      ? [
+          '',
+          `_${capped} earlier head${capped === 1 ? ' is' : 's are'} not listed: the table keeps the first head and the latest ones._`,
         ]
       : []),
     ...(rest.length > 0 ? ['', ...rest] : []),

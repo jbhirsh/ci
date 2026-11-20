@@ -69,7 +69,9 @@ description: >-
   pair (with `## Revisions` and row 1 for the head the PR opened at, the first
   time); a PR with one head gets nothing. A description with no revisions marker
   at all (rewritten without the template's pair) gets the empty pair back first,
-  when a push has moved the head. The row is written after the change
+  when a push has moved the head. The first write of a table lists the heads
+  before it from the PR's timeline (read with the Actions token; revisions.mjs
+  says what that gives, and what it does not). The row is written after the change
   slots, with the person's token (`token`), because an edit by the Actions
   token starts no workflow: the description check, which reads the table's
   current row for the PR's head, runs again on the edit and supersedes the run

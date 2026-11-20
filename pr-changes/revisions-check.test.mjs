@@ -33,6 +33,7 @@ function runTool(first) {
       body: () => body,
       commits: () => [{ sha: '1', subject: 'One', skipped: false }],
       compare: () => ({ status: 'ahead', behindBy: 0, base: A, shas: ['1'] }),
+      timeline: () => [],
       write: (b) => {
         body = b;
       },

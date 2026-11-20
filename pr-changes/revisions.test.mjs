@@ -4,10 +4,13 @@ import {
   CELL_CHARS,
   REVISIONS_BUDGET,
   SUBJECTS,
+  HISTORY_HEADS,
   addRevision,
   budgeted,
+  capChain,
   describeRange,
   goalSentence,
+  headChain,
   inert,
   parseTable,
   previousHead,
@@ -403,5 +406,88 @@ describe('withPair', () => {
   it('does not take a fenced index block for the template’s', () => {
     const body = `a\n\n\`\`\`\n${INDEX}\n\`\`\`\n`;
     expect(withPair(body)).toBe(`${body.trimEnd()}\n\n${START}\n${END}\n`);
+  });
+});
+
+describe('headChain and capChain', () => {
+  const sha = (/** @type {number} */ n) => n.toString(16).padStart(2, '0').repeat(20);
+  const forced = (/** @type {string} */ id) => ({ event: 'head_ref_force_pushed', commit_id: id });
+
+  it('is the heads force-pushes made, the head before this push, and the head', () => {
+    const [a, b, c, d] = [sha(1), sha(2), sha(3), sha(4)];
+    expect(headChain([forced(a), forced(b), forced(c)], { head: c, before: b })).toEqual([a, b, c]);
+    expect(headChain([forced(a), forced(b)], { head: d, before: b })).toEqual([a, b, d]);
+    expect(headChain([forced(a), forced(b)], { head: d, before: c })).toEqual([a, b, c, d]);
+    expect(headChain([forced(a), forced(b)], { head: d, before: null })).toEqual([a, b, d]);
+  });
+
+  it('is empty without a force-push, and for fewer than two heads', () => {
+    expect(headChain([], { head: sha(1), before: sha(2) })).toEqual([]);
+    expect(
+      headChain([{ event: 'committed', sha: sha(3) }, { event: 'labeled' }], {
+        head: sha(1),
+        before: sha(2),
+      }),
+    ).toEqual([]);
+    expect(headChain([forced(sha(1))], { head: sha(1), before: null })).toEqual([]);
+  });
+
+  it('reads only what is a head: 40 hex, an event of its kind, once in a row', () => {
+    const [a, b] = [sha(1), sha(2)];
+    /** @type {Record<string, unknown>[]} */
+    const events = [
+      forced(a),
+      forced(a),
+      forced(a.toUpperCase()),
+      forced('nope'),
+      { event: 'head_ref_force_pushed' },
+      { event: 'head_ref_force_pushed', commit_id: 7 },
+      { event: 'committed', commit_id: sha(9) },
+      forced(b),
+    ];
+    expect(headChain(events, { head: b, before: a })).toEqual([a, b]);
+    expect(headChain([forced(a)], { head: 'short', before: a })).toEqual([]);
+  });
+
+  it('keeps all heads up to the cap, else the first and the latest, with their true numbers', () => {
+    const chain = Array.from({ length: 25 }, (_, i) => sha(i + 1));
+    expect(capChain(chain.slice(0, 3))).toEqual({
+      kept: [
+        { sha: sha(1), rev: 1 },
+        { sha: sha(2), rev: 2 },
+        { sha: sha(3), rev: 3 },
+      ],
+      omitted: 0,
+    });
+    const capped = capChain(chain, 5);
+    expect(capped.kept.map((k) => k.rev)).toEqual([1, 22, 23, 24, 25]);
+    expect(capped.omitted).toBe(20);
+    expect(capChain(chain).kept).toHaveLength(HISTORY_HEADS);
+  });
+});
+
+describe('the note of heads the first write did not list', () => {
+  const note =
+    '_12 earlier heads are not listed: the table keeps the first head and the latest ones._';
+
+  it('is read back as a count, not as a line that is no row, and written again once', () => {
+    const t = parseTable(`${table(row('1', A), row('13', B))}\n\n${note}`, REPO);
+    expect(t.capped).toBe(12);
+    expect(t.rest).toEqual([]);
+    const out = renderTable(t, REPO, { heading: false });
+    expect(out.match(/earlier heads are not listed/g)).toHaveLength(1);
+    expect(parseTable(out, REPO).capped).toBe(12);
+    expect(renderTable({ ...t, capped: 1 }, REPO, { heading: false })).toContain(
+      '_1 earlier head is not listed',
+    );
+  });
+
+  it('is told apart from the limit’s note, and both survive a new row', () => {
+    const both = `${table(row('1', A), row('9', B))}\n\n_2 earlier revisions left out to stay under GitHub's limit._\n\n${note}`;
+    const next = addRevision(parseTable(both, REPO), { head: C, what: 'w', opened: null });
+    const out = renderTable(next, REPO, { heading: false });
+    expect(out).toContain('left out to stay under');
+    expect(out).toContain('12 earlier heads are not listed');
+    expect(out).toContain('| 10 (current)');
   });
 });

@@ -42,6 +42,7 @@ function revisionsSelftest(template) {
     body: () => body,
     commits: () => [{ sha: head, subject: 'Second push', skipped: false }],
     compare: () => ({ status: 'ahead', behindBy: 0, base: opened, shas: [head] }),
+    timeline: () => [],
     write: (text) => {
       body = text;
     },
