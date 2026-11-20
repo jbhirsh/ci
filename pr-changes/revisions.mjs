@@ -33,9 +33,16 @@
 // older rows' What cut to a note (never row 1's, nor the newest's); the oldest
 // rows after row 1 left out, said in a line under the table.
 //
+// A description with no revisions markers at all (an author, or a tool that
+// rewrote it, left the template's pair out) would never get a table, and
+// nothing would say so: `withPair` puts the empty pair back, so that the
+// first push that moves the head can write the table (revisions-run.mjs says
+// when it asks for one).
+//
 // Pure: texts in, texts out. revisions-run.mjs reads and writes GitHub.
 
-import { escape } from './changes.mjs';
+import { revisionsPair } from '../pr-template/body.mjs';
+import { blocks, escape, ownBlock } from './changes.mjs';
 
 /** The most characters the Revisions block holds. */
 export const REVISIONS_BUDGET = 12_000;
@@ -64,6 +71,46 @@ const CUT = 'older revision: its commits are cut to keep this table short';
  * @property {string} what
  * @property {string} why
  */
+
+/** A footer a tool or an author closes a description with: a rule, then one italic line. */
+const FOOTER = /\r?\n---[ \t]*(?:\r?\n)+_[^\r\n]*_[ \t]*(?:\r?\n)*$/;
+
+/**
+ * The description with the empty revisions marker pair in it when it has no
+ * revisions marker at all, counted as the description check counts them
+ * (`revisionsPair`): a marker is the whole of its line, outside fenced code,
+ * so a fenced example or a marker quoted in a sentence doesn't stop the pair
+ * being put in, and one torn or repeated pair is the author's to mend, which
+ * the tool warns about. The pair goes where the template puts it: above the
+ * index block of the changes tool when there is one, else at the end, ahead of
+ * a footer rule, in the description's own line endings.
+ *
+ * @param {string} body
+ * @returns {string}
+ */
+export function withPair(body) {
+  const found = revisionsPair(body);
+  if (found.starts.length > 0 || found.ends.length > 0) return body;
+  const { start, end } = blocks.markers('revisions');
+  const nl = body.includes('\r\n') ? '\r\n' : '\n';
+  const pair = `${start}${nl}${end}`;
+  const index = ownBlock(body, 'index');
+  const footer = FOOTER.exec(body);
+  let out;
+  if (index) {
+    const before = body.slice(0, index.from);
+    // The pair is lines of its own, even where the index block shares a line with text.
+    const lead = before === '' || before.endsWith('\n') ? '' : nl;
+    out = `${before}${lead}${pair}${nl}${nl}${body.slice(index.from)}`;
+  } else if (footer) {
+    out = `${body.slice(0, footer.index).trimEnd()}${nl}${nl}${pair}${nl}${body.slice(footer.index)}`;
+  } else {
+    out = body.trimEnd() ? `${body.trimEnd()}${nl}${nl}${pair}${nl}` : `${pair}${nl}`;
+  }
+  // A description that ends inside a fence that never closes would hide a pair
+  // put at the end: then it goes first, where no fence has opened yet.
+  return revisionsPair(out).at ? out : `${pair}${nl}${nl}${body}`;
+}
 
 /**
  * The block's content, read.
