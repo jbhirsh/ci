@@ -396,6 +396,57 @@ describe("the template's Example", () => {
   });
 });
 
+describe("bodyProblems: Revisions' marker pair, once a push has moved the head", () => {
+  const START = '<!-- pr-changes:revisions -->';
+  const END = '<!-- /pr-changes:revisions -->';
+  const base = GOOD.slice(0, GOOD.indexOf('## Revisions')).trimEnd();
+  const head = 'abcdef0123';
+  const row = '| 2 (current) | [`abcdef0`](https://github.com/o/r/commit/abcdef0123) | w | y |';
+  const withPair = `${base}\n\n${START}\n${END}\n`;
+  const withTable = `${base}\n\n${START}\n## Revisions\n\n| Rev | Head | What changed | Why |\n| --- | --- | --- | --- |\n${row}\n${END}\n`;
+  const revisions = (/** @type {string} */ body, /** @type {{ pushed?: boolean }} */ event) =>
+    bodyProblems(body, head, event).filter((p) =>
+      /pr-changes:revisions|Revisions:|update Revisions/.test(p),
+    );
+
+  it('asks for the pair after a push, and says how to fix it', () => {
+    const [problem] = revisions(base, { pushed: true });
+    expect(problem).toMatch(/no `<!-- pr-changes:revisions -->`.*pair/);
+    expect(problem).toMatch(/puts a missing pair back/);
+  });
+
+  it('does not ask for it of a PR that has not been pushed to, whatever its commits', () => {
+    for (const event of [{}, { pushed: false }]) expect(revisions(base, event)).toEqual([]);
+    // A multi-commit PR opened, reopened, edited or marked ready is not asked: the event is no push,
+    // and the check is not given a commit count.
+  });
+
+  it('wants one clean pair, in order, each marker alone on its line and outside code', () => {
+    expect(revisions(withPair, { pushed: true })[0]).toMatch(/no current row/);
+    for (const torn of [
+      `${base}\n${START}\n`,
+      `${base}\n${END}\n${START}\n`,
+      `${withPair}\n${START}\n${END}\n`,
+    ]) {
+      expect(revisions(torn, { pushed: true })[0]).toMatch(/exactly one/);
+    }
+    const fenced = `${base}\n\n\`\`\`\n${START}\n${END}\n\`\`\`\n`;
+    expect(revisions(fenced, { pushed: true })[0]).toMatch(/no `<!-- pr-changes:revisions -->`/);
+    const quoted = `${base}\n\nKeep \`${START}\` and \`${END}\` in it.\n`;
+    expect(revisions(quoted, { pushed: true })[0]).toMatch(/no `<!-- pr-changes:revisions -->`/);
+    // A fenced example beside the real pair is not a second pair.
+    const both = `${withTable}\n\`\`\`\n${START}\n${END}\n\`\`\`\n`;
+    expect(revisions(both, { pushed: true })).toEqual([]);
+  });
+
+  it('after a push, wants a current row too, which the tool writes', () => {
+    expect(revisions(withPair, { pushed: true })[0]).toMatch(/no current row/);
+    expect(revisions(withTable, { pushed: true })).toEqual([]);
+    // Not after an edit: a table the tool hasn't written yet is not this check's to ask for.
+    expect(revisions(withPair, {})).toEqual([]);
+  });
+});
+
 describe('revisionsPair and maskFences, with backslashes in the description', () => {
   const START = '<!-- pr-changes:revisions -->';
   const END = '<!-- /pr-changes:revisions -->';

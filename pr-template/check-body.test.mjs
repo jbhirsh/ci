@@ -31,6 +31,19 @@ describe('report', () => {
     expect(out.message).toContain('update Revisions');
   });
 
+  it('passes the push to the check, and a PR that was not pushed to needs no pair', () => {
+    const none = GOOD;
+    expect(report({ body: none, action: 'opened' }).code).toBe(0);
+    for (const action of ['edited', 'reopened', 'ready_for_review']) {
+      expect(report({ body: none, action }).code).toBe(0);
+    }
+    const pushed = report({ body: none, action: 'synchronize' });
+    expect(pushed.code).toBe(1);
+    expect(pushed.message).toContain('pr-changes:revisions');
+    expect(report({ body: none, action: 'synchronize', author: 'dependabot[bot]' }).code).toBe(0);
+    expect(report({ body: none, action: 'synchronize', headRef: 'bot/x' }).code).toBe(0);
+  });
+
   it('checks a PR with no description', () => {
     expect(report({ body: undefined }).code).toBe(1);
   });
