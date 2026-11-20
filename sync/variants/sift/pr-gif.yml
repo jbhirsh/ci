@@ -1,0 +1,50 @@
+name: PR GIFs
+
+# A PR's before/after GIFs, for motion a still can't show: jbhirsh/ci's
+# reusable pr-gif.yml (its header says how) takes the videos of the
+# scenarios in e2e/gifs that the PR's CI run recorded (its Screenshots and
+# GIFs job) and a gifs-only run of ci.yml it starts on main, turns them into
+# GIFs and attaches them to the PR's description.
+#
+# The fallback: a PR that changes a scenario gets its GIFs on its own, from
+# pr-gif-attach.yml once its CI run finishes. Run this by hand (Actions, PR
+# GIFs, Run workflow) or through the Actions API, with the PR's number, for
+# every scenario the PR's run recorded, side by side or after only, a failed
+# automatic run, or a fork's PR, and only for a PR whose code you'd run.
+# Dispatch-only, as CI's run is the recording, so it isn't a pull-request
+# workflow: no required check or autofix trigger depends on it.
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: The PR's number
+        required: true
+        type: number
+      side-by-side:
+        description: One labelled GIF of before and after side by side
+        type: boolean
+        default: false
+      after-only:
+        description: Only "after", for a screen main doesn't have
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  gif:
+    permissions:
+      contents: read
+      # videos.mjs reads the PR's head, its CI run and that run's videos,
+      # and starts the gifs-only run on main.
+      pull-requests: read
+      actions: write
+    uses: jbhirsh/ci/.github/workflows/pr-gif.yml@main
+    with:
+      pr: ${{ inputs.pr }}
+      side-by-side: ${{ inputs.side-by-side }}
+      after-only: ${{ inputs.after-only }}
+    secrets:
+      # A person's fine-grained token (Contents and Pull requests write):
+      # GitHub refuses the Actions token for attachments.
+      bot-token: ${{ secrets.BOT_PR_TOKEN }}
