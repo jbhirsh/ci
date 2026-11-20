@@ -1,0 +1,43 @@
+name: PR GIFs attach
+
+# A PR's GIFs, on their own: jbhirsh/ci's reusable pr-gif-attach.yml (its
+# header says how). Once a PR's CI run finishes, for each scenario in
+# e2e/gifs (gif.scenarios in .github/ci.json) the PR's whole diff adds or
+# changes, it takes the video that run's Screenshots and GIFs job recorded
+# (ios-gif-videos) as "after", starts a gifs-only ci.yml run on main for
+# "before", makes the GIFs and attaches them to the PR's description. A
+# later push records and replaces them in place; a scenario that stopped
+# early keeps its earlier GIFs, marked "Not updated"; and the automatic GIFs
+# of a scenario the PR no longer changes are dropped.
+#
+# workflow_run always runs main's copy of this file, in a run of its own, so
+# BOT_PR_TOKEN is never in a run holding the PR's code, and it checks out
+# only main. A fork's PR is neither recorded on main nor attached: a "PR
+# GIFs" commit status says so, and anyone who trusts it runs PR GIFs
+# (pr-gif.yml) by hand. That status, pending then success or failure, is how
+# its result shows on the PR. Not a pull-request workflow, so no required
+# check or autofix trigger depends on it.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  gif:
+    # Only a PR's run: CI also completes on each push to main and for each
+    # gifs-only run this starts there, which the check would only turn away.
+    if: github.event.workflow_run.event == 'pull_request'
+    permissions:
+      contents: read
+      # Starts the gifs-only run on main for "before", and reads the PR's
+      # run and its videos.
+      actions: write
+      pull-requests: read
+      statuses: write
+    uses: jbhirsh/ci/.github/workflows/pr-gif-attach.yml@main
+    secrets:
+      # A person's fine-grained token (Contents and Pull requests write):
+      # GitHub refuses the Actions token for attachments.
+      bot-token: ${{ secrets.BOT_PR_TOKEN }}
