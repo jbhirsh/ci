@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { BUDGET, escape, fill, renderChange } from './changes.mjs';
 
-const WHERE = { repo: 'jbhirsh/app', number: 1 };
+const WHERE = { repo: 'jbhirsh/app', number: 1, n: 1 };
 
 describe('escape', () => {
   it('never leaves a tag, a mention or a line break for any text', () => {
@@ -17,9 +17,17 @@ describe('escape', () => {
 });
 
 describe('renderChange and fill', () => {
+  // What a commit's first line can be: any text, and the awkward ones (trailing
+  // space, a CR from a CRLF message, nothing, replacement patterns).
+  const subjectArb = fc.oneof(
+    fc.string(),
+    fc.string().map((s) => `${s} `),
+    fc.string().map((s) => `${s}\r`),
+    fc.constantFrom('', ' ', '\r', '\t', 'Fix x ', '$&', '$1', '$`', "$'", '$$', 'a \u200b'),
+  );
   const commitArb = fc.record({
     sha: fc.stringMatching(/^[0-9a-f]{40}$/),
-    subject: fc.string(),
+    subject: subjectArb,
     files: fc.array(
       fc.record({ path: fc.string({ minLength: 1 }), added: fc.nat(), removed: fc.nat() }),
       { maxLength: 5 },
@@ -76,6 +84,31 @@ describe('renderChange and fill', () => {
       fc.property(commitArb, (commit) => {
         const [line] = renderChange(commit, WHERE).split('\n');
         expect(line).not.toMatch(/(?<!\\)\$/);
+      }),
+    );
+  });
+
+  // The title is `**N. <subject>** [sha](link)`: the number is the marker's, the
+  // subject can't break out of the bold (no space or nothing inside the stars),
+  // and the commit link is the last thing on the line.
+  it('writes each title as its own number, a bold subject and the commit link last', () => {
+    fc.assert(
+      fc.property(fc.array(commitArb, { minLength: 1, maxLength: 4 }), (commits) => {
+        const slots = commits
+          .map(
+            (_, i) => `<!-- pr-changes:change:${i + 1} -->\n<!-- /pr-changes:change:${i + 1} -->`,
+          )
+          .join('\n\n');
+        const out = fill(`## Changes\n\n${slots}\n`, commits, WHERE).body;
+        const titles = out.split('\n').filter((line) => /^\*\*\d+\. /.test(line));
+        expect(titles).toHaveLength(commits.length);
+        titles.forEach((line, i) => {
+          expect(line.startsWith(`**${i + 1}. `)).toBe(true);
+          expect(line.endsWith(`](https://github.com/jbhirsh/app/commit/${commits[i].sha})`)).toBe(
+            true,
+          );
+          expect(line).toMatch(/^\*\*\d+\. \S(.*\S)?\*\* \[`[0-9a-f]{7}`\]/);
+        });
       }),
     );
   });
