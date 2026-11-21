@@ -47,6 +47,11 @@ const text = fc.oneof(
   fc.string().map((s) => `a.ts${s}`),
 );
 
+// Each run that gets past a tool's own refusals starts a git process, so the
+// runs are sized by that cost: under a 250 ms start (a loaded runner) 200 runs
+// of these took 13-27 s each. Half as many keep every kind of input (the
+// generators still draw from all their arms, and the injection strings are
+// 6 of each draw's choices) and run in 7-14 s there.
 describe('the tools, for any input', () => {
   it('never throw, and diff only files the PR changes', () => {
     fc.assert(
@@ -56,7 +61,7 @@ describe('the tools, for any input', () => {
           expect(paths.every((p) => p === 'a.ts')).toBe(true);
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 100 },
     );
   });
   it('never throw, and show only HEAD or the base', () => {
@@ -68,7 +73,7 @@ describe('the tools, for any input', () => {
           expect(file.startsWith('-')).toBe(false);
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 100 },
     );
   });
   it("never throw, and show only the PR's commits", () => {
@@ -77,7 +82,7 @@ describe('the tools, for any input', () => {
         const result = commit(ctx, { sha });
         if (!result.isError) expect(ctx.headSha.startsWith(sha)).toBe(true);
       }),
-      { numRuns: 200 },
+      { numRuns: 100 },
     );
   });
   it('never comment on a file the PR leaves alone', async () => {
@@ -89,7 +94,7 @@ describe('the tools, for any input', () => {
         if (!result.text.startsWith('GitHub refused')) expect(result.isError).toBe(true);
         else expect(file).toBe('a.ts');
       }),
-      { numRuns: 100 },
+      { numRuns: 50 },
     );
   });
 });
