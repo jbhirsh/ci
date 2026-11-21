@@ -1,8 +1,8 @@
 name: PR description
 description: >-
   Holds a pull request's description to the shared shape (check-body.mjs
-  and body.mjs say what passes): goal, changes and each change's commit or
-  filled tool block, the plan table, the Revisions row naming the head and, once a
+  and body.mjs say what passes): goal, changes and each change's title,
+  commit and files (its filled tool block, or a commit link), the plan table, the Revisions row naming the head and, once a
   push has moved the head, the marker pair the changes tool writes it in. It
   reads only the pull request's event, so the job needs no checkout and no
   token: give the workflow `permissions: {}`. Run it from a workflow triggered
