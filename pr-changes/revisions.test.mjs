@@ -4,6 +4,7 @@ import {
   CELL_CHARS,
   REVISIONS_BUDGET,
   SUBJECTS,
+  OLDER_SUBJECTS,
   HISTORY_HEADS,
   addRevision,
   budgeted,
@@ -24,10 +25,18 @@ const B = 'b'.repeat(40);
 const C = 'c'.repeat(40);
 const head = (/** @type {string} */ sha) =>
   `[\`${sha.slice(0, 7)}\`](https://github.com/${REPO}/commit/${sha})`;
+// The table's old four-column shape, which is still read.
 const row = (/** @type {string} */ rev, /** @type {string} */ sha, what = 'w', why = 'y') =>
   `| ${rev} | ${head(sha)} | ${what} | ${why} |`;
 const table = (/** @type {string[]} */ ...lines) =>
   ['| Rev | Head | What changed | Why |', '| --- | --- | --- | --- |', ...lines].join('\n');
+// The two-column shape the tool writes: the current row bold with a pointer, an older one plain.
+const now = (/** @type {string} */ sha, what = 'w', why = 'y') =>
+  `| **👉 ${head(sha)}** (current)${what === '' ? '' : `<br>**${what}**`} | ${why} |`;
+const older = (/** @type {string} */ sha, what = 'w', why = 'y') =>
+  `| ${head(sha)}${what === '' ? '' : `<br>${what}`} | ${why} |`;
+const fresh = (/** @type {string[]} */ ...lines) =>
+  ['| What changed | Why |', '| --- | --- |', ...lines].join('\n');
 
 describe('parseTable', () => {
   it('reads valid rows, keeping their cells', () => {
@@ -79,12 +88,24 @@ describe('parseTable', () => {
     expect(t.rows[0].what).toBe('a \\| b');
   });
 
+  it('takes the repo as text, not as a pattern: a dot, a backslash or a bracket in it match themselves', () => {
+    const link = (/** @type {string} */ repo) =>
+      `| **👉 [\`aaaaaaa\`](https://github.com/${repo}/commit/${A})** (current) | w |`;
+    for (const repo of ['o/r.x', 'o/r[x]', 'o/r\\x', 'o/r+x', 'o/(r)']) {
+      const text = link(repo);
+      expect(parseTable(text, repo).rows).toHaveLength(1);
+    }
+    // A dot is a dot: it doesn't match any character.
+    expect(parseTable(link('o/rXx'), 'o/r.x').rows).toHaveLength(0);
+    expect(parseTable(link('o/r[x]'), 'o/rx').rows).toHaveLength(0);
+  });
+
   it('reads CRLF text', () => {
     expect(parseTable(table(row('1', A)).replace(/\n/g, '\r\n'), REPO).rows).toHaveLength(1);
   });
 
   it('keeps a Why that has pipes in it as one cell, with the pipes escaped', () => {
-    const t = parseTable(table(row('2 (current)', A, 'w', 'use a || b | c')), REPO);
+    const t = parseTable(table(row('1 (current)', A, 'w', 'use a || b | c')), REPO);
     expect(t.rest).toEqual([]);
     expect(t.rows).toHaveLength(1);
     expect(t.rows[0].current).toBe(true);
@@ -130,11 +151,13 @@ describe('renderTable', () => {
     const t = parseTable(`${table(row('1', A), row('2 (current)', B))}\nextra`, REPO);
     t.omitted = 2;
     const out = renderTable(t, REPO, { heading: true });
-    expect(out.startsWith('## Revisions\n\n| Rev |')).toBe(true);
-    expect(out.indexOf('| 2 (current)')).toBeLessThan(out.indexOf('| 1 |'));
+    expect(out.startsWith('## Revisions\n\n| What changed | Why |')).toBe(true);
+    expect(out.indexOf('| **👉 [`bbbbbbb`]')).toBeLessThan(out.indexOf('| [`aaaaaaa`]'));
     expect(out).toContain("_2 earlier revisions left out to stay under GitHub's limit._");
     expect(out.endsWith('extra')).toBe(true);
-    expect(renderTable(t, REPO, { heading: false }).startsWith('| Rev |')).toBe(true);
+    expect(renderTable(t, REPO, { heading: false }).startsWith('| What changed | Why |')).toBe(
+      true,
+    );
     expect(renderTable({ ...t, omitted: 1 }, REPO, { heading: false })).toContain(
       '1 earlier revision left',
     );
@@ -157,7 +180,40 @@ describe('describeRange', () => {
       out.startsWith(`[\`aaaaaaa…bbbbbbb\`](https://github.com/o/r/compare/${A}...${B})<br>`),
     ).toBe(true);
     expect(out.split('<br>')).toHaveLength(1 + SUBJECTS + 1);
-    expect(out.endsWith('+ 2 more')).toBe(true);
+    expect(out.endsWith(`+ ${7 - SUBJECTS} more`)).toBe(true);
+  });
+
+  it('lists at most three subjects, an older row of a rebuilt table two, each at most 56 characters', () => {
+    expect([SUBJECTS, OLDER_SUBJECTS]).toEqual([3, 2]);
+    const long = [{ sha: '1', subject: 'x'.repeat(100), skipped: false }];
+    const out = describeRange({ repo: REPO, prev: A, head: B, how: 'ahead', commits: long });
+    expect([...out.split('<br>')[1]]).toHaveLength(56 + 1);
+  });
+
+  it('keeps a row’s first cell under CELL_CHARS whatever a subject is, so it is read back as a row', () => {
+    for (const ch of ['&', '\\', '`', '<', '|', '@']) {
+      const subjects = Array.from({ length: SUBJECTS }, (_, i) => ({
+        sha: `${i}`,
+        subject: ch.repeat(100),
+        skipped: false,
+      }));
+      const what = describeRange({
+        repo: REPO,
+        prev: A,
+        head: B,
+        how: 'rewritten',
+        commits: subjects,
+        dropped: 999,
+      });
+      const t = addRevision(parseTable('', REPO), { head: B, what, opened: { sha: A, why: '' } });
+      const out = renderTable(t, REPO, { heading: false });
+      const first = out
+        .split('\n')[2]
+        .split(/(?<!\\)\|/)[1]
+        .trim();
+      expect(first.length).toBeLessThanOrEqual(CELL_CHARS);
+      expect(parseTable(out, REPO).rows).toHaveLength(2);
+    }
   });
 
   it('counts a bot or merge commit instead of listing it', () => {
@@ -191,7 +247,7 @@ describe('describeRange', () => {
     expect(subject.endsWith('…')).toBe(true);
   });
 
-  it('says a rewrite, with the merge base and the commits no longer on the branch', () => {
+  it('says a rewrite, with the commits dropped, and no merge base', () => {
     const out = describeRange({
       repo: REPO,
       prev: A,
@@ -199,14 +255,14 @@ describe('describeRange', () => {
       how: 'rewritten',
       commits: commits(1),
       dropped: 3,
-      base: C,
     });
-    expect(out).toContain(
-      'rewritten (force-push or rebase) from `aaaaaaa`, merge base `ccccccc`, 3 earlier commits no longer on the branch',
-    );
+    expect(out.split('<br>')[0]).toBe('rewritten from `aaaaaaa` (3 commits dropped)');
     expect(
       describeRange({ repo: REPO, prev: A, head: B, how: 'rewritten', commits: [], dropped: 1 }),
-    ).toContain('1 earlier commit no');
+    ).toBe('rewritten from `aaaaaaa` (1 commit dropped)');
+    expect(
+      describeRange({ repo: REPO, prev: A, head: B, how: 'rewritten', commits: [], dropped: 0 }),
+    ).toBe('rewritten from `aaaaaaa`');
   });
 
   it('says the old head is gone', () => {
@@ -295,7 +351,7 @@ describe('budgeted', () => {
       { heading: true },
     );
     expect(out.length).toBeLessThan(REVISIONS_BUDGET);
-    expect(out).toContain('| 2 (current)');
+    expect(out).toContain('| **👉 [`bbbbbbb`]');
   });
 
   it('steps the new row down to fewer subjects first', () => {
@@ -313,7 +369,7 @@ describe('budgeted', () => {
       REPO,
       { heading: true },
     );
-    expect(asked).toEqual([SUBJECTS, 3, 0]);
+    expect(asked).toEqual([SUBJECTS, 1, 0]);
     expect(out).toContain('short');
   });
 
@@ -324,9 +380,9 @@ describe('budgeted', () => {
       { heading: true },
     );
     expect(out.length).toBeLessThanOrEqual(REVISIONS_BUDGET);
-    expect(out).toContain('| 41 (current)');
+    expect(out).toContain('| **👉 [`bbbbbbb`]');
     expect(out).toContain('newest what');
-    expect(out).toContain('| 1 |');
+    expect(out).toContain('| [`0000000`]');
     expect(out).toContain('earlier revisions left out');
     expect(out).toContain('older revision: its commits are cut');
   });
@@ -348,8 +404,8 @@ describe('budgeted', () => {
       REPO,
       { heading: false },
     );
-    expect(out).toContain('| 1 |');
-    expect(out).toContain('| 7 (current)');
+    expect(out).toContain('| [`aaaaaaa`]');
+    expect(out).toContain('| **👉 [`aaaaaaa`]');
   });
 });
 
@@ -488,6 +544,161 @@ describe('the note of heads the first write did not list', () => {
     const out = renderTable(next, REPO, { heading: false });
     expect(out).toContain('left out to stay under');
     expect(out).toContain('12 earlier heads are not listed');
-    expect(out).toContain('| 10 (current)');
+    expect(out).toContain('| **👉 [`ccccccc`]');
+  });
+});
+
+describe('the two-column table', () => {
+  it('writes the head link, then what changed, in one cell, and the Why in the other', () => {
+    const t = addRevision(parseTable('', REPO), {
+      head: B,
+      what: `[\`aaaaaaa…bbbbbbb\`](https://github.com/${REPO}/compare/${A}...${B})<br>Subject<br>+ 2 more`,
+      opened: { sha: A, why: 'Goal.' },
+    });
+    expect(renderTable(t, REPO, { heading: false }).split('\n')).toEqual([
+      '| What changed | Why |',
+      '| --- | --- |',
+      `| **👉 ${head(B)}** (current)<br>**[\`aaaaaaa…bbbbbbb\`](https://github.com/${REPO}/compare/${A}...${B})**<br>**Subject**<br>**+ 2 more** |  |`,
+      `| ${head(A)}<br>Opened | Goal. |`,
+    ]);
+  });
+
+  it('reads a highlighted row, a plain one and a row an author took the pointer or the bold off, the same', () => {
+    const lead = head(A);
+    for (const cell of [
+      `**👉 ${lead}** (current)<br>**what**`,
+      `**${lead}** (current)<br>what`,
+      `${lead} (current)<br>what`,
+    ]) {
+      const t = parseTable(fresh(`| ${cell} | why |`), REPO);
+      expect(t.rest).toEqual([]);
+      expect(t.rows).toEqual([{ rev: 1, current: true, sha: A, what: 'what', why: 'why' }]);
+    }
+    expect(parseTable(fresh(older(A, 'what')), REPO).rows[0]).toEqual({
+      rev: 1,
+      current: false,
+      sha: A,
+      what: 'what',
+      why: 'y',
+    });
+  });
+
+  it('numbers a row by its place from the oldest, keeping row 1 when a note says rows were left out', () => {
+    const t = parseTable(fresh(now(C), older(B), older(A)), REPO);
+    expect(t.rows.map((r) => r.rev)).toEqual([3, 2, 1]);
+    const gap = parseTable(
+      `${fresh(now(C), older(A))}\n\n_5 earlier heads are not listed: the table keeps the first head and the latest ones._`,
+      REPO,
+    );
+    expect(gap.rows.map((r) => r.rev)).toEqual([7, 1]);
+  });
+
+  it('keeps what an author wrote in the Why, bold or not, as written', () => {
+    // A pipe in a Why is the author's text, kept as one cell with the pipe escaped; a backslash stays.
+    for (const [why, kept] of [
+      ['**stay**', '**stay**'],
+      ['plain', 'plain'],
+      ['**a** and _b_ | c', '**a** and _b_ \\| c'],
+      ['a \\ b', 'a \\ b'],
+      ['a \\| b', 'a \\| b'],
+    ]) {
+      const t = parseTable(fresh(now(A, 'w', why)), REPO);
+      const again = parseTable(renderTable(t, REPO, { heading: false }), REPO);
+      expect(t.rows[0].why).toBe(kept);
+      expect(again.rows[0].why).toBe(kept);
+    }
+  });
+
+  it('moves the highlight to the new row on every push, and reads the old four-column shape', () => {
+    const start = parseTable(
+      table(row('2 (current)', B, 'two', 'because'), row('1', A, 'Opened')),
+      REPO,
+    );
+    const once = renderTable(addRevision(start, { head: C, what: 'three', opened: null }), REPO, {
+      heading: false,
+    });
+    expect(once.split('\n').slice(2)).toEqual([
+      `| **👉 ${head(C)}** (current)<br>**three** |  |`,
+      `| ${head(B)}<br>two | because |`,
+      `| ${head(A)}<br>Opened | y |`,
+    ]);
+    const twice = renderTable(
+      addRevision(parseTable(once, REPO), { head: A, what: 'four', opened: null }),
+      REPO,
+      { heading: false },
+    );
+    expect(twice.split('\n').slice(2)).toEqual([
+      `| **👉 ${head(A)}** (current)<br>**four** |  |`,
+      `| ${head(C)}<br>three |  |`,
+      `| ${head(B)}<br>two | because |`,
+      `| ${head(A)}<br>Opened | y |`,
+    ]);
+    expect(twice.match(/\(current\)/g)).toHaveLength(1);
+  });
+
+  it('is a fixpoint, the old shape normalised to the new one on the first write', () => {
+    const old = parseTable(table(row('1', A), row('2 (current)', B)), REPO);
+    const once = renderTable(old, REPO, { heading: true });
+    expect(once).not.toContain('| Rev |');
+    expect(renderTable(parseTable(once, REPO), REPO, { heading: true })).toBe(once);
+  });
+
+  it('is read by the check as the old shape is: the current row must name the head', () => {
+    const t = parseTable(table(row('1', A), row('2 (current)', B)), REPO);
+    const body = (/** @type {string} */ revisions) =>
+      `## Goal\n\nx.\n\n## Changes\n\n### 1. c\n\nwhy\n\n<!-- pr-changes:revisions -->\n${revisions}\n<!-- /pr-changes:revisions -->\n`;
+    const problems = (/** @type {string} */ revisions, /** @type {string} */ sha) =>
+      bodyProblems(body(revisions), sha).filter((p) => /Revisions/.test(p));
+    const oldShape = table(row('1', A), row('2 (current)', B));
+    const newShape = renderTable(t, REPO, { heading: false });
+    for (const text of [oldShape, newShape]) {
+      expect(problems(text, B)).toEqual([]);
+      expect(problems(text, A)).toHaveLength(1);
+    }
+    // A subject that says (current) in an older row is not a current row.
+    const tricky = fresh(older(A, 'fix (current) thing'));
+    expect(problems(tricky, A)).toEqual([]);
+  });
+});
+
+describe('what an author typed in a plain row, and how the highlight is written', () => {
+  it('keeps the What of a plain older row as typed, bold marks and all', () => {
+    const typed = '**Important** fix **now**<br>**whole line**';
+    const t = parseTable(fresh(now(B), `| ${head(A)}<br>${typed} | y |`), REPO);
+    expect(t.rows[1].what).toBe(typed);
+    const out = renderTable(t, REPO, { heading: false });
+    expect(out).toContain(`| ${head(A)}<br>${typed} | y |`);
+    expect(renderTable(parseTable(out, REPO), REPO, { heading: false })).toBe(out);
+  });
+
+  it('takes the bold off a bold row’s What on reading and puts it back on writing, trimming each line', () => {
+    const t = parseTable(fresh(`| **👉 ${head(A)}** (current)<br>**one**<br>**two** | y |`), REPO);
+    expect(t.rows[0].what).toBe('one<br>two');
+    const padded = { ...t, rows: [{ ...t.rows[0], what: 'Fix the thing <br> and more ' }] };
+    expect(renderTable(padded, REPO, { heading: false })).toContain(
+      '<br>**Fix the thing**<br>**and more** |',
+    );
+  });
+
+  it('is read by the check and the parser alike: each form of a current row is current to both', () => {
+    const forms = [
+      `**👉 ${head(A)}** (current)<br>w`,
+      `**${head(A)}** (current)<br>w`,
+      `${head(A)} (current)<br>w`,
+      `**👉 ${head(A)}**(current)`,
+      `**👉 ${head(A)} (current)**`,
+      `👉 ${head(A)} (current)`,
+      `**👉 [\`aaaaaaa\`](https://elsewhere.example/x)** (current)<br>w`,
+    ];
+    for (const cell of forms) {
+      const text = fresh(`| ${cell} | y |`);
+      const parsed = parseTable(text, REPO).rows.some((r) => r.current);
+      const body = `## Goal\n\nx.\n\n## Changes\n\n### 1. c\n\nwhy\n\n<!-- pr-changes:revisions -->\n${text}\n<!-- /pr-changes:revisions -->\n`;
+      // The check says "no current row" on a push when it finds none.
+      const checked = !bodyProblems(body, A, { pushed: true }).some((p) =>
+        /no current row/.test(p),
+      );
+      expect(checked, cell).toBe(parsed);
+    }
   });
 });

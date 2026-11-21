@@ -273,3 +273,98 @@ describe('headHistory (property)', () => {
     );
   });
 });
+
+describe('the two-column table', () => {
+  const head = (/** @type {string} */ s) =>
+    `[\`${s.slice(0, 7)}\`](https://github.com/${REPO}/commit/${s})`;
+  /** One line of text an author might leave in a Why or a What: no newline, no pipe, bold marks and breaks allowed. */
+  const cell = fc
+    .array(
+      fc.oneof(fc.stringMatching(/^[A-Za-z0-9 .,_*`()-]{0,12}$/), fc.constantFrom('**', '<br>')),
+      {
+        maxLength: 5,
+      },
+    )
+    .map((parts) => parts.join(''));
+  const rows = fc.array(fc.record({ sha, what: cell, why: cell }), { minLength: 1, maxLength: 8 });
+
+  it('reads a table of either shape, and writes it back in the new one with every sha, Why and older row What kept, in order, and the one current row', () => {
+    fc.assert(
+      fc.property(rows, fc.nat(), fc.boolean(), (list, at, oldShape) => {
+        const current = at % list.length;
+        const text = list
+          .map((r, i) =>
+            oldShape
+              ? `| ${list.length - i}${i === current ? ' (current)' : ''} | ${head(r.sha)} | ${r.what} | ${r.why} |`
+              : `| ${i === current ? `**👉 ${head(r.sha)}** (current)` : head(r.sha)}<br>${r.what} | ${r.why} |`,
+          )
+          .join('\n');
+        const t = parseTable(text, REPO);
+        expect(t.rest).toEqual([]);
+        expect(t.rows.map((r) => r.sha)).toEqual(list.map((r) => r.sha));
+        expect(t.rows.map((r) => r.current)).toEqual(list.map((_, i) => i === current));
+        // What an author typed in a plain (older) row is what is read, bold marks and breaks and all:
+        // only a cell's outer spaces go, as a cell is trimmed (the What cell of the old shape is a cell of its own).
+        list.forEach((r, i) => {
+          if (oldShape) expect(t.rows[i].what).toBe(r.what.trim());
+          else if (i !== current) expect(t.rows[i].what).toBe(r.what.trimEnd());
+          expect(t.rows[i].why).toBe(r.why.trim());
+        });
+        const out = renderTable(t, REPO, { heading: false });
+        expect(out.startsWith('| What changed | Why |')).toBe(true);
+        expect(out).not.toContain('| Rev |');
+        const back = parseTable(out, REPO);
+        expect(back.rows.map((r) => r.sha)).toEqual(list.map((r) => r.sha));
+        expect(back.rows.map((r) => r.why)).toEqual(t.rows.map((r) => r.why));
+        expect(back.rows.map((r) => r.current)).toEqual(t.rows.map((r) => r.current));
+        // The current row's What is written bold line by line, each line trimmed: read again, the
+        // same text up to the spaces at the lines' ends; every other row is as it was.
+        t.rows.forEach((r, i) => {
+          const same = back.rows[i].what;
+          expect(r.current ? same.replace(/\s+/g, '') : same).toBe(
+            r.current ? r.what.replace(/\s+/g, '') : r.what,
+          );
+        });
+        expect(renderTable(back, REPO, { heading: false })).toBe(out);
+      }),
+    );
+  });
+
+  it('keeps every line an author typed that is no row, below the table, and the highlight on the newest row alone after a push', () => {
+    const prose = fc.array(fc.stringMatching(/^[a-z][a-z ]{0,20}$/), { maxLength: 4 });
+    fc.assert(
+      fc.property(rows, prose, sha, (list, notes, next) => {
+        const text = [
+          ...list.map(
+            (r, i) =>
+              `| ${i === 0 ? `**👉 ${head(r.sha)}** (current)` : head(r.sha)}<br>${r.what} | ${r.why} |`,
+          ),
+          ...notes,
+        ].join('\n');
+        const pushed = addRevision(parseTable(text, REPO), {
+          head: next,
+          what: 'new',
+          opened: null,
+        });
+        const out = renderTable(pushed, REPO, { heading: false });
+        for (const note of notes) expect(out).toContain(note.trim());
+        expect(out.match(/\(current\)/g)).toHaveLength(1);
+        expect(out.split('\n')[2]).toContain('**👉 ');
+        expect(out.match(/\*\*👉 /g)).toHaveLength(1);
+      }),
+    );
+  });
+
+  it('never throws on any text, old shape or new', () => {
+    fc.assert(
+      fc.property(messy, (text) => {
+        const t = parseTable(
+          `| **👉 ${head('a'.repeat(40))}** (current)<br>${text} | ${text} |\n${text}`,
+          REPO,
+        );
+        renderTable(t, REPO, { heading: true });
+        parseTable(text, REPO);
+      }),
+    );
+  });
+});

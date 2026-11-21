@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MAX_CHARS } from '../lib/comment.mjs';
 import { bodyProblems } from '../pr-template/body.mjs';
 import { gitHubIo, headingBefore, main, revisions } from './revisions-run.mjs';
+import { OLDER_SUBJECTS, SUBJECTS, parseTable } from './revisions.mjs';
 
 const REPO = 'o/r';
 const A = 'a'.repeat(40);
@@ -66,9 +67,9 @@ describe('revisions', () => {
     expect(run(f)).toBe(true);
     const out = f.body();
     expect(out).toContain('## Revisions');
-    expect(out).toContain(`| 1 | [\`aaaaaaa\`]`);
+    expect(out).toContain('| [`aaaaaaa`](');
     expect(out).toContain('Make it work.');
-    expect(out).toContain('| 2 (current) | [`bbbbbbb`]');
+    expect(out).toContain('| **👉 [`bbbbbbb`](');
     expect(out).toContain(`compare/${A}...${B}`);
     expect(out).toContain('Second');
     expect(out).not.toContain('First');
@@ -89,7 +90,7 @@ describe('revisions', () => {
       expect(run(f)).toBe(true);
       const out = f.body();
       expect(out.indexOf('## Revisions')).toBeLessThan(out.indexOf('pr-changes:index'));
-      expect(out).toContain('| 2 (current) | [`bbbbbbb`]');
+      expect(out).toContain('| **👉 [`bbbbbbb`](');
       expect(out.match(/pr-changes:revisions -->/g)).toHaveLength(2);
       expect(bodyProblems(out, B).filter((p) => /Revisions/.test(p))).toEqual([]);
     });
@@ -130,11 +131,13 @@ describe('revisions', () => {
       event: 'head_ref_force_pushed',
       commit_id: id,
     });
+    // A row has no number written: it is counted from the oldest, which is what this reads.
     const revs = (/** @type {string} */ out) =>
-      [...out.matchAll(/^\| (\d+)(?: \(current\))? \| \[`([0-9a-f]{7})`\]/gm)].map((m) => [
-        Number(m[1]),
-        m[2],
-      ]);
+      parseTable(
+        /<!-- pr-changes:revisions -->([\s\S]*)<!-- \/pr-changes:revisions -->/.exec(out)?.[1] ??
+          '',
+        REPO,
+      ).rows.map((r) => [r.rev, r.sha.slice(0, 7)]);
 
     it('writes one row per head a force-push made, in order, the newest current', () => {
       const [h1, h2, h3] = [sha(1), sha(2), sha(3)];
@@ -151,16 +154,36 @@ describe('revisions', () => {
         [2, short(2)],
         [1, short(1)],
       ]);
-      expect(out).toContain('| 3 (current)');
+      expect(out).toContain('| **👉 [`');
       expect(out).toContain("the first head GitHub's record of the PR names");
       expect(out).toContain('Make it work.');
       // h1 -> h2 can't be compared: its commits are gone.
-      expect(out).toContain('| (commits replaced by a force-push) |');
+      expect(out).toContain('<br>(commits replaced by a force-push) |');
       // h2 -> h3 was rewritten, 2 commits no longer on the branch.
-      expect(out).toMatch(
-        new RegExp(`rewritten \\(force-push or rebase\\) from \`${short(2)}\`.*2 earlier commits`),
-      );
+      expect(out).toMatch(new RegExp(`rewritten from \`${short(2)}\` \\(2 commits dropped\\)`));
       expect(bodyProblems(out, h3).filter((p) => /Revisions/.test(p))).toEqual([]);
+    });
+
+    it('lists up to three subjects on the current row and two on an older one, the rest as + N more', () => {
+      const [h1, h2, h3] = [sha(1), sha(2), sha(3)];
+      const many = ['1', '2', '3', '4', '5', '6'];
+      const f = fake({
+        pull: { headSha: h3 },
+        timeline: () => [forced(h1), forced(h2), forced(h3)],
+        commits: () => many.map((n) => ({ sha: n, subject: `Subject ${n}`, skipped: false })),
+        compare: () => ({ status: 'ahead', behindBy: 0, base: h1, shas: many }),
+      });
+      run(f, h2);
+      const rows = f
+        .body()
+        .split('\n')
+        .filter((l) => l.startsWith('| '))
+        .slice(2);
+      const subjects = (/** @type {number} */ at) => (rows[at].match(/Subject \d/g) ?? []).length;
+      expect(subjects(0)).toBe(SUBJECTS);
+      expect(subjects(1)).toBe(OLDER_SUBJECTS);
+      expect(f.body()).toContain(`+ ${many.length - SUBJECTS} more`);
+      expect(f.body()).toContain(`+ ${many.length - OLDER_SUBJECTS} more`);
     });
 
     it('adds the head of a plain push after the last force-push, and the head before this push', () => {
@@ -237,7 +260,7 @@ describe('revisions', () => {
         [2, 'bbbbbbb'],
         [1, 'aaaaaaa'],
       ]);
-      expect(f.body()).toContain('| Opened |');
+      expect(f.body()).toContain('<br>Opened |');
       expect(f.body()).not.toContain("the first head GitHub's record");
       // With an earlier force-push, row 1 is that one, and says its earlier heads were replaced.
       const g = fake({ pull: { headSha: B }, timeline: () => [forced(sha(1)), forced(B)] });
@@ -314,7 +337,7 @@ describe('revisions', () => {
       const out = g.body();
       expect(out.match(/earlier heads are not listed/g)).toHaveLength(1);
       expect(out).toContain('10 earlier heads are not listed');
-      expect(out).toContain('| 31 (current)');
+      expect(revs(out)[0][0]).toBe(31);
       expect(g.logs.filter((l) => /no row/.test(l))).toEqual([]);
     });
 
@@ -330,7 +353,7 @@ describe('revisions', () => {
         },
       });
       expect(run(g, B)).toBe(true);
-      expect(g.body()).toContain('| 5 (current)');
+      expect(revs(g.body())[0][0]).toBe(5);
     });
   });
 
@@ -356,8 +379,8 @@ describe('revisions', () => {
     });
     expect(run(g, B)).toBe(true);
     const out = g.body();
-    expect(out).toContain('| 3 (current) | [`ccccccc`]');
-    expect(out).toContain('| 2 | [`bbbbbbb`]');
+    expect(out).toContain('| **👉 [`ccccccc`](');
+    expect(out).toContain('| [`bbbbbbb`](');
     expect(out.match(/\(current\)/g)).toHaveLength(1);
     expect(out).toContain('My why');
   });
@@ -375,9 +398,7 @@ describe('revisions', () => {
   it('shows a force-push as rewritten, with the commits that left', () => {
     const f = fake({ compare: () => ({ status: 'diverged', behindBy: 2, base: C, shas: ['1'] }) });
     run(f);
-    expect(f.body()).toContain(
-      'rewritten (force-push or rebase) from `aaaaaaa`, merge base `ccccccc`, 2 earlier commits no longer on the branch',
-    );
+    expect(f.body()).toContain('rewritten from `aaaaaaa` (2 commits dropped)');
     expect(f.body()).toContain('First');
   });
 
@@ -417,7 +438,7 @@ describe('revisions', () => {
     expect(run(f)).toBe(true);
     // The example in the fence is as it was; the table is in a pair of its own.
     expect(f.body().split(PAIR)).toHaveLength(2);
-    expect(f.body()).toContain('| 2 (current) | [`bbbbbbb`]');
+    expect(f.body()).toContain('| **👉 [`bbbbbbb`](');
   });
 
   it('warns about a line that is no row and keeps it below the table', () => {

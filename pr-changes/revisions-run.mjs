@@ -57,6 +57,7 @@ import {
   addRevision,
   budgeted,
   capChain,
+  OLDER_SUBJECTS,
   describeRange,
   goalSentence,
   headHistory,
@@ -277,7 +278,6 @@ function history(io, body, table, { repo, head, before }) {
         how: found.status === 'ahead' ? 'ahead' : 'rewritten',
         commits: here,
         dropped: found.behindBy,
-        base: found.base,
       },
       subjects,
     );
@@ -289,7 +289,8 @@ function history(io, body, table, { repo, head, before }) {
       rev: k.rev,
       current: k.rev === newest,
       sha: k.sha,
-      what: what(k.rev, subjects),
+      // An older row lists fewer subjects than the current one: its compare link covers the rest.
+      what: what(k.rev, k.rev === newest ? subjects : Math.min(subjects, OLDER_SUBJECTS)),
       why: k.rev === 1 ? why : '',
     })),
     // What the author typed in the block stays below the table.
@@ -366,7 +367,6 @@ function plan(io, body, { repo, head, before }) {
             how,
             commits: since,
             dropped: byHead?.behindBy ?? 0,
-            base: byHead?.base ?? null,
           },
           subjects,
         ),

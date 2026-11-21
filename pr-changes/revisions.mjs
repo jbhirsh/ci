@@ -1,35 +1,61 @@
 // The Revisions table of a PR's description (ci#111): once the PR has a
 // revision (its head moved, by a push or a force-push), the tool writes
 // `## Revisions` and a table, newest first, between `<!-- pr-changes:revisions -->`
-// markers; until then it writes nothing. A row says the revision's number,
-// its head, what changed (written here from the commits) and why (the author's
-// to write). The description check (pr-template/body.mjs) reads the row whose
-// Rev cell says `(current)` and requires its Head cell to name the PR's head.
+// markers; until then it writes nothing. A row says its head, what changed
+// (written here from the commits) and why (the author's to write). The
+// description check (pr-template/body.mjs) reads the row whose first cell
+// says `(current)` and requires the head link in it to name the PR's head.
 //
-//   | Rev | Head | What changed | Why |
-//   | 2 (current) | [`abc1234`](https://github.com/o/r/commit/<40 hex>) | [`old7…new7`](…/compare/old...new)<br>subject<br>+ 3 more | |
+//   | What changed | Why |
+//   | --- | --- |
+//   | **👉 [`abc1234`](https://github.com/o/r/commit/<40 hex>)** (current)<br>**[`old7…new7`](…/compare/old...new)**<br>**subject**<br>**+ 3 more** | |
+//   | [`def5678`](https://github.com/o/r/commit/<40 hex>)<br>[`older…old7`](…)<br>subject | why |
 //
-// The old head goes in What, never in Head: the check tests that the current
-// row's Head cell holds the head's first 7 characters, so an old sha there
-// would pass falsely after a force-push back to it.
+// The current row stands out the way the Plan table's current step does: a
+// pointer, and each line of its first cell bold (the Why is not: it is the
+// author's, never touched, and `(current)` stays outside the bold so that the
+// check reads it the same however a row was edited); older rows are plain.
+// Every write puts the pointer on the newest row only, so it moves with each
+// push.
+//
+// Two columns, the head link at the top of the first cell: on a phone a
+// Rev and a Head column of their own took most of the width and squeezed What
+// changed to a few characters a line (the old four-column table, `| Rev | Head
+// | What changed | Why |`, with `2 (current)` in the first cell and the head
+// link in the second, is still read, and is written back in the new shape by
+// the next write: remove that reader once no open PR holds one). A row's
+// revision number is no longer written: it is its place from the oldest
+// (row 1), counted with the rows a note says were left out.
+//
+// The old head goes in What, never in the head link: the check tests that the
+// current row's head link holds the head's first 7 characters, so an old sha
+// there would pass falsely after a force-push back to it.
 //
 // The block is the author's to edit (a Why is meant to be), so it is parsed,
 // never trusted:
-//   - a row is a line starting `|` with exactly four cells (split on unescaped
-//     pipes), each at most CELL_CHARS; its Rev is 1-999999 with an optional
-//     ` (current)`; its Head is exactly one commit link of this repo whose
-//     seven hex are the sha's first seven. Only such a row is ever read as
-//     state (the previous head is the `(current)` one, else the highest Rev);
+//   - a row is a line starting `|` with two cells (split on unescaped pipes;
+//     the Why is the rest of the line), each at most CELL_CHARS, the first
+//     opening with exactly one commit link of this repo whose seven hex are the
+//     sha's first seven (the current row the tool writes has it bold with the
+//     pointer; a plain one, and a bold one without the pointer, are read too,
+//     as pr-template/body.mjs's check reads them, from the same two patterns),
+//     then an optional ` (current)`, then its What after a `<br>`; or, the old shape, four cells: a Rev 1-999999 with an
+//     optional ` (current)`, a Head that is such a link, What and Why. Only
+//     such a row is ever read as state (the previous head is the `(current)`
+//     one, else the highest Rev);
 //   - what the author typed is never destroyed: a valid row's cells are kept
 //     byte for byte (only `<!--` and `-->` are made harmless, as an unclosed
-//     comment would hide the end marker), and any other line is kept below
+//     comment would hide the end marker; the one exception is the What of a row
+//     written bold, which the tool writes bold line by line on the current
+//     row, so one bold layer is taken off each line on reading and put back on
+//     writing, and a plain row's What is never touched), and any other line is kept below
 //     the table, with its `(current)` defused, and a warning;
 //   - what this module writes is from validated values only: the repo and
 //     the shas, a Rev number, and commit subjects escaped by changes.mjs's
 //     `escape` (a subject is a stranger's text).
 //
 // Size: the block is held to REVISIONS_BUDGET characters by steps, each only
-// when the one before is too long: the new row's subjects (3, then none);
+// when the one before is too long: the new row's subjects (3, then 1, then none);
 // older rows' What cut to a note (never row 1's, nor the newest's); the oldest
 // rows after row 1 left out, said in a line under the table.
 //
@@ -60,22 +86,31 @@
 //
 // Pure: texts in, texts out. revisions-run.mjs reads and writes GitHub.
 
-import { revisionsPair } from '../pr-template/body.mjs';
+import { leadBold, leadPlain, revisionsPair } from '../pr-template/body.mjs';
 import { blocks, escape, ownBlock } from './changes.mjs';
 
 /** The most characters the Revisions block holds. */
 export const REVISIONS_BUDGET = 12_000;
 /** The most characters of one cell the tool reads or keeps. */
 export const CELL_CHARS = 2000;
-/** The most commit subjects a row lists, and their longest, before "+ N more". */
-export const SUBJECTS = 5;
-const SUBJECT_CHARS = 72;
+/**
+ * The most commit subjects the current row lists, and an older row of a rebuilt
+ * table, before "+ N more" (the row's compare link covers the rest), and the
+ * longest a subject is. On a phone the table is two columns of a few words: a
+ * row of five 72-character subjects was most of a screen. These also keep a
+ * row's first cell, the head link, the range, the subjects and the bold marks,
+ * under CELL_CHARS however a subject is escaped (a subject of `&` is five times
+ * as long written): 3 x 56 x 5 is 840, with about 400 for the rest.
+ */
+export const SUBJECTS = 3;
+export const OLDER_SUBJECTS = 2;
+const SUBJECT_CHARS = 56;
 /** The most characters of the goal's first sentence, which row 1's Why copies. */
 const WHY_CHARS = 200;
 
 const HEADING = '## Revisions';
-const HEADER = '| Rev | Head | What changed | Why |';
-const SEPARATOR = '| --- | --- | --- | --- |';
+const HEADER = '| What changed | Why |';
+const SEPARATOR = '| --- | --- |';
 const REV = /^([1-9]\d{0,5})( \(current\))?$/;
 const OMITTED = /^_(\d{1,6}) earlier revisions? left out to stay under GitHub's limit\._$/;
 const CAPPED =
@@ -86,7 +121,7 @@ const CUT = 'older revision: its commits are cut to keep this table short';
  * One valid row of the table.
  *
  * @typedef {object} Row
- * @property {number} rev
+ * @property {number} rev its place from the oldest, 1 up (read from an old table's Rev cell, else counted)
  * @property {boolean} current
  * @property {string} sha the row's head, 40 hex
  * @property {string} what
@@ -233,6 +268,32 @@ function cells(line) {
 }
 
 /**
+ * A What cell as the tool wrote it for the current row (each `<br>`-separated
+ * line bold) back to the plain text it holds, one bold layer taken off each
+ * line. What the tool writes is escaped, so a line it wrote never starts and
+ * ends with an unescaped `**` of its own.
+ *
+ * @param {string} what
+ */
+function unbold(what) {
+  return what
+    .split('<br>')
+    .map((l) => (/^\*\*[\s\S]+\*\*$/.test(l) && l.length > 4 ? l.slice(2, -2) : l))
+    .join('<br>');
+}
+
+/**
+ * A What cell for the current row: each `<br>`-separated line bold.
+ *
+ * @param {string} what
+ */
+const emphasised = (what) =>
+  what
+    .split('<br>')
+    .map((l) => (l.trim() === '' ? l : `**${l.trim()}**`))
+    .join('<br>');
+
+/**
  * Reads the block's content (what is between its markers).
  *
  * @param {string} inner
@@ -240,9 +301,15 @@ function cells(line) {
  * @returns {Table}
  */
 export function parseTable(inner, repo) {
-  const head = new RegExp(
-    `^\\[\`([0-9a-f]{7})\`\\]\\(https://github\\.com/${repo.replace(/[.\\]/g, '\\$&')}/commit/([0-9a-f]{40})\\)$`,
-  );
+  // The repo goes into a pattern: every character a pattern reads is escaped, the backslash with them.
+  const where = repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const link = `\\[\`([0-9a-f]{7})\`\\]\\(https://github\\.com/${where}/commit/([0-9a-f]{40})\\)`;
+  // The old shape's Head cell is the link alone; the new shape's first cell opens with it: bold,
+  // with a pointer, on the current row, plain on an older one, either way read.
+  const head = new RegExp(`^${link}$`);
+  const tail = '( \\(current\\))?(?:<br>([\\s\\S]*))?$';
+  const bold = new RegExp(`^${leadBold(link)}${tail}`);
+  const plain = new RegExp(`^${leadPlain(link)}${tail}`);
   /** @type {Row[]} */
   const rows = [];
   /** @type {string[]} */
@@ -251,7 +318,7 @@ export function parseTable(inner, repo) {
   let capped = 0;
   for (const raw of inner.split(/\r?\n/)) {
     const line = raw.trim();
-    if (line === '' || line === HEADING || /^\|\s*Rev\s*\|/.test(line)) continue;
+    if (line === '' || line === HEADING || /^\|\s*(?:Rev|What changed)\s*\|/.test(line)) continue;
     if (/^\|[\s:|-]+\|?$/.test(line)) continue;
     const note = OMITTED.exec(line);
     if (note) {
@@ -264,23 +331,50 @@ export function parseTable(inner, repo) {
       continue;
     }
     const c = line.startsWith('|') ? cells(line) : [];
-    // Pipes in the Why (the last cell) are the author's text, not more columns:
-    // they are put back escaped, so the row stays a row when it is written.
-    if (c.length > 4) c.splice(3, c.length - 3, c.slice(3).join(' \\| '));
-    const rev = c.length === 4 && c.every((x) => x.length <= CELL_CHARS) ? REV.exec(c[0]) : null;
-    const link = rev ? head.exec(c[1]) : null;
-    if (rev && link && link[2].startsWith(link[1])) {
-      rows.push({
-        rev: Number(rev[1]),
-        current: rev[2] !== undefined,
-        sha: link[2],
-        what: inert(c[2]),
-        why: inert(c[3]),
-      });
+    const small = c.every((x) => x.length <= CELL_CHARS);
+    // The new shape: the head link opens the first cell; every cell after it is the Why
+    // (pipes in the Why are the author's text, not more columns: they are put back escaped,
+    // so the row stays a row when it is written).
+    const asBold = c.length >= 2 && small ? bold.exec(c[0]) : null;
+    const first = asBold ?? (c.length >= 2 && small ? plain.exec(c[0]) : null);
+    /** @type {Row | null} */
+    let row = null;
+    if (first && first[2].startsWith(first[1])) {
+      row = {
+        rev: 0,
+        current: first[3] !== undefined,
+        sha: first[2],
+        // Only a row written bold has its What unbolded: a plain row's What is as typed.
+        what: inert(asBold ? unbold(first[4] ?? '') : (first[4] ?? '')),
+        why: inert(c.slice(1).join(' \\| ')),
+      };
+    } else if (c.length >= 4 && small) {
+      // The old shape, Rev | Head | What changed | Why, the Why again the rest of the line.
+      if (c.length > 4) c.splice(3, c.length - 3, c.slice(3).join(' \\| '));
+      const rev = REV.exec(c[0]);
+      const old = rev ? head.exec(c[1]) : null;
+      if (rev && old && old[2].startsWith(old[1])) {
+        row = {
+          rev: Number(rev[1]),
+          current: rev[2] !== undefined,
+          sha: old[2],
+          what: inert(c[2]),
+          why: inert(c[3]),
+        };
+      }
+    }
+    if (row) {
+      rows.push(row);
     } else {
       rest.push(inert(line.slice(0, CELL_CHARS * 4)).replace(/\(current\)/g, '(current\u200b)'));
     }
   }
+  // A row of the new shape has no number: it is its place from the oldest, which stays row 1
+  // when a note says rows between it and the rest were left out.
+  const gap = omitted + capped;
+  rows.forEach((r, i) => {
+    if (r.rev === 0) r.rev = gap > 0 && i === rows.length - 1 ? 1 : rows.length + gap - i;
+  });
   return { rows, rest, omitted, capped };
 }
 
@@ -303,8 +397,11 @@ export function previousHead(rows) {
  * @param {Row} row
  * @param {string} repo
  */
-const rowLine = (row, repo) =>
-  `| ${row.rev}${row.current ? ' (current)' : ''} | [\`${row.sha.slice(0, 7)}\`](https://github.com/${repo}/commit/${row.sha}) | ${row.what} | ${row.why} |`;
+const rowLine = (row, repo) => {
+  const link = `[\`${row.sha.slice(0, 7)}\`](https://github.com/${repo}/commit/${row.sha})`;
+  const what = row.what === '' ? '' : `<br>${row.current ? emphasised(row.what) : row.what}`;
+  return `| ${row.current ? `**👉 ${link}** (current)` : link}${what} | ${row.why} |`;
+};
 
 /**
  * The block's content: the heading (unless one stands before the block), the
@@ -357,12 +454,11 @@ export function renderTable({ rows, rest, omitted, capped = 0 }, repo, { heading
  *   `rewritten`: a force-push or rebase; `gone`: the old head can't be read
  * @param {readonly Subject[]} range.commits the commits since the old head (or, rewritten, the PR's own)
  * @param {number} [range.dropped] commits the old head had that the branch no longer has
- * @param {string | null} [range.base] the merge base, when rewritten
  * @param {number} [subjects] how many subjects to list
  * @returns {string}
  */
 export function describeRange(range, subjects = SUBJECTS) {
-  const { repo, prev, head, how, commits, dropped = 0, base = null } = range;
+  const { repo, prev, head, how, commits, dropped = 0 } = range;
   const old = prev.slice(0, 7);
   const now = head.slice(0, 7);
   const lead =
@@ -370,7 +466,7 @@ export function describeRange(range, subjects = SUBJECTS) {
       ? `[\`${old}…${now}\`](https://github.com/${repo}/compare/${prev}...${head})`
       : how === 'gone'
         ? `rewritten, the old head \`${old}\` is gone`
-        : `rewritten (force-push or rebase) from \`${old}\`${base ? `, merge base \`${base.slice(0, 7)}\`` : ''}${dropped > 0 ? `, ${dropped} earlier commit${dropped === 1 ? '' : 's'} no longer on the branch` : ''}`;
+        : `rewritten from \`${old}\`${dropped > 0 ? ` (${dropped} commit${dropped === 1 ? '' : 's'} dropped)` : ''}`;
   const listed = commits.filter((c) => !c.skipped);
   const skipped = commits.length - listed.length;
   const shown = listed.slice(0, subjects).map((c) => {
@@ -440,7 +536,7 @@ export function budgeted(build, repo, options) {
   /** @param {Table} t */
   const text = (t) => renderTable(t, repo, options);
   if (text(table).length <= REVISIONS_BUDGET) return text(table);
-  for (const n of [3, 0]) {
+  for (const n of [1, 0]) {
     table = build(n);
     if (text(table).length <= REVISIONS_BUDGET) return text(table);
   }
