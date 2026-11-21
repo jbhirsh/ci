@@ -47,7 +47,11 @@ const text = fc.oneof(
   fc.string().map((s) => `a.ts${s}`),
 );
 
-describe('the tools, for any input', () => {
+// Each run that gets past a tool's own refusals starts a git process (the tools
+// run git for real, which is the point), so these take 0.1-0.3 s on a quiet
+// machine but 15-27 s when every start costs 250 ms, as on ci#127's runner. They
+// keep all their runs and get a hang limit of their own, well above that.
+describe('the tools, for any input', { timeout: 120_000 }, () => {
   it('never throw, and diff only files the PR changes', () => {
     fc.assert(
       fc.property(fc.array(text, { maxLength: 4 }), (paths) => {
