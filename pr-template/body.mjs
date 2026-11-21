@@ -26,14 +26,21 @@
 //     has a numbered heading `### 1. The change` above each pair, and keeps
 //     passing as long as it has one (a heading marks a change, and the pair
 //     under it is its commit);
-//   - Revisions' current row (its first cell opens with the head link, bold
-//     with a pointer, then `(current)`; in the table's old four-column shape
-//     its Rev cell says `(current)` and the next cell is the head link, and a
-//     row that is plain or lacks the pointer is read the same) naming the PR's
-//     head, when the head is given: a push makes it stale, and the check fails
-//     until the row is updated (a description with no current row passes). It
-//     reads the raw description, fenced code aside, since the table sits in a
-//     tool's block; the tool must write it with a person's token, or its edit
+//   - Revisions' current revision naming the PR's head, when the head is given: a
+//     push makes it stale, and the check fails until it is updated (a
+//     description with no current revision passes). The current revision is the
+//     `<details>` whose `<summary>` opens with the head link, bold with a
+//     pointer, then `(current)` (`<summary><b>👉 <a href="…/commit/<sha>"><code>abc1234</code></a></b>
+//     (current) · …</summary>`): only the summary is read, never the table
+//     under it, which the author writes (so a row that says `(current)`, or an
+//     empty row, is of no concern). The shapes earlier PRs hold are read too: the
+//     HTML table whose first cell of a row opens the same way
+//     (`<tr><td …><b>👉 <a href="…"><code>abc1234</code></a></b> (current)</td>…`),
+//     the two-column Markdown table (`| **👉 [`abc1234`](…)** (current)<br>…`), and
+//     the old four-column one, whose Rev cell says `(current)` and whose next cell
+//     is the head link. A head that is plain or lacks the pointer is read the same.
+//     It reads the raw description, fenced code aside, since the block sits in a
+//     tool's markers; the tool must write it with a person's token, or its edit
 //     starts no new run of this check.
 //   - Revisions' marker pair, once a push has moved the PR's head: a
 //     description without `<!-- pr-changes:revisions -->` and its closing
@@ -75,7 +82,8 @@ const EXAMPLE = /^ {0,3}\*\*Example:?\*\*/m;
  * source that captures nothing but the link's own groups): the current row is
  * bold with a pointer, an older row plain, and a row an author took the pointer
  * or the bold off is read the same. The tool's parser (pr-changes/revisions.mjs)
- * and the check below build their patterns from these two, so they accept the
+ * and the check below build their patterns from these two (and `htmlLink` with
+ * `htmlLeadBold` and `htmlLeadPlain` for the HTML table), so they accept the
  * same forms.
  *
  * @param {string} link
@@ -83,29 +91,100 @@ const EXAMPLE = /^ {0,3}\*\*Example:?\*\*/m;
 export const leadBold = (link) => `\\*\\*(?:👉 )?${link}\\*\\*`;
 /** @param {string} link */
 export const leadPlain = (link) => link;
+/**
+ * The head link of the HTML table, a pattern source for `where`, the pattern of
+ * `owner/name` (the parser's is its repo, escaped; the check's any repo): the
+ * commit link around the sha's first seven characters in code. Group 1 is the
+ * whole sha, group 2 its first seven, which the link text must repeat, so a
+ * pattern holds it once: the bold and the plain lead below are two patterns.
+ *
+ * @param {string} where
+ */
+export const htmlLink = (where) =>
+  `<a href="https://github\\.com/${where}/commit/(([0-9a-f]{7})[0-9a-f]{33})"><code>\\2</code></a>`;
+/** @param {string} link */
+export const htmlLeadBold = (link) => `<b>(?:👉 )?${link}</b>`;
+/** @param {string} link */
+export const htmlLeadPlain = (link) => link;
 /** A head link to a GitHub commit whose sha opens with the seven characters shown, capturing them. */
 const ANY_LINK =
   '\\[`([0-9a-f]{7})`\\]\\(https://github\\.com/[\\w.-]+/[\\w.-]+/commit/\\1[0-9a-f]{33}\\)';
-/** Revisions' current row, as the tool writes it (bold, with the pointer) or plain: the head link opens its first cell, then `(current)`. */
+/** Revisions' current row, as the tool wrote it in the two-column Markdown table (bold, with the pointer) or plain: the head link opens its first cell, then `(current)`. */
 const CURRENT_BOLD = new RegExp(`^\\|[ \\t]*${leadBold(ANY_LINK)} \\(current\\)`, 'm');
 const CURRENT_PLAIN = new RegExp(`^\\|[ \\t]*${leadPlain(ANY_LINK)} \\(current\\)`, 'm');
-/** The same row in the table's old shape: its Rev cell (no link in it) says `(current)`; the next cell is its head. */
+/** The same in a revision's summary: `<summary>` opens it (alone on its line, or after the `<details>` tag), the head link is its first thing, then `(current)`. */
+const SUMMARY_ROW = String.raw`^[ \t]*(?:<details\b[^>]*>\s*)?<summary>\s*`;
+/** The same in the HTML table of an earlier PR: the row opens `<tr><td …>`, the head link is the cell's first thing, then `(current)`. */
+const HTML_ROW = String.raw`^[ \t]*<tr><td\b[^>]*>[ \t]*`;
+const HTML_ANY = htmlLink('[\\w.-]+/[\\w.-]+');
+const CURRENT_HTML_BOLD = new RegExp(`${HTML_ROW}${htmlLeadBold(HTML_ANY)}\\s*\\(current\\)`, 'm');
+const CURRENT_HTML_PLAIN = new RegExp(
+  `${HTML_ROW}${htmlLeadPlain(HTML_ANY)}\\s*\\(current\\)`,
+  'm',
+);
+const CURRENT_SUMMARY_BOLD = new RegExp(
+  `${SUMMARY_ROW}${htmlLeadBold(HTML_ANY)}\\s*\\(current\\)`,
+  'm',
+);
+const CURRENT_SUMMARY_PLAIN = new RegExp(
+  `${SUMMARY_ROW}${htmlLeadPlain(HTML_ANY)}\\s*\\(current\\)`,
+  'm',
+);
+/** The same row in the table's old shape: its Rev cell (no link in it) says `(current)`; the next cell is its head. As it always was: whatever the Head cell holds, `currentHead` compares it with the head. */
 const CURRENT_ROW_OLD = /^\|[^|\n[]*\(current\)[^|\n[]*\|([^|\n]*)\|/m;
 
 /**
- * The text of Revisions' current row that names its head (the first row of either
+ * The description with what the TOOL writes under a revision's summary taken out: a closed
+ * `<details>` whose `<summary>` opens with a head link of the tool's form, up to its `</details>`.
+ * The table an author fills there is never read as a current row, whatever its rows say. Nothing an
+ * author typed is taken out: a `<details>` that is never closed, or whose summary isn't the tool's,
+ * stays, so a row of an old table after it is read as it always was.
+ *
+ * @param {string} text
+ */
+const withoutTables = (text) =>
+  // One pattern for each lead: the link's back-reference counts groups from its own start.
+  [htmlLeadBold(HTML_ANY), htmlLeadPlain(HTML_ANY)].reduce(
+    (t, lead) =>
+      t.replace(
+        new RegExp(
+          String.raw`<details\b[^>]*>\s*<summary>\s*${lead}[^\n]*?</summary>[\s\S]*?</details>`,
+          'gi',
+        ),
+        // Keep up to the summary's end: no capture group of its own, which would shift the link's back-reference.
+        (m) => m.slice(0, m.indexOf('</summary>') + '</summary>'.length),
+      ),
+    text,
+  );
+
+/**
+ * The text of Revisions' current row that names its head (the first row of any
  * shape), or null when the table has no current row.
  *
- * @param {string} text the description, fenced code aside
+ * @param {string} description the description, fenced code aside
  * @returns {string | null}
  */
-function currentHead(text) {
-  const bold = CURRENT_BOLD.exec(text);
-  const plain = CURRENT_PLAIN.exec(text);
-  const row = bold && (!plain || bold.index <= plain.index) ? bold : plain;
+function currentHead(description) {
+  const text = withoutTables(description);
+  /** @type {{ index: number, head: string }[]} */
+  const found = [];
+  for (const re of [CURRENT_BOLD, CURRENT_PLAIN]) {
+    const m = re.exec(text);
+    if (m) found.push({ index: m.index, head: m[1] });
+  }
+  for (const re of [
+    CURRENT_HTML_BOLD,
+    CURRENT_HTML_PLAIN,
+    CURRENT_SUMMARY_BOLD,
+    CURRENT_SUMMARY_PLAIN,
+  ]) {
+    const m = re.exec(text);
+    if (m) found.push({ index: m.index, head: m[2] });
+  }
   const old = CURRENT_ROW_OLD.exec(text);
-  if (row && (!old || row.index <= old.index)) return row[1];
-  return old ? old[1] : null;
+  if (old) found.push({ index: old.index, head: old[1] });
+  if (found.length === 0) return null;
+  return found.reduce((a, b) => (b.index < a.index ? b : a)).head;
 }
 /** A change's commit, as a link a reader sees. */
 const COMMIT = /\/commit\/[0-9a-f]{7,40}/;

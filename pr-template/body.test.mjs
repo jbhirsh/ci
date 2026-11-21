@@ -400,7 +400,7 @@ describe("the template's Example", () => {
   });
 });
 
-describe("bodyProblems: Revisions' current row, in either shape of the table", () => {
+describe("bodyProblems: Revisions' current revision, in its details block and every shape before", () => {
   const base = GOOD.slice(0, GOOD.indexOf('## Revisions')).trimEnd();
   const link = (/** @type {string} */ sha) =>
     `[\`${sha.slice(0, 7)}\`](https://github.com/o/r/commit/${sha.padEnd(40, '0')})`;
@@ -410,7 +410,40 @@ describe("bodyProblems: Revisions' current row, in either shape of the table", (
     ['| What changed | Why |', '| --- | --- |', ...lines].join('\n');
   const revisions = (/** @type {string} */ body, /** @type {string} */ head) =>
     bodyProblems(body, head).filter((p) => /Revisions/.test(p));
+  const html = (/** @type {string} */ sha, /** @type {string} */ repo = 'o/r') =>
+    `<a href="https://github.com/${repo}/commit/${sha.padEnd(40, '0')}"><code>${sha.slice(0, 7)}</code></a>`;
+  const htmlTable = (/** @type {string[]} */ ...rows) =>
+    [
+      '<table width="100%">',
+      '<thead><tr><th width="30%">Revision</th><th width="70%">Why</th></tr></thead>',
+      '<tbody>',
+      ...rows,
+      '</tbody>',
+      '</table>',
+    ].join('\n');
+  const summaryOf = (/** @type {string} */ lead, /** @type {string} */ rows = '| a | b |') =>
+    `<details open>\n<summary>${lead}</summary>\n\n| What changed | Why |\n| --- | --- |\n${rows}\n\n</details>`;
   const tables = {
+    'the details block, the head bold with a pointer': [
+      summaryOf(
+        `<b>👉 ${html('abcdef0')}</b> (current) · compare · rewritten from <code>1111111</code>`,
+      ),
+      summaryOf(html('1111111')).replace('<details open>', '<details>'),
+    ].join('\n\n'),
+    'a details block an author took the pointer and the bold off': summaryOf(
+      `${html('abcdef0')} (current)`,
+    ),
+    'a details block with the summary on the details line': `<details open><summary><b>${html('abcdef0')}</b> (current)</summary>\n\n| a | b |\n\n</details>`,
+    'the HTML table, the current row bold with a pointer': htmlTable(
+      `<tr><td><b>👉 ${html('abcdef0')}</b> (current)</td><td>y</td></tr>`,
+      '<tr><td colspan="2">one</td></tr>',
+      '<tr><td colspan="2">two</td></tr>',
+      `<tr><td>${html('1111111')}</td><td></td></tr>`,
+      '<tr><td colspan="2">old</td></tr>',
+    ),
+    'an HTML current row an author took the pointer off': htmlTable(
+      `<tr><td><b>${html('abcdef0')}</b> (current)</td><td>y</td></tr>`,
+    ),
     'the two-column table, the current row bold with a pointer': fresh(
       `| **👉 ${link('abcdef0')}** (current)<br>**w** | y |`,
       `| ${link('1111111')}<br>old | |`,
@@ -435,6 +468,134 @@ describe("bodyProblems: Revisions' current row, in either shape of the table", (
       expect(problem).toMatch(/names another commit than this PR's head, `2222222`/);
     },
   );
+
+  it('reads only the summary of a details block, never the table an author wrote under it', () => {
+    const rows = [
+      '| fix (current) thing | (current) |',
+      `| 2 (current) | ${link('1111111')} | w | y |`,
+      `| ${link('1111111')} (current) | y |`,
+      `| **👉 ${link('1111111')}** (current)<br>w | y |`,
+    ].join('\n');
+    const body = wrap(summaryOf(`<b>👉 ${html('abcdef0')}</b> (current)`, rows));
+    expect(revisions(body, 'abcdef0123')).toEqual([]);
+    // Another head: the summary's, not a row's, is the one named.
+    expect(revisions(body, '2222222333')[0]).toMatch(
+      /names another commit than this PR's head, `2222222`/,
+    );
+    // With no current summary, a row that says (current) in a table is no current revision.
+    const plain = wrap(summaryOf(html('abcdef0'), rows));
+    expect(revisions(plain, '2222222333')).toEqual([]);
+  });
+
+  it('reads the old four-column row as it always was: whatever its Head cell holds is compared with the head', () => {
+    const row = (/** @type {string} */ head) => wrap(fresh(`| 2 (current) | ${head} | w | y |`));
+    const bare = 'bbbbbbb';
+    for (const head of [
+      `[bbbbbbb](https://github.com/o/r/commit/${'b'.repeat(40)})`,
+      `**${link('bbbbbbb')}**`,
+      `\`${'b'.repeat(40)}\``,
+      bare,
+      `👉 ${link('bbbbbbb')}`,
+      link('bbbbbbb'),
+    ]) {
+      expect(revisions(row(head), 'bbbbbbb123')).toEqual([]);
+      expect(revisions(row(head), '2222222333')[0]).toMatch(/names another commit/);
+    }
+    // No head in the cell: another commit than the head, as ever.
+    expect(revisions(row('not a link'), '2222222333')[0]).toMatch(/names another commit/);
+  });
+  it('reads an HTML row only when its cell opens on the row line, as the tool writes it', () => {
+    expect(
+      revisions(
+        wrap(htmlTable(`<tr>\n<td>\n<b>👉 ${html('abcdef0')}</b> (current)</td><td>y</td></tr>`)),
+        '2222222333',
+      ),
+    ).toEqual([]);
+  });
+  it('takes out only what the tool wrote: an author details block, closed or not, hides nothing', () => {
+    const old = (/** @type {string} */ head) =>
+      fresh(`| 2 (current) | ${link(head)} | w | y |`, `| 1 | ${link('1111111')} | Opened | |`);
+    // An author's own <details> that is never closed, ahead of the old table.
+    expect(
+      revisions(
+        wrap(`<details>\n<summary>my notes</summary>\n\n${old('bbbbbbb')}`),
+        '2222222333',
+      )[0],
+    ).toMatch(/names another commit/);
+    expect(revisions(wrap(`<details open>\n${old('bbbbbbb')}`), '2222222333')[0]).toMatch(
+      /names another commit/,
+    );
+    // The table in a block the author wrapped in their own details (a summary that is no head link).
+    const wrapped = `<details>\n<summary>Revisions</summary>\n\n${old('bbbbbbb')}\n\n</details>`;
+    expect(revisions(wrap(wrapped), '2222222333')[0]).toMatch(/names another commit/);
+    expect(revisions(wrap(wrapped), 'bbbbbbb123')).toEqual([]);
+    // A tool block that is never closed has nothing taken out: the row after it is read, as before.
+    const open = `<details>\n<summary>${html('abcdef0')}</summary>\n\n${old('bbbbbbb')}`;
+    expect(revisions(wrap(open), '2222222333')[0]).toMatch(/names another commit/);
+  });
+
+  it('reads the HTML current row, not an older row that says (current) in its text or its Why', () => {
+    const body = wrap(
+      htmlTable(
+        `<tr><td><b>👉 ${html('abcdef0')}</b> (current)</td><td>y</td></tr>`,
+        `<tr><td>${html('1111111')}</td><td>(current)</td></tr>\n<tr><td colspan="2">fix (current) thing</td></tr>`,
+      ),
+    );
+    expect(revisions(body, 'abcdef0123')).toEqual([]);
+    const plainOnly = wrap(
+      htmlTable(
+        `<tr><td>${html('1111111')}</td><td>(current)</td></tr>\n<tr><td colspan="2">fix (current) thing</td></tr>`,
+      ),
+    );
+    expect(revisions(plainOnly, '2222222333')).toEqual([]);
+  });
+
+  it('reads the current row of a description that mixes the HTML table and a Markdown one', () => {
+    const mixed = wrap(
+      [
+        htmlTable(`<tr><td>${html('1111111')}</td><td></td></tr>`),
+        '',
+        fresh(`| ${link('abcdef0')} (current)<br>w | y |`),
+      ].join('\n'),
+    );
+    expect(revisions(mixed, 'abcdef0123')).toEqual([]);
+    expect(revisions(mixed, '2222222333')[0]).toMatch(/names another commit/);
+  });
+
+  it.each([
+    ['a link that is no commit', `<a href="https://elsewhere.example/x"><code>abcdef0</code></a>`],
+    [
+      'another host',
+      `<a href="https://example.com/o/r/commit/${'a'.repeat(40)}"><code>aaaaaaa</code></a>`,
+    ],
+    [
+      'a sha that is not the one shown',
+      `<a href="https://github.com/o/r/commit/${'1'.repeat(40)}"><code>abcdef0</code></a>`,
+    ],
+    [
+      'a short sha in the link',
+      `<a href="https://github.com/o/r/commit/abcdef0"><code>abcdef0</code></a>`,
+    ],
+  ])('does not read an HTML cell with %s as a current row', (_name, a) => {
+    expect(
+      revisions(wrap(htmlTable(`<tr><td>${a} (current)</td><td>y</td></tr>`)), '2222222333'),
+    ).toEqual([]);
+    expect(
+      revisions(
+        wrap(htmlTable(`<tr><td><b>👉 ${a}</b> (current)</td><td>y</td></tr>`)),
+        '2222222333',
+      ),
+    ).toEqual([]);
+  });
+
+  it('does not read (current) after text in the cell, or a row that is no row, as the current row', () => {
+    const cell = (/** @type {string} */ c) => wrap(htmlTable(`<tr><td>${c}</td></tr>`));
+    expect(revisions(cell(`see ${html('abcdef0')} (current)`), '2222222333')).toEqual([]);
+    expect(revisions(cell(`${html('abcdef0')} now`), '2222222333')).toEqual([]);
+    expect(
+      revisions(wrap(`text <tr><td>${html('abcdef0')} (current)</td></tr>`), '2222222333'),
+    ).toEqual([]);
+  });
 
   it('reads the current row, not an older row that says (current) in its text', () => {
     const body = wrap(
