@@ -355,15 +355,28 @@ describe('budgeted', () => {
   });
 
   it('steps the new row down to fewer subjects first', () => {
+    // A row is written no longer than a cell holds, so it is the rows before it that fill the block:
+    // four of them take about 10,000 of the budget, and a new row of 1,750 characters is one too many.
+    const older = () => ({
+      rows: [4, 3, 2, 1].map((rev) => ({
+        rev,
+        current: rev === 4,
+        sha: A,
+        what: 'o'.repeat(1200),
+        why: 'p'.repeat(1250),
+      })),
+      rest: [],
+      omitted: 0,
+    });
     /** @type {number[]} */
     const asked = [];
     const out = budgeted(
       (n) => {
         asked.push(n);
-        return addRevision(parseTable('', REPO), {
+        return addRevision(older(), {
           head: B,
-          what: n > 0 ? 'x'.repeat(REVISIONS_BUDGET) : 'short',
-          opened: { sha: A, why: '' },
+          what: n > 0 ? 'x'.repeat(1750) : 'short',
+          opened: null,
         });
       },
       REPO,
@@ -371,6 +384,7 @@ describe('budgeted', () => {
     );
     expect(asked).toEqual([SUBJECTS, 1, 0]);
     expect(out).toContain('short');
+    expect(out).not.toContain('earlier revisions left out');
   });
 
   it('cuts older rows, then leaves out the oldest, keeping row 1 and the newest', () => {
@@ -392,7 +406,10 @@ describe('budgeted', () => {
       rev,
       current: false,
       sha: A,
-      what: 'x'.repeat(2000),
+      // A What of 1,500 and a Why of 2,000 make a row of about 3,600 characters, every one of them
+      // valid (a first cell holds 2,000 with its head link): seven are about 25,000, far over
+      // REVISIONS_BUDGET, so every step is taken and only rows 1 and 7 are left, about 7,300.
+      what: 'x'.repeat(1500),
       why: 'y'.repeat(2000),
     });
     const out = budgeted(

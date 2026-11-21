@@ -48,8 +48,13 @@
 //     comment would hide the end marker; the one exception is the What of a row
 //     written bold, which the tool writes bold line by line on the current
 //     row, so one bold layer is taken off each line on reading and put back on
-//     writing, and a plain row's What is never touched), and any other line is kept below
-//     the table, with its `(current)` defused, and a warning;
+//     writing, and a plain row's What is never touched; and a cell is held to
+//     CELL_CHARS, as it is read: a Why, or a What that its head link, pointer and bold
+//     marks would take past that, is written in the plainest form that fits and, only
+//     if it still does not, cut at its end with `…`, for a longer cell is read as no row
+//     at all), and any other line is kept below the table, with its `(current)` defused,
+//     and a warning, cut to REST_CHARS (a line longer than a row can be, or kept so, has its
+//     first `|` escaped, so that it is read as no row each time);
 //   - what this module writes is from validated values only: the repo and
 //     the shas, a Rev number, and commit subjects escaped by changes.mjs's
 //     `escape` (a subject is a stranger's text).
@@ -93,6 +98,45 @@ import { blocks, escape, ownBlock } from './changes.mjs';
 export const REVISIONS_BUDGET = 12_000;
 /** The most characters of one cell the tool reads or keeps. */
 export const CELL_CHARS = 2000;
+/** The most characters of a line that is no row the tool keeps, after the changes it makes to it. */
+const REST_CHARS = CELL_CHARS * 4;
+/** The longest line that can be a row: two cells at most, the escapes in them, and the link. */
+const ROW_CHARS = CELL_CHARS * 3;
+
+/**
+ * The first n characters of a text, never ending in half of a character that takes two (an emoji
+ * is two UTF-16 units: cut between them it is written as nothing readable).
+ *
+ * @param {string} text
+ * @param {number} n
+ */
+const startOf = (text, n) => {
+  if (text.length <= n) return text;
+  const cut = text.slice(0, n);
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
+};
+
+/**
+ * A text of at most n characters: the text itself, or, when it is longer, its start with `…`, cut at a
+ * whole code point (a combining mark or a joiner after the cut may still be lost from the letter before it) and
+ * not ending in a space, as a cell is trimmed when it is read. A text cut this way is cut no further
+ * the next time, which is what keeps a table the same on every write.
+ *
+ * @param {string} text
+ * @param {number} n
+ */
+function cutAt(text, n) {
+  if (text.length <= n) return text;
+  return `${startOf(text, n - 1).trimEnd()}…`;
+}
+
+/**
+ * Text cut to a cell: a cell is read at most CELL_CHARS long, so a cell written longer would be read
+ * as no row at all.
+ *
+ * @param {string} text
+ */
+const fitCell = (text) => cutAt(text, CELL_CHARS);
 /**
  * The most commit subjects the current row lists, and an older row of a rebuilt
  * table, before "+ N more" (the row's compare link covers the rest), and the
@@ -330,7 +374,12 @@ export function parseTable(inner, repo) {
       capped += Number(cap[1]);
       continue;
     }
-    const c = line.startsWith('|') ? cells(line) : [];
+    // A line longer than any row can be is no row, however its cells split. It is kept cut (and a cut
+    // line's cells can shrink to a row's size), and kept longer than a row can be it is read again
+    // as it was: so a line that is, or is kept, longer than a row has its first `|` escaped, and
+    // read again it starts with a backslash, no row either.
+    const tooLong = line.length > ROW_CHARS;
+    const c = line.startsWith('|') && !tooLong ? cells(line) : [];
     const small = c.every((x) => x.length <= CELL_CHARS);
     // The new shape: the head link opens the first cell; every cell after it is the Why
     // (pipes in the Why are the author's text, not more columns: they are put back escaped,
@@ -346,7 +395,7 @@ export function parseTable(inner, repo) {
         sha: first[2],
         // Only a row written bold has its What unbolded: a plain row's What is as typed.
         what: inert(asBold ? unbold(first[4] ?? '') : (first[4] ?? '')),
-        why: inert(c.slice(1).join(' \\| ')),
+        why: fitCell(inert(c.slice(1).join(' \\| ').trim())),
       };
     } else if (c.length >= 4 && small) {
       // The old shape, Rev | Head | What changed | Why, the Why again the rest of the line.
@@ -359,14 +408,24 @@ export function parseTable(inner, repo) {
           current: rev[2] !== undefined,
           sha: old[2],
           what: inert(c[2]),
-          why: inert(c[3]),
+          why: fitCell(inert(c[3].trim())),
         };
       }
     }
     if (row) {
       rows.push(row);
     } else {
-      rest.push(inert(line.slice(0, CELL_CHARS * 4)).replace(/\(current\)/g, '(current\u200b)'));
+      // Cut after the changes (`<!--` and `(current)` grow), and cut at the end of text: a line already cut,
+      // and read again with its spaces taken off, is then cut no further.
+      const kept = cutAt(
+        inert(startOf(line, REST_CHARS + 1)).replace(/\(current\)/g, '(current\u200b)'),
+        REST_CHARS,
+      );
+      rest.push(
+        line.startsWith('|') && (tooLong || kept.length > ROW_CHARS)
+          ? cutAt(`\\${kept}`, REST_CHARS)
+          : kept,
+      );
     }
   }
   // A row of the new shape has no number: it is its place from the oldest, which stays row 1
@@ -394,13 +453,52 @@ export function previousHead(rows) {
 }
 
 /**
+ * A row's first cell: the head link, then its What after a `<br>`. It is written the way the row
+ * reads best that fits CELL_CHARS, for a longer cell would be read as no row at all: the current
+ * row bold with the pointer and its What bold line by line; else the link plain with ` (current)`
+ * and its What as it is (still the current row, to the check and to the next read, but without the
+ * pointer); and a What too long even then (one an author typed, or one a four-column table held
+ * whole) cut at its end, with `…`. A cell is trimmed when it is read, so a current row's What that ends in spaces (a bold
+ * `** **` is read back as one space, and so is a last line of bold spaces) is written trimmed, and a
+ * What of spaces alone is no What; an older row's What is as a cell was read, already trimmed.
+ *
+ * @param {Row} row
+ * @param {string} link
+ */
+function firstCell(row, link) {
+  const text = row.current ? row.what.trimEnd() : row.what;
+  const plain = (/** @type {string} */ x) => x;
+  /** @type {[string, (x: string) => string][]} */
+  const forms = row.current
+    ? [
+        [`**👉 ${link}** (current)`, emphasised],
+        [`${link} (current)`, plain],
+      ]
+    : [[link, plain]];
+  /** The first form in which a What fits the cell, or null. */
+  const fit = (/** @type {string} */ what) => {
+    for (const [lead, format] of forms) {
+      const cell = what === '' ? lead : `${lead}<br>${format(what)}`;
+      if (cell.length <= CELL_CHARS) return cell;
+    }
+    return null;
+  };
+  const whole = fit(text);
+  if (whole !== null) return whole;
+  // Cut to what the plainest form holds, then written in the first form the cut What fits (bold lines
+  // are trimmed, so it may fit bold): the same What is then written the same way the next time.
+  const lead = forms[forms.length - 1][0];
+  const cut = cutAt(text, CELL_CHARS - lead.length - '<br>'.length);
+  return fit(cut) ?? `${lead}<br>${cut}`;
+}
+
+/**
  * @param {Row} row
  * @param {string} repo
  */
 const rowLine = (row, repo) => {
   const link = `[\`${row.sha.slice(0, 7)}\`](https://github.com/${repo}/commit/${row.sha})`;
-  const what = row.what === '' ? '' : `<br>${row.current ? emphasised(row.what) : row.what}`;
-  return `| ${row.current ? `**👉 ${link}** (current)` : link}${what} | ${row.why} |`;
+  return `| ${firstCell(row, link)} | ${row.why} |`;
 };
 
 /**

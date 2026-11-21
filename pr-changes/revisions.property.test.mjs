@@ -2,6 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { bodyProblems, revisionsPair } from '../pr-template/body.mjs';
 import {
+  CELL_CHARS,
   REVISIONS_BUDGET,
   addRevision,
   budgeted,
@@ -365,6 +366,141 @@ describe('the two-column table', () => {
         renderTable(t, REPO, { heading: true });
         parseTable(text, REPO);
       }),
+    );
+  });
+});
+
+describe('a table written and read again', () => {
+  const full = '8bbb8bc4a3f18e594cc7ccbe15fb76b40c27b7f4';
+  const link = (/** @type {string} */ s) =>
+    `[\`${s.slice(0, 7)}\`](https://github.com/${REPO}/commit/${s})`;
+  /** @param {string} text */
+  const write = (text) => renderTable(parseTable(text, REPO), REPO, { heading: false });
+  /** The row lines of a written table: one per revision. */
+  const rowLines = (/** @type {string} */ out) => out.split('\n').slice(2);
+
+  it('writes a Why that is an escaped pipe between empty cells the way it reads it back', () => {
+    // Found by review of ci#129: the cells after the head were rejoined as ` \| ` with their spaces, so
+    // the first write said `|  \|  |` and the read of it, which trims a cell, `| \| |`.
+    const first = write(`| ${link(full)}<br> |  |  |`);
+    expect(first.split('\n')[2]).toBe(`| ${link(full)} | \\| |`);
+    expect(write(first)).toBe(first);
+  });
+
+  it('keeps a row whose What is as long as a cell holds, in each shape it can be read in', () => {
+    // Found by review of ci#129: a plain or four-column row with a What of 1,893 characters or more
+    // grew past CELL_CHARS when written (the bold marks, the pointer, the head link), so the next read
+    // took it for no row. It is now written in the plainest form that fits, and cut with `…` only when
+    // even that does not.
+    for (const k of [1880, 1890, 1892, 1893, 1896, 1900, 1990, 2000]) {
+      // What a cell of each shape can hold: the cell, the head link and the rest of its text, at most CELL_CHARS.
+      const room = CELL_CHARS - `${link(full)} (current)<br>`.length;
+      const y = 'y'.repeat(k);
+      for (const text of [
+        `| ${link(full)} (current)<br>${y.slice(0, room)} |  |`,
+        `| 1 (current) | ${link(full)} | ${y} |  |`,
+        `| 1 | ${link(full)} | ${y} |  |`,
+        `| **👉 ${link(full)}** (current)<br>**${y.slice(0, room - 20)}** |  |`,
+      ]) {
+        const first = write(text);
+        const read = parseTable(first, REPO);
+        expect(read.rows).toHaveLength(1);
+        expect(read.rest).toEqual([]);
+        expect(rowLines(first)[0].length).toBeLessThanOrEqual(CELL_CHARS + 2 + ' |  |'.length + 4);
+        expect(write(first)).toBe(first);
+      }
+    }
+  });
+
+  it('keeps a Why made longer by its escaped pipes within a cell', () => {
+    const why = `${'a|'.repeat(900)}b`;
+    const first = write(`| ${link(full)} | ${why} |`);
+    expect(parseTable(first, REPO).rows).toHaveLength(1);
+    expect(write(first)).toBe(first);
+  });
+
+  it('keeps a long line that is no row the same size on every write', () => {
+    // `<!--` is made harmless by growing it, so a line cut before that grew was cut again on the next read.
+    const long = `note ${'<!--'.repeat(2100)} (current) ${'x'.repeat(100)}`;
+    const first = write(long);
+    expect(write(first)).toBe(first);
+    const read = parseTable(long, REPO);
+    expect(read.rest[0].length).toBeLessThanOrEqual(CELL_CHARS * 4);
+    expect(parseTable(first, REPO).rest).toEqual(read.rest);
+  });
+
+  it('writes a line that is no row the same on every write, however long and whatever it holds', () => {
+    // Found by review of ci#130: a line of 7,000 characters or more, cut to what is kept, had cells
+    // as small as a row's, and the next read took it for one.
+    const piece = fc.oneof(
+      fc.string({ maxLength: 8 }),
+      fc.constantFrom(
+        '|',
+        '\\|',
+        ' ',
+        '**',
+        '<br>',
+        '<!--',
+        '-->',
+        '(current)',
+        '😀',
+        '\t',
+        '…',
+        '\u00a0',
+      ),
+      fc.integer({ min: 1, max: 4 * CELL_CHARS }).map((n) => 'y'.repeat(n)),
+      fc.integer({ min: 1, max: 4 * CELL_CHARS }).map((n) => ' '.repeat(n)),
+      fc.integer({ min: 1, max: 2 * CELL_CHARS }).map((n) => '<!--'.repeat(n)),
+    );
+    const lineText = fc
+      .tuple(fc.boolean(), fc.array(piece, { maxLength: 8 }))
+      .map(([pipe, parts]) => (pipe ? '|' : '') + parts.join(''));
+    fc.assert(
+      fc.property(fc.array(lineText, { minLength: 1, maxLength: 3 }), (lines) => {
+        const read = parseTable(lines.join('\n'), REPO);
+        const out = renderTable(read, REPO, { heading: false });
+        const back = parseTable(out, REPO);
+        expect(back.rows).toHaveLength(read.rows.length);
+        expect(back.rest).toEqual(read.rest);
+        expect(renderTable(back, REPO, { heading: false })).toBe(out);
+      }),
+      { numRuns: 1000 },
+    );
+  });
+
+  it('reads back every row it wrote, and writes the same table again, whatever the rows hold', () => {
+    /** Cells of any size around the limit, with pipes, bold marks, breaks, spaces and comment markers. */
+    const piece = fc.oneof(
+      fc.string({ maxLength: 8 }),
+      fc.constantFrom('|', '\\|', ' ', '**', '<br>', '<!--', '-->', '(current)', '`', '\\'),
+      fc.integer({ min: 1700, max: CELL_CHARS + 100 }).map((n) => 'y'.repeat(n)),
+      // What cuts a cell badly: two-unit characters, marks and joiners, runs of spaces, a cell's own `…`.
+      fc.constantFrom('😀', 'é', '\u200b', '\u00a0', '\t', '…', '👉', '   ', '\r'),
+      fc.integer({ min: 1, max: CELL_CHARS + 100 }).map((n) => '😀'.repeat(n)),
+      fc.integer({ min: 1, max: CELL_CHARS + 100 }).map((n) => ' '.repeat(n)),
+    );
+    const text = fc.array(piece, { maxLength: 4 }).map((parts) => parts.join(''));
+    const row = fc.record({ sha, what: text, why: text, current: fc.boolean() });
+    fc.assert(
+      // One shape to a table, as the tool and an author leave it: a table of the old shape numbers its
+      // rows itself, so rows of mixed shapes would be ordered by numbers that are not their places.
+      fc.property(fc.array(row, { minLength: 1, maxLength: 4 }), fc.nat(3), (list, shape) => {
+        const lines = list.map((r, i) => {
+          const l = link(r.sha);
+          if (shape === 0) return `| ${l}<br>${r.what} | ${r.why} |`;
+          if (shape === 1)
+            return `| ${l}${r.current ? ' (current)' : ''}<br>${r.what} | ${r.why} |`;
+          if (shape === 2) return `| **👉 ${l}** (current)<br>**${r.what}** | ${r.why} |`;
+          return `| ${list.length - i}${r.current ? ' (current)' : ''} | ${l} | ${r.what} | ${r.why} |`;
+        });
+        const read = parseTable(lines.join('\n'), REPO);
+        const out = renderTable(read, REPO, { heading: false });
+        const back = parseTable(out, REPO);
+        expect(back.rows.map((r) => r.sha)).toEqual(read.rows.map((r) => r.sha));
+        expect(back.rest).toEqual(read.rest);
+        expect(renderTable(back, REPO, { heading: false })).toBe(out);
+      }),
+      { numRuns: 1000 },
     );
   });
 });
