@@ -22,7 +22,10 @@
 //     with its commit: a commit link, or the `pr-changes:change:N` pair the
 //     changes tool has filled (an empty pair is not a commit, only the place
 //     the tool writes it);
-//   - Revisions' current row (its Rev cell says `(current)`) naming the PR's
+//   - Revisions' current row (its first cell opens with the head link, bold
+//     with a pointer, then `(current)`; in the table's old four-column shape
+//     its Rev cell says `(current)` and the next cell is the head link, and a
+//     row that is plain or lacks the pointer is read the same) naming the PR's
 //     head, when the head is given: a push makes it stale, and the check fails
 //     until the row is updated (a description with no current row passes). It
 //     reads the raw description, fenced code aside, since the table sits in a
@@ -63,8 +66,43 @@ const ISSUE =
   /\b(?:closes|part of)\s+\[?(?:(?:[\w.-]{1,100}\/[\w.-]{1,100})?#\d+|https?:\/\/\S{1,200}\/issues\/\d+)|\bno issues?\b/i;
 /** A bug fix's example: a bold paragraph, as the template says. */
 const EXAMPLE = /^ {0,3}\*\*Example:?\*\*/m;
-/** Revisions' current row: its Rev cell says `(current)`; the next cell is its head. */
-const CURRENT_ROW = /^\|[^|\n]*\(current\)[^|\n]*\|([^|\n]*)\|/m;
+/**
+ * How a Revisions row's first cell opens, with the head link `link` (a pattern
+ * source that captures nothing but the link's own groups): the current row is
+ * bold with a pointer, an older row plain, and a row an author took the pointer
+ * or the bold off is read the same. The tool's parser (pr-changes/revisions.mjs)
+ * and the check below build their patterns from these two, so they accept the
+ * same forms.
+ *
+ * @param {string} link
+ */
+export const leadBold = (link) => `\\*\\*(?:👉 )?${link}\\*\\*`;
+/** @param {string} link */
+export const leadPlain = (link) => link;
+/** A head link to a GitHub commit whose sha opens with the seven characters shown, capturing them. */
+const ANY_LINK =
+  '\\[`([0-9a-f]{7})`\\]\\(https://github\\.com/[\\w.-]+/[\\w.-]+/commit/\\1[0-9a-f]{33}\\)';
+/** Revisions' current row, as the tool writes it (bold, with the pointer) or plain: the head link opens its first cell, then `(current)`. */
+const CURRENT_BOLD = new RegExp(`^\\|[ \\t]*${leadBold(ANY_LINK)} \\(current\\)`, 'm');
+const CURRENT_PLAIN = new RegExp(`^\\|[ \\t]*${leadPlain(ANY_LINK)} \\(current\\)`, 'm');
+/** The same row in the table's old shape: its Rev cell (no link in it) says `(current)`; the next cell is its head. */
+const CURRENT_ROW_OLD = /^\|[^|\n[]*\(current\)[^|\n[]*\|([^|\n]*)\|/m;
+
+/**
+ * The text of Revisions' current row that names its head (the first row of either
+ * shape), or null when the table has no current row.
+ *
+ * @param {string} text the description, fenced code aside
+ * @returns {string | null}
+ */
+function currentHead(text) {
+  const bold = CURRENT_BOLD.exec(text);
+  const plain = CURRENT_PLAIN.exec(text);
+  const row = bold && (!plain || bold.index <= plain.index) ? bold : plain;
+  const old = CURRENT_ROW_OLD.exec(text);
+  if (row && (!old || row.index <= old.index)) return row[1];
+  return old ? old[1] : null;
+}
 /** A change's commit, as a link a reader sees. */
 const COMMIT = /\/commit\/[0-9a-f]{7,40}/;
 /** A change's slot, the pair the changes tool fills with its commit and files. */
@@ -464,7 +502,7 @@ function revisionsProblems(body, { pushed = false }) {
       'keep exactly one `<!-- pr-changes:revisions -->` and `<!-- /pr-changes:revisions -->` pair, in that order, each marker alone on its line and outside code: the changes tool writes the Revisions table only inside a clean pair',
     ];
   }
-  if (!CURRENT_ROW.test(withoutFences(body))) {
+  if (currentHead(withoutFences(body)) === null) {
     return [
       "update Revisions: this push moved the PR's head and the table has no current row for it yet (the changes tool writes it, and its edit runs this check again; a fork's author adds the row by hand)",
     ];
@@ -587,8 +625,8 @@ export function bodyProblems(body, head, event = {}) {
       "fill in or delete the plan table's template row, or delete the Plan section for a PR that isn't a step of a plan",
     );
   }
-  const row = head ? CURRENT_ROW.exec(withoutFences(body)) : null;
-  if (head && row && !row[1].toLowerCase().includes(head.slice(0, 7).toLowerCase())) {
+  const named = head ? currentHead(withoutFences(body)) : null;
+  if (head && named !== null && !named.toLowerCase().includes(head.slice(0, 7).toLowerCase())) {
     problems.push(
       `update Revisions: its current row names another commit than this PR's head, \`${head.slice(0, 7)}\` (add a row for the head, or fix the row)`,
     );

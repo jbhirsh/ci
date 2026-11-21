@@ -396,6 +396,73 @@ describe("the template's Example", () => {
   });
 });
 
+describe("bodyProblems: Revisions' current row, in either shape of the table", () => {
+  const base = GOOD.slice(0, GOOD.indexOf('## Revisions')).trimEnd();
+  const link = (/** @type {string} */ sha) =>
+    `[\`${sha.slice(0, 7)}\`](https://github.com/o/r/commit/${sha.padEnd(40, '0')})`;
+  const wrap = (/** @type {string} */ table) =>
+    `${base}\n\n<!-- pr-changes:revisions -->\n## Revisions\n\n${table}\n<!-- /pr-changes:revisions -->\n`;
+  const fresh = (/** @type {string[]} */ ...lines) =>
+    ['| What changed | Why |', '| --- | --- |', ...lines].join('\n');
+  const revisions = (/** @type {string} */ body, /** @type {string} */ head) =>
+    bodyProblems(body, head).filter((p) => /Revisions/.test(p));
+  const tables = {
+    'the two-column table, the current row bold with a pointer': fresh(
+      `| **👉 ${link('abcdef0')}** (current)<br>**w** | y |`,
+      `| ${link('1111111')}<br>old | |`,
+    ),
+    'a current row an author took the pointer off': fresh(
+      `| **${link('abcdef0')}** (current)<br>w | y |`,
+    ),
+    'a current row an author made plain': fresh(`| ${link('abcdef0')} (current)<br>w | y |`),
+    'the old four-column table': [
+      '| Rev | Head | What changed | Why |',
+      '| --- | --- | --- | --- |',
+      `| 2 (current) | ${link('abcdef0')} | w | y |`,
+      `| 1 | ${link('1111111')} | Opened | |`,
+    ].join('\n'),
+  };
+
+  it.each(Object.entries(tables))(
+    'passes %s for its head, and fails it for another',
+    (_name, table) => {
+      expect(revisions(wrap(table), 'abcdef0123')).toEqual([]);
+      const [problem] = revisions(wrap(table), '2222222333');
+      expect(problem).toMatch(/names another commit than this PR's head, `2222222`/);
+    },
+  );
+
+  it('reads the current row, not an older row that says (current) in its text', () => {
+    const body = wrap(
+      fresh(
+        `| **👉 ${link('abcdef0')}** (current)<br>**w** | y |`,
+        `| ${link('1111111')}<br>fix (current) thing | |`,
+      ),
+    );
+    expect(revisions(body, 'abcdef0123')).toEqual([]);
+    const plainOnly = wrap(fresh(`| ${link('1111111')}<br>fix (current) thing | |`));
+    expect(revisions(plainOnly, '2222222333')).toEqual([]);
+  });
+
+  it.each([
+    ['a pointer with no bold', `👉 ${link('abcdef0')} (current)<br>w`],
+    ['the (current) inside the bold', `**👉 ${link('abcdef0')} (current)**<br>w`],
+    ['no space before (current)', `**👉 ${link('abcdef0')}**(current)<br>w`],
+    ['a link that is no commit', '**👉 [`abcdef0`](https://elsewhere.example/x)** (current)<br>w'],
+    [
+      'a sha that is not the one shown',
+      `**👉 [\`abcdef0\`](https://github.com/o/r/commit/${'1'.repeat(40)})** (current)<br>w`,
+    ],
+  ])('does not read %s as a current row', (_name, cell) => {
+    expect(revisions(wrap(fresh(`| ${cell} | y |`)), '2222222333')).toEqual([]);
+  });
+
+  it('does not take a code fence for the table', () => {
+    const fenced = `${base}\n\n\`\`\`\n${tables['the two-column table, the current row bold with a pointer']}\n\`\`\`\n`;
+    expect(revisions(fenced, '2222222333')).toEqual([]);
+  });
+});
+
 describe("bodyProblems: Revisions' marker pair, once a push has moved the head", () => {
   const START = '<!-- pr-changes:revisions -->';
   const END = '<!-- /pr-changes:revisions -->';
