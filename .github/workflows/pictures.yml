@@ -1,0 +1,124 @@
+# The pictures route (ci#133): a Claude session's own pictures (a screenshot
+# of GitHub's page, say) attached to an issue or a PR in this repository, as
+# a table between <!-- pictures:<block> --> markers in its description. A
+# session can push a branch and dispatch a workflow, but can't upload a
+# file, and GitHub refuses the Actions token for attachments. This replaces
+# a one-off workflow written per picture (ci#118's) with one checked entry
+# point. CONTRIBUTING.md ("Pictures from a session") gives the commands.
+#
+# The session pushes its PNGs to an orphan pictures/<name> branch, places the
+# empty marker pair where the table belongs, and dispatches this on main.
+# Two jobs:
+#   - Files (pictures/from-branch, the Actions token only, no checkout):
+#     checks every input, reads only the named paths of refs/heads/<branch>
+#     through the API (plain files of at most 10 MB), checks them as
+#     pictures, uploads them as the run's artifact, and deletes the branch,
+#     on failure and cancel too, once its name was accepted.
+#   - Attach (pictures/attach, unchanged, BOT_PR_TOKEN, no checkout): uploads
+#     them through the host PR and writes the table into the target.
+# For an app's issue or PR, the session targets the host PR with a block
+# named for it, then copies the finished block into the app by REST: no
+# app gets a workflow, secret or file.
+#
+# Trust, in plain words: the token is only in Attach, which runs none of a
+# PR's code or the session's files and checks nothing out, and every input
+# is checked where it enters (pictures/branch.mjs, pictures/inputs.mjs). That
+# keeps a PR's code and a session's files away from the token. It does not
+# guard the token against anyone who can push to this repository:
+# BOT_PR_TOKEN is a plain repository secret, so any workflow on any pushed
+# branch can already use it. The owner chose to say so rather than limit the
+# token to main with an environment (ci#133, decision B1).
+#
+# Traps:
+#   - The concurrency group is the whole run's and is pr-gif's attach group
+#     for the host PR, as gh can't edit a description conditionally. GitHub
+#     keeps one run running and one pending in a group, and a third queued
+#     cancels the pending one, which never reached Files and so keeps its
+#     branch: dispatch it again.
+#   - A pending run waits on the group, never on a timer; this workflow has
+#     no fixed-time wait of its own (pictures/attach's waitForLinks is
+#     ci#58's).
+#   - run-name is "Pictures from <branch>": use a new branch name for each
+#     dispatch, so a session that lacks the dispatch's run id can find its
+#     run by name.
+#   - A failed Attach reruns on the same artifact (rerun-failed-jobs); a
+#     failed Files deleted the branch, so push again under a new name.
+name: Pictures
+
+run-name: Pictures from ${{ inputs.branch }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "The pictures/<name> branch holding the pictures (deleted by the run)"
+        required: true
+        type: string
+      files:
+        description: 'The pictures, one a line, "path | caption", in the table''s order'
+        required: true
+        type: string
+      target:
+        description: "The issue's or PR's number in this repository that gets the table"
+        required: true
+        type: string
+      block:
+        description: "The block's name in the markers, pictures:<block>"
+        required: true
+        type: string
+      host-pr:
+        description: "The PR the pictures upload to; empty takes the PICTURES_HOST_PR variable"
+        default: ""
+        type: string
+      columns:
+        description: "Pictures a table row holds, 1 to 4"
+        default: "2"
+        type: string
+      width:
+        description: "Each picture's width in pixels"
+        default: "300"
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: pr-gif-attach-${{ github.repository }}-${{ inputs.host-pr || vars.PICTURES_HOST_PR }}
+  cancel-in-progress: false
+
+jobs:
+  files:
+    name: Files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: jbhirsh/ci/pictures/from-branch@main
+        with:
+          branch: ${{ inputs.branch }}
+          files: ${{ inputs.files }}
+          target: ${{ inputs.target }}
+          host-pr: ${{ inputs.host-pr || vars.PICTURES_HOST_PR }}
+          block: ${{ inputs.block }}
+          columns: ${{ inputs.columns }}
+          width: ${{ inputs.width }}
+
+  attach:
+    name: Attach
+    needs: files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+    steps:
+      - uses: jbhirsh/ci/pictures/attach@main
+        with:
+          target: ${{ inputs.target }}
+          host-pr: ${{ inputs.host-pr || vars.PICTURES_HOST_PR }}
+          run-id: ${{ github.run_id }}
+          artifact: pictures
+          files: ${{ inputs.files }}
+          block: ${{ inputs.block }}
+          columns: ${{ inputs.columns }}
+          width: ${{ inputs.width }}
+          token: ${{ secrets.BOT_PR_TOKEN }}
