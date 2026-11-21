@@ -1,0 +1,94 @@
+name: Pictures, from a branch
+description: >-
+  The Files job of the pictures route (.github/workflows/pictures.yml,
+  ci#133): reads the pictures a Claude session pushed to a pictures/<name>
+  branch through the REST API, never by checkout, takes only the paths
+  FILES names (each a plain file, mode 100644, of at most 10 MB), checks
+  them as pictures and uploads them as this run's "pictures" artifact for
+  pictures/attach. Then it deletes the branch, on failure and cancel too,
+  once its name was accepted. It needs only the Actions token with contents
+  write: the person's token belongs in the Attach job alone.
+  pictures/branch.mjs's header says what each input is held to, and the
+  trust model.
+
+inputs:
+  branch:
+    description: >-
+      The branch holding the pictures: pictures/ then one name (letters,
+      digits, _, . and -, no -- or ..), at most 100 characters in all.
+      Deleted by this action.
+    required: true
+  files:
+    description: >-
+      The pictures, one a line, as "path | caption": paths on the branch
+      (plain names, no . or .., none starting with - or .), each a PNG, JPEG
+      or GIF of at most 10 MB.
+    required: true
+  target:
+    description: The issue's or PR's number that gets the table (checked here, used by Attach).
+    required: true
+  host-pr:
+    description: >-
+      The PR whose description the pictures upload to (checked here, used
+      by Attach): empty is refused, saying to set PICTURES_HOST_PR.
+    required: true
+  block:
+    description: The block's name in the markers (checked here, used by Attach).
+    required: true
+  columns:
+    description: Pictures a table row holds, 1 to 4 (checked here, used by Attach).
+    default: "2"
+  width:
+    description: Each picture's width in pixels (checked here, used by Attach).
+    default: "300"
+  github-token:
+    description: >-
+      Reads the branch and deletes it (contents write): the Actions token,
+      never a person's.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    # Alone and first, so the delete below runs for any name accepted here,
+    # whatever fails after it.
+    - id: name
+      name: The branch's name
+      shell: bash
+      env:
+        BRANCH: ${{ inputs.branch }}
+      run: node "$GITHUB_ACTION_PATH/../branch.mjs" name
+
+    - name: The inputs, and the named files
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        BRANCH: ${{ steps.name.outputs.branch }}
+        FILES: ${{ inputs.files }}
+        TARGET: ${{ inputs.target }}
+        HOST_PR: ${{ inputs.host-pr }}
+        BLOCK: ${{ inputs.block }}
+        COLUMNS: ${{ inputs.columns }}
+        WIDTH: ${{ inputs.width }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: node "$GITHUB_ACTION_PATH/../branch.mjs" fetch "$RUNNER_TEMP/pictures"
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: pictures
+        path: ${{ runner.temp }}/pictures
+        if-no-files-found: error
+        retention-days: 1
+
+    - name: Delete the branch
+      if: always() && steps.name.outputs.branch != ''
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        BRANCH: ${{ steps.name.outputs.branch }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: node "$GITHUB_ACTION_PATH/../branch.mjs" delete

@@ -35,7 +35,8 @@ choices.
   `Visual changes` status that holds only a PR that merges itself (`visual-review/`, with
   `visual-shots/` in the app's screenshot job and `describe/` writing the bots' sections), README screenshots
   that refresh themselves (`readme-screenshots/`), and a CI run's pictures attached to an
-  issue or a PR, so a plan's mockups reach its issue (`pictures/`).
+  issue or a PR, so a plan's mockups reach its issue (`pictures/`), or a Claude session's own,
+  pushed to a branch and attached by a dispatched workflow (`pictures.yml`).
   A PR's description lists each change's title, commit and files, written under its empty marker pair (`pr-changes/`).
 - **Reports that remember.** Each job's summary, a report page on GitHub Pages and one PR
   comment, comparing the run with recent ones to show what got slower or flaky
