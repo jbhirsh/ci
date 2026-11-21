@@ -1,0 +1,53 @@
+# One-off trial of ci#133 (never on main; deleted after).
+name: Pictures trial final
+
+run-name: Pictures from pictures/trial-final
+
+on:
+  push:
+    branches: [tmp/pictures-trial]
+    paths: [.github/workflows/pictures-trial-final.yml]
+
+permissions: {}
+
+concurrency:
+  group: pr-gif-attach-${{ github.repository }}-134
+  cancel-in-progress: false
+
+jobs:
+  files:
+    name: Files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: jbhirsh/ci/pictures/from-branch@tmp/pictures-trial
+        with:
+          branch: "pictures/trial-final"
+          files: "after-1000.png | Final code, wide"
+          target: "134"
+          host-pr: 134
+          block: "trial-final"
+          columns: "1"
+          width: "300"
+
+  attach:
+    name: Attach
+    needs: files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+    steps:
+      - uses: jbhirsh/ci/pictures/attach@tmp/pictures-trial
+        with:
+          target: "134"
+          host-pr: 134
+          run-id: ${{ github.run_id }}
+          artifact: pictures
+          files: "after-1000.png | Final code, wide"
+          block: "trial-final"
+          columns: "1"
+          width: "300"
+          token: ${{ secrets.BOT_PR_TOKEN }}
