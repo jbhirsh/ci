@@ -1,11 +1,15 @@
 # Fills each numbered change's commit and files in a PR's description, with the
-# line counts as small coloured pictures (ci#79, ci#100): this repo's own copy
-# of the caller an app adopts (CONTRIBUTING.md's "PR changes" says why each part
-# is the way it is). It runs on pull_request_target, so always the default
-# branch's copy of this file, and holds BOT_PR_TOKEN (attaching a picture needs
-# a person's token): safe because the job checks out and runs nothing from the
-# PR. Keep it so. Its own concurrency group, not another workflow's: GitHub
-# keeps one pending run per group.
+# line counts as small coloured pictures (jbhirsh/ci#79, jbhirsh/ci#100): the
+# caller this repo and every app hold (jbhirsh/ci's CONTRIBUTING.md, "PR
+# changes", says why each part is the way it is). It runs on
+# pull_request_target, so always the default branch's copy of this file, and
+# holds BOT_PR_TOKEN (attaching a picture needs a person's token): safe because
+# the job checks out and runs nothing from the PR. Keep it so. Its own
+# concurrency group, not another workflow's: GitHub keeps one pending run per
+# group.
+#
+# This is the canonical copy every app holds (sync/manifest.json); change it
+# in jbhirsh/ci, never in an app.
 name: PR changes
 
 on:
