@@ -1,8 +1,17 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { anchor, BUDGET, chooseLevel, escape, fill, placed, renderChange } from './changes.mjs';
+import {
+  anchor,
+  BUDGET,
+  chooseLevel,
+  escape,
+  fill,
+  placed,
+  putBlock,
+  renderChange,
+} from './changes.mjs';
 
-const WHERE = { repo: 'jbhirsh/app', number: 7 };
+const WHERE = { repo: 'jbhirsh/app', number: 7, n: 1 };
 const SHA = 'abcdef0123456789abcdef0123456789abcdef01';
 
 /**
@@ -48,7 +57,9 @@ describe('renderChange', () => {
       ]),
       WHERE,
     );
-    expect(out).toContain(`[\`abcdef0\`](https://github.com/jbhirsh/app/commit/${SHA}) Add a`);
+    expect(out.split('\n')[0]).toBe(
+      `**1. Add a** [\`abcdef0\`](https://github.com/jbhirsh/app/commit/${SHA})`,
+    );
     expect(out).toContain('<details><summary>2 files changed +8 −1</summary>');
     expect(out).toContain(
       `- [\`src/a.ts\`](https://github.com/jbhirsh/app/pull/7/files${anchor('src/a.ts')}) +3 −1`,
@@ -64,6 +75,40 @@ describe('renderChange', () => {
     expect(out.endsWith('\n\n1 file changed +3 −1')).toBe(true);
     expect(out).not.toContain('<details>');
     expect(out).not.toContain('src/a.ts');
+  });
+  it('numbers the title from the change, bolds the subject and puts the commit link last', () => {
+    const [line] = renderChange(commit('Fix *this*'), { ...WHERE, n: 12 }).split('\n');
+    expect(line).toBe(
+      `**12. Fix \\*this\\*** [\`abcdef0\`](https://github.com/jbhirsh/app/commit/${SHA})`,
+    );
+  });
+  it('keeps the bold closed round a subject with trailing space, a CR or nothing', () => {
+    const first = (/** @type {string} */ subject) =>
+      renderChange(commit(subject), WHERE).split('\n')[0];
+    const link = `[\`abcdef0\`](https://github.com/jbhirsh/app/commit/${SHA})`;
+    expect(first('Fix x ')).toBe(`**1. Fix x** ${link}`);
+    expect(first('Fix x\r')).toBe(`**1. Fix x** ${link}`);
+    expect(first('  Fix x \t')).toBe(`**1. Fix x** ${link}`);
+    expect(first('')).toBe(`**1. (no subject)** ${link}`);
+    expect(first(' \r\n ')).toBe(`**1. (no subject)** ${link}`);
+    expect(first('\u200b')).toBe(`**1. (no subject)** ${link}`);
+    expect(first('Fix x \u200b')).toBe(`**1. Fix x** ${link}`);
+  });
+  it("writes a subject's replacement patterns as they are, escaped, never as a pattern", () => {
+    const subject = "Fix $& and $1 and $` and $' and $$";
+    const slot1 = '<!-- pr-changes:change:1 -->\n<!-- /pr-changes:change:1 -->';
+    const body = `## Changes\n\n$& $1 $\` $' $$\n\n${slot1}\n\n- why $& $1\n`;
+    const out = fill(body, [commit(subject)], WHERE).body;
+    expect(out).toContain("**1. Fix \\$&amp; and \\$1 and \\$\\` and \\$' and \\$\\$** [");
+    expect(out.startsWith("## Changes\n\n$& $1 $` $' $$\n\n<!-- pr-changes:change:1 -->\n")).toBe(
+      true,
+    );
+    expect(out.endsWith('\n\n- why $& $1\n')).toBe(true);
+  });
+  it('leaves a bidirectional override out of a subject, and stops a `www.` link', () => {
+    expect(escape('a\u202eb\u2066c')).toBe('abc');
+    expect(escape('see www.example.com')).toBe('see www\u200b.example.com');
+    expect(escape('WWW.example.com')).toBe('WWW\u200b.example.com');
   });
   it('is only the commit line for a commit with no files', () => {
     expect(renderChange(commit('empty', []), WHERE)).not.toContain('<details>');
@@ -111,6 +156,25 @@ describe('fill', () => {
   it('gives the same description on a rerun', () => {
     const once = fill(body, commits, WHERE).body;
     expect(fill(once, commits, WHERE).body).toBe(once);
+  });
+  it('numbers each title from its own marker, with no heading needed', () => {
+    const bare = `## Changes\n\n${slot(1)}\n\n- why one\n\n${slot(2)}\n\n- why two\n`;
+    const out = fill(bare, commits, WHERE).body;
+    expect(out).toContain('**1. One** [');
+    expect(out).toContain('**2. Two** [');
+    expect(out).toContain('\n\n- why one\n\n');
+    expect(out.endsWith('\n\n- why two\n')).toBe(true);
+    expect(out).not.toContain('###');
+  });
+  it('rewrites a block filled the old way, keeping its heading and what is outside the markers', () => {
+    const old = `## Changes\n\n### 1. A\n\nWhy.\n\n<!-- pr-changes:change:1 -->\n[\`abcdef0\`](https://github.com/jbhirsh/app/commit/${SHA}) One\n\n<details><summary>1 file changed +1 −0</summary>\n\n- [\`x\`](https://github.com/jbhirsh/app/pull/7/files#diff-x) +1 −0\n\n</details>\n<!-- /pr-changes:change:1 -->\n\nTail`;
+    const out = fill(old, [commit('One')], WHERE).body;
+    expect(out).toContain('**1. One** [`abcdef0`]');
+    expect(out).not.toContain(`[\`abcdef0\`](https://github.com/jbhirsh/app/commit/${SHA}) One`);
+    expect(out.startsWith('## Changes\n\n### 1. A\n\nWhy.\n\n<!-- pr-changes:change:1 -->\n')).toBe(
+      true,
+    );
+    expect(out.endsWith('\n\nTail')).toBe(true);
   });
   it('says so in every slot, and leaves no stale commit, when slots and commits differ', () => {
     const filled = fill(body, commits, WHERE).body;
@@ -209,5 +273,18 @@ describe('fill at a level', () => {
     const out = fill(`${slot(1)}\n${'x'.repeat(BUDGET)}`, [commit('x')], WHERE);
     expect(out.problem).toMatch(/too long to write/);
     expect(out.body).toBe(`${slot(1)}\n${'x'.repeat(BUDGET)}`);
+  });
+});
+
+describe('a block written into a description', () => {
+  // Text from outside goes in by slicing, never as a replacement string.
+  it('holds `$&`, `$1`, `$$` and the like as they are, in the block and round it', () => {
+    const text = "$& $1 $` $' $$";
+    const body = `before ${text}\n\n<!-- pr-changes:x -->\nold\n<!-- /pr-changes:x -->\n\nafter ${text}\n`;
+    const out = putBlock(body, 'x', text);
+    expect(out).toBe(
+      `before ${text}\n\n<!-- pr-changes:x -->\n${text}\n<!-- /pr-changes:x -->\n\nafter ${text}\n`,
+    );
+    expect(putBlock(`plain ${text}`, 'y', text)).toContain(`<!-- pr-changes:y -->\n${text}\n`);
   });
 });

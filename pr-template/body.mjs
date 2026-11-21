@@ -18,10 +18,14 @@
 //   - under a Plan, the template's HTML table, each step its own `<tbody>` and
 //     only this PR's starting with an empty `<tr></tr>`, so that GitHub shades
 //     only this PR's row (a Markdown table shades every other row);
-//   - under Changes, at least one numbered change: `### 1. The change`, each
-//     with its commit: a commit link, or the `pr-changes:change:N` pair the
-//     changes tool has filled (an empty pair is not a commit, only the place
-//     the tool writes it);
+//   - under Changes, at least one change, each with its commit: a commit link,
+//     or the `pr-changes:change:N` pair the changes tool has filled (an empty
+//     pair is not a commit, only the place the tool writes it). A change is
+//     its pair, whose title line the tool writes (`**N. subject** [sha](link)`),
+//     with the author's why in bullets under it; a description from before
+//     has a numbered heading `### 1. The change` above each pair, and keeps
+//     passing as long as it has one (a heading marks a change, and the pair
+//     under it is its commit);
 //   - Revisions' current row (its first cell opens with the head link, bold
 //     with a pointer, then `(current)`; in the table's old four-column shape
 //     its Rev cell says `(current)` and the next cell is the head link, and a
@@ -109,7 +113,7 @@ const COMMIT = /\/commit\/[0-9a-f]{7,40}/;
 const CHANGE_SLOT = /^pr-changes:change:\d+$/;
 /** What the template's example change says. */
 const SAMPLE_HEADING = /^The first change, as a goal\b/i;
-const SAMPLE_WHY = /^Why this change\.\s*$/im;
+const SAMPLE_WHY = /^\s*(?:[-*]|\d+\.)?\s*Why this change\.\s*$/im;
 /**
  * The plan table's template row: this PR's row with the "What" cell empty,
  * as the HTML table the template has now, or the Markdown one it had.
@@ -413,7 +417,7 @@ const SLOT_KEY = /^describe:visual-review:/;
 const LOCAL_GIF = /\]\(\.\/pr-gif\//;
 /** The first line of a block PR GIFs marked stale. */
 const STALE_BLOCK = /^\*\*Not updated for `[0-9a-f]{7,40}`: /;
-/** A numbered change's heading. */
+/** A numbered change's heading (from before the tool wrote each change's title). */
 const NUMBERED = /^ {0,3}### +\d+\.[ \t]+\S/;
 
 /**
@@ -434,7 +438,12 @@ function pictureProblems(blocks, found, lines) {
   const changes = found.find((f) => f.at === 2);
   const after = changes ? found.find((f) => f.line > changes.line && f.at !== 2) : undefined;
   const end = after ? after.line : lines.length;
-  const first = changes ? lines.findIndex((l, i) => i > changes.line && NUMBERED.test(l)) : -1;
+  const heading = changes ? lines.findIndex((l, i) => i > changes.line && NUMBERED.test(l)) : -1;
+  // A change starts at its numbered heading, or at its pair when it has none.
+  const slot = changes
+    ? blocks.find((b) => CHANGE_SLOT.test(b.key) && b.at > changes.line && b.at < end)
+    : undefined;
+  const first = Math.min(...[heading, slot?.at ?? -1].filter((at) => at !== -1), Infinity);
   const own = blocks.filter((b) => GIF_KEY.test(b.key) || SLOT_KEY.test(b.key));
   for (const { key, inner, at } of own) {
     const gif = GIF_KEY.test(key);
@@ -449,7 +458,7 @@ function pictureProblems(blocks, found, lines) {
         `the GIF for \`${key.slice(7)}\` is marked "Not updated": its latest recording failed, so it shows old behaviour. Re-run PR GIFs for it`,
       );
     }
-    if (changes === undefined || first === -1 || at < first || at >= end) {
+    if (changes === undefined || first === Infinity || at < first || at >= end) {
       problems.push(
         `put the ${what} block \`${key}\` under the change it belongs to: add an empty \`<!-- ${key} -->\` and \`<!-- /${key} -->\` pair there (a ${what} at the top or the very end belongs to no change), then ${
           gif
@@ -581,40 +590,77 @@ export function bodyProblems(body, head, event = {}) {
     const changes = section(2);
     const kept = section(2, withTools);
     /** @type {number[]} */
-    const starts = [];
+    const headings = [];
+    /** @type {{ at: number, n: number }[]} */
+    const pairs = [];
     kept.forEach((l, i) => {
-      if (/^ {0,3}### +\d+\.[ \t]+\S/.test(l)) starts.push(i);
+      if (NUMBERED.test(l)) headings.push(i);
+      const slot = /^@@tool:pr-changes:change:([1-9]\d*)@@$/.exec(l);
+      if (slot) pairs.push({ at: i, n: Number(slot[1]) });
     });
+    // A change starts at its pair. A numbered heading above it (a description
+    // from before) starts it instead, when it is the heading numbered like the
+    // pair and comes after the pair before: a numbered sub-heading inside
+    // someone's why (`### 1. Steps`) is no change. Without any pair, the
+    // headings are the changes, as they were.
+    const starts = pairs.length
+      ? pairs.map(({ at, n }, i) => {
+          const lead = headings.findLast(
+            (h) => h < at && h > (pairs[i - 1]?.at ?? -1) && Number(/\d+/.exec(kept[h])?.[0]) === n,
+          );
+          return { from: lead ?? at, n, led: lead !== undefined };
+        })
+      : headings.map((from) => ({
+          from,
+          n: Number(/\d+/.exec(kept[from])?.[0]),
+          led: true,
+        }));
     // `at` and the lines here index alike, from the line after the Changes heading.
     const base = (found.find((f) => f.at === 2)?.line ?? -1) + 1;
-    starts.forEach((from, i) => {
-      const to = starts[i + 1];
+    starts.forEach(({ from, n, led }, i) => {
+      const to = starts[i + 1]?.from;
       const part = kept.slice(from, to);
       const slots = blocks.filter(
         (b) => CHANGE_SLOT.test(b.key) && b.at >= base + from && b.at < base + (to ?? kept.length),
       );
       const filled = slots.some((b) => b.inner.join('').trim() !== '');
       if (!filled && !COMMIT.test(part.join('\n'))) {
-        const n = /\d+/.exec(part[0])?.[0];
         problems.push(
           slots.length > 0
             ? `under change ${n}, its \`<!-- pr-changes:change:${n} -->\` pair is empty: the changes tool fills it with the commit and files on the next push, or link the commit yourself`
             : `under change ${n}, add its commit: the empty marker pair \`<!-- pr-changes:change:${n} -->\` with \`<!-- /pr-changes:change:${n} -->\` (the changes tool fills it), or a link to the commit`,
         );
       }
+      // The tool writes the title; the why is the author's, under the pair.
+      if (!led && !part.slice(1).some((l) => l.trim() !== '' && !l.startsWith('@@tool:'))) {
+        problems.push(
+          `under change ${n}, write why: bullets (or numbered steps) under its \`<!-- pr-changes:change:${n} -->\` pair, since the changes tool writes only the title, the commit and the files`,
+        );
+      }
     });
+    // With no heading to carry a number, the pair's own number is the change's
+    // only identity: the Nth commit goes in the pair numbered N.
+    if (
+      pairs.length > 0 &&
+      starts.every((st) => !st.led) &&
+      pairs.some((pr, i) => pr.n !== i + 1)
+    ) {
+      problems.push(
+        `number the change pairs 1, 2, 3… in the order they appear (they are ${pairs.map((pr) => pr.n).join(', ')}): the changes tool puts the Nth commit in the pair numbered N`,
+      );
+    }
+    if (starts.length === 0) {
+      problems.push(
+        'under `## Changes`, add a change: an empty `<!-- pr-changes:change:1 -->` and `<!-- /pr-changes:change:1 -->` pair, each marker alone on its line (the changes tool writes its title, commit and files), then why in bullets under it',
+      );
+    }
     const numbered = changes.flatMap((l) => {
       const m = /^ {0,3}### +\d+\.[ \t]+(\S.*)$/.exec(l);
       return m ? [m[1].trimEnd()] : [];
     });
-    if (numbered.length === 0) {
-      problems.push(
-        'under `## Changes`, add a numbered change heading such as `### 1. The first change`',
-      );
-    }
     if (numbered.some((text) => SAMPLE_HEADING.test(text)) || SAMPLE_WHY.test(changes.join('\n'))) {
       problems.push(
-        'replace the template\'s sample change (`### 1. The first change, as a goal`, "Why this change.") with your own',
+        'replace the template\'s sample change (its "Why this change." line, or a heading `### 1. The first change, as a goal`) with your own',
       );
     }
   }

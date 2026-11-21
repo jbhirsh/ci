@@ -1,9 +1,15 @@
-// What a PR's description says about each change (ci#79): under the nth
-// numbered change heading the author places an empty pair
-// `<!-- pr-changes:change:N -->` … `<!-- /pr-changes:change:N -->`, and this
-// fills it from git alone with the nth commit: its linked sha and subject,
-// then a closed dropdown "N files changed +a −d" that opens on each file,
-// linked to its diff (`#diff-<sha256 of the path>`), with its counts.
+// What a PR's description says about each change (ci#79): under Changes the
+// author places an empty pair `<!-- pr-changes:change:N -->` …
+// `<!-- /pr-changes:change:N -->` for each change, and this fills it from git
+// alone with the nth commit: its title, a line `**N. <subject>** [`sha`](link)`
+// (the number is the pair's own, the subject is bold and the commit link comes
+// last), then a closed dropdown "N files changed +a −d" that opens on each file,
+// linked to its diff (`#diff-<sha256 of the path>`), with its counts. The
+// author writes only why, in bullets under the pair: there is no heading to
+// write, since the title is this tool's. A description from before (a numbered
+// `### N.` heading above its pair, and a line `[`sha`](link) subject` in it) is
+// rewritten the same way on the next run, as the whole block is, and the
+// heading stays the author's.
 //
 // The counts (`+81 −37`) are green and red through a small picture of the
 // numbers, not text: GitHub strips HTML colour, and the GitHub app shows
@@ -63,6 +69,13 @@ const ANY_MARKER = /<!-- \/?[a-z][a-z0-9-]*:[^\s<>]+ -->/;
 export const anchor = (path) => `#diff-${createHash('sha256').update(path).digest('hex')}`;
 
 /**
+ * Bidirectional controls and zero-width characters: they would reorder or hide
+ * what a reader sees of a stranger's text, or leave a space the eye can't see
+ * inside the bold's closing stars.
+ */
+const INVISIBLE = /[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
+
+/**
  * Text that is safe as one line of Markdown: nothing in it makes a tag, a
  * link, emphasis, a table cell or a mention.
  *
@@ -71,12 +84,15 @@ export const anchor = (path) => `#diff-${createHash('sha256').update(path).diges
 export function escape(text) {
   return (
     text
+      .replace(INVISIBLE, '')
       .replace(/[\r\n]+/g, ' ')
       .replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] ?? c)
       .replace(/[\\`*_[\]|~$]/g, (c) => `\\${c}`)
       // A zero-width space after what makes a mention, an issue reference or a link.
       .replace(/[@#]/g, (c) => `${c}\u200b`)
       .replace(/:\/\//g, ':\u200b//')
+      // `www.` makes a link on its own, without a scheme.
+      .replace(/www\./gi, (m) => `${m.slice(0, 3)}\u200b.`)
   );
 }
 
@@ -123,15 +139,18 @@ export const plain = (/** @type {number} */ added, /** @type {number} */ removed
  * What goes between a slot's markers for one commit.
  *
  * @param {Commit} commit
- * @param {{ repo: string, number: number, level?: Level, pair?: Pair }} options
- *   `pair` is the markup of a pair (default: plain text); `level` says how
- *   much to show (default `full`)
+ * @param {{ repo: string, number: number, n: number, level?: Level, pair?: Pair }} options
+ *   `n` is the change's number, from its marker; `pair` is the markup of a
+ *   pair (default: plain text); `level` says how much to show (default `full`)
  * @returns {string}
  */
-export function renderChange(commit, { repo, number, level = 'full', pair = plain }) {
-  const added = commit.files.reduce((n, f) => n + f.added, 0);
-  const removed = commit.files.reduce((n, f) => n + f.removed, 0);
-  const line = `[\`${commit.sha.slice(0, 7)}\`](https://github.com/${repo}/commit/${commit.sha}) ${escape(commit.subject)}`;
+export function renderChange(commit, { repo, number, n, level = 'full', pair = plain }) {
+  const added = commit.files.reduce((sum, f) => sum + f.added, 0);
+  const removed = commit.files.reduce((sum, f) => sum + f.removed, 0);
+  // Trimmed before it is escaped, and never empty: a space inside the bold's
+  // closing `**` (or nothing between the stars) makes GitHub show the stars.
+  const subject = escape(commit.subject.replace(INVISIBLE, '').trim()) || '(no subject)';
+  const line = `**${n}. ${subject}** [\`${commit.sha.slice(0, 7)}\`](https://github.com/${repo}/commit/${commit.sha})`;
   if (commit.files.length === 0) return line;
   const label = count(commit.files.length, 'file');
   if (level === 'totals') return [line, '', `${label} changed ${plain(added, removed)}`].join('\n');
@@ -290,7 +309,7 @@ export function chooseLevel(body, commits, where, { pair, reserve = 0 }) {
   if (!matches(slots, commits.length)) return null;
   for (const level of LEVELS) {
     const out = writeAll(body, slots, (n) =>
-      renderChange(commits[n - 1], { ...where, level, pair }),
+      renderChange(commits[n - 1], { ...where, n, level, pair }),
     );
     if (out.length + (level === 'totals' ? 0 : reserve) <= BUDGET) return level;
   }
@@ -326,7 +345,7 @@ export function fill(body, commits, where, { level, pair = plain, reserve = 0 } 
     };
   }
   const out = writeAll(body, slots, (n) =>
-    renderChange(commits[n - 1], { ...where, level: chosen, pair }),
+    renderChange(commits[n - 1], { ...where, n, level: chosen, pair }),
   );
   return { body: out, problem: null };
 }

@@ -109,11 +109,15 @@ table: there is no totals line, as the PR's own header has the totals. -->
 <!-- /describe:visual-review -->
 
 <!--
-One numbered "###" heading per change: the change as a goal, then bullets (or
-numbered steps) on what changed and why, then its marker pairs: `pr-changes:change:N` for the Nth change (the tool writes
-its commit and files there), written as the markers above are. Visual review's screens go under the change that made
-them: add a pair `describe:visual-review:<screen>` for each screen (the screen's name
-in the table), written as the markers above are.
+One empty marker pair per change, numbered from 1 and in the order of the commits:
+`pr-changes:change:N` for the Nth change, written as the markers above are. The
+changes tool writes the change's title (its number, its commit's subject and a
+link to the commit) and its files there; you write only why, as bullets (or
+numbered steps) under the pair, with sub-bullets for detail, links, and a fenced
+block for a command or a message. There is no heading to write for a change.
+Visual review's screens go under the change that made them: add a pair
+`describe:visual-review:<screen>` for each screen (the screen's name in the
+table), written as the markers above are.
 
 Does the change move something: a transition, a sheet or dialog opening or
 closing, a drag, swipe or scroll, a multi-step flow? Then it needs a GIF, which
@@ -126,15 +130,13 @@ scenario's own name (the `name` it exports, else its file's name without the
 extension).
 
 In a PR with several changes, a change that fixes a bug or changes behaviour takes
-its own bold "**Example**" paragraph under its heading, as the one under Goal does.
+its own bold "**Example**" paragraph under its pair, as the one under Goal does.
 -->
-
-### 1. The first change, as a goal
-
-Why this change.
 
 <!-- pr-changes:change:1 -->
 <!-- /pr-changes:change:1 -->
+
+- Why this change.
 
 ## Checklist
 

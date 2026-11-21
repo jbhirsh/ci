@@ -1,10 +1,12 @@
 name: PR changes
 description: >-
   Fills a PR description's change slots from its commits (changes.mjs's
-  header says the rules): under each numbered change heading the author
-  places an empty `<!-- pr-changes:change:N -->` pair, and the Nth commit by
-  someone other than a bot (or a merge) goes in it, with its linked sha, its
-  subject and a closed list of its files, each linked to its diff. The line
+  header says the rules): under Changes the author places an empty
+  `<!-- pr-changes:change:N -->` pair for each change, and the Nth commit by
+  someone other than a bot (or a merge) goes in it: a title line (the
+  number, the subject in bold and the linked sha last) and a closed list of
+  its files, each linked to its diff. The author writes only why, in
+  bullets under the pair; there is no heading to write. The line
   counts are small coloured pictures, so they read in the GitHub app as well
   as on the web (counts.mjs says what and why); run.mjs's header says how
   they are attached. When the slots and the commits differ in number it writes

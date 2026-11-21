@@ -33,6 +33,42 @@ const anything = fc.oneof(
   fc.constantFrom('## Goal', '```', '<!--', '-->', '### 1. x', '| a | b |', '\r\n', '~~~'),
 );
 
+describe('bodyProblems and changes the tool titles', () => {
+  /**
+   * @param {boolean[]} filled whether each change's pair has its title in it
+   * @param {string} why the author's text under every pair
+   */
+  const changes = (filled, why) =>
+    GOOD.replace(
+      /### 1\. The change[\s\S]*?\n\n## Checklist/,
+      // A function, so a `$&` in the author's text is text, not a pattern.
+      () =>
+        `${filled
+          .map(
+            (on, i) =>
+              `<!-- pr-changes:change:${i + 1} -->\n${on ? `**${i + 1}. Do it** [\`abc1234\`](https://github.com/o/r/commit/abc1234)\n` : ''}<!-- /pr-changes:change:${i + 1} -->\n\n${why}`,
+          )
+          .join('\n\n')}\n\n## Checklist`,
+    );
+
+  /** Something written under a pair: never blank, and sometimes a replacement pattern. */
+  const whyArb = fc.oneof(
+    harmless.map((text) => `- ${text.trim() || 'because'}`),
+    fc.constantFrom('- $&', '- $1', '- $`', "- $'", '- $$'),
+  );
+
+  it('names exactly the changes whose pair is still empty, whatever the author writes under them', () => {
+    fc.assert(
+      fc.property(fc.array(fc.boolean(), { minLength: 1, maxLength: 6 }), whyArb, (filled, why) => {
+        const found = bodyProblems(changes(filled, why));
+        const empty = filled.flatMap((on, i) => (on ? [] : [i + 1]));
+        expect(found).toHaveLength(empty.length);
+        found.forEach((problem, i) => expect(problem).toContain(`under change ${empty[i]},`));
+      }),
+    );
+  });
+});
+
 describe('bodyProblems', () => {
   it('never throws, and gives sentences, for any description', () => {
     fc.assert(
