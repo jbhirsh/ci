@@ -149,9 +149,15 @@ description check needs it. Write "Nothing to do." when there is nothing to list
 <!--
 Revisions: leave the markers below empty. Once the PR has a revision (a push
 after it opened, or a force-push), the changes tool writes the "## Revisions"
-heading and a table of two columns inside them, newest first: What changed (the
-head, then what changed; the current row is bold with a pointer) and Why. Write
-each row's Why; the rest is written for you.
+heading and, for each revision, newest first, a collapsible block: its summary
+(the head, the current one bold with a pointer; a compare link; and a note such
+as "rewritten from … (2 commits dropped)" or "Opened") and under it a table of
+two columns, "What changed" and "Why", with one empty row. The newest revision is
+open and the older ones are closed. Fill the table in the description, one row
+for each change, in plain words: what changed and why (not the commit's subject,
+as a commit may be reworked into another). The tool keeps every row you write. A
+row has two cells: write a pipe inside a cell as \|, as GitHub drops any cell
+after the second.
 -->
 
 <!-- pr-changes:revisions -->
