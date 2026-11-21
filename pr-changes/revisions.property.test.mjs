@@ -280,10 +280,13 @@ describe('the two-column table', () => {
   /** One line of text an author might leave in a Why or a What: no newline, no pipe, bold marks and breaks allowed. */
   const cell = fc
     .array(
-      fc.oneof(fc.stringMatching(/^[A-Za-z0-9 .,_*`()-]{0,12}$/), fc.constantFrom('**', '<br>')),
-      {
-        maxLength: 5,
-      },
+      fc.oneof(
+        fc.stringMatching(/^[A-Za-z0-9 .,_*`()-]{0,12}$/),
+        // Bold marks, breaks, spaces and backticks on their own: a What of `** **`, of spaces, of a
+        // last line of spaces (what a cell's trim and the writer's bold must agree on).
+        fc.constantFrom('**', '<br>', ' ', '`', '** **', '*', '  '),
+      ),
+      { maxLength: 6 },
     )
     .map((parts) => parts.join(''));
   const rows = fc.array(fc.record({ sha, what: cell, why: cell }), { minLength: 1, maxLength: 8 });
@@ -327,7 +330,24 @@ describe('the two-column table', () => {
         });
         expect(renderTable(back, REPO, { heading: false })).toBe(out);
       }),
+      // The generator reaches the bold-spaces class in about one run of 75 (worst of 300 seeds: 643):
+      // a bound above that, so the property finds it on any seed; the pinned test below is the sure guard.
+      { numRuns: 1000 },
     );
+  });
+
+  it('writes a current row whose What ends in bold spaces the same way it reads it back', () => {
+    // Found by fast-check (seed 1675818613): `** **` is read as one space, which the writer put after a
+    // `<br>` the next read trimmed away, so the table changed on its second write. A plain trailing
+    // space never got this far (the cell's trim takes it before the writer sees it): only bold ones fail.
+    const sha0 = 'aaa0aaaaa00a000aaa0aa0aaa00a00a0a0a00a0a';
+    for (const what of ['** **', '**  **', 'x<br>** **']) {
+      const text = `| **👉 ${head(sha0)}** (current)<br>${what} |  |`;
+      const first = renderTable(parseTable(text, REPO), REPO, { heading: false });
+      const second = renderTable(parseTable(first, REPO), REPO, { heading: false });
+      expect(second).toBe(first);
+      expect(first).not.toMatch(/<br> {2,}\|/);
+    }
   });
 
   it('keeps every line an author typed that is no row, below the table, and the highlight on the newest row alone after a push', () => {
