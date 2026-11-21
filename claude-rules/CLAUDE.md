@@ -87,7 +87,10 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
 - **Describe the PR from the repo's own `.github/pull_request_template.md`**, which the
   shared template in jbhirsh/ci is the master of for apps that have adopted it. `gh pr create
 --body` doesn't apply the template: read it and fill it in. A bug fix renames Goal to
-  Problem and Plan to Solution, as the template says. Findings from your own review
+  Problem and Plan to Solution, as the template says. Write every section as bullets,
+  numbered steps, checkboxes or a table, linking every issue, PR, comment and file it
+  mentions, with a fenced code block for any command or message: a paragraph is two
+  sentences at most. Findings from your own review
   before the PR go to the owner in the chat, never in the description. When you edit the
   description later, keep its empty marker pairs (`pr-changes:change`, `pr-changes:revisions`,
   `pr-gif`) and the `pr-changes:index` block: the tools fill only inside them, and a
