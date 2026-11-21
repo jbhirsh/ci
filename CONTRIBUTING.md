@@ -112,6 +112,96 @@ jobs:
 - **Revisions:** the same action keeps the description's Revisions table (`pr-changes/revisions.mjs`'s header says the row grammar and the rules). A PR with one head gets nothing; a description with no revisions marker at all (rewritten without the template's pair) gets the empty pair back when a push moves the head, above the index block or, with none, at the end ahead of a footer rule; once a push or a force-push moves the head it writes `## Revisions` and a table inside the template's `<!-- pr-changes:revisions -->` pair, row 1 for the head the PR opened at and a row for each later head, whose Why the author writes. The table has two columns, What changed (the head link first, then what changed) and Why; the current row is bold with a pointer, and each push moves it (the header of `pr-changes/revisions.mjs` says why, and how a row is read). A table in the old four-column shape is still read and is rewritten in the new one. It needs the token: its edit is what makes the description check run again on a description whose current row names the new head, and an edit by the Actions token starts no workflow. A same-repo PR that needs a row and has no token fails the `PR changes` job (never a required check); a fork's PR only gets a notice, and the check stays red until its author adds the row by hand. `revisions: "false"` turns it off. The first write rebuilds the earlier rows from the PR's timeline: the head each force-push made, in order (the first and the latest 19 at most, with their true numbers and a line, kept on later pushes, saying how many are not listed), with what changed where GitHub still has the commits, "(commits replaced by a force-push)" where it doesn't, and a note where none of a row's commits is on the PR any more or GitHub failed to read its range. Row 1 says `Opened` unless a force-push came before the head it names. What the author typed in the block stays below the table. The timeline does not give the head a PR opened at once a force-push replaced it (row 1 is then the first head a force-push made), the heads of plain pushes (one row covers the commits of several between two force-pushes), or a head force-pushed away and never fetched. A PR whose timeline names no force-push has no record of the head it opened at except the push event's `before`, so row 1 shows the head before the push that first wrote the table: after two pushes in quick succession, or when the first push's run failed (no token, say), that is the head between them. A Why with `|` in it is kept as one cell, its pipes escaped.
 - **Without a token** (a fork's PR, or no secret) the counts are plain text and the run says why. `BOT_PR_TOKEN` also needs Contents, Pull requests and Issues read and write on this repository to try the tool here.
 
+## Pictures from a session
+
+A Claude session can push a branch and dispatch a workflow, but can't upload a file. The
+pictures route (`.github/workflows/pictures.yml`, ci#133) attaches a session's own PNGs to an
+issue or a PR here, as a table between `<!-- pictures:<block> -->` markers; the workflow's
+header says how it works and what it trusts.
+
+- **One-time setup (the owner):** a draft PR in this repo whose description may be overwritten
+  (`Pictures host (never merge)`), its number in the repository variable `PICTURES_HOST_PR`, and
+  `BOT_PR_TOKEN` with Contents, Pull requests and Issues write here.
+- **Trust:** the token is only in the Attach job, which runs none of a PR's code or the
+  session's files and checks nothing out. That does not guard the token against anyone who can
+  push here: it is a plain repository secret, which any workflow on a pushed branch can use.
+- **A ci PR target:** dispatch only after the PR's `PR changes` run has finished (it edits the
+  same description in its own group), then read the block back.
+
+1. Shoot GitHub's own page, signed out, cropped to the element: ci's Playwright on the
+   session's Chrome (`chromium.launch({ executablePath: '/usr/bin/google-chrome' })`, a 402 or
+   1000 viewport, `colorScheme` light or dark, `page.locator(…).screenshot({ path })`).
+2. Put the empty pair where the table belongs, in the target's description, before dispatching
+   (a block with no pair lands at the end):
+
+   ```markdown
+   <!-- pictures:revisions --><!-- /pictures:revisions -->
+   ```
+
+3. Push an orphan `pictures/<name>` branch holding only the PNGs, staged by name. Use a new name
+   for each dispatch (`pictures/` then letters, digits, `_`, `.` and `-`, no `--` or `..`): the
+   run deletes it by name, and its run is named for it. Never push to it again once dispatched:
+   a later push is deleted with it, unread.
+
+   ```sh
+   git worktree add --orphan -b pictures/ci-132-revisions ../pictures-ci-132
+   cp before-402.png after-402.png ../pictures-ci-132/
+   git -C ../pictures-ci-132 add before-402.png after-402.png
+   git -C ../pictures-ci-132 commit -m "Pictures for ci#132"
+   git -C ../pictures-ci-132 push origin pictures/ci-132-revisions
+   git worktree remove ../pictures-ci-132 && git branch -D pictures/ci-132-revisions
+   ```
+
+4. Dispatch it on `main` (`host-pr` left out takes `PICTURES_HOST_PR`). Ask for the run's id in
+   the answer:
+
+   ```sh
+   gh api -X POST repos/jbhirsh/ci/actions/workflows/pictures.yml/dispatches -f ref=main \
+     -F return_run_details=true \
+     -f 'inputs[branch]=pictures/ci-132-revisions' -f 'inputs[target]=132' \
+     -f 'inputs[block]=revisions' \
+     -f "inputs[files]=$(printf 'before-402.png | Before (main), phone\nafter-402.png | After, phone')" \
+     --jq .workflow_run_id
+   ```
+
+   If the answer has no id (or the API refuses `return_run_details`: drop it), find the run by
+   its name, never by "the newest run". GitHub may not list it the moment the dispatch answers:
+   if this read finds nothing, read once more, with no pause, and if that finds nothing too,
+   stop and report the run's name (`Pictures from <branch>`) rather than loop or dispatch again:
+
+   ```sh
+   gh run list -R jbhirsh/ci -w pictures.yml -L 100 --json databaseId,displayTitle \
+     --jq '.[] | select(.displayTitle == "Pictures from pictures/ci-132-revisions") | .databaseId'
+   ```
+
+5. Wait for it to end, then read the description back and check the block:
+
+   ```sh
+   gh run watch <run id> -R jbhirsh/ci --exit-status
+   gh api repos/jbhirsh/ci/issues/132 --jq .body
+   ```
+
+- **Redo:** a failed Attach reruns on the same artifact, within a day (its retention)
+  (`gh api -X POST repos/jbhirsh/ci/actions/runs/<run id>/rerun-failed-jobs`); "Re-run all
+  jobs" never works, as Files finds the branch it deleted.
+- **A refused input still costs the branch.** Files deletes the branch once its name is
+  accepted, whatever it refuses after that (an unset `PICTURES_HOST_PR`, a mistyped `target` or
+  `block`, a missing path, a file that isn't a picture), and its log says which with a
+  `pictures: …` line. Fix the input, push the pictures again under a new name and dispatch
+  again. A branch name it refuses is never deleted, and a run cancelled while pending never
+  started and kept its branch.
+- **An app's issue or PR:** no app gets a workflow, secret or file. Dispatch with the host PR as
+  `target` and a block named for the app's target (`<app>-<n>`, such as `sift-249`), put the empty pair in the app's
+  description, then copy the finished block from the host into it by REST:
+
+  ```sh
+  gh api repos/jbhirsh/ci/pulls/<host> --jq .body > host.md
+  gh api repos/jbhirsh/<app>/issues/<n> --jq .body > app.md
+  # take the <!-- pictures:<app>-<n> --> … <!-- /pictures:<app>-<n> --> block from host.md
+  # into app.md's empty pair, then:
+  gh api -X PATCH repos/jbhirsh/<app>/issues/<n> -F body=@app.md
+  ```
+
 ## Claude autofix
 
 Claude autofix runs on the Claude Agent SDK too (`autofix/sdk.mjs`), signed in as the review
