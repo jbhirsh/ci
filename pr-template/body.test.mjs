@@ -203,12 +203,16 @@ describe('bodyProblems', () => {
   });
 
   it('does no quadratic work on the new checks: blank lines in a Plan, a long run of "closes"', () => {
-    // Sized to a body's 65,536-character limit: a regex that backtracked from
-    // every line start would take seconds and hit the test timeout.
-    bodyProblems(`## Plan${'\n'.repeat(60000)}`);
-    bodyProblems(`## Goal\n\n${'closes '.repeat(9000)}`);
-    bodyProblems(`## Plan\n\n${'<tbody>'.repeat(9000)}`);
-    expect(bodyProblems(`## Plan${'\n'.repeat(60000)}`)).toContain(
+    // Sized past a body's 65,536-character limit, to where a quadratic regex
+    // that backtracked from every line start runs for a minute or more and hits
+    // the test timeout, which only ends a hang (there is no clock to compare
+    // with). Measured: 400,000 blank lines take ~0.2 s here as written and ~80 s
+    // with such a regex; at the body limit (60,000) it takes only ~2 s, which the
+    // hang limit could not tell from linear work.
+    bodyProblems(`## Plan${'\n'.repeat(400000)}`);
+    bodyProblems(`## Goal\n\n${'closes '.repeat(60000)}`);
+    bodyProblems(`## Plan\n\n${'<tbody>'.repeat(60000)}`);
+    expect(bodyProblems(`## Plan${'\n'.repeat(400000)}`)).toContain(
       "write the Plan as the template's HTML table, not a Markdown one: GitHub shades every other row of a Markdown table, and only this PR's row of the template's",
     );
   });
