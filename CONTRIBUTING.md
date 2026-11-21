@@ -109,7 +109,42 @@ jobs:
 - **It runs on `pull_request_target`**, which runs the workflow as it is on the default branch, never the PR's copy, so it may hold `BOT_PR_TOKEN` (the apps' fine-grained token: attaching a file needs a person's token). That is safe because the job checks out and runs nothing from the PR: keep it that way. `pr-changes/action.yml`'s description lists the rules (no checkout, no cache, no PR text in a `run:` line or an expression, the token only on the attach call and the one Revisions edit). A change to the workflow takes effect once it is on the default branch.
 - **Its own concurrency group**, not describe's: GitHub keeps one pending run per group, so sharing would let each cancel the other's pending run.
 - **`autofix.exempt`:** add an entry for it in `.github/ci.json`, with its reason ("PR changes: reads the PR as data, runs none of its code"), or `autofix/check-triggers.mjs` fails the app's CI for a `pull_request_target` workflow.
-- **Revisions:** the same action keeps the description's Revisions table (`pr-changes/revisions.mjs`'s header says the row grammar and the rules). A PR with one head gets nothing; a description with no revisions marker at all (rewritten without the template's pair) gets the empty pair back when a push moves the head, above the index block or, with none, at the end ahead of a footer rule; once a push or a force-push moves the head it writes `## Revisions` and a table inside the template's `<!-- pr-changes:revisions -->` pair, row 1 for the head the PR opened at and a row for each later head, whose Why the author writes. The table has two columns, What changed (the head link first, then what changed) and Why; the current row is bold with a pointer, and each push moves it (the header of `pr-changes/revisions.mjs` says why, and how a row is read). A table in the old four-column shape is still read and is rewritten in the new one. It needs the token: its edit is what makes the description check run again on a description whose current row names the new head, and an edit by the Actions token starts no workflow. A same-repo PR that needs a row and has no token fails the `PR changes` job (never a required check); a fork's PR only gets a notice, and the check stays red until its author adds the row by hand. `revisions: "false"` turns it off. The first write rebuilds the earlier rows from the PR's timeline: the head each force-push made, in order (the first and the latest 19 at most, with their true numbers and a line, kept on later pushes, saying how many are not listed), with what changed where GitHub still has the commits, "(commits replaced by a force-push)" where it doesn't, and a note where none of a row's commits is on the PR any more or GitHub failed to read its range. Row 1 says `Opened` unless a force-push came before the head it names. What the author typed in the block stays below the table. The timeline does not give the head a PR opened at once a force-push replaced it (row 1 is then the first head a force-push made), the heads of plain pushes (one row covers the commits of several between two force-pushes), or a head force-pushed away and never fetched. A PR whose timeline names no force-push has no record of the head it opened at except the push event's `before`, so row 1 shows the head before the push that first wrote the table: after two pushes in quick succession, or when the first push's run failed (no token, say), that is the head between them. A Why with `|` in it is kept as one cell, its pipes escaped.
+- **Revisions:** the same action keeps the description's Revisions block (`pr-changes/revisions.mjs`'s header says the grammar and the rules).
+  - **When it writes:**
+    - A PR with one head gets nothing.
+    - A description with no revisions marker at all gets the empty `<!-- pr-changes:revisions -->` pair back when a push moves the head: above the index block, or at the end ahead of a footer rule.
+    - Once a push or a force-push moves the head it writes `## Revisions` inside the pair, row 1 for the head the PR opened at and one for each later head.
+    - `revisions: "false"` turns it off.
+  - **The shape:**
+    - Each revision is a collapsible `<details>`, newest first: the newest is `<details open>`, the older ones closed.
+    - Its `<summary>` is the head link (the current one bold with a pointer and `(current)`), a compare link to the head before it (`compare <code>old…new</code>`: GitHub drops a link whose whole text is the range), and the tool's note (`Opened`, `rewritten from … (N commits dropped)`).
+    - Under it is a table `| What changed | Why |` that the AUTHOR fills: one row for each change, in plain words.
+    - The tool never derives a row from a commit, because this repo reworks and squashes commits: it writes one empty row for a revision with none, and keeps every row an author wrote.
+    - A table in HTML with set widths, one with three columns, a list and a heading per revision were tried on github.com at 402px and left: the owner found a table of two columns under a label easier to read on a phone.
+  - **What the check reads:** only the summary's head link, never the table, so an unfilled row isn't flagged (an empty Why never was).
+  - **What an author can type:**
+    - A pipe in a cell is written `\|`: a row with other than two cells is written as GitHub reads it (the cells after the second joined into it, or an empty second cell).
+    - A tag that would end a block, a cell or the table (`</details>`, `<summary>`, a table's tags) is made harmless (`&lt;`) in what an author or a commit subject wrote.
+    - A `(current)` typed after a head link in a row is defused with a zero-width space.
+    - Text typed outside the blocks stays below them, in order; text typed in a block stays in it.
+    - A summary an author types with a head link of this repo is read as a revision: delete it to remove it.
+    - An unclosed code fence inside the block hides the end marker from the check, as it always did: close it.
+  - **The size limit:**
+    - The block is held to 12,000 characters only by leaving out whole old revisions, oldest first after revision 1 and never the newest, with a line saying how many.
+    - A kept revision's rows are never shortened; text typed outside the blocks is never left out, so shorten it if it is what makes the description too long.
+  - **Earlier shapes:** the HTML table of ci#132's first push, the two-column Markdown table and the old four-column one are still read and are rewritten as blocks, their Why in the first row's Why cell and their What lines as its What.
+  - **The token:** it needs the person's token, as its edit is what makes the description check run again on a description whose current revision names the new head, and an edit by the Actions token starts no workflow.
+    - A same-repo PR that needs a row and has no token fails the `PR changes` job (never a required check).
+    - A fork's PR only gets a notice, and the check stays red until its author adds the row by hand.
+  - **The first write** rebuilds the earlier revisions from the PR's timeline: the head each force-push made, in order.
+    - It lists the first and the latest 19 at most, with their true numbers and a line, kept on later pushes, saying how many are not listed.
+    - Each has a compare link and a note where GitHub still has the commits, "(commits replaced by a force-push)" where it doesn't, and a note where none of a revision's commits is on the PR any more or GitHub failed to read its range.
+    - Revision 1 says `Opened` unless a force-push came before the head it names, and its first row is the goal's first sentence.
+  - **What the timeline does not give:**
+    - The head a PR opened at once a force-push replaced it (revision 1 is then the first head a force-push made).
+    - The heads of plain pushes: one revision covers the commits of several between two force-pushes.
+    - A head force-pushed away and never fetched.
+    - For a PR whose timeline names no force-push, the only record of the opening head is the push event's `before`, so revision 1 shows the head before the push that first wrote the blocks: after two pushes in quick succession, or when the first push's run failed (no token, say), that is the head between them.
 - **Without a token** (a fork's PR, or no secret) the counts are plain text and the run says why. `BOT_PR_TOKEN` also needs Contents, Pull requests and Issues read and write on this repository to try the tool here.
 
 ## Claude autofix
