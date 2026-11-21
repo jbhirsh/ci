@@ -1,16 +1,22 @@
 ## Goal
 
 <!--
-The goal in one paragraph: what this gives whom.
+Write every section of this description as bullets and sub-bullets, not
+paragraphs: numbered steps where order matters, checkboxes for what the owner
+does, a table where it compares things, a hyperlink for every issue, PR,
+comment and source file it mentions, and a fenced code block (with a language)
+for any command, message or snippet. A paragraph is two sentences at most.
 
-For one step of a plan across PRs, add a second sentence: "**This PR:**", this
+The goal as a few short bullets: what this gives whom.
+
+For one step of a plan across PRs, add a second bullet: "**This PR:**", this
 step's own goal and why, ending "Closes #N", or "Part of #N" when the issue is
-bigger than this PR. Otherwise end the paragraph with "Closes #N" when there is
-an issue. Say it here only: the plan below doesn't repeat it. Delete this
+bigger than this PR. Otherwise end the last bullet with "Closes #N" when there
+is an issue. Say it here only: the plan below doesn't repeat it. Delete this
 comment's advice with the text it was for.
 
-For a bug fix, rename this heading "Problem": what is wrong, who sees it and
-what causes it, ending "Closes #N" when there is an issue.
+For a bug fix, rename this heading "Problem": bullets for what is wrong, who
+sees it and what causes it, the last ending "Closes #N" when there is an issue.
 
 A bug fix or a change in behaviour (not a cosmetic change, a rename, a chore or a
 bot's PR) also gets an Example: the simplest case that shows it, in code, as long
@@ -71,7 +77,7 @@ PR's starts with an empty <tr></tr>. Cells take HTML, not Markdown (<a href>,
 <tbody><tr><td>1</td><td><a href="…/pull/12">#12</a></td><td>…</td><td>✅ merged (#12)</td></tr></tbody>
 
 For a bug fix, rename this heading "Solution" and replace what is below with
-what the fix does and why it removes the cause.
+bullets: what the fix does and why it removes the cause.
 -->
 
 <table>
@@ -103,8 +109,8 @@ table: there is no totals line, as the PR's own header has the totals. -->
 <!-- /describe:visual-review -->
 
 <!--
-One numbered "###" heading per change: the change as a goal, a sentence on why,
-then its marker pairs: `pr-changes:change:N` for the Nth change (the tool writes
+One numbered "###" heading per change: the change as a goal, then bullets (or
+numbered steps) on what changed and why, then its marker pairs: `pr-changes:change:N` for the Nth change (the tool writes
 its commit and files there), written as the markers above are. Visual review's screens go under the change that made
 them: add a pair `describe:visual-review:<screen>` for each screen (the screen's name
 in the table), written as the markers above are.
