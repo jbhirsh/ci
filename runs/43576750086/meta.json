@@ -1,0 +1,12 @@
+{
+  "id": 43576750086,
+  "number": 151,
+  "workflow": "CI",
+  "branch": "claude/zen-meitner-0s3vbt",
+  "sha": "b979c4f14807dba97f0176a4f67176576c147a56",
+  "created": "2026-11-14T08:38:07Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43576750086",
+  "jobs": [
+    "check"
+  ]
+}

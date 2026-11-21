@@ -1,0 +1,12 @@
+{
+  "id": 43916263441,
+  "number": 175,
+  "workflow": "CI",
+  "branch": "autofix-sdk-engine",
+  "sha": "c2ea6612005cb1a5e9420a626d3f5c7b8c73421f",
+  "created": "2026-11-16T17:14:27Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43916263441",
+  "jobs": [
+    "check"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": 43980380620,
+  "number": 203,
+  "workflow": "CI",
+  "branch": "property-dotdot-segment",
+  "sha": "0977b4df4d0ec6d488549f6a22f2db0be7af4349",
+  "created": "2026-11-16T23:34:01Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43980380620",
+  "jobs": [
+    "check"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": 44468167136,
+  "number": 266,
+  "workflow": "CI",
+  "branch": "keep-shown-pictures",
+  "sha": "6dbb6abcfb5e266ed141e521cb72467236234de3",
+  "created": "2026-11-19T05:52:45Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44468167136",
+  "jobs": [
+    "check"
+  ]
+}

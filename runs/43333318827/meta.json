@@ -1,0 +1,12 @@
+{
+  "id": 43333318827,
+  "number": 114,
+  "workflow": "CI",
+  "branch": "gif-attachments",
+  "sha": "69f9db6c91a88a043fbbd77c455fc5483ee9d0d7",
+  "created": "2026-11-12T23:58:57Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43333318827",
+  "jobs": [
+    "check"
+  ]
+}

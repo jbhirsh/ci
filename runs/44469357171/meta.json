@@ -1,0 +1,12 @@
+{
+  "id": 44469357171,
+  "number": 268,
+  "workflow": "CI",
+  "branch": "pr-description-action",
+  "sha": "d14c00303037a4f309ed38d7c74424fcf7450628",
+  "created": "2026-11-19T06:03:09Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44469357171",
+  "jobs": [
+    "check"
+  ]
+}

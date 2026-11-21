@@ -1,0 +1,12 @@
+{
+  "id": 44438224775,
+  "number": 245,
+  "workflow": "CI",
+  "branch": "pr-changes-real",
+  "sha": "3f96c1af7b3bd5d4cd3b0f298ae86544927181c1",
+  "created": "2026-11-19T01:36:52Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44438224775",
+  "jobs": [
+    "check"
+  ]
+}

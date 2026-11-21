@@ -1,0 +1,12 @@
+{
+  "id": 44839338427,
+  "number": 304,
+  "workflow": "CI",
+  "branch": "sync-manifest",
+  "sha": "4af18913dc22f5313c113b9ee45e1d26af2361cd",
+  "created": "2026-11-20T23:47:27Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44839338427",
+  "jobs": [
+    "check"
+  ]
+}

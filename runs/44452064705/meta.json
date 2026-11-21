@@ -1,0 +1,12 @@
+{
+  "id": 44452064705,
+  "number": 249,
+  "workflow": "CI",
+  "branch": "claude/remove-visual-baselines-tools",
+  "sha": "1582781f0949bd4f0a2655741553907e30ca4fb7",
+  "created": "2026-11-19T03:31:45Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44452064705",
+  "jobs": [
+    "check"
+  ]
+}

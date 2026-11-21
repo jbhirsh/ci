@@ -1,0 +1,12 @@
+{
+  "id": 43132375815,
+  "number": 104,
+  "workflow": "CI",
+  "branch": "gif-browser-setting",
+  "sha": "24edc65b0a0dfe003b168cd6e7ae466273811e60",
+  "created": "2026-11-12T01:08:20Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43132375815",
+  "jobs": [
+    "check"
+  ]
+}

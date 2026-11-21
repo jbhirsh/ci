@@ -1,0 +1,12 @@
+{
+  "id": 42099962058,
+  "number": 74,
+  "workflow": "CI",
+  "branch": "claude/epic-wozniak-1kxbgw",
+  "sha": "a8db377b8377f45d8c94b22f8eb58b64d64f2773",
+  "created": "2026-11-05T20:04:45Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/42099962058",
+  "jobs": [
+    "check"
+  ]
+}

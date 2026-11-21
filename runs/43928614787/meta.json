@@ -1,0 +1,12 @@
+{
+  "id": 43928614787,
+  "number": 181,
+  "workflow": "CI",
+  "branch": "claude/visual-review",
+  "sha": "da4862b09054dac16d53b1d4b6892763aeb6fe0f",
+  "created": "2026-11-16T18:25:17Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43928614787",
+  "jobs": [
+    "check"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": 43966237528,
+  "number": 197,
+  "workflow": "CI",
+  "branch": "slots-per-screen",
+  "sha": "d0e3267c4013c1c864c9058bcc4b68664807c120",
+  "created": "2026-11-16T22:03:21Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43966237528",
+  "jobs": [
+    "check"
+  ]
+}

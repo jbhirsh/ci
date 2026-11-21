@@ -1,0 +1,12 @@
+{
+  "id": 44916721473,
+  "number": 310,
+  "workflow": "CI",
+  "branch": "pr-description-bullets",
+  "sha": "e1f1b0d1c79f9b4df62af23c1b71166a1d484a06",
+  "created": "2026-11-21T14:59:05Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44916721473",
+  "jobs": [
+    "check"
+  ]
+}

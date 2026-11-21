@@ -1,0 +1,12 @@
+{
+  "id": 43813452600,
+  "number": 167,
+  "workflow": "CI",
+  "branch": "credit-probe",
+  "sha": "d0ec39c87b1cdbd3a9fb2e42e59176775a439ec6",
+  "created": "2026-11-16T05:56:25Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43813452600",
+  "jobs": [
+    "check"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": 44921184577,
+  "number": 323,
+  "workflow": "CI",
+  "branch": "git-test-timeouts",
+  "sha": "d1bba01983dfb6f108a1d5b3f888b6f75199a706",
+  "created": "2026-11-21T15:49:02Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44921184577",
+  "jobs": [
+    "check"
+  ]
+}

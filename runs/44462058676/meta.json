@@ -1,0 +1,12 @@
+{
+  "id": 44462058676,
+  "number": 264,
+  "workflow": "CI",
+  "branch": "revisions-optional",
+  "sha": "ac817fbf28c172917387676214baecaa5b471d3e",
+  "created": "2026-11-19T04:59:45Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44462058676",
+  "jobs": [
+    "check"
+  ]
+}

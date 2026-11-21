@@ -1,0 +1,12 @@
+{
+  "id": 43939293121,
+  "number": 185,
+  "workflow": "CI",
+  "branch": "claude/mockup-refuse-nowhere",
+  "sha": "2fbde2e54a1682f9ba79335b66d9835849181808",
+  "created": "2026-11-16T19:26:07Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43939293121",
+  "jobs": [
+    "check"
+  ]
+}
