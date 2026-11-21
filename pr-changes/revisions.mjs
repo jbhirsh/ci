@@ -399,7 +399,12 @@ export function previousHead(rows) {
  */
 const rowLine = (row, repo) => {
   const link = `[\`${row.sha.slice(0, 7)}\`](https://github.com/${repo}/commit/${row.sha})`;
-  const what = row.what === '' ? '' : `<br>${row.current ? emphasised(row.what) : row.what}`;
+  // A cell is trimmed when it is read, so a current row's What that ends in spaces (a bold `** **`
+  // is read back as one space, and so is a last `<br>` line of bold spaces) would be written one way
+  // and read back another: it is written trimmed, and a What of spaces alone is no What. An older
+  // row's What is as a cell was read, already trimmed.
+  const text = row.current ? row.what.trimEnd() : row.what;
+  const what = text === '' ? '' : `<br>${row.current ? emphasised(text) : text}`;
   return `| ${row.current ? `**👉 ${link}** (current)` : link}${what} | ${row.why} |`;
 };
 
