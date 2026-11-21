@@ -1,10 +1,10 @@
 // revisions.mjs against GitHub: when a PR's head has moved since its
-// Revisions table last named it, add a row (and, the first time, the table
-// with row 1 for the head the PR opened at). Reads with the Actions token
-// (GH_TOKEN); the one write, the description with the row in it, is made with
+// Revisions last named it, add a revision (and, the first time, the blocks
+// with revision 1 for the head the PR opened at). Reads with the Actions token
+// (GH_TOKEN); the one write, the description with the revision in it, is made with
 // a person's token (UPLOAD_TOKEN), because an edit by the Actions token starts
 // no workflow, and the description check must run again on the description it
-// now reads (its current row names the new head). The check's run for the
+// now reads (its current revision names the new head). The check's run for the
 // push read the old description, was red, and is superseded by the run this
 // edit starts (the apps' PR description workflows cancel an older run per PR).
 //
@@ -12,8 +12,8 @@
 //                             optional: UPLOAD_TOKEN, BEFORE)
 //
 // BEFORE is the head before a push (`github.event.before`), the only record
-// of the head a PR opened at: a PR with no table has had one head until a push
-// says otherwise. Without it (an `edited` run) a PR with no table is left
+// of the head a PR opened at: a PR with no blocks has had one head until a push
+// says otherwise. Without it (an `edited` run) a PR with no blocks is left
 // alone.
 //
 // What it writes, and when:
@@ -23,14 +23,14 @@
 //   - the empty pair itself, when a push has moved the head and the
 //     description has no revisions marker at all (an author or a tool
 //     rewrote it without the template's pair): `withPair` puts it where the
-//     template does, and the table goes in as below, so a rewritten
+//     template does, and the revision goes in as below, so a rewritten
 //     description doesn't leave a PR with no Revisions, silently;
-//   - nothing when the table's current row already names the PR's head, so a
+//   - nothing when the current revision already names the PR's head, so a
 //     rerun, the run the tool's own edit wakes and an author's edit of a Why
 //     all leave the description alone;
-//   - otherwise the row, worked out again if the description changed under it
+//   - otherwise the revision, worked out again if the description changed under it
 //     (3 attempts), and skipped if the PR's head moved on meanwhile: the run
-//     for the newer head writes the row for it.
+//     for the newer head writes its revision.
 //
 // HARD RULES (the job runs on `pull_request_target` with a person's token):
 //   - it checks out nothing and runs none of the PR's code: the PR is data;
@@ -57,12 +57,11 @@ import {
   addRevision,
   budgeted,
   capChain,
-  OLDER_SUBJECTS,
-  describeRange,
   goalSentence,
   headHistory,
   parseTable,
   previousHead,
+  rangeNote,
   withPair,
 } from './revisions.mjs';
 
@@ -79,6 +78,13 @@ const ATTEMPTS = 3;
  */
 
 /**
+ * @typedef {object} Commit
+ * @property {string} sha
+ * @property {string} subject
+ * @property {boolean} skipped a merge or a bot's commit
+ */
+
+/**
  * @typedef {object} Compare
  * @property {string} status `ahead`, `behind`, `diverged` or `identical`
  * @property {number} behindBy
@@ -90,7 +96,7 @@ const ATTEMPTS = 3;
  * @typedef {object} Io
  * @property {() => Pull} pull
  * @property {() => string} body
- * @property {() => import('./revisions.mjs').Subject[]} commits every commit of the PR, oldest first
+ * @property {() => Commit[]} commits every commit of the PR, oldest first
  * @property {(prev: string, head: string) => Compare | null} compare null when GitHub can't compare (the old head is gone)
  * @property {() => import('./revisions.mjs').TimelineEvent[]} timeline the PR's timeline events, oldest first
  * @property {(body: string) => void} write with the person's token
@@ -207,19 +213,19 @@ const message = (error) => (error instanceof Error ? error.message : String(erro
 
 /**
  * The table for a PR's first write, from GitHub's timeline of its heads
- * (revisions.mjs's header says what that gives): one row per head, the
+ * (revisions.mjs's header says what that gives): one revision per head, the
  * first and the latest HISTORY_HEADS - 1 at most, each with what changed from
- * the head before it where GitHub still has the commits, else REPLACED. A
- * `build(subjects)` for `budgeted`, or null when the timeline names no
- * earlier head (or can't be read), and the caller starts from `before`.
+ * the head before it where GitHub still has the commits, else REPLACED, or
+ * null when the timeline names no earlier head (or can't be read), and the
+ * caller starts from `before`.
  *
  * @param {Io} io
  * @param {string} body
  * @param {import('./revisions.mjs').Table} table the block as it is: empty of rows, with what the author typed in it
- * @param {{ repo: string, head: string, before: string }} where
- * @returns {((subjects: number) => import('./revisions.mjs').Table) | null}
+ * @param {{ head: string, before: string }} where
+ * @returns {import('./revisions.mjs').Table | null}
  */
-function history(io, body, table, { repo, head, before }) {
+function history(io, body, table, { head, before }) {
   /** @type {import('./revisions.mjs').TimelineEvent[]} */
   let events;
   try {
@@ -233,13 +239,13 @@ function history(io, body, table, { repo, head, before }) {
   const { chain, fromTimeline } = headHistory(events, { head, before });
   if (chain.length < 2) return null;
   const { kept, omitted } = capChain(chain, HISTORY_HEADS);
-  /** @type {import('./revisions.mjs').Subject[]} */
+  /** @type {Commit[]} */
   let commits = [];
   try {
     commits = io.commits();
   } catch (error) {
     io.log(
-      `::warning::pr-changes: the PR's commits couldn't be read (${message(error)}), so the rows list no commit subjects`,
+      `::warning::pr-changes: the PR's commits couldn't be read (${message(error)}), so no revision says whether its commits are still on the PR`,
     );
   }
   const why = goalSentence(renderedLines(body));
@@ -260,44 +266,41 @@ function history(io, body, table, { repo, head, before }) {
       }),
   );
   /**
+   * A revision after the first: the head before it (its compare link), and its note.
+   *
    * @param {number} rev
-   * @param {number} subjects
+   * @returns {{ prev: string | null, note: string }}
    */
-  const what = (rev, subjects) => {
-    if (rev === 1) return fromTimeline ? FIRST_KNOWN : 'Opened';
+  const range = (rev) => {
+    const prev = chain[rev - 2];
     const found = ranges.get(rev);
-    if (found === undefined) return UNREAD;
-    if (found === null) return REPLACED;
+    if (found === undefined) return { prev, note: UNREAD };
+    if (found === null) return { prev: null, note: REPLACED };
     const asked = new Set(found.shas);
     const here = commits.filter((c) => asked.has(c.sha));
-    const row = describeRange(
-      {
-        repo,
-        prev: chain[rev - 2],
-        head: chain[rev - 1],
-        how: found.status === 'ahead' ? 'ahead' : 'rewritten',
-        commits: here,
-        dropped: found.behindBy,
-      },
-      subjects,
-    );
-    // None of its commits is on the PR now (later rewritten): the row says so.
-    return here.length === 0 ? `${row}<br>${NO_LONGER}` : row;
+    const said = rangeNote({
+      prev,
+      how: found.status === 'ahead' ? 'ahead' : 'rewritten',
+      dropped: found.behindBy,
+    });
+    // None of its commits is on the PR now (later rewritten): the note says so.
+    return here.length === 0 ? { ...said, note: `${said.note} ${NO_LONGER}`.trim() } : said;
   };
-  return (subjects) => ({
+  return {
     rows: kept.map((k) => ({
       rev: k.rev,
       current: k.rev === newest,
       sha: k.sha,
-      // An older row lists fewer subjects than the current one: its compare link covers the rest.
-      what: what(k.rev, k.rev === newest ? subjects : Math.min(subjects, OLDER_SUBJECTS)),
-      why: k.rev === 1 ? why : '',
+      ...(k.rev === 1 ? { prev: null, note: fromTimeline ? FIRST_KNOWN : 'Opened' } : range(k.rev)),
+      // The goal's first sentence is what the first revision says it was for.
+      rows: k.rev === 1 && why !== '' ? [`| — | ${why} |`] : [],
+      typed: [],
     })),
-    // What the author typed in the block stays below the table.
+    // What the author typed outside the blocks stays below them.
     rest: table.rest,
     omitted: table.omitted,
     capped: omitted,
-  });
+  };
 }
 
 /**
@@ -328,49 +331,25 @@ function plan(io, body, { repo, head, before }) {
   const kept = table.rest.length;
   if (kept > 0) {
     io.log(
-      `::warning::pr-changes: ${kept} line(s) of the Revisions block are no row; they stay below the table`,
+      `::warning::pr-changes: ${kept} line(s) of the Revisions block are no row; they stay below the blocks`,
     );
   }
   const prev = previousHead(table.rows) ?? before;
   if (prev === null || prev === head) return null;
   if (table.rows.length === 0) {
-    const build = history(io, body, table, { repo, head, before: prev });
-    if (build) {
-      return { text: budgeted(build, repo, { heading: !headingBefore(body, at.from) }), at };
+    const first = history(io, body, table, { head, before: prev });
+    if (first) {
+      return { text: budgeted(first, repo, { heading: !headingBefore(body, at.from) }), at };
     }
   }
   const opened =
     table.rows.length === 0 ? { sha: prev, why: goalSentence(renderedLines(body)) } : null;
-  const commits = io.commits();
   const byHead = io.compare(prev, head);
-  const rewritten = byHead !== null && byHead.status !== 'ahead';
   if (byHead?.status === 'identical') return null;
-  /** @type {import('./revisions.mjs').Subject[]} */
-  const since =
-    byHead === null || rewritten
-      ? commits
-      : (() => {
-          const asked = new Set(byHead.shas);
-          return commits.filter((c) => asked.has(c.sha));
-        })();
-  const how = byHead === null ? 'gone' : rewritten ? 'rewritten' : 'ahead';
+  const how = byHead === null ? 'gone' : byHead.status === 'ahead' ? 'ahead' : 'rewritten';
+  const range = rangeNote({ prev, how, dropped: byHead?.behindBy ?? 0 });
   const text = budgeted(
-    (subjects) =>
-      addRevision(table, {
-        head,
-        opened,
-        what: describeRange(
-          {
-            repo,
-            prev,
-            head,
-            how,
-            commits: since,
-            dropped: byHead?.behindBy ?? 0,
-          },
-          subjects,
-        ),
-      }),
+    addRevision(table, { head, prev: range.prev, note: range.note, opened }),
     repo,
     { heading: !headingBefore(body, at.from) },
   );

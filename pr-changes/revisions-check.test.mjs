@@ -85,7 +85,7 @@ describe('the tool and the check agree on the revisions pair', () => {
       }
       if (wrote) {
         expect(pairProblems(after)).toEqual([]);
-        expect(after).toContain('| **👉 [`');
+        expect(after).toContain('<b>👉 <a href="https://github.com/o/r/commit/');
       }
     });
   }

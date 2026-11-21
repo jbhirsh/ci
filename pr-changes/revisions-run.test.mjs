@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MAX_CHARS } from '../lib/comment.mjs';
 import { bodyProblems } from '../pr-template/body.mjs';
 import { gitHubIo, headingBefore, main, revisions } from './revisions-run.mjs';
-import { OLDER_SUBJECTS, SUBJECTS, parseTable } from './revisions.mjs';
+import { parseTable } from './revisions.mjs';
 
 const REPO = 'o/r';
 const A = 'a'.repeat(40);
@@ -62,18 +62,24 @@ describe('revisions', () => {
     expect(f.writes).toEqual([]);
   });
 
-  it('on the first push writes the heading, row 1 for the opening head and the current row', () => {
+  it('on the first push writes the heading, revision 1 for the opening head and the current revision', () => {
     const f = fake();
     expect(run(f)).toBe(true);
     const out = f.body();
     expect(out).toContain('## Revisions');
-    expect(out).toContain('| [`aaaaaaa`](');
-    expect(out).toContain('Make it work.');
-    expect(out).toContain('| **👉 [`bbbbbbb`](');
-    expect(out).toContain(`compare/${A}...${B}`);
-    expect(out).toContain('Second');
+    expect(out).toContain(`<details>\n<summary><a href="https://github.com/${REPO}/commit/${A}">`);
+    expect(out).toContain('· Opened</summary>');
+    // The goal's first sentence is what the first revision was for; the tool derives nothing from commits.
+    expect(out).toContain('| — | Make it work. |');
+    expect(out).toContain(
+      '<details open>\n<summary><b>👉 <a href="https://github.com/o/r/commit/bbbb',
+    );
+    expect(out).toContain(
+      `· <a href="https://github.com/${REPO}/compare/${A}...${B}">compare <code>aaaaaaa…bbbbbbb</code></a></summary>`,
+    );
+    expect(out).toContain('|  |  |');
     expect(out).not.toContain('First');
-    expect(out).toContain('+ 1 bot or merge commit');
+    expect(out).not.toContain('Second');
     // Only the block changed.
     expect(
       out.replace(/<!-- pr-changes:revisions -->[\s\S]*<!-- \/pr-changes:revisions -->/, PAIR),
@@ -90,7 +96,7 @@ describe('revisions', () => {
       expect(run(f)).toBe(true);
       const out = f.body();
       expect(out.indexOf('## Revisions')).toBeLessThan(out.indexOf('pr-changes:index'));
-      expect(out).toContain('| **👉 [`bbbbbbb`](');
+      expect(out).toContain('<b>👉 <a href="https://github.com/o/r/commit/bbbb');
       expect(out.match(/pr-changes:revisions -->/g)).toHaveLength(2);
       expect(bodyProblems(out, B).filter((p) => /Revisions/.test(p))).toEqual([]);
     });
@@ -154,19 +160,23 @@ describe('revisions', () => {
         [2, short(2)],
         [1, short(1)],
       ]);
-      expect(out).toContain('| **👉 [`');
+      expect(out).toContain('<b>👉 <a href="https://github.com/o/r/commit/');
       expect(out).toContain("the first head GitHub's record of the PR names");
       expect(out).toContain('Make it work.');
-      // h1 -> h2 can't be compared: its commits are gone.
-      expect(out).toContain('<br>(commits replaced by a force-push) |');
+      // h1 -> h2 can't be compared: its commits are gone, and there is no compare link to write.
+      const summaries = out.split('\n').filter((l) => l.startsWith('<summary>'));
+      expect(summaries.map((l) => l.includes('compare/'))).toEqual([true, false, false]);
+      expect(out).toContain('(commits replaced by a force-push)</summary>');
       // h2 -> h3 was rewritten, 2 commits no longer on the branch.
-      expect(out).toMatch(new RegExp(`rewritten from \`${short(2)}\` \\(2 commits dropped\\)`));
+      expect(out).toMatch(
+        new RegExp(`rewritten from <code>${short(2)}</code> \\(2 commits dropped\\)`),
+      );
       expect(bodyProblems(out, h3).filter((p) => /Revisions/.test(p))).toEqual([]);
     });
 
-    it('lists up to three subjects on the current row and two on an older one, the rest as + N more', () => {
+    it('writes no commit of the PR: a compare link on every revision after the first, an empty row to fill', () => {
       const [h1, h2, h3] = [sha(1), sha(2), sha(3)];
-      const many = ['1', '2', '3', '4', '5', '6'];
+      const many = Array.from({ length: 11 }, (_, i) => `${i + 1}`);
       const f = fake({
         pull: { headSha: h3 },
         timeline: () => [forced(h1), forced(h2), forced(h3)],
@@ -174,16 +184,17 @@ describe('revisions', () => {
         compare: () => ({ status: 'ahead', behindBy: 0, base: h1, shas: many }),
       });
       run(f, h2);
-      const rows = f
-        .body()
-        .split('\n')
-        .filter((l) => l.startsWith('| '))
-        .slice(2);
-      const subjects = (/** @type {number} */ at) => (rows[at].match(/Subject \d/g) ?? []).length;
-      expect(subjects(0)).toBe(SUBJECTS);
-      expect(subjects(1)).toBe(OLDER_SUBJECTS);
-      expect(f.body()).toContain(`+ ${many.length - SUBJECTS} more`);
-      expect(f.body()).toContain(`+ ${many.length - OLDER_SUBJECTS} more`);
+      const out = f.body();
+      expect(out).not.toContain('Subject');
+      const read = parseTable(out.slice(out.indexOf('<!-- pr-changes:revisions -->')), REPO);
+      expect(read.rows.map((r) => [r.rev, r.prev])).toEqual([
+        [3, h2],
+        [2, h1],
+        [1, null],
+      ]);
+      // The first revision holds the goal's sentence; the others have no row yet.
+      expect(read.rows.map((r) => r.rows.length)).toEqual([0, 0, 1]);
+      expect(out.match(/\| {2}\| {2}\|/g)).toHaveLength(2);
     });
 
     it('adds the head of a plain push after the last force-push, and the head before this push', () => {
@@ -260,7 +271,7 @@ describe('revisions', () => {
         [2, 'bbbbbbb'],
         [1, 'aaaaaaa'],
       ]);
-      expect(f.body()).toContain('<br>Opened |');
+      expect(f.body()).toContain('· Opened</summary>');
       expect(f.body()).not.toContain("the first head GitHub's record");
       // With an earlier force-push, row 1 is that one, and says its earlier heads were replaced.
       const g = fake({ pull: { headSha: B }, timeline: () => [forced(sha(1)), forced(B)] });
@@ -281,7 +292,7 @@ describe('revisions', () => {
       run(f, sha(2));
       const out = f.body();
       expect(out).toContain(typed);
-      expect(out.indexOf(typed)).toBeGreaterThan(out.indexOf('| 1 |'));
+      expect(out.indexOf(typed)).toBeGreaterThan(out.indexOf('</table>'));
       expect(f.logs.some((l) => /no row/.test(l))).toBe(true);
     });
 
@@ -367,11 +378,15 @@ describe('revisions', () => {
     expect(f.writes).toHaveLength(1);
   });
 
-  it('adds a row for a later head, keeping the author’s Why', () => {
+  it('adds a revision for a later head, keeping every row the author wrote', () => {
     const f = fake();
     run(f);
     f.writes.length = 0;
-    const edited = f.body().replace(/\| +\|\n/, '| My why |\n');
+    const mine = '| I changed `x` \\| in plain words | Because **y** |';
+    const edited = f
+      .body()
+      .replace('|  |  |\n\n</details>\n\n<details>', `${mine}\n\n</details>\n\n<details>`);
+    expect(edited).toContain(mine);
     const g = fake({
       body: edited,
       pull: { headSha: C },
@@ -379,10 +394,20 @@ describe('revisions', () => {
     });
     expect(run(g, B)).toBe(true);
     const out = g.body();
-    expect(out).toContain('| **👉 [`ccccccc`](');
-    expect(out).toContain('| [`bbbbbbb`](');
+    expect(out).toContain(
+      '<details open>\n<summary><b>👉 <a href="https://github.com/o/r/commit/cccc',
+    );
+    expect(out).toContain(`<details>\n<summary><a href="https://github.com/${REPO}/commit/${B}">`);
+    expect(out.match(/<details open>/g)).toHaveLength(1);
     expect(out.match(/\(current\)/g)).toHaveLength(1);
-    expect(out).toContain('My why');
+    expect(out).toContain(`\n${mine}\n`);
+    // The older revision keeps its row; the new one has the empty row to fill.
+    const read = parseTable(out.slice(out.indexOf('<!-- pr-changes:revisions -->')), REPO);
+    expect(read.rows.map((r) => r.rows)).toEqual([
+      [],
+      [mine],
+      [expect.stringContaining('Make it work.')],
+    ]);
   });
 
   it('does not repeat the heading an app’s template has before the markers', () => {
@@ -398,14 +423,17 @@ describe('revisions', () => {
   it('shows a force-push as rewritten, with the commits that left', () => {
     const f = fake({ compare: () => ({ status: 'diverged', behindBy: 2, base: C, shas: ['1'] }) });
     run(f);
-    expect(f.body()).toContain('rewritten from `aaaaaaa` (2 commits dropped)');
-    expect(f.body()).toContain('First');
+    expect(f.body()).toContain('(current) · ');
+    expect(f.body()).toContain('rewritten from <code>aaaaaaa</code> (2 commits dropped)</summary>');
+    expect(f.body()).toContain(`compare/${A}...${B}`);
   });
 
   it('shows a head GitHub can no longer compare to as gone, and an identical compare as nothing', () => {
     const f = fake({ compare: () => null });
     run(f);
-    expect(f.body()).toContain('rewritten, the old head `aaaaaaa` is gone');
+    expect(f.body()).toContain('rewritten, the old head <code>aaaaaaa</code> is gone</summary>');
+    // With the old head gone there is nothing to compare.
+    expect(f.body()).not.toContain('compare/');
     const g = fake({ compare: () => ({ status: 'identical', behindBy: 0, base: A, shas: [] }) });
     expect(run(g)).toBe(false);
   });
@@ -438,7 +466,7 @@ describe('revisions', () => {
     expect(run(f)).toBe(true);
     // The example in the fence is as it was; the table is in a pair of its own.
     expect(f.body().split(PAIR)).toHaveLength(2);
-    expect(f.body()).toContain('| **👉 [`bbbbbbb`](');
+    expect(f.body()).toContain('<b>👉 <a href="https://github.com/o/r/commit/bbbb');
   });
 
   it('warns about a line that is no row and keeps it below the table', () => {
@@ -511,7 +539,9 @@ describe('revisions', () => {
     expect(run(f)).toBe(true);
     const block = f.body().slice(f.body().indexOf('<!-- pr-changes:revisions -->'));
     expect(block.match(/<!-- \/pr-changes:revisions -->/g)).toHaveLength(1);
-    expect(block.match(/^\| [^|]*\(current\)/gm)).toHaveLength(1);
+    expect(block.match(/^<summary>.*\(current\)/gm)).toHaveLength(1);
+    // The old table's line is no revision: it stays below the blocks, defused.
+    expect(block).toContain(`1 (current${String.fromCharCode(0x200b)})`);
   });
 });
 
