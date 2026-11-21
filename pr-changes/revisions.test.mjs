@@ -317,6 +317,24 @@ describe('addRevision', () => {
     expect(t.rows.map((r) => r.rev).sort()).toEqual([2, 4, 5]);
   });
 
+  // A `$&`, `$1`, `` $` ``, `$'` or `$$` typed by an author, or in a commit
+  // subject, is text: nothing here may take it for a replacement pattern.
+  it('keeps a Why, typed lines and a subject made of replacement patterns byte for byte', () => {
+    const patterns = "Fix $& and $1 and $` and $' and $$";
+    const t = addRevision(
+      parseTable(`${fresh(older(A, 'w', patterns))}\nnote: ${patterns}`, REPO),
+      {
+        head: C,
+        what: patterns,
+        opened: null,
+      },
+    );
+    const out = renderTable(t, REPO, { heading: true });
+    expect(out).toContain(`| ${patterns} |`);
+    expect(out).toContain(`note: ${patterns}`);
+    expect(parseTable(out, REPO).rows.find((r) => r.sha === A)?.why).toBe(patterns);
+  });
+
   it('makes a table the check reads: green for its head, red for another', () => {
     const t = addRevision(parseTable('', REPO), {
       head: B,
