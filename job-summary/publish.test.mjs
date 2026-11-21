@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BRANCH, addRun, indexPage, prune, publish, runsIn } from './publish.mjs';
+import { BRANCH, TRIES, addRun, indexPage, prune, publish, runsIn } from './publish.mjs';
 
 const NOW = Date.parse('2026-10-29T12:00:00Z');
 /** @type {string[]} */
@@ -111,14 +111,20 @@ describe('indexPage', () => {
 describe('publish', () => {
   /**
    * A bare repository standing in for GitHub, and a run of commands that
-   * answers gh from the given artifacts and passes git through.
+   * answers gh from the given artifacts and passes git through. A refused
+   * push is injected: `failPushes` makes the run throw before git is called,
+   * so git itself never rejects a push here. With `fakeGit` there is no
+   * repository and every other git call answers '', so a test of how many
+   * pushes are tried starts no git process (each start costs ~250 ms on a
+   * loaded runner, and six attempts make about 40 of them); the path where a
+   * fetch of the branch fails is then covered only by the tests with real git.
    *
    * @param {Record<string, string | null>} artifacts
-   * @param {{ failPushes?: number, noArtifacts?: boolean }} [opts]
+   * @param {{ failPushes?: number, noArtifacts?: boolean, fakeGit?: boolean }} [opts]
    */
   function setup(artifacts, opts = {}) {
     const remote = temp();
-    execFileSync('git', ['init', '-q', '--bare', remote]);
+    if (!opts.fakeGit) execFileSync('git', ['init', '-q', '--bare', remote]);
     let failures = opts.failPushes ?? 0;
     /** @type {string[][]} */
     const calls = [];
@@ -151,6 +157,7 @@ describe('publish', () => {
         failures--;
         throw new Error('stale info');
       }
+      if (opts.fakeGit) return '';
       return execFileSync(args[0], args.slice(1), {
         cwd,
         encoding: 'utf8',
@@ -212,12 +219,18 @@ describe('publish', () => {
     expect(first.parents()).toBe('1');
   });
 
-  it('tries again when another publish got there first, and gives up after its tries', () => {
-    const retried = setup({ 'job-summary-check': 'x' }, { failPushes: 2 });
+  it('tries again when another publish got there first', () => {
+    // One refused push is enough to show a retry; more are 6 starts of git each.
+    const retried = setup({ 'job-summary-check': 'x' }, { failPushes: 1 });
     expect(publish(retried.env, retried.run, NOW)).toContain('Published 1 report');
-    expect(retried.calls.filter((c) => c.includes('push'))).toHaveLength(3);
-    const stuck = setup({ 'job-summary-check': 'x' }, { failPushes: 9 });
+    expect(retried.calls.filter((c) => c.includes('push'))).toHaveLength(2);
+    expect(retried.tree()).toContain('runs/77/check/index.html');
+  });
+
+  it('gives up after its tries when every push is refused, saying why', () => {
+    const stuck = setup({ 'job-summary-check': 'x' }, { failPushes: TRIES + 3, fakeGit: true });
     expect(() => publish(stuck.env, stuck.run, NOW)).toThrow('stale info');
+    expect(stuck.calls.filter((c) => c.includes('push'))).toHaveLength(TRIES);
   });
 
   it('publishes nothing for a run with no reports', () => {
