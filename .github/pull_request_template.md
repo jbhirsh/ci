@@ -147,8 +147,9 @@ description check needs it. Write "Nothing to do." when there is nothing to list
 <!--
 Revisions: leave the markers below empty. Once the PR has a revision (a push
 after it opened, or a force-push), the changes tool writes the "## Revisions"
-heading and a table inside them, newest first: the revision, its head and what
-changed. Write each row's Why; the rest is written for you.
+heading and a table of two columns inside them, newest first: What changed (the
+head, then what changed; the current row is bold with a pointer) and Why. Write
+each row's Why; the rest is written for you.
 -->
 
 <!-- pr-changes:revisions -->
