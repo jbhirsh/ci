@@ -1,0 +1,53 @@
+# One-off trial of ci#133 (never on main; deleted after).
+name: Pictures trial dash
+
+run-name: Pictures from pictures/trial-dash
+
+on:
+  push:
+    branches: [tmp/pictures-trial]
+    paths: [.github/workflows/pictures-trial-dash.yml]
+
+permissions: {}
+
+concurrency:
+  group: pictures-trial-dash
+  cancel-in-progress: false
+
+jobs:
+  files:
+    name: Files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: jbhirsh/ci/pictures/from-branch@tmp/pictures-trial
+        with:
+          branch: "pictures/trial-dash"
+          files: "-a.png"
+          target: "134"
+          host-pr: 134
+          block: "trial-bad"
+          columns: "2"
+          width: "300"
+
+  attach:
+    name: Attach
+    needs: files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+    steps:
+      - uses: jbhirsh/ci/pictures/attach@tmp/pictures-trial
+        with:
+          target: "134"
+          host-pr: 134
+          run-id: ${{ github.run_id }}
+          artifact: pictures
+          files: "-a.png"
+          block: "trial-bad"
+          columns: "2"
+          width: "300"
+          token: ${{ secrets.BOT_PR_TOKEN }}
