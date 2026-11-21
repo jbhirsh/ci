@@ -83,7 +83,7 @@ Claude Review runs on the Claude Agent SDK (`review/sdk.mjs`). An app's settings
 
 ## PR changes
 
-`pr-changes/` fills each numbered change's commit and files in a PR's description, with the line counts as small coloured pictures (ci#79, ci#100). An app adopts it with a workflow of its own, `.github/workflows/pr-changes.yml`:
+`pr-changes/` fills each change's title, commit and files in a PR's description (you write only why, in bullets under its empty pair: there is no heading per change), with the line counts as small coloured pictures (ci#79, ci#100). Until the sync from #109 carries the new template into an app, a PR there keeps its numbered `### N.` heading above each pair and the tool writes the title under it, so each change shows twice for a while (intended); a link to an old change-heading anchor has no target in a description written the new way. An app adopts it with a workflow of its own, `.github/workflows/pr-changes.yml`:
 
 ```yaml
 on:

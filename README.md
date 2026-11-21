@@ -36,7 +36,7 @@ choices.
   `visual-shots/` in the app's screenshot job and `describe/` writing the bots' sections), README screenshots
   that refresh themselves (`readme-screenshots/`), and a CI run's pictures attached to an
   issue or a PR, so a plan's mockups reach its issue (`pictures/`).
-  A PR's description lists each change's commit and files under its heading (`pr-changes/`).
+  A PR's description lists each change's title, commit and files, written under its empty marker pair (`pr-changes/`).
 - **Reports that remember.** Each job's summary, a report page on GitHub Pages and one PR
   comment, comparing the run with recent ones to show what got slower or flaky
   (`job-summary/`).

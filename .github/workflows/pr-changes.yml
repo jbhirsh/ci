@@ -1,4 +1,4 @@
-# Fills each numbered change's commit and files in a PR's description, with the
+# Fills each change's title, commit and files in a PR's description, with the
 # line counts as small coloured pictures (ci#79, ci#100): this repo's own copy
 # of the caller an app adopts (CONTRIBUTING.md's "PR changes" says why each part
 # is the way it is). It runs on pull_request_target, so always the default
