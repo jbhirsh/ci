@@ -1,16 +1,18 @@
 import { execFileSync } from 'node:child_process';
 import {
+  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   addBaseTree,
   build,
@@ -176,12 +178,20 @@ describe('serve and stopServers', () => {
   }, 15_000);
 });
 
-// A repository with one commit on main, pushed to an origin beside it.
-function repo() {
+// A repository with one commit on main, pushed to an origin beside it. Built
+// once (about a dozen git processes, each ~250 ms on a loaded runner) and
+// copied for each test: the tests below would otherwise start ~15 git
+// processes each before their own, and ran into the test timeout on a slow
+// runner.
+function buildRepo() {
   const dir = temp();
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')),
-  );
+  const env = {
+    ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_'))),
+    GIT_AUTHOR_NAME: 'T',
+    GIT_AUTHOR_EMAIL: 't@example.com',
+    GIT_COMMITTER_NAME: 'T',
+    GIT_COMMITTER_EMAIL: 't@example.com',
+  };
   /** @param {string[]} args */
   const raw = (...args) =>
     execFileSync('git', args, {
@@ -193,19 +203,37 @@ function repo() {
   execFileSync('git', ['init', '-q', '--bare', path.join(dir, 'origin.git')], { env });
   mkdirSync(path.join(dir, 'app', 'node_modules'), { recursive: true });
   raw('init', '-q', '-b', 'main');
-  raw('config', 'user.email', 't@example.com');
-  raw('config', 'user.name', 'T');
-  raw('config', 'commit.gpgsign', 'false');
   writeFileSync(path.join(dir, 'app', 'a.txt'), 'main');
   writeFileSync(path.join(dir, 'app', '.gitignore'), 'node_modules\n');
   raw('add', 'a.txt', '.gitignore');
-  raw('commit', '-q', '-m', 'one');
+  raw('commit', '-q', '--no-gpg-sign', '-m', 'one');
   raw('remote', 'add', 'origin', path.join(dir, 'origin.git'));
   raw('push', '-q', 'origin', 'main');
-  return { dir, root: path.join(dir, 'app') };
+  return dir;
 }
 
 describe('git and addBaseTree', () => {
+  /** @type {string} */
+  let template;
+  beforeAll(() => {
+    template = buildRepo();
+  });
+  afterAll(() => {
+    rmSync(template, { recursive: true, force: true });
+  });
+
+  /** The template's repository, copied, its origin pointing at the copy's own. */
+  function repo() {
+    const dir = temp();
+    cpSync(template, dir, { recursive: true });
+    const config = path.join(dir, 'app', '.git', 'config');
+    writeFileSync(
+      config,
+      readFileSync(config, 'utf8').replaceAll(template, () => dir),
+    );
+    return { dir, root: path.join(dir, 'app') };
+  }
+
   it("checks a remote's ref out, fetched first, borrowing the checkout's node_modules", () => {
     const { dir, root } = repo();
     expect(git(root, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main');
