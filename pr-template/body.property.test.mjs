@@ -203,3 +203,87 @@ describe('revisionsPair and maskFences', () => {
     );
   });
 });
+
+// The check's reading of the shapes earlier PRs hold must not change: `mainCurrent` is the matcher
+// main's pr-template/body.mjs had before the details blocks (copied, as the oracle), and the check
+// must name the same head for every old-shape description, wherever an author's own tags and text sit.
+const ORACLE_LINK =
+  '\\[`([0-9a-f]{7})`\\]\\(https://github\\.com/[\\w.-]+/[\\w.-]+/commit/\\1[0-9a-f]{33}\\)';
+const ORACLE_BOLD = new RegExp(`^\\|[ \\t]*\\*\\*(?:👉 )?${ORACLE_LINK}\\*\\* \\(current\\)`, 'm');
+const ORACLE_PLAIN = new RegExp(`^\\|[ \\t]*${ORACLE_LINK} \\(current\\)`, 'm');
+const ORACLE_OLD = /^\|[^|\n[]*\(current\)[^|\n[]*\|([^|\n]*)\|/m;
+/** @param {string} text */
+function mainCurrent(text) {
+  const bold = ORACLE_BOLD.exec(text);
+  const plain = ORACLE_PLAIN.exec(text);
+  const row = bold && (!plain || bold.index <= plain.index) ? bold : plain;
+  const old = ORACLE_OLD.exec(text);
+  if (row && (!old || row.index <= old.index)) return row[1];
+  return old ? old[1] : null;
+}
+
+describe('the current revision of an old-shape description', () => {
+  const hex7 = fc.stringMatching(/^[0-9a-f]{7}$/);
+  /** @param {string} s */
+  const link = (s) => `[\`${s}\`](https://github.com/o/r/commit/${s.padEnd(40, '0')})`;
+  const head = hex7.chain((s) =>
+    fc.constantFrom(
+      link(s),
+      `[${s}](https://github.com/o/r/commit/${s.padEnd(40, '0')})`,
+      `**${link(s)}**`,
+      `**👉 ${link(s)}**`,
+      `👉 ${link(s)}`,
+      `\`${s.padEnd(40, '0')}\``,
+      s,
+      'not a link',
+      '',
+    ),
+  );
+  const rev = fc.constantFrom(
+    '1',
+    '2',
+    '2 (current)',
+    '3 (current)',
+    '(current)',
+    'fix (current) it',
+  );
+  const row = fc.oneof(
+    fc.tuple(rev, head).map(([r, h]) => `| ${r} | ${h} | w | y |`),
+    fc.tuple(rev, head).map(([r, h]) => `| ${r} | ${h} |`),
+    head.chain((h) =>
+      fc.constantFrom(
+        `| ${h} (current)<br>w | y |`,
+        `| **👉 ${h}** (current)<br>w | y |`,
+        `| ${h} | y |`,
+      ),
+    ),
+    fc.constantFrom('| a | b |', '| --- | --- |', '| What changed | Why |', 'text', ''),
+  );
+  // An author's own tags, which the check must not read through.
+  const noise = fc.constantFrom(
+    '<details>',
+    '<details open>',
+    '<details>\n<summary>notes</summary>',
+    '</details>',
+    '<summary>x</summary>',
+    '<tr>',
+    '<td>',
+  );
+  const line = fc.oneof({ weight: 4, arbitrary: row }, { weight: 1, arbitrary: noise });
+
+  it('names the same head as main did for every old-shape table, whatever tags the author typed around it', () => {
+    fc.assert(
+      fc.property(fc.array(line, { minLength: 1, maxLength: 8 }), hex7, (lines, h) => {
+        const table = lines.join('\n');
+        const body = `${GOOD.slice(0, GOOD.indexOf('## Revisions'))}<!-- pr-changes:revisions -->\n## Revisions\n\n${table}\n<!-- /pr-changes:revisions -->\n`;
+        const named = mainCurrent(table);
+        const stale = named !== null && !named.toLowerCase().includes(h.toLowerCase());
+        const flagged = bodyProblems(body, h.padEnd(40, '0')).some((p) =>
+          /names another commit/.test(p),
+        );
+        expect(flagged).toBe(stale);
+      }),
+      { numRuns: Number(process.env.REVISIONS_FUZZ_RUNS ?? 1000) },
+    );
+  });
+});
