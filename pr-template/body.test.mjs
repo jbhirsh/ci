@@ -98,7 +98,7 @@ describe('bodyProblems', () => {
       /write the goal/,
     );
     expect(bodyProblems(GOOD.replace('### 1. The change', '### The change'))[0]).toMatch(
-      /numbered change heading/,
+      /add a change: an empty `<!-- pr-changes:change:1 -->`/,
     );
   });
 
@@ -552,5 +552,119 @@ describe('revisionsPair and maskFences, with backslashes in the description', ()
     const tilde = ['~~~ \\', START, '```', END, '~~~', START, ''].join('\n');
     expect(revisionsPair(tilde).starts).toHaveLength(1);
     expect(revisionsPair(tilde).ends).toHaveLength(0);
+  });
+});
+
+describe('bodyProblems for changes the tool titles (no numbered heading)', () => {
+  const pair = (/** @type {number} */ n, /** @type {string} */ inner = '') =>
+    `<!-- pr-changes:change:${n} -->\n${inner}<!-- /pr-changes:change:${n} -->`;
+  const title = (/** @type {number} */ n) =>
+    `**${n}. Do a thing** [\`abc1234\`](https://github.com/o/r/commit/abc1234)\n`;
+  /** @param {string} changes */
+  const withChanges = (changes) =>
+    GOOD.replace(/### 1\. The change[\s\S]*?\n\n## Checklist/, () => `${changes}\n\n## Checklist`);
+
+  it('passes a change that is a filled pair with its why under it', () => {
+    expect(bodyProblems(withChanges(`${pair(1, title(1))}\n\n- Why.\n`))).toEqual([]);
+    expect(
+      bodyProblems(withChanges(`${pair(1, title(1))}\n\n- One.\n\n${pair(2, title(2))}\n\n- Two.`)),
+    ).toEqual([]);
+  });
+
+  it('says which change has its pair still empty', () => {
+    expect(
+      bodyProblems(withChanges(`${pair(1, title(1))}\n\n- One.\n\n${pair(2)}\n\n- Two.`)),
+    ).toEqual([
+      'under change 2, its `<!-- pr-changes:change:2 -->` pair is empty: the changes tool fills it with the commit and files on the next push, or link the commit yourself',
+    ]);
+  });
+
+  it('asks for a change when there is none, and for the pair to be a pair', () => {
+    expect(bodyProblems(withChanges('- Only a why.'))[0]).toMatch(/add a change: an empty/);
+    expect(bodyProblems(withChanges('<!-- pr-changes:change:1 -->\n- torn'))[0]).toMatch(
+      /add a change: an empty/,
+    );
+  });
+
+  it('still passes a description with numbered headings, each with its pair filled the old way', () => {
+    const old = withChanges(
+      `### 1. A\n\nWhy.\n\n${pair(1, '[`abc1234`](https://github.com/o/r/commit/abc1234) Do a thing\n')}`,
+    );
+    expect(bodyProblems(old)).toEqual([]);
+  });
+
+  it("still wants a heading's commit, and takes the new title in its pair for it", () => {
+    expect(bodyProblems(withChanges(`### 1. A\n\nWhy.\n\n${pair(1)}`))[0]).toMatch(
+      /under change 1, its .* pair is empty/,
+    );
+    expect(bodyProblems(withChanges(`### 1. A\n\nWhy.\n\n${pair(1, title(1))}`))).toEqual([]);
+  });
+
+  it('holds a GIF to a place under a change: under its pair is fine, above the first is not', () => {
+    const gif = '<!-- pr-gif:swipe -->\n<!-- /pr-gif:swipe -->';
+    const ok = withChanges(`${pair(1, title(1))}\n\n- Why.\n\n${gif}`);
+    expect(bodyProblems(ok)).toEqual([]);
+    const above = withChanges(`${gif}\n\n${pair(1, title(1))}\n\n- Why.`);
+    expect(bodyProblems(above)[0]).toMatch(/put the GIF block `pr-gif:swipe` under the change/);
+  });
+
+  it('asks for the why under a pair that has nothing under it', () => {
+    expect(bodyProblems(withChanges(pair(1, title(1))))).toEqual([
+      'under change 1, write why: bullets (or numbered steps) under its `<!-- pr-changes:change:1 -->` pair, since the changes tool writes only the title, the commit and the files',
+    ]);
+    expect(
+      bodyProblems(withChanges(`${pair(1, title(1))}\n\n- One.\n\n${pair(2, title(2))}\n\n`)),
+    ).toHaveLength(1);
+    // A GIF or a screen under a pair is not a why.
+    const gif = '<!-- pr-gif:swipe -->\n<!-- /pr-gif:swipe -->';
+    expect(bodyProblems(withChanges(`${pair(1, title(1))}\n\n${gif}`))[0]).toMatch(/write why/);
+  });
+
+  it('catches the sample line indented, numbered or plain, and a heading-style change needs no why under its pair', () => {
+    for (const sample of [
+      'Why this change.',
+      '  - Why this change.',
+      '1. Why this change.',
+      '* Why this change.',
+    ]) {
+      expect(bodyProblems(withChanges(`${pair(1, title(1))}\n\n${sample}\n`))[0]).toMatch(
+        /replace the template's sample change/,
+      );
+    }
+    expect(bodyProblems(withChanges(`### 1. A\n\n${pair(1, title(1))}`))).toEqual([]);
+  });
+
+  it('is not fooled by a numbered sub-heading in the why: the empty pair after it is still named', () => {
+    const body = withChanges(
+      `${pair(1, title(1))}\n\n- One.\n\n### 1. Steps\n\n- first\n\n${pair(2)}\n\n- Two.`,
+    );
+    expect(bodyProblems(body)).toEqual([
+      'under change 2, its `<!-- pr-changes:change:2 -->` pair is empty: the changes tool fills it with the commit and files on the next push, or link the commit yourself',
+    ]);
+  });
+
+  it('checks a pair that comes before the first heading too', () => {
+    const body = withChanges(`${pair(1)}\n\n- One.\n\n### 2. B\n\n${pair(2, title(2))}`);
+    expect(bodyProblems(body)).toHaveLength(1);
+    expect(bodyProblems(body)[0]).toMatch(/under change 1, its .* pair is empty/);
+  });
+
+  it('wants the pairs numbered 1, 2, 3 in order when no heading carries the numbers', () => {
+    const numbered = (/** @type {number[]} */ ns) =>
+      withChanges(ns.map((n) => `${pair(n, title(n))}\n\n- Why.`).join('\n\n'));
+    expect(bodyProblems(numbered([1, 2, 3]))).toEqual([]);
+    for (const ns of [[2, 1], [1, 3], [1, 1], [2]]) {
+      const found = bodyProblems(numbered(ns));
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatch(/number the change pairs 1, 2, 3… in the order they appear/);
+    }
+    // With headings carrying the numbers (a description from before), it is left alone.
+    const old = withChanges(`### 2. B\n\n${pair(2, title(2))}\n\n### 1. A\n\n${pair(1, title(1))}`);
+    expect(bodyProblems(old)).toEqual([]);
+  });
+  it('replaces the template sample: its Why line is a placeholder in a pair-only change too', () => {
+    expect(bodyProblems(withChanges(`${pair(1, title(1))}\n\nWhy this change.\n`))[0]).toMatch(
+      /replace the template's sample change/,
+    );
   });
 });
