@@ -121,16 +121,26 @@ export function parseFiles(value) {
 }
 
 /**
+ * REPO: owner/name.
+ *
+ * @param {string | undefined} value
+ */
+export function parseRepo(value) {
+  const repo = (value ?? '').trim();
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+    throw new Error(`pictures: REPO is owner/name, not "${value ?? ''}"`);
+  }
+  return repo;
+}
+
+/**
  * Every input, from the environment.
  *
  * @param {Record<string, string | undefined>} env
  * @returns {Inputs}
  */
 export function parseInputs(env) {
-  const repo = (env.REPO ?? '').trim();
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
-    throw new Error(`pictures: REPO is owner/name, not "${env.REPO ?? ''}"`);
-  }
+  const repo = parseRepo(env.REPO);
   const artifact = (env.ARTIFACT ?? '').trim();
   if (!/^\w[\w.-]*$/.test(artifact)) {
     throw new Error(`pictures: ARTIFACT is an artifact's name, not "${env.ARTIFACT ?? ''}"`);
