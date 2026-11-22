@@ -187,8 +187,11 @@ header says how it works and what it trusts.
    git worktree remove ../pictures-ci-132 && git branch -D pictures/ci-132-revisions
    ```
 
-4. Dispatch it on `main` (`host-pr` left out takes `PICTURES_HOST_PR`). Ask for the run's id in
-   the answer:
+4. Dispatch it on `main`. `host-pr` left out takes `PICTURES_HOST_PR`; while that is unset, the
+   run refuses an empty one, so pass it: a ci target's own number (`-f 'inputs[host-pr]=132'`),
+   or for an app's target any ci PR whose description may be overwritten, such as
+   [ci#134](https://github.com/jbhirsh/ci/pull/134), the closed trial host kept for this. Ask for
+   the run's id in the answer:
 
    ```sh
    gh api -X POST repos/jbhirsh/ci/actions/workflows/pictures.yml/dispatches -f ref=main \
