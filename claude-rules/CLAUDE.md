@@ -65,8 +65,10 @@ Every new feature request, in this order:
        than a sketch: a throwaway build of the screen, never committed.
      - Where the app has a mockup run, run it (its `CLAUDE.md` gives the command, with
        `mockup_patch` and `mockup_issue`): visual review writes the before/after table into
-       the issue's body, the one addition the body allows, and the Plan comment links it.
-     - Where it has none, take the screenshots, say where they are, and the owner hosts them.
+       the issue's body (that table and the pictures route's `<!-- pictures:<block> -->` one
+       are the only additions the body allows), and the Plan comment links it.
+     - Where it has none, take the screenshots yourself and attach them with the pictures
+       route ("Claude attaches every picture", below).
 3. **Plan review.** Spawn a reviewer agent on the plan, briefed with the issue, its Plan
    comment (link) and its mockups, and these rules but not your reasoning, so its read is
    independent. Record its findings only as Revisions rows, the ones you reject too, with the
@@ -113,8 +115,17 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
   something on a screen or in a rendered page (a blank card, a misplaced control, a
   description that shows plain text where pictures belong), the Example carries a picture of
   the bug as it is on `main`, and the Solution one of it fixed. Take them from the app's own
-  visual review or a screenshot of the real page, never a sketch. Where the tools can't attach
-  one, say where the file is and the owner hosts it.
+  visual review or a screenshot of the real page (for anything GitHub renders, GitHub's own
+  page, signed out), never a sketch.
+- **Claude attaches every picture**, in an issue or a PR alike:
+  - through the app's own tools where they make it: visual review, PR GIFs, or
+    `pictures/attach` from a CI run;
+  - through the pictures route for one the session took itself: jbhirsh/ci `CONTRIBUTING.md`,
+    "Pictures from a session", gives the commands, and the host PR to pass while
+    `PICTURES_HOST_PR` is unset.
+  - A picture is never left to the owner as a task, a file name or an apology, and a
+    description never says one is missing or not attached. Where one truly can't be made, the
+    description says in words what it shows, and nothing else.
 - **A change that moves something needs a GIF**: a transition, a sheet or dialog opening or
   closing, a drag, swipe or scroll, a multi-step flow. Commit a GIF scenario for it where the
   repo's CONTRIBUTING says, so PR GIFs records it, and put an empty `pr-gif:<scenario>` marker
