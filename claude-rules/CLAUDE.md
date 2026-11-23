@@ -157,6 +157,11 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
 - Change a test to make it pass: fix the implementation.
 - Turn on a PR's auto-merge: GitHub records it as the owner's, and the owner turning it on is
   how a changed screen is accepted (`Visual changes`, jbhirsh/ci#64). The owner merges.
+  - The one exception, by the owner's decision (jbhirsh/ci#109): jbhirsh/ci's sync turns it on
+    for its own `bot/sync-files` PR in each app, bound to the head it checked. That PR holds
+    only files jbhirsh/ci has merged, byte for byte, and the app's required checks still gate
+    it, `Visual changes` included, which holds it if a screen changed. The sync's `auto-merge`
+    input turns it off. Even there, you never turn it on.
 - Install packages outside the project root.
 
 ## Code
