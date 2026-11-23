@@ -147,6 +147,26 @@ jobs:
     - For a PR whose timeline names no force-push, the only record of the opening head is the push event's `before`, so revision 1 shows the head before the push that first wrote the blocks: after two pushes in quick succession, or when the first push's run failed (no token, say), that is the head between them.
 - **Without a token** (a fork's PR, or no secret) the counts are plain text and the run says why. `BOT_PR_TOKEN` also needs Contents, Pull requests and Issues read and write on this repository to try the tool here.
 
+## The sync
+
+`.github/workflows/sync-files.yml` (ci#109) keeps each app's copies of the files in
+`sync/manifest.json` in step through one `bot/sync-files` PR per app; `sync/sync.mjs`'s header
+says how.
+
+- **One-time setup (the owner):** this repo's `BOT_PR_TOKEN` must be a fine-grained token on
+  BoardGames, fog-and-frontier and sift (as well as this repo, for the pictures route) with:
+  - Contents, Pull requests and Workflows: read and write;
+  - Checks and Commit statuses: read.
+
+  Without it every run fails at its first step, naming the token, and changes nothing in an app.
+
+- **A run by hand,** for one app or all, from `main` (`auto-merge` false leaves the PR for a
+  person to merge):
+
+  ```sh
+  gh workflow run sync-files.yml --repo jbhirsh/ci -f app=sift
+  ```
+
 ## Pictures from a session
 
 A Claude session can push a branch and dispatch a workflow, but can't upload a file. The

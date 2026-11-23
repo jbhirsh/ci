@@ -262,6 +262,26 @@ function files(dir, keep) {
   });
 }
 
+/** @param {string} file */
+const read = (file) => parse(readFileSync(file, 'utf8'));
+
+/**
+ * What a `jbhirsh/ci/<path>` reference names in a checkout of this repo: an
+ * action's folder or a workflow file, or null. The sync lints the workflows
+ * it is about to write with it (sync/sync.mjs).
+ *
+ * @param {string} root this repo's checkout
+ * @returns {(target: string) => Target | null}
+ */
+export function targetsIn(root) {
+  return (target) => {
+    const file = target.endsWith('.yml')
+      ? path.join(root, target)
+      : path.join(root, target, 'action.yml');
+    return existsSync(file) ? targetOf(read(file)) : null;
+  };
+}
+
 /**
  * Lints this repo, and an app's workflows when given one.
  *
@@ -269,15 +289,7 @@ function files(dir, keep) {
  * @param {string | null} app an app's checkout
  */
 export function main(root, app) {
-  /** @param {string} file */
-  const read = (file) => parse(readFileSync(file, 'utf8'));
-  /** @param {string} target */
-  const resolve = (target) => {
-    const file = target.endsWith('.yml')
-      ? path.join(root, target)
-      : path.join(root, target, 'action.yml');
-    return existsSync(file) ? targetOf(read(file)) : null;
-  };
+  const resolve = targetsIn(root);
   /** @param {string} target */
   const exists = (target) => resolve(target) !== null;
   const rel = (/** @type {string} */ base, /** @type {string} */ file) => path.relative(base, file);

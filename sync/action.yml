@@ -1,0 +1,76 @@
+name: Sync files
+description: >-
+  The sync's publish job for one app (ci#109; sync/sync.mjs's header says
+  what it does): keeps the app's copies of the files in sync/manifest.json
+  byte-identical to their source in jbhirsh/ci, through one PR from
+  bot/sync-files that merges itself once the app's required checks pass.
+  Run by .github/workflows/sync-files.yml from a checkout of jbhirsh/ci's
+  main, which the check step holds to the commit being synced, after sync/prepare (a job with no token) has left
+  prepared.json as the sync-files-<app> artifact. This job runs no code of
+  an app's: it reads the app from GitHub, reads prepared.json as data and
+  holds what it pushes to the guard. The job needs contents and actions
+  read here.
+
+inputs:
+  app:
+    description: The app to sync, one of the manifest's apps (BoardGames, fog-and-frontier, sift).
+    required: true
+  token:
+    description: >-
+      secrets.BOT_PR_TOKEN - a person's fine-grained token on the three apps
+      with Contents, Pull requests and Workflows read and write, and Checks
+      and Commit statuses read. A push or PR the Actions token makes starts no
+      workflow, so the app's required checks would never report - there is no
+      fallback, and an empty one fails the run before it reads an app.
+    required: true
+  ci-token:
+    description: >-
+      Reads jbhirsh/ci (its main and its CI runs): the Actions token, with
+      contents and actions read.
+    default: ${{ github.token }}
+  ci-sha:
+    description: The jbhirsh/ci commit being synced; its CI must have passed on main.
+    required: true
+  auto-merge:
+    description: >-
+      'true' turns auto-merge (squash) on for the sync PR, bound to the head
+      the guard read, as the approved plan has it; 'false' opens or updates
+      the PR and leaves it, with auto-merge off, for a person to merge.
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Check the token and the commit
+      id: check
+      shell: bash
+      env:
+        TOKEN_SET: ${{ inputs.token != '' }}
+        GH_TOKEN: ${{ inputs.ci-token }}
+        CI_SHA: ${{ inputs.ci-sha }}
+      run: node "$GITHUB_ACTION_PATH/sync.mjs" check
+
+    # A missing artifact (the prepare job failed) is reported by publish,
+    # which names that job.
+    - if: steps.check.outputs.go == 'true'
+      uses: actions/download-artifact@v8
+      continue-on-error: true
+      with:
+        name: sync-files-${{ inputs.app }}
+        path: ${{ runner.temp }}/sync-files
+
+    - name: Open, update or close the sync PR
+      if: steps.check.outputs.go == 'true'
+      shell: bash
+      env:
+        APP: ${{ inputs.app }}
+        GH_TOKEN: ${{ inputs.token }}
+        CI_SHA: ${{ inputs.ci-sha }}
+        SYNC_OUT: ${{ runner.temp }}/sync-files
+        AUTO_MERGE: ${{ inputs.auto-merge }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: node "$GITHUB_ACTION_PATH/sync.mjs" publish
