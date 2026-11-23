@@ -1,8 +1,10 @@
 // Rules for an app's callers of jbhirsh/ci's PR GIF workflows (ci#92), run by
 // lint/actions.mjs on every workflow of an app ("Against <app>") whose job
 // uses `pr-gif.yml` or `pr-gif-attach.yml`, found by what it `uses`, never by
-// its file name. gif/callers/ holds the shape every app copies; these are the
-// lines in it that matter, because a wrong copy puts BOT_PR_TOKEN, the one
+// its file name. gif/callers/ holds the shape every app's copy takes (the
+// sync keeps the copies in step, sync/manifest.json, with sift's and fog's
+// differences as variants); these are the lines in it that matter, checked
+// here as defence in depth, because a wrong copy puts BOT_PR_TOKEN, the one
 // token that may attach files, in a run that holds a PR's code, or wakes
 // nothing:
 //
