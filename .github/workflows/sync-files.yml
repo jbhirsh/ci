@@ -1,0 +1,140 @@
+# The sync (ci#109): keeps each app's copies of the files in
+# sync/manifest.json byte-identical to their source here, through one PR per
+# app from bot/sync-files that merges itself once the app's required checks
+# pass. sync/sync.mjs's header says what a run does; sync/prepare/action.yml
+# and sync/action.yml run it.
+#
+# When it runs:
+#   - after CI passes on a push to main (workflow_run, so it never runs from
+#     a commit whose Check and Against jobs didn't pass, and the check step
+#     asks GitHub again). A commit that is no longer main's head is skipped:
+#     a run from main's head syncs, once its CI passes or when dispatched;
+#   - by hand, for one app or all of them, from main:
+#       gh workflow run sync-files.yml --repo jbhirsh/ci -f app=sift
+#     which is how a sync PR that got stuck after the last run is looked at
+#     again: no app event starts a run, and nothing waits on a timer.
+# Every run of every app also reads its open sync PR and fails, naming it, on
+# an unresolved review thread or a failed required check; sift requires an
+# up-to-date branch, so each rebuild there reruns its hour of checks.
+#
+# Two jobs per app, one leg per app (fail-fast off):
+#   - Prepare (sync/prepare, no token): checks the token is set and the
+#     commit's CI passed, checks the app out and works out what differs. It
+#     is the only place an app's code runs (its Prettier, for a companion
+#     key), so the token is never in a job that runs it. It hands
+#     prepared.json on as the sync-files-<app> artifact.
+#   - Publish (sync, BOT_PR_TOKEN): runs no app code; reads the app from
+#     GitHub and the artifact as data, and opens, updates or closes the PR.
+#     It runs even when another app's Prepare failed (`!cancelled()`), and
+#     fails naming its own Prepare when that left no artifact.
+# Each Publish leg waits in its own concurrency group: GitHub keeps one
+# pending run per group, so a run waiting for sift is never replaced by one
+# for BoardGames, while a newer ci commit's run replaces an older one still
+# waiting for the same app (it syncs the newer files).
+#
+# Both jobs check out main, never workflow_run's head_sha or a dispatch's
+# ref, and run that checkout's actions: a job with the default branch's
+# privileges must not run code from a ref an event names, which could write
+# the cache main's jobs restore. The check step then refuses unless the
+# checkout is the commit whose CI passed and still main's head. No job here
+# uses a dependency cache.
+#
+# auto-merge (dispatch only; on by default, as the approved plan has it):
+# false opens or updates the PR and leaves it for a person to merge.
+#
+# The token is ci's BOT_PR_TOKEN (sync/action.yml's `token` input says what
+# it needs); without it every run fails at its first step, changing nothing.
+# Not a required check, and it has no `paths:` filter: a change to any file
+# can change what is synced (the manifest, a variant, a script).
+name: Sync files
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      app:
+        description: The app to sync, or all of them
+        type: choice
+        options: [all, BoardGames, fog-and-frontier, sift]
+        default: all
+      auto-merge:
+        description: Turn auto-merge on for the sync PR (off leaves it for a person)
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  prepare:
+    name: Prepare ${{ matrix.app }}
+    # A push to main whose CI passed, from this repository; or a dispatch.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.event == 'push'
+          && github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # The manifest's apps (sync/manifest.mjs's APPS; a test holds them equal).
+        app: ${{ fromJSON(inputs.app && inputs.app != 'all' && format('["{0}"]', inputs.app) || '["BoardGames","fog-and-frontier","sift"]') }}
+    permissions:
+      contents: read
+      # The check step reads this commit's CI runs.
+      actions: read
+    steps:
+      # main itself, never an event's ref: the check step refuses to go on
+      # unless this is the commit whose CI passed, still main's head.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          path: ci
+          persist-credentials: false
+      - uses: ./ci/sync/prepare
+        with:
+          app: ${{ matrix.app }}
+          # Only whether it is set: no token reaches this job.
+          token-set: ${{ secrets.BOT_PR_TOKEN != '' }}
+          ci-sha: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+  publish:
+    name: Sync ${{ matrix.app }}
+    needs: prepare
+    if: >-
+      !cancelled()
+      && (github.event_name == 'workflow_dispatch'
+          || (github.event.workflow_run.conclusion == 'success'
+              && github.event.workflow_run.event == 'push'
+              && github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(inputs.app && inputs.app != 'all' && format('["{0}"]', inputs.app) || '["BoardGames","fog-and-frontier","sift"]') }}
+    concurrency:
+      group: sync-files-${{ matrix.app }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      # The check step reads this commit's CI runs; the artifact is this run's.
+      actions: read
+    steps:
+      # main itself, never an event's ref: the check step refuses to go on
+      # unless this is the commit whose CI passed, still main's head.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          path: ci
+          persist-credentials: false
+      - uses: ./ci/sync
+        with:
+          app: ${{ matrix.app }}
+          token: ${{ secrets.BOT_PR_TOKEN }}
+          ci-sha: ${{ github.event.workflow_run.head_sha || github.sha }}
+          auto-merge: ${{ github.event_name != 'workflow_dispatch' || inputs.auto-merge }}

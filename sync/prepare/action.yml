@@ -1,0 +1,74 @@
+name: Sync files, prepare
+description: >-
+  The sync's first job for one app, which holds no token (ci#109;
+  sync/sync.mjs's header says what each step does). It checks that
+  BOT_PR_TOKEN is set and that the commit's CI passed, checks the app out,
+  works out what differs, and for a file that brings a companion key writes
+  the app's .github/ci.json through the app's own Prettier - the only code of
+  an app's the sync ever runs, which is why it is a job of its own - then
+  hands prepared.json to the publish job as the sync-files-<app> artifact.
+  The publish job reads it as data and guards it; it re-reads everything
+  else from GitHub itself. Run by .github/workflows/sync-files.yml from a
+  checkout of jbhirsh/ci's main, which the check step holds to the commit
+  being synced. The job needs contents and actions read here.
+
+inputs:
+  app:
+    description: The app to sync, one of the manifest's apps (BoardGames, fog-and-frontier, sift).
+    required: true
+  token-set:
+    description: >-
+      Whether secrets.BOT_PR_TOKEN is set ('true' or 'false'): only that, so
+      no token is in this job.
+    required: true
+  ci-token:
+    description: >-
+      Reads jbhirsh/ci (its main and its CI runs) and checks the public app
+      out: the Actions token, with contents and actions read.
+    default: ${{ github.token }}
+  ci-sha:
+    description: The jbhirsh/ci commit being synced; its CI must have passed on main.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Check the token and the commit
+      id: check
+      shell: bash
+      env:
+        TOKEN_SET: ${{ inputs.token-set }}
+        GH_TOKEN: ${{ inputs.ci-token }}
+        CI_SHA: ${{ inputs.ci-sha }}
+      run: node "$GITHUB_ACTION_PATH/../sync.mjs" check
+
+    - if: steps.check.outputs.go == 'true'
+      uses: actions/checkout@v7
+      with:
+        repository: jbhirsh/${{ inputs.app }}
+        ref: main
+        path: sync-app
+        token: ${{ inputs.ci-token }}
+        persist-credentials: false
+
+    - name: Find what differs
+      if: steps.check.outputs.go == 'true'
+      shell: bash
+      env:
+        APP: ${{ inputs.app }}
+        APP_ROOT: sync-app
+        CI_SHA: ${{ inputs.ci-sha }}
+        SYNC_OUT: ${{ runner.temp }}/sync-files
+      run: node "$GITHUB_ACTION_PATH/../sync.mjs" prepare
+
+    - if: steps.check.outputs.go == 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: sync-files-${{ inputs.app }}
+        path: ${{ runner.temp }}/sync-files/prepared.json
+        retention-days: 1
+        if-no-files-found: error
