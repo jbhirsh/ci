@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { writeFiles } from '../review/testApp.mjs';
-import { loadManifest, parseManifest } from './manifest.mjs';
+import { CI_ROOT, loadManifest, parseManifest, resolve } from './manifest.mjs';
 import { appName, cli, selftest } from './selftest.mjs';
 
 const app = (/** @type {Record<string, string>} */ files) => {
@@ -113,12 +113,38 @@ describe('selftest', () => {
   });
 });
 
+describe("the self-test's report of what the next sync would change", () => {
+  /** @param {string} file */
+  const ours = (file) => readFileSync(path.join(CI_ROOT, file), 'utf8');
+  /** The files sift holds when in step: the canonical, or sift's variant. */
+  const inStep = () =>
+    Object.fromEntries(
+      resolve(loadManifest(), 'sift').map((file) => [file.path, ours(file.source)]),
+    );
+
+  it('says an app in step needs no PR', () => {
+    expect(selftest(app(inStep()), 'sift').slice(1)).toEqual([
+      'sync: sift: every synced file matches jbhirsh/ci; no PR.',
+    ]);
+  });
+
+  it('names exactly the file that drifted, and never fails on it', () => {
+    const files = inStep();
+    files['.github/workflows/pr-gif.yml'] += '# a hand edit\n';
+    expect(selftest(app(files), 'sift').slice(1)).toEqual([
+      'sync: sift: would open or update one PR from bot/sync-files, "Sync shared files with jbhirsh/ci", with 1 commit(s):',
+      'sync:   - Sync .github/workflows/pr-gif.yml with jbhirsh/ci (updated, +0 −1, variant)',
+    ]);
+  });
+});
+
 describe('cli', () => {
   it('prints the self-test and returns its exit code', () => {
     /** @type {string[]} */
     const out = [];
     expect(cli([app({})], (l) => out.push(l), { APP_NAME: 'sift' })).toBe(0);
-    expect(out).toEqual(['sync: sift holds 5 synced files; they fit this checkout.']);
+    expect(out[0]).toBe('sync: sift holds 5 synced files; they fit this checkout.');
+    expect(out[1]).toMatch(/^sync: sift: would open or update one PR .* with 5 commit\(s\):$/);
     expect(cli([app({ '.github/ci.json': '{' })], (l) => out.push(l), {})).toBe(1);
     expect(out.at(-1)).toMatch(/^sync self-test failed: .*ci\.json is not JSON/);
     expect(cli([app({})], (l) => out.push(l), { APP_NAME: 'nope' })).toBe(1);
