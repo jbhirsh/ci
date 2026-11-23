@@ -11,6 +11,9 @@
 //   - each synced path is a regular file or absent, and no folder on its way
 //     is a link or a file, where the sync could not write it.
 //
+// For a named app it then prints what the next sync would change there (the
+// dry run's report, plan.mjs), as information: a difference never fails it.
+//
 // The last two are the app's state, not the manifest's, and failing on them is
 // deliberate: the sync would otherwise fail in the app's PR, later and harder
 // to read. Only the entries that name the app are checked when it is known:
@@ -18,10 +21,19 @@
 // CI). CI's "Against <app>" jobs run in this repo, where that is no app's name,
 // so they pass APP_NAME; run by hand without either, every entry is checked.
 
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appSettings, SETTINGS_FILE } from '../lib/app.mjs';
-import { APPS, companionProblem, loadManifest, lstatOrNull, resolve } from './manifest.mjs';
+import {
+  APPS,
+  CI_ROOT,
+  companionProblem,
+  loadManifest,
+  lstatOrNull,
+  resolve,
+} from './manifest.mjs';
+import { changesFor, report } from './plan.mjs';
 
 /** @typedef {import('./manifest.mjs').Manifest} Manifest */
 
@@ -86,9 +98,10 @@ function settingsOf(root) {
  * @param {string} root the app's checkout
  * @param {string} [app] the app it is, when known
  * @param {Manifest} [manifest] this repo's manifest, unless a test brings its own
+ * @param {string} [ciRoot] the checkout its sources are read from
  * @returns {string[]} what to print; throws on the first problem
  */
-export function selftest(root, app, manifest = loadManifest()) {
+export function selftest(root, app, manifest = loadManifest(), ciRoot = CI_ROOT) {
   const files = app ? resolve(manifest, app) : manifest.files;
   const settings = settingsOf(root);
   const problems = files.flatMap(({ path: file, companions }) => [
@@ -97,10 +110,21 @@ export function selftest(root, app, manifest = loadManifest()) {
   ]);
   const found = [...new Set(problems.filter((problem) => problem !== null))];
   if (found.length > 0) throw new Error(found.join('; '));
+  if (!app) {
+    return [`sync: ${files.length} synced files (no app named, so every entry) fit this checkout.`];
+  }
+  /** @param {string} file */
+  const readApp = (file) =>
+    lstatOrNull(path.join(root, file))?.isFile() ? readFileSync(path.join(root, file)) : null;
+  const changes = changesFor(
+    resolve(manifest, app),
+    (source) => readFileSync(path.join(ciRoot, source)),
+    readApp,
+    settings,
+  );
   return [
-    app
-      ? `sync: ${app} holds ${files.length} synced files; they fit this checkout.`
-      : `sync: ${files.length} synced files (no app named, so every entry) fit this checkout.`,
+    `sync: ${app} holds ${files.length} synced files; they fit this checkout.`,
+    ...report(app, changes, 'HEAD').map((line) => `sync: ${line}`),
   ];
 }
 
