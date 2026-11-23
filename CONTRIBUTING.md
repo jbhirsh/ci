@@ -83,32 +83,11 @@ Claude Review runs on the Claude Agent SDK (`review/sdk.mjs`). An app's settings
 
 ## PR changes
 
-`pr-changes/` fills each change's title, commit and files in a PR's description (you write only why, in bullets under its empty pair: there is no heading per change), with the line counts as small coloured pictures (ci#79, ci#100). Until the sync from #109 carries the new template into an app, a PR there keeps its numbered `### N.` heading above each pair and the tool writes the title under it, so each change shows twice for a while (intended); a link to an old change-heading anchor has no target in a description written the new way. An app adopts it with a workflow of its own, `.github/workflows/pr-changes.yml`:
-
-```yaml
-on:
-  pull_request_target:
-    types: [opened, reopened, synchronize, edited]
-permissions:
-  contents: read
-  pull-requests: write
-concurrency:
-  group: pr-changes-${{ github.repository }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
-jobs:
-  pr-changes:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: jbhirsh/ci/pr-changes@main
-        with:
-          number: ${{ github.event.pull_request.number }}
-          # A fork's PR gets no person's token: its counts are plain text.
-          token: ${{ github.event.pull_request.head.repo.full_name == github.repository && secrets.BOT_PR_TOKEN || '' }}
-```
+`pr-changes/` fills each change's title, commit and files in a PR's description (you write only why, in bullets under its empty pair: there is no heading per change), with the line counts as small coloured pictures (ci#79, ci#100). Until the sync from #109 carries the new template into an app, a PR there keeps its numbered `### N.` heading above each pair and the tool writes the title under it, so each change shows twice for a while (intended); a link to an old change-heading anchor has no target in a description written the new way. Each app holds this repo's own `.github/workflows/pr-changes.yml`, which the sync keeps in step (The sync, below).
 
 - **It runs on `pull_request_target`**, which runs the workflow as it is on the default branch, never the PR's copy, so it may hold `BOT_PR_TOKEN` (the apps' fine-grained token: attaching a file needs a person's token). That is safe because the job checks out and runs nothing from the PR: keep it that way. `pr-changes/action.yml`'s description lists the rules (no checkout, no cache, no PR text in a `run:` line or an expression, the token only on the attach call and the one Revisions edit). A change to the workflow takes effect once it is on the default branch.
 - **Its own concurrency group**, not describe's: GitHub keeps one pending run per group, so sharing would let each cancel the other's pending run.
-- **`autofix.exempt`:** add an entry for it in `.github/ci.json`, with its reason ("PR changes: reads the PR as data, runs none of its code"), or `autofix/check-triggers.mjs` fails the app's CI for a `pull_request_target` workflow.
+- **`autofix.exempt`:** the app's `.github/ci.json` needs its entry, or `autofix/check-triggers.mjs` fails the app's CI for a `pull_request_target` workflow: the sync adds it with the file (a companion in `sync/manifest.json`).
 - **Revisions:** the same action keeps the description's Revisions block (`pr-changes/revisions.mjs`'s header says the grammar and the rules).
   - **When it writes:**
     - A PR with one head gets nothing.
@@ -149,23 +128,70 @@ jobs:
 
 ## The sync
 
-`.github/workflows/sync-files.yml` (ci#109) keeps each app's copies of the files in
-`sync/manifest.json` in step through one `bot/sync-files` PR per app; `sync/sync.mjs`'s header
-says how.
+The sync (ci#109) keeps each app's copies of the files in `sync/manifest.json` byte-identical
+to their source here, through one `bot/sync-files` PR per app that merges itself once the
+app's required checks pass.
+[`.github/workflows/sync-files.yml`](https://github.com/jbhirsh/ci/blob/main/.github/workflows/sync-files.yml)
+says when it runs, [`sync/sync.mjs`](https://github.com/jbhirsh/ci/blob/main/sync/sync.mjs) what a run does and
+[`sync/manifest.mjs`](https://github.com/jbhirsh/ci/blob/main/sync/manifest.mjs) the manifest's fields and rules.
 
-- **One-time setup (the owner):** this repo's `BOT_PR_TOKEN` must be a fine-grained token on
-  BoardGames, fog-and-frontier and sift (as well as this repo, for the pictures route) with:
-  - Contents, Pull requests and Workflows: read and write;
-  - Checks and Commit statuses: read.
-
-  Without it every run fails at its first step, naming the token, and changes nothing in an app.
-
-- **A run by hand,** for one app or all, from `main` (`auto-merge` false leaves the PR for a
-  person to merge):
+- **One-time setup (the owner):** this repo's `BOT_PR_TOKEN`, a fine-grained token on the
+  three apps (and on this repo, for the pictures route), with the permissions
+  [`sync/action.yml`](https://github.com/jbhirsh/ci/blob/main/sync/action.yml)'s `token` input lists.
+  Without it every run fails at its first step, naming the token, and changes nothing in an
+  app.
+- **Adding a synced file:** its canonical file here and one entry in `sync/manifest.json`
+  (its path in the apps, its source here, which apps hold it).
+  - `sync/coverage.test.mjs` fails a canonical caller or reusable workflow that is neither
+    synced nor listed in `unsynced` with a reason.
+  - A workflow that runs on `pull_request` or `pull_request_target` carries its
+    `autofix.exempt` entry as a `companions` key: the sync sets it in the app's
+    `.github/ci.json` in the same commit, never overwriting a key the app holds.
+  - Try it before the PR: `node sync/sync.mjs dry-run sift ../sift` prints the PR the sync
+    would open for that checkout and changes nothing; each `Against` job's self-test prints
+    the same for the app's `main`.
+- **A deliberate difference in one app** is a variant: the app's whole file under
+  `sync/variants/<app>/`, named in the entry's `variants` with a `why`, which the sync PR
+  shows. Change it here like any synced file. An app can't declare its own.
+- **Reading a sync PR:** "Sync shared files with jbhirsh/ci", from `bot/sync-files`, one
+  commit per file. Its table lists each file (added or updated, its source at the synced
+  commit, the lines changed), then each variant's `why` and each `ci.json` key it adds.
+  Auto-merge is on, bound to the head the sync checked. There is nothing to do unless a run
+  goes red.
+- **A run by hand,** from `main`, for one app or all of them; `auto-merge` false opens or
+  updates the PR and leaves it, auto-merge off, for a person to merge:
 
   ```sh
   gh workflow run sync-files.yml --repo jbhirsh/ci -f app=sift
+  gh workflow run sync-files.yml --repo jbhirsh/ci -f app=all
+  gh workflow run sync-files.yml --repo jbhirsh/ci -f app=sift -f auto-merge=false
   ```
+
+- **When a run goes red,** its log names the app and the cause; nothing waits, and a PR that
+  gets stuck later is reported at the next run (a ci change, or one by hand).
+  - **An unresolved review thread:** read it and resolve it in the app; never auto-resolved.
+    CodeQL raises one ("unpinned action") once on each newly synced workflow.
+  - **`Visual changes` in the app** ("1 screen changed, and this PR merges itself"): the
+    app's visual review holds any PR that merges itself when a screen changed, a sync PR too
+    (fog-and-frontier's first, [#373](https://github.com/jbhirsh/fog-and-frontier/pull/373)).
+    Look at the PR's table, then merge it or turn its auto-merge off, as the status says. If
+    the change is noise, fix the flaky screen in the app.
+  - **A failed required check:** fix its cause. A synced file's source is fixed here, and the
+    next run rebuilds the PR. For a cause in the app, fix it on the app's `main`, then close
+    the sync PR and run the sync by hand, which opens a fresh one from the app's head (never
+    GitHub's Update branch: the apps' commit check refuses its merge commit).
+  - **Blocked, with every check passing and no thread open:** the log names main's rule
+    types; the app's branch rule is the place to look.
+  - **In conflict with the app's `main`, or behind it where the app requires an up-to-date
+    branch:** not a failure; the run rebuilds the branch from the app's head. Each rebuild in
+    sift, which requires an up-to-date branch, reruns its hour of checks.
+  - **The token:** a missing Workflows permission fails the push, naming it, and changes
+    nothing in the app.
+- **Holding a sync PR:** make it a draft (the sync leaves a draft without auto-merge until it
+  is marked ready), or run it by hand with `auto-merge` false. Closing it holds nothing: the
+  next run opens a fresh one while a file still differs.
+- **A hand edit in an app** to a synced file is reverted by the next sync PR, as a visible
+  diff. To keep it, make it a variant here.
 
 ## Pictures from a session
 

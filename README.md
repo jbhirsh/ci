@@ -12,7 +12,9 @@ name, and calls a composite action here at `@main`; a change merged here reaches
 their next run, with no PR in any of them. That's why every PR here is tested against all
 three apps, as their `main` stands, before it can merge. Each tool reads its settings from the
 app's `.github/ci.json`, one key per tool, so the apps share the code and keep their own
-choices.
+choices. The few files GitHub reads only from an app itself (its PR template, the callers of
+the PR tools) are kept here too, and the sync (`sync/`) carries a change to them into each app
+as one PR that merges itself once the app's checks pass.
 
 ## What it gives the apps
 

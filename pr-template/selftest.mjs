@@ -4,9 +4,11 @@
 // it must hold, in `.github/pull_request_template.md`, a template of
 // the shared shape (structure.mjs), and use visual review, since that is
 // what decides whether a screen changed once the box is gone. The master
-// is this repo's own template, `.github/pull_request_template.md`. Only the
+// is this repo's own template, `.github/pull_request_template.md`, which the
+// sync (sync/manifest.json) carries into each app byte for byte. Only the
 // shape is checked, by decision (ci#79): a copy whose comments differ passes,
-// so a change to the master can't turn an app's required job red.
+// so a change to the master can't turn an app's required job red before the
+// sync's PR has merged there.
 
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';

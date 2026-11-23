@@ -86,9 +86,9 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
 
 ## Before opening a PR
 
-- **Describe the PR from the repo's own `.github/pull_request_template.md`**, which the
-  shared template in jbhirsh/ci is the master of for apps that have adopted it. `gh pr create
---body` doesn't apply the template: read it and fill it in. A bug fix renames Goal to
+- **Describe the PR from the repo's own `.github/pull_request_template.md`**, which
+  jbhirsh/ci's sync keeps equal to the shared template there. `gh pr create --body` doesn't
+  apply the template: read it and fill it in. A bug fix renames Goal to
   Problem and Plan to Solution, as the template says. Write every section as bullets,
   numbered steps, checkboxes or a table, linking every issue, PR, comment and file it
   mentions, with a fenced code block for any command or message: a paragraph is two
@@ -190,7 +190,8 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
 - **Shared CI tooling lives in jbhirsh/ci.** The apps' workflows call its tools at `@main`
   and keep their own triggers and job names (the required checks); an app's settings for
   each tool are its key in `.github/ci.json`, and how a tool works is in its headers. Change
-  a tool in jbhirsh/ci, never by copying it into an app.
+  a tool in jbhirsh/ci, never by copying it into an app, and a file the apps hold in step
+  (jbhirsh/ci's `sync/manifest.json`) there too: the next sync reverts an app's edit.
 - **A required workflow has no trigger-level `paths:` filter.** A filtered-out workflow
   never reports, so its required check waits forever. Decide inside the job and skip the
   expensive step: a skipped step or job still passes.
