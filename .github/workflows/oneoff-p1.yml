@@ -1,0 +1,89 @@
+# One-off (ci#144, the cleanup's step 1: P1 and P3), on this throwaway
+# branch only: never on main. A push to this branch uploads two pictures in a
+# comment on each throwaway PR, links them from its description, closes one
+# PR and merges the other into its scratch base, deletes the comments (the
+# Actions token first), and fetches every link signed out after each step.
+# Each fetch is a step tied to the one before it, plus a second job on a
+# fresh runner once the first has finished: no fixed-time wait.
+name: ci#144 P1 (throwaway)
+
+on:
+  push:
+    branches: [oneoff/ci144-p1]
+
+permissions: {}
+
+env:
+  REPO: ${{ github.repository }}
+  CLOSED_PR: '149'
+  MERGED_PR: '150'
+
+jobs:
+  p1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    env:
+      ACTIONS_TOKEN: ${{ github.token }}
+      UPLOAD_TOKEN: ${{ secrets.BOT_PR_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: gh --version | head -1
+      - name: Upload comment (BOT_PR_TOKEN), as visual review did
+        run: node oneoff/p1.mjs upload "$RUNNER_TEMP/p1.json"
+      - name: Fetch, right after the upload
+        run: node oneoff/p1.mjs fetch "$RUNNER_TEMP/p1.json" after-upload
+      - name: Section into the description (Actions token), as describe did
+        run: node oneoff/p1.mjs describe "$RUNNER_TEMP/p1.json"
+      - name: Fetch, after the description edit
+        run: node oneoff/p1.mjs fetch "$RUNNER_TEMP/p1.json" after-describe
+      - name: Close one PR, merge the other into its scratch base
+        run: node oneoff/p1.mjs finish "$RUNNER_TEMP/p1.json"
+      - name: Delete the comments (P3, Actions token first)
+        run: node oneoff/p1.mjs delete "$RUNNER_TEMP/p1.json"
+      - name: Fetch, after the delete
+        run: node oneoff/p1.mjs fetch "$RUNNER_TEMP/p1.json" after-delete
+      - name: The descriptions still link them
+        run: node oneoff/p1.mjs bodies "$RUNNER_TEMP/p1.json"
+      - name: Report
+        if: always()
+        run: node oneoff/p1.mjs report "$RUNNER_TEMP/p1.json" || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: p1-state
+          path: ${{ runner.temp }}/p1.json
+
+  refetch:
+    needs: p1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v7
+        with:
+          name: p1-state
+          path: ${{ runner.temp }}
+      - name: Fetch again, on a fresh runner once p1 has finished
+        run: node oneoff/p1.mjs fetch "$RUNNER_TEMP/p1.json" fresh-runner
+      - name: Report
+        run: node oneoff/p1.mjs report "$RUNNER_TEMP/p1.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: p1-state-final
+          path: ${{ runner.temp }}/p1.json
