@@ -50,7 +50,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appRoot } from '../lib/app.mjs';
-import { isReason, notes } from '../lib/reason.mjs';
+import { isReason, notes } from '../lib/reason.ts';
 
 /** @typedef {{ file: string, line: number, message: string }} Finding */
 

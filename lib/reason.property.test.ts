@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { isReason } from './reason.mjs';
+import { isReason } from './reason.ts';
 
 // A reason is whatever someone wrote beside a setting.
 describe('isReason, for any text', () => {
