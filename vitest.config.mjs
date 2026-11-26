@@ -2,7 +2,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['**/*.test.mjs'],
+    // Both extensions while the repo moves to TypeScript (ci#155).
+    include: ['**/*.test.{mjs,ts}'],
     exclude: ['node_modules/**'],
     // A test never writes to the runner's own summary or outputs: on CI a
     // tool's test (a compare action's, say) would otherwise put its
@@ -19,8 +20,8 @@ export default defineConfig({
     hookTimeout: 30_000,
     coverage: {
       provider: 'v8',
-      include: ['**/*.mjs'],
-      exclude: ['**/*.test.mjs', '*.config.*', 'node_modules/**', 'coverage/**'],
+      include: ['**/*.{mjs,ts}'],
+      exclude: ['**/*.test.{mjs,ts}', '*.config.*', 'node_modules/**', 'coverage/**'],
       // Every file on its own, as in the apps.
       thresholds: { perFile: true, lines: 80 },
     },
