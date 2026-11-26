@@ -1,0 +1,46 @@
+# One-off (ci#144), on this throwaway branch only: never on main. Tests
+# whether `gh pr edit --body-file … --attach` (BOT_PR_TOKEN) takes a PR
+# description over 65,536 characters, on the closed throwaway ci#149, then
+# puts ci#149's description back as it was (Actions token).
+name: ci#144 length probe (throwaway)
+
+on:
+  push:
+    branches: [oneoff/ci144-length]
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write
+    env:
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Probe
+        env:
+          ACTIONS_TOKEN: ${{ github.token }}
+          UPLOAD_TOKEN: ${{ secrets.BOT_PR_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          GH_TOKEN="$ACTIONS_TOKEN" gh api "repos/$REPO/pulls/149" --jq .body > orig.md
+          python3 -c "from zlib import crc32;import struct
+          def ch(t,d): return struct.pack('>I',len(d))+t+d+struct.pack('>I',crc32(t+d)&0xffffffff)
+          import zlib;raw=b''.join(b'\x00'+b'\x10\x80\x10'*8 for _ in range(8))
+          open('p.png','wb').write(b'\x89PNG\r\n\x1a\n'+ch(b'IHDR',struct.pack('>IIBBBBB',8,8,8,2,0,0,0))+ch(b'IDAT',zlib.compress(raw))+ch(b'IEND',b''))"
+          for n in 67800 70000; do
+            python3 -c "import sys;o=open('orig.md').read().rstrip('\n');pad='\n\n<!-- ci144 length probe -->\n';img='\n'+chr(33)+'[probe](./p.png)\n';n=int(sys.argv[1]);open('b.md','w').write(o+pad+'x'*(n-len(o)-len(pad)-len(img))+img)" $n
+            echo "sending $(python3 -c "print(len(open('b.md').read()))") characters"
+            if GH_TOKEN="$UPLOAD_TOKEN" gh pr edit 149 --repo "$REPO" --body-file b.md --attach ./p.png; then
+              GH_TOKEN="$ACTIONS_TOKEN" gh api "repos/$REPO/pulls/149" --jq .body > got.md
+              echo "n=$n accepted: read back $(python3 -c "print(len(open('got.md').read()))") characters; links: $(grep -c 'user-attachments/assets' got.md || true); local path left: $(grep -c '(./p.png)' got.md || true)"
+            else
+              echo "n=$n REFUSED by gh pr edit"
+            fi
+          done
+          python3 -c "import json;print(json.dumps({'body':open('orig.md').read().rstrip(chr(10))}))" > r.json
+          GH_TOKEN="$ACTIONS_TOKEN" gh api -X PATCH "repos/$REPO/pulls/149" --input r.json --jq '.body|length'
+          GH_TOKEN="$ACTIONS_TOKEN" gh api "repos/$REPO/pulls/149" --jq .body | diff - <(python3 -c "print(open('orig.md').read().rstrip(chr(10)))") && echo "ci#149 put back"
