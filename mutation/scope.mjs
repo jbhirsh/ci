@@ -16,10 +16,13 @@
 // to mutate.
 //
 // A changed test file stands for the source it covers (`x.test.ts`,
-// `x.cache.test.ts` or `__tests__/x.test.ts` beside `x.ts`/`x.tsx`), mutated
-// whole, since a weakened test can let any of its mutants survive (setting
-// `testSubjects`). An infix is stripped only when no source has the full
-// name, so `x.helpers.test.ts` covers `x.helpers.ts` alone.
+// `x.cache.test.ts` or `__tests__/x.test.ts` beside `x.ts`/`x.tsx`/`x.mjs`,
+// whatever the test's own extension, so a module and its test may be
+// renamed from `.mjs` to `.ts` apart), mutated whole, since a weakened test
+// can let any of its mutants survive (setting `testSubjects`). An infix is
+// stripped only when no source has the full name, so `x.helpers.test.ts`
+// covers `x.helpers.ts` alone. A subject still counts only where the
+// `mutate` globs take it.
 //
 // A file whose change is formatting alone is left out (setting
 // `formatCheck`): when the app's Prettier, with the app's config, turns its
@@ -79,6 +82,9 @@ export function wiringChanged(files, globs) {
 
 const TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
 
+/** The extensions a test's subject may have, in the order they're listed. */
+const SUBJECT_EXTENSIONS = ['.ts', '.tsx', '.mjs'];
+
 /**
  * The source files a changed file stands for: itself, or a test's subject.
  *
@@ -88,7 +94,10 @@ const TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
 export function subjects(file, exists) {
   if (!TEST_FILE.test(file)) return [file];
   const base = file.replace(TEST_FILE, '').replace(/(^|\/)__tests__\//, '$1');
-  const sources = (/** @type {string} */ b) => [`${b}.ts`, `${b}.tsx`].filter((c) => exists(c));
+  const sources = (/** @type {string} */ b) =>
+    SUBJECT_EXTENSIONS.map((extension) => b + extension).filter(
+      (c) => !TEST_FILE.test(c) && exists(c),
+    );
   const exact = sources(base);
   return exact.length > 0 ? exact : sources(base.replace(/\.[\w-]+$/, ''));
 }
