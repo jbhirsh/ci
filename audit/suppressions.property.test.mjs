@@ -1,4 +1,4 @@
-import ts from '@typescript/typescript6';
+import ts from 'typescript';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { knipSuppressions, suppressionTags } from './suppressions.mjs';

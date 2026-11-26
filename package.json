@@ -9,7 +9,7 @@
   "scripts": {
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "node node_modules/typescript/bin/tsc -p tsconfig.json",
+    "typecheck": "node node_modules/@typescript/native/bin/tsc -p tsconfig.json",
     "lint": "eslint . && node lint/actions.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
@@ -18,7 +18,7 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.6",
     "@types/pngjs": "^6.0.5",
-    "@typescript/typescript6": "^6.0.2",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "@vitest/coverage-v8": "^5.1.1",
     "eslint": "^10.15.0",
     "eslint-plugin-jsdoc": "^65.5.0",
@@ -27,7 +27,7 @@
     "jsdom": "^31.0.1",
     "playwright": "^1.65.1",
     "prettier": "^3.10.1",
-    "typescript": "^7.0.2",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vitest": "^5.0.5",
     "yaml": "^2.9.1"
   },
@@ -38,5 +38,11 @@
     "pixelmatch": "^8.0.0",
     "pngjs": "^7.0.0",
     "zod": "^4.6.7"
+  },
+  "//overrides": [
+    "@typescript/native: typescript-estree (8.73 on) names a TypeScript 7.1 nightly as an optional peer, for its experimental tsgo parser, which this repo never turns on; without this, npm installs a nightly copy of TS 7 under each typescript-eslint package beside ours. It costs four nested copies of typescript-estree, which npm won't hoist past the peer it overrides, and turning tsgo on would need it gone. Delete it once typescript-estree's @typescript/native range accepts the TS 7 we install, or the alias goes."
+  ],
+  "overrides": {
+    "@typescript/native": "npm:typescript@^7.0.2"
   }
 }

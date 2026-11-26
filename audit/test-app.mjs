@@ -16,9 +16,7 @@ import path from 'node:path';
 import { writeFiles } from '../mutation/test-repo.mjs';
 
 /** This repo's TypeScript 6, its JavaScript API, as an app installs it. */
-const TYPESCRIPT = path.dirname(
-  createRequire(import.meta.url).resolve('@typescript/typescript6/package.json'),
-);
+const TYPESCRIPT = path.dirname(createRequire(import.meta.url).resolve('typescript/package.json'));
 
 /** @type {string[]} */
 const made = [];
