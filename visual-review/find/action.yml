@@ -33,5 +33,6 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
-        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        # One-off (ci#144 V2 in fog): a PR into a scratch base counts as into main.
+        DEFAULT_BRANCH: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
       run: node "$GITHUB_ACTION_PATH/../find.mjs"

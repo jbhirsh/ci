@@ -79,7 +79,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - id: find
-        uses: jbhirsh/ci/visual-review/find@main
+        uses: jbhirsh/ci/visual-review/find@oneoff/vr-v2-fog
 
   review:
     needs: find
@@ -104,7 +104,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
-      - uses: jbhirsh/ci/visual-review@main
+      - uses: jbhirsh/ci/visual-review@oneoff/vr-v2-fog
         with:
           target: ${{ toJSON(matrix.target) }}
           upload-token: ${{ secrets.bot-pr-token }}
@@ -133,7 +133,7 @@ jobs:
       group: pr-gif-attach-${{ github.repository }}-${{ matrix.target.number }}
       cancel-in-progress: false
     steps:
-      - uses: jbhirsh/ci/visual-review/attach@main
+      - uses: jbhirsh/ci/visual-review/attach@oneoff/vr-v2-fog
         with:
           run: ${{ matrix.target.run }}
           kind: ${{ matrix.target.kind }}
