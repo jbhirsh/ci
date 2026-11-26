@@ -5,12 +5,8 @@
 /** How many words a reason needs, a version label not counting. */
 const REASON_WORDS = 3;
 
-/**
- * Whether a comment gives a reason: a few words, not just a version label.
- *
- * @param {string} text
- */
-export function isReason(text) {
+/** Whether a comment gives a reason: a few words, not just a version label. */
+export function isReason(text: string): boolean {
   const words = text
     .replace(/\b[0-9a-f]{40}\b/gi, ' ')
     .replace(/\bv?\d+(?:\.[\w-]+)*/g, ' ')
@@ -19,14 +15,9 @@ export function isReason(text) {
   return words.length >= REASON_WORDS;
 }
 
-/**
- * The notes under a key: a string or a list of strings.
- *
- * @param {unknown} value
- * @returns {string[]}
- */
-export function notes(value) {
+/** The notes under a key: a string or a list of strings. */
+export function notes(value: unknown): string[] {
   if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.filter((v) => typeof v === 'string');
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string');
   return [];
 }
