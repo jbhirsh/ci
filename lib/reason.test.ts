@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isReason, notes } from './reason.mjs';
+import { isReason, notes } from './reason.ts';
 
 describe('isReason', () => {
   it('takes a few words', () => {
