@@ -1,143 +1,25 @@
-# One-off check V10/V11 for jbhirsh/ci#144: does `gh issue edit --body-file
-# --attach` work with BOT_PR_TOKEN on an issue? Runs only from its own branch,
-# never merged (shared rules: one-off workflows never go on main).
+# One-off check V10 for jbhirsh/ci#144, second push: fetch the attachments the
+# first run (45747339808) put in ci#145, signed out, now that they've had time
+# to go live, and compare each with the runner's PNG hash. Never merged.
 name: V10 throwaway
 
 on:
   push:
     branches: [v10-issue-attach-throwaway]
 
-permissions:
-  contents: read
-  issues: write # only to close the issue if the bot token can't
+permissions: {}
 
 jobs:
-  v10:
+  fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      R: ${{ github.repository }}
-      GH_TOKEN: ${{ secrets.BOT_PR_TOKEN }}
+    timeout-minutes: 5
     steps:
-      - name: gh version and --attach support
+      - name: Fetch signed out
         run: |
-          gh --version
-          echo "--- issue edit:";  gh issue edit --help | grep -i attach || echo "(no --attach)"
-          echo "--- issue comment:"; gh issue comment --help | grep -i attach || echo "(no --attach)"
-          echo "--- pr edit:"; gh pr edit --help | grep -i attach || echo "(no --attach)"
-          if ! gh issue edit --help | grep -q -- '--attach'; then
-            echo "::warning::runner gh lacks issue edit --attach; upgrading from apt"
-            sudo apt-get update -q && sudo apt-get install -y -q --only-upgrade gh
-            gh --version
-            gh issue edit --help | grep -i attach || echo "(still no --attach on issue edit)"
-            gh issue comment --help | grep -i attach || echo "(still no --attach on issue comment)"
-          fi
-          echo "--- token identity:"; gh api user --jq .login || true
-
-      - name: PNGs
-        run: |
-          python3 - <<'EOF'
-          import struct, zlib
-          def png(path, rgb, w=40, h=20):
-              raw = b''.join(b'\x00' + bytes(rgb) * w for _ in range(h))
-              def chunk(t, d):
-                  return struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
-              data = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)) \
-                  + chunk(b'IDAT', zlib.compress(raw)) + chunk(b'IEND', b'')
-              open(path, 'wb').write(data)
-          png('red.png', (255, 0, 0))
-          png('blue.png', (0, 0, 255))
-          EOF
-          sha256sum red.png blue.png
-
-      - name: Create the issue, then hand-edit it
-        run: |
-          since=$(date -u +%Y-%m-%dT%H:%M:%SZ); echo "SINCE=$since" >> "$GITHUB_ENV"
-          set +e
-          n=$(gh api "repos/$R/issues" -f title='V10 throwaway (never keep)' \
-              -f body='Created by the V10 throwaway workflow for jbhirsh/ci#144. Never keep.' --jq .number)
-          rc=$?
-          set -e
-          if [ $rc -ne 0 ] || [ -z "$n" ]; then
-            echo "::warning::BOT_PR_TOKEN could not create an issue (rc=$rc); creating with the Actions token"
-            n=$(GH_TOKEN=${{ github.token }} gh api "repos/$R/issues" -f title='V10 throwaway (never keep)' \
-                -f body='Created by the V10 throwaway workflow for jbhirsh/ci#144. Never keep.' --jq .number)
-            echo "CREATED_BY=actions-token" >> "$GITHUB_ENV"
-          else
-            echo "CREATED_BY=bot-token" >> "$GITHUB_ENV"
-          fi
-          echo "N=$n" >> "$GITHUB_ENV"
-          echo "issue: https://github.com/$R/issues/$n"
-          # A "hand edit": text around an empty marker pair and a record line.
-          printf '%s\n' \
-            'Hand-written intro line, kept as is.' \
-            '' \
-            '<!-- pictures:start -->' \
-            '<!-- pictures:end -->' \
-            '' \
-            '<!-- record: v10 1234abcd -->' \
-            'Hand-written outro line, kept as is.' > hand.md
-          gh api -X PATCH "repos/$R/issues/$n" -F body=@hand.md --jq .number \
-            || echo "::warning::BOT_PR_TOKEN could not PATCH the issue body"
-          gh api "repos/$R/issues/$n" --jq .body > before.md
-          echo "--- body before:"; cat before.md
-
-      - name: Edit with --attach (as asked, path#alt)
-        run: |
-          python3 - <<'EOF'
-          b = open('before.md').read()
-          block = '<!-- pictures:start -->\n![Red](./red.png)\n\n<img src="./blue.png" width="300">\n<!-- pictures:end -->'
-          open('body.md', 'w').write(b.replace('<!-- pictures:start -->\n<!-- pictures:end -->', block))
-          EOF
-          echo "--- body.md:"; cat body.md
-          set +e
-          gh issue edit "$N" -R "$R" --body-file body.md --attach 'red.png#Red' --attach 'blue.png#Blue' 2>&1 | tee edit1.log
-          echo "EDIT1_RC=${PIPESTATUS[0]}" | tee -a "$GITHUB_ENV"
-
-      - name: Edit with --attach (plain ./ paths), if the first failed
-        if: env.EDIT1_RC != '0'
-        run: |
-          set +e
-          gh issue edit "$N" -R "$R" --body-file body.md --attach ./red.png --attach ./blue.png 2>&1 | tee edit2.log
-          echo "EDIT2_RC=${PIPESTATUS[0]}" | tee -a "$GITHUB_ENV"
-
-      - name: Read back and check
-        run: |
-          gh api "repos/$R/issues/$N" --jq .body > after.md
-          echo "--- body after (REST):"; cat after.md; echo; echo "--- end"
-          echo "--- diff before.md -> after.md:"; diff before.md after.md || true
-          echo "--- intro/outro/markers/record kept?"
-          for l in 'Hand-written intro line, kept as is.' '<!-- pictures:start -->' '<!-- pictures:end -->' \
-                   '<!-- record: v10 1234abcd -->' 'Hand-written outro line, kept as is.'; do
-            grep -qxF -- "$l" after.md && echo "kept: $l" || echo "MISSING: $l"
+          echo "want red  802769b7ac77d81a0106d702e2ad6a5983eb8d2ca64848cb6bc1d0b248e93055"
+          echo "want blue 1e6b28b86bdf8faca9bd3dda09ecf2d46e69a15bba9729b8d53cf15a42064afb"
+          for u in 29444f13-d872-4f4b-92d1-e0afb37b2ce2 c0143921-223b-4c16-88ba-e74bff959a27; do
+            out=$(curl -sS -L -o got.bin -w '%{http_code} %{content_type} %{url_effective}' "https://github.com/user-attachments/assets/$u")
+            echo "$u: $out" | sed -E 's/\?.*//'
+            sha256sum got.bin
           done
-          grep -n -- './red.png\|./blue.png' after.md && echo "LOCAL PATHS LEFT" || echo "no local paths left"
-          grep -o 'https://github.com/user-attachments/assets/[A-Za-z0-9-]*' after.md | tee links.txt || true
-
-      - name: Fetch each link signed out, compare sha256
-        run: |
-          sha256sum red.png blue.png
-          while read -r u; do
-            code=$(env -u GH_TOKEN curl -sS -L -o got.bin -w '%{http_code}' "$u")
-            echo "$code $(sha256sum got.bin | cut -d' ' -f1) $u"
-          done < links.txt
-
-      - name: Fallback probe, gh issue comment --attach (only if no edit worked)
-        if: env.EDIT1_RC != '0' && env.EDIT2_RC != '0'
-        run: |
-          set +e
-          printf '![Red](./red.png)\n' > c.md
-          gh issue comment "$N" -R "$R" --body-file c.md --attach ./red.png 2>&1
-          echo "comment rc=$?"
-
-      - name: Runs started since the issue was created
-        run: |
-          gh api "repos/$R/actions/runs?created=>=$SINCE&per_page=50" \
-            --jq '.workflow_runs[] | "\(.id) \(.event) \(.name) \(.head_branch)"'
-          echo "--- issues-event runs ever:"; gh api "repos/$R/actions/runs?event=issues&per_page=5" --jq .total_count
-
-      - name: Close the issue
-        if: always() && env.N != ''
-        run: |
-          gh issue close "$N" -R "$R" --reason 'not planned' \
-            || GH_TOKEN=${{ github.token }} gh issue close "$N" -R "$R" --reason 'not planned'
