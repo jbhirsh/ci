@@ -7,9 +7,11 @@
 //
 //   node pictures/cli.mjs
 //
-// gh 2.99 takes `--attach` on a PR's commands only, so the files always
-// upload through a host PR, one whose description may be overwritten (sift's
-// is a throwaway draft):
+// The files always upload through a host PR, one whose description may be
+// overwritten (sift's is a throwaway draft), as the route was built when gh
+// took `--attach` on a PR's commands only; gh 2.104 takes it on `gh issue
+// edit` too (ci#144's V10), which visual review's mockups use, but this
+// route is unchanged:
 //
 // 1. The inputs and files are checked (inputs.mjs, files.mjs).
 // 2. The host's `pictures:<block>` block, in place of an earlier one, gets
