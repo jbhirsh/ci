@@ -86,7 +86,7 @@ Claude Review runs on the Claude Agent SDK (`review/sdk.mjs`). An app's settings
 `pr-changes/` fills each change's title, commit and files in a PR's description (you write only why, in bullets under its empty pair: there is no heading per change), with the line counts as small coloured pictures (ci#79, ci#100). Until the sync from #109 carries the new template into an app, a PR there keeps its numbered `### N.` heading above each pair and the tool writes the title under it, so each change shows twice for a while (intended); a link to an old change-heading anchor has no target in a description written the new way. Each app holds this repo's own `.github/workflows/pr-changes.yml`, which the sync keeps in step (The sync, below).
 
 - **It runs on `pull_request_target`**, which runs the workflow as it is on the default branch, never the PR's copy, so it may hold `BOT_PR_TOKEN` (the apps' fine-grained token: attaching a file needs a person's token). That is safe because the job checks out and runs nothing from the PR: keep it that way. `pr-changes/action.yml`'s description lists the rules (no checkout, no cache, no PR text in a `run:` line or an expression, the token only on the attach call and the one Revisions edit). A change to the workflow takes effect once it is on the default branch.
-- **Its own concurrency group**, not describe's: GitHub keeps one pending run per group, so sharing would let each cancel the other's pending run.
+- **Its own concurrency group**, not PR GIFs' attach group (which visual review's attach job shares): GitHub keeps one pending run per group, so sharing would let each cancel the other's pending run.
 - **`autofix.exempt`:** the app's `.github/ci.json` needs its entry, or `autofix/check-triggers.mjs` fails the app's CI for a `pull_request_target` workflow: the sync adds it with the file (a companion in `sync/manifest.json`).
 - **Revisions:** the same action keeps the description's Revisions block (`pr-changes/revisions.mjs`'s header says the grammar and the rules).
   - **When it writes:**
@@ -125,6 +125,15 @@ Claude Review runs on the Claude Agent SDK (`review/sdk.mjs`). An app's settings
     - A head force-pushed away and never fetched.
     - For a PR whose timeline names no force-push, the only record of the opening head is the push event's `before`, so revision 1 shows the head before the push that first wrote the blocks: after two pushes in quick succession, or when the first push's run failed (no token, say), that is the head between them.
 - **Without a token** (a fork's PR, or no secret) the counts are plain text and the run says why. `BOT_PR_TOKEN` also needs Contents, Pull requests and Issues read and write on this repository to try the tool here.
+
+## Visual review
+
+`.github/workflows/visual-review.yml`'s header says how an app calls it; nothing here needs an app's own change.
+
+- **No comment** (ci#144): its attach job uploads a result's pictures in one edit of the PR's description, or a mockup issue's, with `BOT_PR_TOKEN`, then writes the table with the Actions token (`visual-review/attach.mjs`'s header says in what order). That one edit runs `PR changes` and `PR description` once; visual review skips it.
+- **`BOT_PR_TOKEN`** needs Pull requests write for a PR's description and Issues write for a mockup issue's, on each app.
+- **Its attach job shares PR GIFs' attach group** (`pr-gif-attach-<repo>-<number>`), so neither overwrites the other's block.
+- **Upload comments from before ci#144** stay until the cleanup ci#144's plan describes: a PR with one and no record uploads once in the new form at its next review, and the old comment is hidden.
 
 ## The sync
 

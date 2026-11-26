@@ -1,0 +1,84 @@
+name: Visual review, attach
+description: >-
+  The attach job of the visual-review workflow (ci#144): puts the table one
+  review handed off (the artifact `visual-review-attach-<kind>-<number>-<run>`) into the
+  PR's or the mockup issue's description, with no comment: one BOT_PR_TOKEN
+  edit that uploads the pictures, then one Actions-token edit that writes
+  the finished table into its block and slots (attach.mjs's header says in
+  what order, and what it checks first). It checks nothing out and runs
+  nothing of the PR's: the hand-off is data. Run it in PR GIFs' attach
+  group, `pr-gif-attach-<repo>-<number>` with cancel-in-progress false, so
+  it takes turns with a GIF attach on the same PR. The job needs actions
+  read (to tell a failed download from no hand-off), pull-requests and
+  issues write.
+
+inputs:
+  run:
+    description: The target's screenshot run, which names its hand-off.
+    required: true
+  kind:
+    description: The target's kind, "pr" or "issue".
+    required: true
+  number:
+    description: The target's PR or issue number; the hand-off must be for it.
+    required: true
+  upload-token:
+    description: >-
+      BOT_PR_TOKEN: GitHub takes attachments only from a person's token.
+      Used only for the one edit that uploads the pictures.
+    required: true
+  github-token:
+    description: The Actions token, for every other read and write.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        package-manager-cache: false
+
+    # A review that found nothing to write handed nothing off: attach.mjs
+    # then says so and edits nothing, after checking the run holds no such
+    # artifact, so a download that failed still fails the job.
+    - uses: actions/download-artifact@v8
+      continue-on-error: true
+      with:
+        name: visual-review-attach-${{ inputs.kind }}-${{ inputs.number }}-${{ inputs.run }}
+        path: ${{ runner.temp }}/visual-review-attach
+
+    - name: How many pictures to upload
+      id: pictures
+      shell: bash
+      env:
+        HANDOFF_DIR: ${{ runner.temp }}/visual-review-attach
+      run: echo "count=$(node "$GITHUB_ACTION_PATH/../attach.mjs" pictures)" >> "$GITHUB_OUTPUT"
+
+    # `--attach` came in gh 2.99 for a PR and by 2.104 for an issue
+    # (lib/gh.mjs). The runner's image installs gh from GitHub's own apt
+    # source, so an image whose gh lags upgrades from there, signed, rather
+    # than from a download. Only a hand-off with pictures uploads.
+    - name: A gh that can attach
+      if: steps.pictures.outputs.count != '0'
+      shell: bash
+      env:
+        KIND: ${{ inputs.kind }}
+      run: |
+        args=(check)
+        if [ "$KIND" = issue ]; then args+=(--issue); fi
+        node "$GITHUB_ACTION_PATH/../../lib/gh.mjs" "${args[@]}" || {
+          sudo apt-get update -q && sudo apt-get install -y -q --only-upgrade gh
+          node "$GITHUB_ACTION_PATH/../../lib/gh.mjs" "${args[@]}"
+        }
+
+    - name: Put the table in the description
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        UPLOAD_TOKEN: ${{ inputs.upload-token }}
+        HANDOFF_DIR: ${{ runner.temp }}/visual-review-attach
+        ARTIFACT: visual-review-attach-${{ inputs.kind }}-${{ inputs.number }}-${{ inputs.run }}
+        KIND: ${{ inputs.kind }}
+        NUMBER: ${{ inputs.number }}
+      run: node "$GITHUB_ACTION_PATH/../attach.mjs"

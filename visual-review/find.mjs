@@ -11,16 +11,27 @@
 //     the description, or auto-merge was turned on or off
 //     (pull_request_target): the PR's review again, from its newest
 //     finished screenshot run, since its pictures or auto-merge changed.
+//     An edit that changed only the contents of visual review's own block
+//     and slots is the attach job's upload (ci#144) and calls for nothing
+//     (ownEdit): otherwise each upload would start a review of its own.
 //
-// It runs main's code and reads the event and the API only.
+// A mockup's target carries its issue's number, read from its shots'
+// manifest, so the attach job's concurrency group (keyed on the number) is
+// known when the job starts. It runs main's code and reads the event, the
+// API and that manifest only.
 
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
 import { ghApi } from '../lib/comment.mjs';
 import { newest, pages, statusFrom } from '../lib/github.mjs';
 import { pullOfRun } from '../lib/run-pr.mjs';
+import { MANIFEST, parseManifest } from '../visual-shots/shots.mjs';
+import { outsideOwnBlocks } from './record.mjs';
 import { settings } from './settings.mjs';
 import { CONTEXT } from './status.mjs';
 
@@ -37,6 +48,47 @@ import { CONTEXT } from './status.mjs';
  * @typedef {{ number: number, state: string, head: { sha: string,
  *   repo: { full_name: string } | null }, base?: { ref: string } }} Pull
  */
+
+/**
+ * Downloads a run's visual-shots artifact into `dir`: 'none' when the run
+ * has none, 'expired' when it's gone; any other failure throws, never
+ * passing for "no shots".
+ *
+ * @param {{ api: import('../lib/comment.mjs').Api, gh: (args: string[]) => string,
+ *   repo: string, runId: number, dir: string }} options gh: with the Actions token
+ * @returns {'ok' | 'none' | 'expired'}
+ */
+export function downloadShots({ api, gh, repo, runId, dir }) {
+  const found = /** @type {{ expired: boolean }[]} */ (
+    pages(api, `repos/${repo}/actions/runs/${runId}/artifacts?name=visual-shots`, 'artifacts')
+  );
+  if (found.length === 0) return 'none';
+  if (found.every((a) => a.expired)) return 'expired';
+  gh(['run', 'download', String(runId), '--repo', repo, '--name', 'visual-shots', '--dir', dir]);
+  return 'ok';
+}
+
+/**
+ * Whether a pull_request_target event is an edit of the description that
+ * changed only the contents of visual review's block and slots (record.mjs):
+ * the attach job's own upload. A retarget, a title edit, a slot added or
+ * removed, or any change to the rest still calls for a review.
+ *
+ * @param {Record<string, unknown>} payload
+ */
+export function ownEdit(payload) {
+  const changes = /** @type {{ body?: { from?: unknown }, base?: unknown } | undefined} */ (
+    payload.changes
+  );
+  if (payload.action !== 'edited' || !changes?.body || changes.base) return false;
+  const was = changes.body.from;
+  const now = /** @type {{ body?: unknown }} */ (payload.pull_request).body;
+  // GitHub sends null for an empty description.
+  const text = (/** @type {unknown} */ v) => (v === null ? '' : v);
+  const [from, to] = [text(was), text(now)];
+  if (typeof from !== 'string' || typeof to !== 'string') return false;
+  return outsideOwnBlocks(from) === outsideOwnBlocks(to);
+}
 
 /**
  * The newest finished pull_request run of the screenshot workflow on a
@@ -61,10 +113,33 @@ export function latestRun(api, repo, workflow, sha) {
  * The reviews an event calls for.
  *
  * @param {{ name: string, payload: Record<string, unknown>, repo: string, main: string,
- *   workflow: string, api: import('../lib/comment.mjs').Api, log: (line: string) => void }} event
+ *   workflow: string, api: import('../lib/comment.mjs').Api, log: (line: string) => void,
+ *   mockupIssue: (run: number) => number | null }} event
+ *   mockupIssue: the issue a run by hand's shots are a mockup for, from their
+ *   manifest, or null when they're none
  * @returns {import('./review.mjs').Target[]}
  */
-export function targets({ name, payload, repo, main, workflow, api, log }) {
+export function targets({ name, payload, repo, main, workflow, api, log, mockupIssue }) {
+  /** @param {number} run */
+  const mockup = (run) => {
+    /** @type {number | null} */
+    let number;
+    try {
+      number = mockupIssue(run);
+    } catch (error) {
+      // One mockup's shots that can't be read fail only that mockup, never
+      // the PRs settled by the same push.
+      log(
+        `::warning::run ${run}: its shots' manifest couldn't be read (${/** @type {Error} */ (error).message}): no mockup review`,
+      );
+      return [];
+    }
+    if (number === null) {
+      log(`run ${run}: a run by hand that is no mockup: nothing to do`);
+      return [];
+    }
+    return [{ kind: /** @type {const} */ ('issue'), number, run }];
+  };
   /**
    * @param {number} number
    * @param {string} sha
@@ -83,6 +158,10 @@ export function targets({ name, payload, repo, main, workflow, api, log }) {
   if (name === 'pull_request_target') {
     const pr = /** @type {Pull} */ (payload.pull_request);
     if (pr.state !== 'open' || pr.head.repo?.full_name !== repo || pr.base?.ref !== main) return [];
+    if (ownEdit(payload)) {
+      log(`#${pr.number}: only visual review's own block changed: nothing to review`);
+      return [];
+    }
     return forPr(pr.number, pr.head.sha);
   }
   if (name !== 'workflow_run') throw new Error(`visual-review doesn't run on ${name}`);
@@ -101,7 +180,7 @@ export function targets({ name, payload, repo, main, workflow, api, log }) {
       : forPr(found.pull.number, run.head_sha);
   }
   if (!ours || run.head_branch !== main) return [];
-  if (run.event === 'workflow_dispatch') return [{ kind: 'issue', run: run.id }];
+  if (run.event === 'workflow_dispatch') return mockup(run.id);
   if (run.event !== 'push') return [];
 
   // Main's shots of this commit are in: settle whatever waited on them.
@@ -124,33 +203,59 @@ export function targets({ name, payload, repo, main, workflow, api, log }) {
       `repos/${repo}/actions/workflows/${workflow}/runs?event=workflow_dispatch&head_sha=${run.head_sha}&status=completed&per_page=20`,
     )
   );
-  for (const m of mockups.workflow_runs ?? []) out.push({ kind: 'issue', run: m.id });
+  for (const m of mockups.workflow_runs ?? []) out.push(...mockup(m.id));
   return out;
 }
 
 /**
+ * The issue a run's shots are a mockup for, from their manifest, or null.
+ *
+ * @param {{ api: import('../lib/comment.mjs').Api, gh: (args: string[]) => string,
+ *   repo: string, run: number }} options
+ */
+export function mockupIssue({ api, gh, repo, run }) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'mockup-'));
+  try {
+    const got = downloadShots({ api, gh, repo, runId: run, dir });
+    // Expired shots were a mockup's, maybe: say so, rather than "no mockup".
+    if (got === 'expired') throw new Error('its shots have expired');
+    if (got === 'none') return null;
+    return parseManifest(JSON.parse(readFileSync(path.join(dir, MANIFEST), 'utf8'))).mockupIssue;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** gh with the job's token (GH_TOKEN), returning what it printed. */
+const realGh = (/** @type {string[]} */ args) =>
+  execFileSync('gh', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'inherit'],
+    timeout: 300_000,
+  });
+
+/**
  * @param {Record<string, string | undefined>} env
  * @param {import('../lib/comment.mjs').Api} [api]
+ * @param {(args: string[]) => string} [gh]
  */
-export function main(env, api = ghApi) {
+export function main(env, api = ghApi, gh = realGh) {
   const s = settings(appConfig('visual-review', appRoot()));
   if (!s) throw new Error('.github/ci.json has no visual-review key');
   const payload = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH ?? '', 'utf8'));
+  const repo = env.GITHUB_REPOSITORY ?? '';
   const found = targets({
     name: env.GITHUB_EVENT_NAME ?? '',
     payload,
-    repo: env.GITHUB_REPOSITORY ?? '',
+    repo,
     main: env.DEFAULT_BRANCH ?? 'main',
     workflow: s.workflow,
     api,
     log: console.log,
+    mockupIssue: (run) => mockupIssue({ api, gh, repo, run }),
   });
   setOutput('targets', JSON.stringify(found));
   setOutput('any', String(found.length > 0));
-  // describe's job runs once per PR; a mockup's issue is described in its
-  // review job, since nothing else writes an issue's description.
-  const prs = [...new Set(found.flatMap((t) => (t.kind === 'pr' ? [t.number] : [])))];
-  setOutput('prs', JSON.stringify(prs));
   return found;
 }
 

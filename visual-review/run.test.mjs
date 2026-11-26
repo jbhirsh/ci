@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -15,11 +15,16 @@ describe('parseTarget', () => {
       number: 5,
       run: 11,
     });
-    expect(parseTarget('{"kind":"issue","run":3}')).toEqual({ kind: 'issue', run: 3 });
+    expect(parseTarget('{"kind":"issue","number":9,"run":3}')).toEqual({
+      kind: 'issue',
+      number: 9,
+      run: 3,
+    });
     for (const bad of [
       '{"kind":"pr","run":1}',
-      '{"kind":"x","run":1}',
-      '{"kind":"issue","run":0}',
+      '{"kind":"x","number":1,"run":1}',
+      '{"kind":"issue","run":3}',
+      '{"kind":"issue","number":9,"run":0}',
     ]) {
       expect(() => parseTarget(bad)).toThrow(/not a review target/);
     }
@@ -56,6 +61,16 @@ describe('main', () => {
         description: expect.stringMatching(/^Visual review failed: BOT_PR_TOKEN is missing/),
       },
     ]);
+    expect(() =>
+      main(
+        {
+          GITHUB_REPOSITORY: 'a/b',
+          UPLOAD_TOKEN: 'bot',
+          TARGET: '{"kind":"pr","number":5,"run":1}',
+        },
+        { api, gh: () => 'jbhirsh\n' },
+      ),
+    ).toThrow(/HANDOFF_DIR is missing/);
   });
   it('keeps the first error when posting the failure status fails too', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'app-'));
@@ -102,7 +117,8 @@ describe('main, against a fake gh', () => {
         return { id: 1, head_sha: 'a'.repeat(40), conclusion: 'success' };
       }
       if (route.includes('/artifacts')) return { artifacts: [] };
-      if (route.endsWith('/pulls/5')) return { head: { sha: 'a'.repeat(40) } };
+      if (route.endsWith('/pulls/5')) return { head: { sha: 'a'.repeat(40) }, body: '' };
+      if (route.includes('/pulls/5/commits')) return [];
       if (route.includes('/statuses?')) return [];
       if (route.includes('/jobs')) return { jobs: [] };
       if (route.includes('/comments')) return [];
@@ -123,6 +139,7 @@ describe('main, against a fake gh', () => {
                   body: '',
                   state: 'OPEN',
                   autoMergeRequest: null,
+                  timelineItems: { nodes: [] },
                 },
               },
             },
@@ -136,6 +153,7 @@ describe('main, against a fake gh', () => {
           UPLOAD_TOKEN: 'bot',
           UPLOAD_LOGIN: 'jbhirsh',
           TARGET: '{"kind":"pr","number":5,"run":1}',
+          HANDOFF_DIR: mkdtempSync(path.join(tmpdir(), 'handoff-')),
         },
         { gh: withGraphql, api },
       ),
@@ -148,14 +166,17 @@ describe('main, against a fake gh', () => {
 describe('gitHubIo', () => {
   /** @type {[string, string[]][]} */
   let calls;
+  /** @type {number} */
+  let told;
+  const dir = mkdtempSync(path.join(tmpdir(), 'handoff-'));
   /** @param {(args: string[]) => string} answer */
   const io = (answer) => {
     calls = [];
+    told = 0;
     return gitHubIo({
       env: { OWNER: 'jbhirsh', DEFAULT_BRANCH: 'trunk', UPLOAD_LOGIN: 'jbhirsh' },
       repo: 'jbhirsh/app',
       token: 'actions',
-      upload: 'bot',
       gh: (token, args) => {
         calls.push([token, args]);
         return answer(args);
@@ -166,28 +187,25 @@ describe('gitHubIo', () => {
           : route.includes('/runs/4/')
             ? { artifacts: [{ expired: true }] }
             : { artifacts: [] },
+      handoffDir: path.join(dir, 'out'),
+      handedOff: () => {
+        told++;
+      },
     });
   };
 
-  it('posts and edits the upload comment with BOT_PR_TOKEN only', () => {
-    const g = io(() => 'https://github.com/jbhirsh/app/pull/5#issuecomment-42\n');
+  it('writes the hand-off and its pictures where the action uploads them', () => {
+    const g = io(() => '');
     expect(g.main).toBe('trunk');
-    expect(g.upload('pr', 5, 'body', ['/t/01.png'])).toBe(42);
-    expect(calls[0]).toEqual([
-      'bot',
-      ['pr', 'comment', '5', '--repo', 'jbhirsh/app', '--body', 'body', '--attach', '/t/01.png'],
-    ]);
-    g.upload('issue', 9, 'b', []);
-    expect(calls[1][1][0]).toBe('issue');
-    g.editComment(42, 'new');
-    expect(calls[2]).toEqual([
-      'bot',
-      ['api', '-X', 'PATCH', 'repos/jbhirsh/app/issues/comments/42', '-f', 'body=new'],
-    ]);
-  });
-
-  it("stops when gh doesn't name the comment", () => {
-    expect(() => io(() => 'done').upload('pr', 5, 'b', [])).toThrow(/didn't say/);
+    expect(g.uploader).toBe('jbhirsh');
+    const handoff = /** @type {import('./review.mjs').Handoff} */ (
+      /** @type {unknown} */ ({ version: 1, pictures: ['01.png'] })
+    );
+    g.handoff(handoff, [{ name: '01.png', bytes: Buffer.from('png') }]);
+    expect(readFileSync(path.join(dir, 'out', '01.png'), 'utf8')).toBe('png');
+    expect(JSON.parse(readFileSync(path.join(dir, 'out', 'attach.json'), 'utf8'))).toEqual(handoff);
+    expect(told).toBe(1);
+    expect(calls).toEqual([]);
   });
 
   it('downloads with the Actions token, and asks GraphQL with typed variables', () => {

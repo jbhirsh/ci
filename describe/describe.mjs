@@ -1,30 +1,22 @@
-// The one writer of the bots' sections in a PR's or an issue's description
-// (ci#64): visual-review's table today, the PR GIFs once they move here.
-// Each bot posts its pictures in an upload comment with BOT_PR_TOKEN, the
-// only kind of token GitHub lets attach files, and ends that comment with
-// its finished section. This copies each bot's newest section into the
-// description, between `<!-- describe:<bot> -->` markers, with the Actions
-// token: GitHub starts no workflow for that token's edits, so PR description and
-// the like don't run again. Runs share one concurrency group per PR
-// (action.yml), so edits take turns.
+// The bots' sections in a PR's or an issue's description (ci#64, ci#144):
+// visual-review's table today. A bot hands its finished section to place(),
+// which writes it between `<!-- describe:<bot> -->` markers, and each part of
+// it under the slot an author placed for it, with the Actions token: GitHub
+// starts no workflow for that token's edits. visual-review's attach job runs it
+// right after the one edit that uploads the pictures (visual-review/attach.mjs),
+// in the concurrency group PR GIFs' attach job shares, so edits take turns.
 //
-// An upload comment counts only if:
+// Until ci#144, each bot posted its pictures in an upload comment with
+// BOT_PR_TOKEN and this copied the newest one's section in. parseUpload still
+// reads such a comment, for what remains of them: visual review's fallback for
+// a PR with no record in its description yet, and the cleanup's dry run. An
+// upload comment counts only if:
 //   - BOT_PR_TOKEN's own account wrote it (no one else can post as it);
 //   - it starts with `<!-- describe-upload:<bot>:<sha> -->`, a bot name
 //     and the commit it's for;
 //   - its section, after `<!-- describe-section -->`, links only GitHub
 //     attachments (`https://github.com/user-attachments/assets/…`) and
 //     commits (`https://github.com/<owner>/<repo>/commit/<sha>`).
-// Of a bot's comments, the newest wins. A bot posts nothing for a head the
-// PR has moved on from (visual-review checks before it uploads), and its
-// runs for one PR take turns, so the newest is the latest head's; ranking
-// by the comment rather than by the PR's commits keeps working after a
-// force-push drops a commit. Every section is
-// rebuilt on each run, not only the caller's, so a run GitHub drops from
-// the queue loses nothing: the next one writes it all. A bot with no upload
-// comment keeps whatever it already has, such as GIFs attached by hand.
-// Earlier upload comments are hidden as outdated, never deleted, so no
-// attachment depends on what GitHub does with a deleted comment.
 //
 // The description is read again just before it's written, and the edit is
 // worked out afresh if it changed meanwhile, so a person's edit is lost
@@ -54,8 +46,9 @@
 // read, so a marker inside it is gone and can't count. A state is a file
 // name's, so one outside letters, digits, `.`, `_` and `-`, or holding `--`,
 // never gets a slot or a part (its rows stay in the bot's block). Part lines never reach the description. Slots added
-// by editing the description are filled on the next run from the same
-// upload: this reads the upload again each time, so no new upload is needed.
+// by editing the description are filled on the next run: visual review
+// re-renders its section from the links its record keeps (record.mjs), so no
+// new upload is needed.
 
 import { blocksFor } from '../lib/blocks.mjs';
 
@@ -161,28 +154,6 @@ export function parseUpload(comment, login) {
   if (plain.includes('<!-- describe') || plain.includes('<!-- /describe')) return null;
   if (!urlsIn(section).every((url) => ATTACHMENT.test(url) || COMMIT.test(url))) return null;
   return { id: comment.id, nodeId: comment.node_id, bot: m[1], sha: m[2], section };
-}
-
-/**
- * Each bot's newest upload, and the bots' other uploads, to hide.
- *
- * @param {readonly Comment[]} comments
- * @param {string} login
- */
-export function latest(comments, login) {
-  /** @type {Map<string, Upload>} */
-  const best = new Map();
-  /** @type {Upload[]} */
-  const all = [];
-  for (const comment of comments) {
-    const upload = parseUpload(comment, login);
-    if (!upload) continue;
-    all.push(upload);
-    const seen = best.get(upload.bot);
-    if (!seen || upload.id > seen.id) best.set(upload.bot, upload);
-  }
-  const kept = new Set([...best.values()].map((u) => u.id));
-  return { sections: best, outdated: all.filter((u) => !kept.has(u.id)) };
 }
 
 /**
@@ -331,41 +302,44 @@ function writeSection(body, bot, section) {
  * The description with each bot's section in it.
  *
  * @param {string} body
- * @param {ReadonlyMap<string, Upload>} sections
+ * @param {ReadonlyMap<string, { section: string }>} sections by bot
  */
 export function withSections(body, sections) {
   let out = body;
-  for (const [bot, upload] of [...sections].sort(([a], [b]) => (a < b ? -1 : 1))) {
-    out = writeSection(out, bot, upload.section);
+  for (const [bot, { section }] of [...sections].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    out = writeSection(out, bot, section);
   }
   return out;
 }
 
 /**
- * What describe needs from GitHub.
+ * What place needs from GitHub.
  *
  * @typedef {object} Io
  * @property {() => string} body the description, read now
  * @property {(body: string) => void} write sets it (the Actions token)
- * @property {() => Comment[]} comments the PR's or issue's comments
- * @property {(nodeId: string) => void} hide marks a comment outdated
  * @property {(line: string) => void} log
  */
 
 /**
- * Writes every bot's newest section, and hides the uploads it supersedes.
+ * Writes a bot's section into the description, each part in its slot.
  * Returns whether the description changed.
  *
  * @param {Io} io
- * @param {string} login BOT_PR_TOKEN's account
+ * @param {string} bot
+ * @param {string} section
+ * @param {(body: string) => string} [tidy] applied to the description as read,
+ *   before the section goes in (attach.mjs drops what gh appended)
  */
-export function describe(io, login) {
-  const { sections, outdated } = latest(io.comments(), login);
-  let changed = false;
+export function place(io, bot, section, tidy = (body) => body) {
+  const sections = new Map([[bot, { section }]]);
   for (let attempt = 1; ; attempt++) {
     const before = io.body();
-    const after = withSections(before, sections);
-    if (after === before) break;
+    const after = withSections(tidy(before), sections);
+    if (after === before) {
+      io.log(`describe: ${bot}'s section already up to date`);
+      return false;
+    }
     // Read again just before writing: an edit meanwhile is worked in.
     if (io.body() !== before) {
       if (attempt >= ATTEMPTS) {
@@ -376,12 +350,7 @@ export function describe(io, login) {
       continue;
     }
     io.write(after);
-    changed = true;
-    break;
+    io.log(`describe: ${bot}'s section written`);
+    return true;
   }
-  for (const upload of outdated) io.hide(upload.nodeId);
-  io.log(
-    `describe: ${sections.size} section(s)${changed ? ' written' : ' already up to date'}, ${outdated.length} old upload(s) hidden`,
-  );
-  return changed;
 }

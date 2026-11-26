@@ -1,11 +1,10 @@
 import { describe as group, expect, it } from 'vitest';
 import {
   blocks,
-  describe,
   isScreenState,
-  latest,
   parseUpload,
   partMarker,
+  place,
   SECTION,
   uploadMarker,
   withSections,
@@ -13,7 +12,6 @@ import {
 
 const BOT = 'jbhirsh';
 const A = 'a'.repeat(40);
-const B = 'b'.repeat(40);
 const IMG = 'https://github.com/user-attachments/assets/0123abcd-0000-1111-2222-333344445555';
 
 /**
@@ -60,35 +58,13 @@ group('parseUpload', () => {
   });
 });
 
-group('latest', () => {
-  it("takes each bot's newest upload, whatever order they're listed in", () => {
-    const comments = [
-      upload(5, 'visual-review', B, 'new'),
-      upload(3, 'visual-review', A, 'old'),
-      upload(4, 'pr-gif', A, 'gif'),
-      // A commit a force-push dropped still counts: it's the newest.
-      upload(6, 'pr-gif', 'c'.repeat(40), 'gif after a force-push'),
-    ];
-    const { sections, outdated } = latest(comments, BOT);
-    expect(sections.get('visual-review')?.section).toBe('new');
-    expect(sections.get('pr-gif')?.section).toBe('gif after a force-push');
-    expect(outdated.map((u) => u.id).sort()).toEqual([3, 4]);
-  });
-
-  it('prefers the later comment for the same commit', () => {
-    const { sections, outdated } = latest(
-      [upload(1, 'visual-review', A, 'one'), upload(2, 'visual-review', A, 'two')],
-      BOT,
-    );
-    expect(sections.get('visual-review')?.section).toBe('two');
-    expect(outdated.map((u) => u.id)).toEqual([1]);
-  });
-});
+/** One bot's section, as withSections takes it. */
+const one = (/** @type {string} */ section, bot = 'visual-review') => new Map([[bot, { section }]]);
 
 group('withSections', () => {
   it("writes each bot's block and leaves the rest of the description", () => {
     const body = `Mine.\n\n${blocks.markers('pr-gif').start}\nhand\n${blocks.markers('pr-gif').end}`;
-    const { sections } = latest([upload(1, 'visual-review', A, 'table')], BOT);
+    const sections = one('table');
     const out = withSections(body, sections);
     expect(out.startsWith('Mine.')).toBe(true);
     expect(out).toContain('hand');
@@ -99,7 +75,7 @@ group('withSections', () => {
   });
 });
 
-group('describe', () => {
+group('place', () => {
   /**
    * A fake GitHub holding a description that may change under it.
    *
@@ -108,50 +84,47 @@ group('describe', () => {
   const io = (reads) => {
     /** @type {string[]} */
     const written = [];
-    /** @type {string[]} */
-    const hidden = [];
     let i = 0;
     return {
       written,
-      hidden,
       io: {
         body: () => reads[Math.min(i++, reads.length - 1)],
         write: (/** @type {string} */ b) => written.push(b),
-        comments: () => [
-          upload(1, 'visual-review', A, 'old'),
-          upload(2, 'visual-review', B, 'new'),
-        ],
-        hide: (/** @type {string} */ id) => hidden.push(id),
         log: () => {},
       },
     };
   };
 
-  it('writes the newest section and hides the old upload', () => {
+  it("writes the section it's handed", () => {
     const f = io(['Mine.']);
-    expect(describe(f.io, BOT)).toBe(true);
-    expect(f.written).toHaveLength(1);
-    expect(f.written[0]).toContain('new');
-    expect(f.hidden).toEqual(['N1']);
+    expect(place(f.io, 'visual-review', 'new')).toBe(true);
+    expect(f.written).toEqual([
+      'Mine.\n\n<!-- describe:visual-review -->\nnew\n<!-- /describe:visual-review -->\n',
+    ]);
   });
 
   it('writes nothing when the description already holds it', () => {
-    const done = withSections('Mine.', latest(io([]).io.comments(), BOT).sections);
-    const f = io([done]);
-    expect(describe(f.io, BOT)).toBe(false);
+    const f = io([withSections('Mine.', one('new'))]);
+    expect(place(f.io, 'visual-review', 'new')).toBe(false);
     expect(f.written).toEqual([]);
+  });
+
+  it('tidies the description as read before the section goes in', () => {
+    const f = io(['Mine.\n\nSTRAY']);
+    place(f.io, 'visual-review', 'new', (b) => b.replace('\n\nSTRAY', ''));
+    expect(f.written[0]).not.toContain('STRAY');
   });
 
   it('works the edit out again when the description moved, keeping the new text', () => {
     const f = io(['Mine.', 'Mine, edited.', 'Mine, edited.', 'Mine, edited.']);
-    describe(f.io, BOT);
+    place(f.io, 'visual-review', 'new');
     expect(f.written).toHaveLength(1);
     expect(f.written[0].startsWith('Mine, edited.')).toBe(true);
   });
 
   it('gives up, saying so, when it keeps moving', () => {
     const f = io(['1', '2', '3', '4', '5', '6', '7']);
-    expect(() => describe(f.io, BOT)).toThrow(/kept changing/);
+    expect(() => place(f.io, 'visual-review', 'new')).toThrow(/kept changing/);
     expect(f.written).toEqual([]);
   });
 });
@@ -176,8 +149,7 @@ const parts = (screens, rest) =>
 const slot = (/** @type {string} */ state, inner = '') =>
   `<!-- describe:visual-review:${state} -->${inner ? `\n${inner}\n` : '\n'}<!-- /describe:visual-review:${state} -->`;
 /** @param {string} section */
-const written = (section, body = '') =>
-  withSections(body, latest([upload(1, 'visual-review', A, section)], BOT).sections);
+const written = (section, body = '') => withSections(body, one(section));
 
 group('a section in parts', () => {
   it('is read with its part lines left out, and refused with any other marker of ours', () => {
@@ -277,10 +249,10 @@ group('a section in parts', () => {
   });
 
   it("keeps another bot's section as it is", () => {
-    const sections = latest(
-      [upload(1, 'visual-review', A, parts({ trips: 'T' })), upload(2, 'pr-gif', A, 'gif')],
-      BOT,
-    ).sections;
+    const sections = new Map([
+      ['visual-review', { section: parts({ trips: 'T' }) }],
+      ['pr-gif', { section: 'gif' }],
+    ]);
     const out = withSections(slot('trips'), sections);
     expect(out).toContain('<!-- describe:pr-gif -->\ngif\n<!-- /describe:pr-gif -->');
   });
