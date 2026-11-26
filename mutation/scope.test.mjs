@@ -280,6 +280,24 @@ describe('subjects', () => {
     expect(subjects('src/a.cache.test.ts', exists)).toEqual(['src/a.ts']);
     expect(subjects('src/gone.test.ts', exists)).toEqual([]);
   });
+
+  it('maps a .mjs test to its .mjs source, and either to the other while one is renamed', () => {
+    /** @param {string} f */
+    const mixed = (f) =>
+      ['lib/a.mjs', 'lib/b.ts', 'lib/c.mjs', 'lib/c.ts', 'lib/x.helpers.mjs'].includes(f);
+    expect(subjects('lib/a.test.mjs', mixed)).toEqual(['lib/a.mjs']);
+    expect(subjects('lib/__tests__/a.test.mjs', mixed)).toEqual(['lib/a.mjs']);
+    expect(subjects('lib/a.property.test.mjs', mixed)).toEqual(['lib/a.mjs']);
+    expect(subjects('lib/x.helpers.test.mjs', mixed)).toEqual(['lib/x.helpers.mjs']);
+    // A module renamed to .ts before its test, and the other way round.
+    expect(subjects('lib/b.test.mjs', mixed)).toEqual(['lib/b.ts']);
+    expect(subjects('lib/a.test.ts', mixed)).toEqual(['lib/a.mjs']);
+    // Both extensions mid-rename: each is a subject.
+    expect(subjects('lib/c.test.ts', mixed)).toEqual(['lib/c.ts', 'lib/c.mjs']);
+    expect(subjects('lib/gone.test.mjs', mixed)).toEqual([]);
+    // A subject is never itself a test.
+    expect(subjects('lib/a.test.test.ts', (f) => f === 'lib/a.test.ts')).toEqual([]);
+  });
 });
 
 describe('addedRanges', () => {
@@ -449,6 +467,19 @@ describe('scopeEntries', () => {
     expect(await scopeEntries(['src/tested.test.ts', 'src/covered.test.ts'], rules, r)).toEqual([
       'src/tested.ts',
     ]);
+  });
+
+  it('maps a .mjs test to its .mjs source only where the mutate globs take it', async () => {
+    const io = fakeRepo({
+      base: { 'scripts/a.mjs': 'a', 'scripts/a.test.mjs': 'it(1)' },
+      head: { 'scripts/a.mjs': 'a', 'scripts/a.test.mjs': 'it(2)' },
+    });
+    const changed = ['scripts/a.test.mjs'];
+    // Globs that take only TypeScript (BoardGames' and sift's today).
+    expect(await scopeEntries(changed, rules, io)).toEqual([]);
+    // Globs that take .mjs scripts (fog-and-frontier's `scripts/**/*.{ts,mjs}`).
+    const withMjs = { ...rules, mutate: ['scripts/**/*.mjs', '!scripts/**/*.test.mjs'] };
+    expect(await scopeEntries(changed, withMjs, io)).toEqual(['scripts/a.mjs']);
   });
 
   it('maps no test to its source without testSubjects', async () => {
