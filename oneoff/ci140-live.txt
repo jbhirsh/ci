@@ -1,1 +1,2 @@
 Throwaway for the live check of jbhirsh/ci#140; never merged.
+Second line: a push that moves the head, as a rebase would.
