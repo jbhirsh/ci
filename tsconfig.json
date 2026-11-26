@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    // The .mjs files, typed in JSDoc, while the repo moves to TypeScript
+    // (ci#155): PR 6 narrows these to the files that stay .mjs.
     "allowJs": true,
     "checkJs": true,
     "noEmit": true,
@@ -7,9 +9,17 @@
     "target": "es2023",
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    // Node 24 runs a .ts file by stripping its types, with no build: a
+    // relative import names the file as Node loads it (`./x.ts`), only
+    // syntax Node can blank out is allowed (no enum, namespace or parameter
+    // properties), and a type comes in by `import type`, never as a value
+    // Node would look for at run time.
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["**/*.mjs", "**/*.js"],
+  "include": ["**/*.ts", "**/*.mjs", "**/*.js"],
   "exclude": ["node_modules", "coverage"]
 }
