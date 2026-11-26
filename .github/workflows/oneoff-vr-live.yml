@@ -1,0 +1,251 @@
+# One-off (ci#144, V2 to V9), on this throwaway branch only: never on main.
+# Adding the label "v2-run" to the throwaway PR drives visual-review/attach
+# (this branch's) against the PR and a throwaway issue; every edit of the
+# PR's description runs `skip`, which records what find.mjs's ownEdit says.
+name: ci#144 live check (throwaway)
+
+on:
+  pull_request:
+    types: [labeled, edited]
+
+permissions: {}
+
+env:
+  REPO: ${{ github.repository }}
+  PR: ${{ github.event.pull_request.number }}
+  HEAD: ${{ github.event.pull_request.head.sha }}
+  RUN: ${{ github.run_id }}
+
+jobs:
+  skip:
+    if: github.event.action == 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: What find.mjs's ownEdit says
+        run: |
+          node --input-type=module -e "
+            import { readFileSync, appendFileSync } from 'node:fs';
+            import { ownEdit } from './visual-review/find.mjs';
+            const p = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+            const line = 'ownEdit=' + ownEdit(p) + ' changes=' + Object.keys(p.changes ?? {}).join(',') + ' sender=' + p.sender?.login + ' at=' + new Date().toISOString();
+            console.log(line);
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, line + '\n');
+          "
+
+  prep:
+    if: github.event.action == 'labeled' && github.event.label.name == 'v2-run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      issue: ${{ steps.issue.outputs.issue }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+      - id: issue
+        run: echo "issue=$(cat oneoff/issue.txt)" >> "$GITHUB_OUTPUT"
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ steps.issue.outputs.issue }}
+        run: node oneoff/vr-live.mjs prep "$RUNNER_TEMP/h"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: visual-review-attach-pr-${{ github.event.pull_request.number }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/h/pr
+      - uses: actions/upload-artifact@v7
+        with:
+          name: visual-review-attach-issue-${{ steps.issue.outputs.issue }}-2
+          path: ${{ runner.temp }}/h/issue
+
+  attach-pr:
+    needs: prep
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+      issues: write
+    concurrency:
+      group: pr-gif-attach-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: date -u +%FT%TZ
+      - uses: ./visual-review/attach
+        with:
+          run: ${{ github.run_id }}
+          kind: pr
+          number: ${{ github.event.pull_request.number }}
+          upload-token: ${{ secrets.BOT_PR_TOKEN }}
+      - run: date -u +%FT%TZ
+
+  gif:
+    needs: prep
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: pr-gif-attach-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+      - run: date -u +%FT%TZ
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          UPLOAD_TOKEN: ${{ secrets.BOT_PR_TOKEN }}
+        run: node oneoff/vr-live.mjs gif "$RUNNER_TEMP/g"
+
+  attach-issue:
+    needs: prep
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    concurrency:
+      group: pr-gif-attach-${{ github.repository }}-${{ needs.prep.outputs.issue }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ./visual-review/attach
+        with:
+          run: "2"
+          kind: issue
+          number: ${{ needs.prep.outputs.issue }}
+          upload-token: ${{ secrets.BOT_PR_TOKEN }}
+
+  later:
+    needs: [prep, attach-pr, gif, attach-issue]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ needs.prep.outputs.issue }}
+        run: node oneoff/vr-live.mjs later "$RUNNER_TEMP/h"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: visual-review-attach-pr-${{ github.event.pull_request.number }}-3
+          path: ${{ runner.temp }}/h/rerender
+      - uses: actions/upload-artifact@v7
+        with:
+          name: visual-review-attach-pr-${{ github.event.pull_request.number }}-4
+          path: ${{ runner.temp }}/h/stale
+      - uses: actions/upload-artifact@v7
+        with:
+          name: visual-review-attach-issue-${{ needs.prep.outputs.issue }}-1
+          path: ${{ runner.temp }}/h/older
+
+  attach-later:
+    needs: [prep, later]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+      issues: write
+    concurrency:
+      group: pr-gif-attach-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: date -u +%FT%TZ
+      - name: The same result again, re-rendered (Actions token only)
+        uses: ./visual-review/attach
+        with:
+          run: "3"
+          kind: pr
+          number: ${{ github.event.pull_request.number }}
+          upload-token: ${{ secrets.BOT_PR_TOKEN }}
+      - name: A head the PR never had (edits nothing)
+        uses: ./visual-review/attach
+        with:
+          run: "4"
+          kind: pr
+          number: ${{ github.event.pull_request.number }}
+          upload-token: ${{ secrets.BOT_PR_TOKEN }}
+      - name: An older mockup run (edits nothing)
+        uses: ./visual-review/attach
+        with:
+          run: "1"
+          kind: issue
+          number: ${{ needs.prep.outputs.issue }}
+          upload-token: ${{ secrets.BOT_PR_TOKEN }}
+      - run: date -u +%FT%TZ
+
+  verify:
+    needs: [prep, attach-later]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ needs.prep.outputs.issue }}
+        run: node oneoff/vr-live.mjs verify "$RUNNER_TEMP/v"
+
+  # V6: adding the label "v6-fetch" fetches every picture the records name,
+  # signed out (no token), once.
+  fetch:
+    if: github.event.action == 'labeled' && github.event.label.name == 'v6-fetch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: "146"
+        run: node oneoff/vr-live.mjs fetch "$RUNNER_TEMP/f"
