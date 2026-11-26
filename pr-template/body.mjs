@@ -1,7 +1,8 @@
 // Whether a PR's description is in the shared shape (ci#79), in every app. The master is `.github/pull_request_template.md`;
 // structure.mjs checks a template against it, and this reads a description the
 // author, or a tool, has written from it. Shape only, never the words: a
-// description passes with any text in its sections.
+// description passes with any text in its sections, and a Revisions cell needs
+// only to hold some.
 //
 // What it requires, in what a reader sees (code, HTML comments and the
 // blocks other tools keep between their markers are not read, so a heading
@@ -31,9 +32,15 @@
 //     description with no current revision passes). The current revision is the
 //     `<details>` whose `<summary>` opens with the head link, bold with a
 //     pointer, then `(current)` (`<summary><b>👉 <a href="…/commit/<sha>"><code>abc1234</code></a></b>
-//     (current) · …</summary>`): only the summary is read, never the table
-//     under it, which the author writes (so a row that says `(current)`, or an
-//     empty row, is of no concern). The shapes earlier PRs hold are read too: the
+//     (current) · …</summary>`): only the summary decides which revision is
+//     current, never the table under it, which the author writes (a row that
+//     says `(current)` is of no concern). Then, in that revision only, when it
+//     is a `<details>` block naming the head, its rows (up to a line that is
+//     `</details>` alone, the next `<details>` or the pair's end marker) must
+//     include one with letters or digits in both cells (comments, tags and
+//     entities aside) and none with only one: the tool's empty placeholder fails
+//     until the author fills it (ci#140). Older revisions, and the older shapes
+//     below, are never judged. The shapes earlier PRs hold are read too: the
 //     HTML table whose first cell of a row opens the same way
 //     (`<tr><td …><b>👉 <a href="…"><code>abc1234</code></a></b> (current)</td>…`),
 //     the two-column Markdown table (`| **👉 [`abc1234`](…)** (current)<br>…`), and
@@ -53,7 +60,8 @@
 //     tool puts a missing pair back and writes the row, and the edit it makes
 //     starts a run that supersedes this one; a push whose description has the
 //     pair but no current row yet is red the same way a stale row is, until the
-//     tool's edit (a fork's author adds the row by hand);
+//     tool's edit; then red until the author fills the new revision's row (a
+//     fork's author adds the revision and its row by hand);
 //   - none of the template's own placeholders left in: the sample change
 //     heading, its "Why this change." line, the plan table's empty row;
 //   - no `No visible UI change` box, which this template doesn't have.
@@ -140,51 +148,244 @@ const CURRENT_ROW_OLD = /^\|[^|\n[]*\(current\)[^|\n[]*\|([^|\n]*)\|/m;
  * author typed is taken out: a `<details>` that is never closed, or whose summary isn't the tool's,
  * stays, so a row of an old table after it is read as it always was.
  *
+ * `back` turns a position in what is left into the same position in `text`, so that the current
+ * revision found here can have its rows read where they are.
+ *
  * @param {string} text
+ * @returns {{ text: string, back: (at: number) => number }}
  */
-const withoutTables = (text) =>
+function withoutTables(text) {
+  /** @type {{ at: number, length: number }[][]} each pass's cuts, where each is in what the pass left */
+  const passes = [];
   // One pattern for each lead: the link's back-reference counts groups from its own start.
-  [htmlLeadBold(HTML_ANY), htmlLeadPlain(HTML_ANY)].reduce(
-    (t, lead) =>
-      t.replace(
-        new RegExp(
-          String.raw`<details\b[^>]*>\s*<summary>\s*${lead}[^\n]*?</summary>[\s\S]*?</details>`,
-          'gi',
-        ),
-        // Keep up to the summary's end: no capture group of its own, which would shift the link's back-reference.
-        (m) => m.slice(0, m.indexOf('</summary>') + '</summary>'.length),
+  const left = [htmlLeadBold(HTML_ANY), htmlLeadPlain(HTML_ANY)].reduce((t, lead) => {
+    /** @type {{ at: number, length: number }[]} */
+    const cuts = [];
+    let gone = 0;
+    const next = t.replace(
+      new RegExp(
+        String.raw`<details\b[^>]*>\s*<summary>\s*${lead}[^\n]*?</summary>[\s\S]*?</details>`,
+        'gi',
       ),
-    text,
-  );
+      // Keep up to the summary's end: no capture group of its own, which would shift the link's back-reference.
+      (m, ...rest) => {
+        const keep = m.indexOf('</summary>') + '</summary>'.length;
+        cuts.push({
+          at: /** @type {number} */ (rest.at(-2)) - gone + keep,
+          length: m.length - keep,
+        });
+        gone += m.length - keep;
+        return m.slice(0, keep);
+      },
+    );
+    passes.push(cuts);
+    return next;
+  }, text);
+  return {
+    text: left,
+    back: (at) =>
+      passes.reduceRight(
+        (pos, cuts) => pos + cuts.filter((c) => c.at <= pos).reduce((n, c) => n + c.length, 0),
+        at,
+      ),
+  };
+}
 
 /**
- * The text of Revisions' current row that names its head (the first row of any
- * shape), or null when the table has no current row.
+ * Revisions' current revision: the text of its row or summary that names its
+ * head (the first of any shape), and, when it is a `<details>` block (the
+ * shape since ci#132) whose summary closes on its line, the rows of its table
+ * (`revisionRows`); null when the table has no current row.
  *
  * @param {string} description the description, fenced code aside
- * @returns {string | null}
+ * @returns {{ head: string, rows: string[] | null } | null}
  */
-function currentHead(description) {
-  const text = withoutTables(description);
-  /** @type {{ index: number, head: string }[]} */
+function currentRevision(description) {
+  const { text, back } = withoutTables(description);
+  /** @type {{ index: number, head: string, summary?: number }[]} */
   const found = [];
   for (const re of [CURRENT_BOLD, CURRENT_PLAIN]) {
     const m = re.exec(text);
     if (m) found.push({ index: m.index, head: m[1] });
   }
-  for (const re of [
-    CURRENT_HTML_BOLD,
-    CURRENT_HTML_PLAIN,
-    CURRENT_SUMMARY_BOLD,
-    CURRENT_SUMMARY_PLAIN,
-  ]) {
+  for (const re of [CURRENT_HTML_BOLD, CURRENT_HTML_PLAIN]) {
     const m = re.exec(text);
     if (m) found.push({ index: m.index, head: m[2] });
+  }
+  for (const re of [CURRENT_SUMMARY_BOLD, CURRENT_SUMMARY_PLAIN]) {
+    const m = re.exec(text);
+    // The summary's own tag: the head link after it holds no `<summary>`, so it is the last one.
+    if (m)
+      found.push({ index: m.index, head: m[2], summary: m.index + m[0].lastIndexOf('<summary>') });
   }
   const old = CURRENT_ROW_OLD.exec(text);
   if (old) found.push({ index: old.index, head: old[1] });
   if (found.length === 0) return null;
-  return found.reduce((a, b) => (b.index < a.index ? b : a)).head;
+  const first = found.reduce((a, b) => (b.index < a.index ? b : a));
+  return {
+    head: first.head,
+    rows: first.summary === undefined ? null : revisionRows(description, back(first.summary)),
+  };
+}
+
+/**
+ * The text of Revisions' current row that names its head, or null.
+ *
+ * @param {string} description the description, fenced code aside
+ */
+const currentHead = (description) => currentRevision(description)?.head ?? null;
+
+/** The header, the rule and the empty row of a revision's table, the frame the changes tool writes (a trimmed line): not rows the author wrote. pr-changes/revisions.mjs reads the frame with these too. */
+export const TABLE_HEAD_LINE = /^\|\s*What changed\s*\|\s*Why\s*\|$/i;
+export const TABLE_RULE_LINE = /^\|(?:\s*:?-{3,}:?\s*\|)+$/;
+export const TABLE_EMPTY_LINE = /^\|(?:\s*\|)+$/;
+/** The revisions end marker, alone on a trimmed line. */
+const REVISIONS_END_ALONE = /^<!-- \/pr-changes:revisions -->$/;
+
+/** A line that ends a revision's block for the changes tool (a trimmed line): `</details>` alone, the next `<details>`, or the end marker. */
+const blockEnds = (/** @type {string} */ row) =>
+  row.toLowerCase() === '</details>' || /^<details\b/i.test(row) || REVISIONS_END_ALONE.test(row);
+
+/**
+ * The rows of the revision whose `<summary>` is at `at`, as the changes tool reads them: the
+ * trimmed lines after the line that closes the summary that start with `|`, but for the frame, up
+ * to a line that ends the block (`blockEnds`, so a `</details>` in a row's code span ends nothing).
+ * A line in an HTML comment block (from a line that opens with `<!--` to the line holding `-->`)
+ * is not read, as a reader doesn't see it. A summary on its `<details>` line that ends with
+ * `</details>` is a block of one line, with no rows, as the tool reads it. Null when the summary
+ * never closes before the block ends: not a block.
+ *
+ * @param {string} text the description, fenced code aside
+ * @param {number} at
+ * @returns {string[] | null}
+ */
+function revisionRows(text, at) {
+  const from = text.lastIndexOf('\n', at - 1) + 1;
+  const lines = text.slice(from).split('\n');
+  // The summary may wrap: its rows start after the line that closes it.
+  let close = 0;
+  while (!/<\/summary>/i.test(close === 0 ? lines[0].slice(at - from) : lines[close])) {
+    close++;
+    if (close === lines.length || blockEnds(lines[close].trim())) return null;
+  }
+  if (close === 0 && /^\s*<details\b/i.test(lines[0]) && /<\/details>\s*$/i.test(lines[0]))
+    return [];
+  /** @type {string[]} */
+  const rows = [];
+  let comment = false;
+  for (const raw of lines.slice(close + 1)) {
+    const row = raw.trim();
+    if (blockEnds(row)) break;
+    if (comment || row.startsWith('<!--')) {
+      // A comment block ends on the line that holds its `-->`, which is the comment's too.
+      comment = !row.includes('-->', comment ? 0 : 4);
+      continue;
+    }
+    if (
+      row.startsWith('|') &&
+      !TABLE_HEAD_LINE.test(row) &&
+      !TABLE_RULE_LINE.test(row) &&
+      !TABLE_EMPTY_LINE.test(row)
+    ) {
+      rows.push(row);
+    }
+  }
+  return rows;
+}
+
+/** A letter or a digit, of any script. */
+const LETTER = /[\p{L}\p{N}]/u;
+
+/**
+ * Whether a cell of a revision's table holds text, as a reader sees it: a letter or a digit, of
+ * any script, once its HTML comments, tags and entities are taken out, or in a code span, whose
+ * text is shown as it is (`` `<br>` `` is text). A dash, `<br>`, `&nbsp;`, `<!-- why -->` or an
+ * emoji alone is empty; `` `x` ``, `n/a` and `修正` are text. So is an entity for a letter
+ * (`&#65;`), an autolink or an `<img>` alone empty: rows are for words. Whichever opens first
+ * wins, as in Markdown. A pass along the cell, with no pattern that backtracks: once no `>` (or
+ * `-->`) is left, a `<` is only text.
+ *
+ * @param {string} cell
+ */
+export function holdsText(cell) {
+  let out = '';
+  let code = '';
+  let tags = true;
+  let comments = true;
+  for (let i = 0; i < cell.length;) {
+    if (cell[i] === '`') {
+      let n = 0;
+      while (cell[i + n] === '`') n++;
+      const end = findRun(cell, i + n, n);
+      if (end !== -1) {
+        code += cell.slice(i + n, end);
+        i = end + n;
+      } else {
+        out += cell.slice(i, i + n);
+        i += n;
+      }
+      continue;
+    }
+    if (comments && cell.startsWith('<!--', i)) {
+      const end = cell.indexOf('-->', i + 4);
+      if (end !== -1) {
+        i = end + 3;
+        continue;
+      }
+      comments = false;
+    }
+    if (tags && cell[i] === '<' && /[A-Za-z/!?]/.test(cell[i + 1] ?? '')) {
+      const end = cell.indexOf('>', i + 1);
+      if (end !== -1) {
+        i = end + 1;
+        continue;
+      }
+      tags = false;
+    }
+    out += cell[i++];
+  }
+  return (
+    LETTER.test(code) ||
+    LETTER.test(out.replace(/&(?:#\d{1,7}|#x[\da-f]{1,6}|[a-z][a-z\d]{1,31});/gi, ''))
+  );
+}
+
+/**
+ * A row's two cells, What changed and Why, split at each `|` not written `\|`, as GitHub reads
+ * them: a cell after the second is not shown, and a missing one is empty.
+ *
+ * @param {string} row a trimmed line starting `|`
+ * @returns {[string, string]}
+ */
+const rowCells = (row) => {
+  const parts = row.split(/(?<!\\)\|/);
+  return [parts[1] ?? '', parts[2] ?? ''];
+};
+
+/**
+ * What is wrong with the rows of the current revision, which names `head`: none has both cells
+ * filled, or one has only one (ci#140). A row with neither filled, beside a filled one, is no
+ * concern.
+ *
+ * @param {string[]} rows the revision's rows, its table's frame aside
+ * @param {string} head the PR's head sha
+ * @returns {string[]}
+ */
+export function revisionRowProblems(rows, head) {
+  const sha = head.slice(0, 7);
+  const filled = rows.map((row) => rowCells(row).map(holdsText));
+  if (!filled.some(([what, why]) => what && why)) {
+    return [
+      `fill Revisions' current revision, \`${sha}\`: its table has no row with both cells filled. In the description, write one row for each change this push made, both cells in plain words, such as \`| The cap fails closed | It's the only paid API |\` (each row opens with \`|\`; write a pipe in a cell as \`\\|\`). Do it once this push's \`PR changes\` run has ended: a run still going can write an older copy over your edit`,
+    ];
+  }
+  const half = filled.filter(([what, why]) => what !== why).length;
+  if (half > 0) {
+    return [
+      `fill both cells of every row in Revisions' current revision, \`${sha}\`: ${half === 1 ? '1 row has' : `${half} rows have`} an empty What changed or Why`,
+    ];
+  }
+  return [];
 }
 /** A change's commit, as a link a reader sees. */
 const COMMIT = /\/commit\/[0-9a-f]{7,40}/;
@@ -751,11 +952,14 @@ export function bodyProblems(body, head, event = {}) {
       "fill in or delete the plan table's template row, or delete the Plan section for a PR that isn't a step of a plan",
     );
   }
-  const named = head ? currentHead(withoutFences(body)) : null;
-  if (head && named !== null && !named.toLowerCase().includes(head.slice(0, 7).toLowerCase())) {
+  const current = head ? currentRevision(withoutFences(body)) : null;
+  if (head && current && !current.head.toLowerCase().includes(head.slice(0, 7).toLowerCase())) {
     problems.push(
       `update Revisions: its current row names another commit than this PR's head, \`${head.slice(0, 7)}\` (add a row for the head, or fix the row)`,
     );
+  } else if (head && current?.rows) {
+    // Only a `<details>` revision naming the head: a stale one is the problem above.
+    problems.push(...revisionRowProblems(current.rows, head));
   }
   problems.push(...revisionsProblems(body, event));
   if (BOX.test(lines.join('\n'))) {

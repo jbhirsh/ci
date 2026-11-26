@@ -680,7 +680,11 @@ describe('addRevision', () => {
       opened: { sha: A, why: '' },
     });
     const out = renderTable(t, REPO, { heading: true });
-    expect(problems(out, B)).toEqual([]);
+    // Its placeholder row is the author's to fill (ci#140): the check asks for it, then passes.
+    expect(problems(out, B)).toEqual([
+      expect.stringMatching(/^fill Revisions' current revision, `bbbbbbb`: /),
+    ]);
+    expect(problems(out.replace('|  |  |', '| A change | Its reason |'), B)).toEqual([]);
     expect(problems(out, A)).toHaveLength(1);
   });
 });

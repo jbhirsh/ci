@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { bodyProblems, maskFences, revisionsPair } from './body.mjs';
+import { bodyProblems, holdsText, maskFences, revisionsPair } from './body.mjs';
 
 const GOOD = [
   '## Goal',
@@ -284,6 +284,102 @@ describe('the current revision of an old-shape description', () => {
         expect(flagged).toBe(stale);
       }),
       { numRuns: Number(process.env.REVISIONS_FUZZ_RUNS ?? 1000) },
+    );
+  });
+});
+
+// The current revision's rows (ci#140). Each generated cell carries its label, filled or empty, and
+// the labels are the oracle: filled cells are built with a letter or a digit in what a reader sees,
+// empty ones only from blanks, dashes, tags, entities, comments, `\|`, an emoji and U+2028. The
+// test never repeats the check's own predicate. fast-check prints the seed and the smallest
+// counterexample of a failure.
+describe("the current revision's rows", () => {
+  const HEAD = 'abcdef0'.padEnd(40, '1');
+  const OLD = '1111111'.padEnd(40, '0');
+  const empties = fc.constantFrom(
+    '',
+    ' ',
+    '—',
+    '-',
+    '<br>',
+    '<b></b>',
+    '&nbsp;',
+    '&#65;',
+    '<!-- why -->',
+    '\\|',
+    '🎉',
+    ' ',
+    '<img src="x.png">',
+    '<https://x.example>',
+  );
+  const words = fc.oneof(
+    fc.stringMatching(/^[A-Za-z0-9]{1,8}$/),
+    fc.constantFrom('修正', 'é', '`x`', '<code>x</code>', 'n/a', 'a \\| b', '7', 'Ωmega'),
+  );
+  const noise = fc.array(empties, { maxLength: 3 }).map((parts) => parts.join(' '));
+  /** @type {fc.Arbitrary<{ text: string, filled: boolean }>} */
+  const cell = fc.oneof(
+    fc.tuple(noise, words, noise).map(([a, w, b]) => ({ text: `${a} ${w} ${b}`, filled: true })),
+    noise.map((text) => ({ text, filled: false })),
+  );
+  const row = fc.tuple(cell, cell);
+  const rows = fc.array(fc.tuple(row, fc.boolean()), { maxLength: 6 });
+  const render = (/** @type {[[{ text: string }, { text: string }], boolean][]} */ list) =>
+    list.flatMap(([[what, why], gap]) => [...(gap ? [''] : []), `| ${what.text} | ${why.text} |`]);
+  const html = (/** @type {string} */ sha) =>
+    `<a href="https://github.com/o/r/commit/${sha}"><code>${sha.slice(0, 7)}</code></a>`;
+  const body = (/** @type {string[]} */ lines, crlf = false) => {
+    const text = `${GOOD.slice(0, GOOD.indexOf('## Revisions'))}<!-- pr-changes:revisions -->\n## Revisions\n\n<details open>\n<summary><b>👉 ${html(HEAD)}</b> (current)</summary>\n\n| What changed | Why |\n| --- | --- |\n${lines.join('\n')}\n\n</details>\n\n<details>\n<summary>${html(OLD)} · Opened</summary>\n\n|  |  |\n\n</details>\n<!-- /pr-changes:revisions -->\n`;
+    return crlf ? text.replace(/\n/g, '\r\n') : text;
+  };
+  const passes = (/** @type {string} */ text) =>
+    !bodyProblems(text, HEAD).some((p) => /Revisions/.test(p));
+  const RUN = { numRuns: Number(process.env.REVISIONS_FUZZ_RUNS ?? 1000) };
+
+  it('reads a cell as holding text exactly when it was built with some', () => {
+    fc.assert(
+      fc.property(cell, ({ text, filled }) => {
+        expect(holdsText(text)).toBe(filled);
+      }),
+      RUN,
+    );
+  });
+
+  it('passes exactly when some row is filled in both cells and none in only one, for LF and CRLF alike', () => {
+    fc.assert(
+      fc.property(rows, (list) => {
+        const labels = list.map(([[what, why]]) => [what.filled, why.filled]);
+        const wanted =
+          labels.some(([what, why]) => what && why) && !labels.some(([what, why]) => what !== why);
+        const lines = render(list);
+        expect(passes(body(lines))).toBe(wanted);
+        expect(bodyProblems(body(lines, true), HEAD)).toEqual(bodyProblems(body(lines), HEAD));
+      }),
+      RUN,
+    );
+  });
+
+  it('keeps a passing table passing when a filled row is added, and fails the placeholder alone', () => {
+    fc.assert(
+      fc.property(rows, fc.tuple(words, words), fc.nat(6), (list, [what, why], at) => {
+        const lines = render(list);
+        expect(passes(body(['|  |  |']))).toBe(false);
+        if (!passes(body(lines))) return;
+        const more = [...lines];
+        more.splice(Math.min(at, more.length), 0, `| ${what} | ${why} |`);
+        expect(passes(body(more))).toBe(true);
+      }),
+      RUN,
+    );
+  });
+
+  it('never throws, whatever is typed in the rows', () => {
+    fc.assert(
+      fc.property(fc.array(anything, { maxLength: 8 }), (lines) => {
+        const text = body(lines.map((l) => `|${l}|`));
+        expect(() => bodyProblems(text, HEAD, { pushed: true })).not.toThrow();
+      }),
+      RUN,
     );
   });
 });

@@ -2,7 +2,8 @@ name: PR description
 
 # This repo's own copy of the description check an app adopts (jbhirsh/ci#112):
 # the PR's description is held to the shared shape (headings, the goal's issue,
-# the plan table's shading, each change's commit, Revisions naming the head).
+# the plan table's shading, each change's commit, Revisions naming the head,
+# its row filled).
 # The master template and the tools that write a description live here, so
 # this repo's PRs are held to it too. It reads only the event's description,
 # so it checks nothing out and needs no token. It calls the action at @main,

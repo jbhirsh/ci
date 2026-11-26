@@ -41,9 +41,11 @@
 // GitHub keeps `open`, `<summary>` and a Markdown table inside `<details>` when
 // blank lines surround it (tried on github.com at 402px).
 //
-// The check reads only the summary's head link (a table row the author wrote
-// can say anything, `(current)` included, and is never read), so an unfilled
-// placeholder row isn't flagged: an empty Why passed before, and still does.
+// The check reads the summary's head link to find the current revision (a table row the
+// author wrote can say anything, `(current)` included, and never makes a revision current),
+// then the current revision's rows: it fails until one has both cells filled
+// (pr-template/body.mjs says when a cell is). The placeholder written here is what it fails
+// on, until the author replaces it (ci#140).
 //
 // Older shapes are still read, and written back in this one by the next write
 // (remove those readers once no open PR holds one):
@@ -140,6 +142,9 @@ import {
   leadBold,
   leadPlain,
   revisionsPair,
+  TABLE_EMPTY_LINE,
+  TABLE_HEAD_LINE,
+  TABLE_RULE_LINE,
 } from '../pr-template/body.mjs';
 import { blocks, escape, ownBlock } from './changes.mjs';
 
@@ -432,11 +437,9 @@ const FRAME =
   /^(?:(?:<\/?(?:table|thead|tbody|tfoot|colgroup|col)\b[^>]*>\s*)+|<thead\b[\s\S]*<\/thead>|<tr>\s*<th\b[\s\S]*<\/tr>)$/i;
 /** A row of one cell across the old HTML table, which holds a revision's next line. */
 const MORE = /^[ \t]*<tr>\s*<td\b[^>]*>([\s\S]*?)<\/td>\s*<\/tr>[ \t]*$/;
-/** The header and the rule of a Markdown table of two columns, which the tool writes again. */
-const TABLE_HEAD_LINE = /^\|\s*What changed\s*\|\s*Why\s*\|$/i;
-const TABLE_RULE_LINE = /^\|(?:\s*:?-{3,}:?\s*\|)+$/;
-/** The row of a revision that has none yet, which the author hasn't filled: no cell holds anything. */
-const TABLE_EMPTY_LINE = /^\|(?:\s*\|)+$/;
+// The header and the rule of a Markdown table of two columns, which the tool writes again, and the
+// row of a revision that has none yet (no cell holds anything): TABLE_HEAD_LINE, TABLE_RULE_LINE and
+// TABLE_EMPTY_LINE, from pr-template/body.mjs, so that the check reads the same frame.
 /** A line of an old Markdown table's frame (its header and its rule), which the tool no longer writes. */
 const OLD_FRAME_LINE = /^\|\s*(?:Rev|What changed)\s*\|/;
 

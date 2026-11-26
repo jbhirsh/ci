@@ -6,7 +6,8 @@
 // edit that tore a slot, or put another tool's marker inside it, fails here
 // and not on a PR. A template with a `pr-changes:revisions` pair must also
 // get its Revisions table written (revisions.mjs), read back by the description
-// check as naming the PR's head and no other, and left alone by a second run.
+// check as naming the PR's head and no other, asking only for the new
+// revision's row until it is filled (ci#140), and left alone by a second run.
 
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -53,9 +54,18 @@ function revisionsSelftest(template) {
     throw new Error(`${TEMPLATE}: the Revisions table was not written for a pushed head`);
   }
   /** @param {string} sha */
-  const problems = (sha) => bodyProblems(body, sha).filter((p) => /Revisions/.test(p));
-  if (problems(head).length > 0) {
-    throw new Error(`${TEMPLATE}: the check rejects the Revisions table for its own head`);
+  const problems = (sha, text = body) => bodyProblems(text, sha).filter((p) => /Revisions/.test(p));
+  // The new revision's row is the author's (ci#140): the check asks for it, and only for it, until
+  // it is filled.
+  const fresh = problems(head);
+  const filled = problems(head, body.replace('|  |  |', '| A change | Its reason |'));
+  const asks =
+    fresh.length === 1 &&
+    fresh[0].startsWith(`fill Revisions' current revision, \`${head.slice(0, 7)}\``);
+  if (!asks || filled.length > 0) {
+    throw new Error(
+      `${TEMPLATE}: the check should ask only for the new revision's row, then accept the table for its own head once filled; it says ${JSON.stringify(fresh)}, and filled ${JSON.stringify(filled)}`,
+    );
   }
   if (problems(opened).length === 0) {
     throw new Error(`${TEMPLATE}: the check accepts the Revisions table for another head`);
@@ -64,7 +74,7 @@ function revisionsSelftest(template) {
   if (revisions(io, { repo: 'owner/app', before: opened }) || body !== written) {
     throw new Error(`${TEMPLATE}: running the Revisions step twice changed the description`);
   }
-  return `pr-changes: ${TEMPLATE} gets its Revisions table, read back as current.`;
+  return `pr-changes: ${TEMPLATE} gets its Revisions table, read back as current, its row asked for until filled.`;
 }
 
 /**

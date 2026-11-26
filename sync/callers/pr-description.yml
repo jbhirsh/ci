@@ -2,7 +2,7 @@ name: PR description
 
 # jbhirsh/ci's PR description check: holds the PR's description to the shared
 # shape (headings, the goal's issue, the plan table's shading, each change's
-# commit, a Revisions row naming the head). It reads only this event's
+# commit, Revisions naming the head, its row filled). It reads only this event's
 # description, so it checks nothing out and needs no token.
 #
 # Every edit triggers it as well as every push: the tools that write the

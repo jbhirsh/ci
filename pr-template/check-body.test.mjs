@@ -44,6 +44,29 @@ describe('report', () => {
     expect(report({ body: none, action: 'synchronize', headRef: 'bot/x' }).code).toBe(0);
   });
 
+  it('fails a current revision with no filled row, saying what to do, and passes closed, Dependabot and bot PRs (ci#140)', () => {
+    const head = 'abcdef0'.padEnd(40, '1');
+    const rows = (/** @type {string} */ row) =>
+      `${GOOD}\n<!-- pr-changes:revisions -->\n<details open>\n<summary><b>👉 <a href="https://github.com/o/r/commit/${head}"><code>abcdef0</code></a></b> (current)</summary>\n\n| What changed | Why |\n| --- | --- |\n${row}\n\n</details>\n<!-- /pr-changes:revisions -->\n`;
+    const empty = rows('|  |  |');
+    for (const action of ['synchronize', 'edited']) {
+      expect(report({ body: empty, headSha: head, action })).toEqual({
+        code: 1,
+        message: [
+          "::error::This PR's description isn't in the shared shape.",
+          "  - fill Revisions' current revision, `abcdef0`: its table has no row with both cells filled. In the description, write one row for each change this push made, both cells in plain words, such as `| The cap fails closed | It's the only paid API |` (each row opens with `|`; write a pipe in a cell as `\\|`). Do it once this push's `PR changes` run has ended: a run still going can write an older copy over your edit",
+          "The template is the app's `.github/pull_request_template.md` (jbhirsh/ci's `.github/pull_request_template.md` is the master). Editing the description re-runs this check.",
+        ].join('\n'),
+      });
+    }
+    expect(report({ body: rows('| The cap | Paid |'), headSha: head, action: 'edited' }).code).toBe(
+      0,
+    );
+    expect(report({ body: empty, headSha: head, state: 'closed' }).code).toBe(0);
+    expect(report({ body: empty, headSha: head, author: 'dependabot[bot]' }).code).toBe(0);
+    expect(report({ body: empty, headSha: head, headRef: 'bot/x' }).code).toBe(0);
+  });
+
   it('checks a PR with no description', () => {
     expect(report({ body: undefined }).code).toBe(1);
   });
