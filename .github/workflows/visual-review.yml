@@ -28,13 +28,17 @@
 # Its settings are the app's `visual-review` key in .github/ci.json
 # (visual-review/settings.mjs). Three jobs:
 #   - find (visual-review/find): which reviews the event calls for, from the
-#     event and the API alone (find.mjs's header);
+#     event and the API alone (find.mjs's header), each with its PR's or
+#     mockup issue's number;
 #   - review (visual-review), one per PR or mockup, in a concurrency group of
-#     its own so a PR's status writes take turns: compares, uploads the
-#     table in a comment with BOT_PR_TOKEN, sets the status;
-#   - describe, one per PR, in the group the GIF bot's describe shares
-#     (describe-<repo>-<pr>): copies the bots' sections into the PR's
-#     description with the Actions token, which starts no workflow.
+#     its own so a PR's status writes take turns: compares, sets the status,
+#     and hands the table to attach as an artifact;
+#   - attach (visual-review/attach), one per target, in the group PR GIFs'
+#     attach job shares (pr-gif-attach-<repo>-<number>), so the two take
+#     turns on a description: uploads the pictures in one edit of the
+#     description with BOT_PR_TOKEN, then writes the finished table into its
+#     block and slots with the Actions token, which starts no workflow. No
+#     comment is posted (ci#144).
 # Nothing waits on a clock: each event that could change a result runs it
 # again, and every run works the result out afresh.
 
@@ -57,7 +61,8 @@ jobs:
       github.event_name != 'workflow_run' ||
       contains(fromJSON('["pull_request", "push", "workflow_dispatch"]'), github.event.workflow_run.event)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # A mockup's shots are downloaded for their manifest.
+    timeout-minutes: 10
     permissions:
       actions: read
       contents: read
@@ -66,7 +71,6 @@ jobs:
     outputs:
       targets: ${{ steps.find.outputs.targets }}
       any: ${{ steps.find.outputs.any }}
-      prs: ${{ steps.find.outputs.prs }}
     steps:
       # The default branch, for the settings, never the PR: named outright,
       # since pull_request_target's default ref is the PR's base branch.
@@ -105,24 +109,33 @@ jobs:
           target: ${{ toJSON(matrix.target) }}
           upload-token: ${{ secrets.bot-pr-token }}
 
-  describe:
+  attach:
     needs: [find, review]
-    if: always() && needs.find.result == 'success' && needs.find.outputs.prs != '[]' && needs.find.outputs.prs != ''
+    # After every review leg, a failed one too: its target simply handed
+    # nothing off. GitHub keeps one waiting job a group: a third queued
+    # while one runs and one waits cancels the waiting one. A visual-review
+    # attach lost that way is written at the PR's next review; a GIF attach
+    # fails the PR GIFs status, and its re-run writes it. A group of its own
+    # would instead let either edit overwrite the other's block.
+    if: always() && needs.find.result == 'success' && needs.find.outputs.any == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
+      actions: read
       contents: read
       pull-requests: write
       issues: write
     strategy:
       fail-fast: false
       matrix:
-        number: ${{ fromJSON(needs.find.outputs.prs) }}
+        target: ${{ fromJSON(needs.find.outputs.targets) }}
     concurrency:
-      group: describe-${{ github.repository }}-${{ matrix.number }}
+      group: pr-gif-attach-${{ github.repository }}-${{ matrix.target.number }}
       cancel-in-progress: false
     steps:
-      - uses: jbhirsh/ci/describe@main
+      - uses: jbhirsh/ci/visual-review/attach@main
         with:
-          number: ${{ matrix.number }}
+          run: ${{ matrix.target.run }}
+          kind: ${{ matrix.target.kind }}
+          number: ${{ matrix.target.number }}
           upload-token: ${{ secrets.bot-pr-token }}

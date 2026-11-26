@@ -1,20 +1,24 @@
 // review.mjs against GitHub, for the review job: the Actions token (GH_TOKEN)
-// for the API, GraphQL and artifact downloads, BOT_PR_TOKEN (UPLOAD_TOKEN)
-// only for the upload comment, which gh posts with --attach (gh 2.99 or
-// later, which lib/gh.mjs checks first in action.yml).
+// for the API, GraphQL and artifact downloads. BOT_PR_TOKEN (UPLOAD_TOKEN)
+// only reads which account it is, whose upload comments from before ci#144
+// count: this job writes nothing with it. The hand-off for the attach job
+// (attach.mjs) goes into HANDOFF_DIR, which action.yml uploads.
 //
 //   node run.mjs   (env: GH_TOKEN, UPLOAD_TOKEN, TARGET (one
 //                   matrix entry, JSON), GITHUB_REPOSITORY, DEFAULT_BRANCH,
-//                   OWNER; from the app's checkout of main, for its settings)
+//                   OWNER, HANDOFF_DIR; from the app's checkout of main, for
+//                   its settings)
 
 import { execFileSync } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
 import { ghApi } from '../lib/comment.mjs';
-import { pages } from '../lib/github.mjs';
 import { PIXELS } from '../lib/pixels.mjs';
 import { enable } from '../dependabot-merge/enable.mjs';
+import { downloadShots } from './find.mjs';
 import { review } from './review.mjs';
 import { settings } from './settings.mjs';
 import { CONTEXT, MAX_DESCRIPTION } from './status.mjs';
@@ -29,10 +33,9 @@ import { CONTEXT, MAX_DESCRIPTION } from './status.mjs';
 export function parseTarget(text) {
   const t = /** @type {Record<string, unknown>} */ (JSON.parse(text));
   const whole = (/** @type {unknown} */ n) => Number.isInteger(n) && Number(n) > 0;
-  if (t.kind === 'pr' && whole(t.number) && whole(t.run)) {
-    return { kind: 'pr', number: Number(t.number), run: Number(t.run) };
+  if ((t.kind === 'pr' || t.kind === 'issue') && whole(t.number) && whole(t.run)) {
+    return { kind: t.kind, number: Number(t.number), run: Number(t.run) };
   }
-  if (t.kind === 'issue' && whole(t.run)) return { kind: 'issue', run: Number(t.run) };
   throw new Error(`not a review target: ${text}`);
 }
 
@@ -53,14 +56,15 @@ function realGh(token, args) {
 }
 
 /**
- * The review's io against GitHub: the Actions token for everything but the
- * upload comment, which only BOT_PR_TOKEN may post.
+ * The review's io against GitHub: the Actions token for all of it.
  *
  * @param {{ env: Record<string, string | undefined>, repo: string, token: string,
- *   upload: string, gh: Gh, api: import('../lib/comment.mjs').Api }} options
+ *   gh: Gh, api: import('../lib/comment.mjs').Api, handoffDir: string,
+ *   handedOff: () => void }} options
+ *   handedOff: told when a hand-off is written
  * @returns {import('./review.mjs').Io}
  */
-export function gitHubIo({ env, repo, token, upload, gh, api }) {
+export function gitHubIo({ env, repo, token, gh, api, handoffDir, handedOff }) {
   return {
     repo,
     owner: env.OWNER ?? repo.split('/')[0],
@@ -73,51 +77,13 @@ export function gitHubIo({ env, repo, token, upload, gh, api }) {
       }
       return JSON.parse(gh(token, args)).data;
     },
-    artifact: (runId, dir) => {
-      const found = /** @type {{ expired: boolean }[]} */ (
-        pages(api, `repos/${repo}/actions/runs/${runId}/artifacts?name=visual-shots`, 'artifacts')
-      );
-      if (found.length === 0) return 'none';
-      if (found.every((a) => a.expired)) return 'expired';
-      // Any failure here throws: a download that failed must never read as
-      // "no shots", which passes.
-      gh(token, [
-        'run',
-        'download',
-        String(runId),
-        '--repo',
-        repo,
-        '--name',
-        'visual-shots',
-        '--dir',
-        dir,
-      ]);
-      return 'ok';
-    },
-    upload: (kind, number, body, files) => {
-      const url = gh(upload, [
-        kind === 'pr' ? 'pr' : 'issue',
-        'comment',
-        String(number),
-        '--repo',
-        repo,
-        '--body',
-        body,
-        ...files.flatMap((f) => ['--attach', f]),
-      ]).trim();
-      const id = /#issuecomment-(\d+)$/.exec(url)?.[1];
-      if (!id) throw new Error(`gh didn't say which comment it posted: ${url}`);
-      return Number(id);
-    },
-    editComment: (id, body) => {
-      gh(upload, [
-        'api',
-        '-X',
-        'PATCH',
-        `repos/${repo}/issues/comments/${id}`,
-        '-f',
-        `body=${body}`,
-      ]);
+    artifact: (runId, dir) =>
+      downloadShots({ api, gh: (args) => gh(token, args), repo, runId, dir }),
+    handoff: (handoff, files) => {
+      mkdirSync(handoffDir, { recursive: true });
+      for (const { name, bytes } of files) writeFileSync(path.join(handoffDir, name), bytes);
+      writeFileSync(path.join(handoffDir, 'attach.json'), JSON.stringify(handoff));
+      handedOff();
     },
     uploader: env.UPLOAD_LOGIN ?? '',
     enable: (number) =>
@@ -144,13 +110,26 @@ export function main(env, { gh = realGh, api = ghApi } = {}) {
     if (!upload) {
       throw new Error('BOT_PR_TOKEN is missing: visual review uploads its pictures with it');
     }
+    if (!env.HANDOFF_DIR) {
+      throw new Error('HANDOFF_DIR is missing: where the hand-off for the attach job goes');
+    }
     // Which account it is: an upload counts only from it (describe.mjs).
     const login = gh(upload, ['api', 'user', '--jq', '.login']).trim();
     if (!login) throw new Error("BOT_PR_TOKEN's account couldn't be read");
-    const io = gitHubIo({ env: { ...env, UPLOAD_LOGIN: login }, repo, token, upload, gh, api });
+    let handoff = false;
+    const io = gitHubIo({
+      env: { ...env, UPLOAD_LOGIN: login },
+      repo,
+      token,
+      gh,
+      api,
+      handoffDir: env.HANDOFF_DIR ?? '',
+      handedOff: () => {
+        handoff = true;
+      },
+    });
     const number = review(target, { s, io });
-    setOutput('number', number === null ? '' : String(number));
-    setOutput('login', login);
+    setOutput('handoff', String(handoff));
     return number;
   } catch (error) {
     // A required check must never go unreported: a review that can't

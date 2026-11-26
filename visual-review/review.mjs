@@ -1,5 +1,6 @@
 // One review (ci#64): a screenshot run's shots against main's, the table
-// uploaded and the `Visual changes` status set, for one PR or one mockup.
+// handed to the attach job and the `Visual changes` status set, for one PR
+// or one mockup.
 // It runs from main's code with the Actions token, checks nothing out, and
 // reads the shots only as bytes from the runs' artifacts. Everything a PR's
 // code wrote is checked where it's read: the manifest (visual-shots), the
@@ -14,30 +15,40 @@
 //      finishing starts a review of every PR waiting on it, find.mjs).
 //      Finished without shots: the status says so;
 //   3. the comparison, its rows and its fingerprint (status.mjs);
-//   4. when the result differs from the last upload's, a new upload
-//      comment with BOT_PR_TOKEN: the pictures, then the finished table
-//      after describe's marker. describe (its own job) copies it into the
-//      description;
-//   5. the status, on the run's head commit; then, for Dependabot's npm
-//      bump, enable.mjs, which turns auto-merge on only after "No visual
-//      changes".
-// A mockup does 1 to 4 on its issue, and sets no status.
+//   4. the status, on the run's head commit;
+//   5. the hand-off to the attach job (attach.mjs, ci#144), an artifact: when
+//      the result differs from the one the description's record names
+//      (record.mjs), the pictures and the table with each picture's local
+//      path, for attach to upload in one BOT_PR_TOKEN edit of the
+//      description; when it's the same, the table re-rendered from the
+//      record's links, for attach to place with the Actions token alone, so
+//      a slot added later fills with no new upload. A PR whose table came
+//      from an upload comment (before ci#144) has no record: its newest
+//      genuine comment stands in for it, and attach hides it;
+//   6. for Dependabot's npm bump, enable.mjs, which turns auto-merge on only
+//      after "No visual changes".
+// A mockup does 1 to 3 and 5 on its issue, and sets no status.
+//
+// The result shown before, which keeps an acceptance across heads, comes
+// from the Actions token's own `Visual changes` statuses on the PR's heads
+// (earlierResult), never from the description or a comment, which the PR
+// can edit.
 
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { newest, pages, statusFrom } from '../lib/github.mjs';
-import { parseUpload, SECTION, uploadMarker } from '../describe/describe.mjs';
+import { parseUpload } from '../describe/describe.mjs';
 import { parseManifest, MANIFEST } from '../visual-shots/shots.mjs';
 import { compareShots } from './compare.mjs';
-import { CONTEXT, fingerprint, shownAt, status } from './status.mjs';
+import { BOT, assetLink, parseRecord } from './record.mjs';
+import { CONTEXT, fingerprint, readMark, shownAt, status } from './status.mjs';
 import { isMinor, keyOf, lines, pick, renderTable, summary } from './table.mjs';
 import { crop, enlarge, outlined, sideBySide } from './zoom.mjs';
 import { MAX_CHARS } from '../lib/comment.mjs';
 
-/** The bot's name in its upload comments and its description block. */
-export const BOT = 'visual-review';
+export { BOT };
 
 /**
  * What a review needs from GitHub and the runner.
@@ -52,11 +63,10 @@ export const BOT = 'visual-review';
  *   downloads a run's visual-shots artifact into `dir`: 'none' when the run
  *   has none, 'expired' when it's gone; any other failure throws, never
  *   passing for "no shots"
- * @property {(kind: 'pr' | 'issue', number: number, body: string, files: string[]) => number}
- *   upload posts a comment with BOT_PR_TOKEN, attaching the files, and
- *   returns its id
- * @property {(id: number, body: string) => void} editComment with BOT_PR_TOKEN
- * @property {string} uploader BOT_PR_TOKEN's account
+ * @property {(handoff: Handoff, files: { name: string, bytes: Buffer }[]) => void}
+ *   handoff writes what the attach job reads: the hand-off and the pictures
+ * @property {string} uploader BOT_PR_TOKEN's account, whose upload comments
+ *   (before ci#144) count
  * @property {(number: number) => string} enable enable.mjs, for one PR
  * @property {import('../lib/pixels.mjs').Pixels} pixels
  * @property {() => number} now epoch seconds
@@ -66,30 +76,35 @@ export const BOT = 'visual-review';
 /**
  * One review to do: a PR's or a mockup's screenshot run.
  *
- * @typedef {{ kind: 'pr', number: number, run: number } | { kind: 'issue', run: number }} Target
+ * @typedef {{ kind: 'pr' | 'issue', number: number, run: number }} Target
  */
 
 /**
- * The fingerprint an upload comment records, or null.
+ * What the review hands the attach job (attach.mjs), as `attach.json` beside
+ * the pictures.
  *
- * @param {string} body
+ * @typedef {object} Handoff
+ * @property {1} version
+ * @property {'pr' | 'issue'} kind
+ * @property {number} number
+ * @property {string} head the run's head, which a PR's must still be
+ * @property {number} run the screenshot run
+ * @property {Omit<import('./record.mjs').Record, 'assets'>} record
+ * @property {string} section the finished section; with pictures, each
+ *   referenced by its local path (`src="./01.png"`)
+ * @property {string[]} pictures the files to upload, in pick's order
+ * @property {string[]} assets with no pictures, the record's attachment ids
+ * @property {string[]} legacy the upload comments (node ids) attach hides
  */
-const fingerprintIn = (body) => /^fingerprint: ([0-9a-f]{8})$/m.exec(body)?.[1] ?? null;
 
 /**
  * The shape of an upload's section. It goes up whenever the section's form
  * changes (table.mjs, describe/describe.mjs), so a PR whose last upload is
  * the old form gets one new upload in the new form, though its pictures
- * didn't change: the fingerprint alone would leave it as it was.
+ * didn't change: the fingerprint alone would leave it as it was. 4: the
+ * pictures in the description, no upload comment (ci#144).
  */
-const UPLOAD_FORMAT = 3;
-
-/**
- * The format an upload comment records: 1 for one without the line.
- *
- * @param {string} body
- */
-const formatIn = (body) => Number(/^format: (\d+)$/m.exec(body)?.[1] ?? 1);
+export const UPLOAD_FORMAT = 4;
 
 /**
  * Whether `to` is `from` or comes after it on the history GitHub compares.
@@ -198,30 +213,104 @@ function pullFacts(io, number) {
 }
 
 /**
- * The upload comments that count, newest last.
+ * The upload comments that count (before ci#144), newest last.
  *
  * @param {Io} io
  * @param {number} number
  */
 function uploads(io, number) {
-  return pages(io.api, `repos/${io.repo}/issues/${number}/comments`)
-    .map((c) => {
-      const comment = /** @type {import('../describe/describe.mjs').Comment} */ (c);
-      const upload = parseUpload(comment, io.uploader);
-      return upload && upload.bot === BOT ? { ...upload, body: String(comment.body) } : null;
-    })
-    .filter((u) => u !== null);
+  return pages(io.api, `repos/${io.repo}/issues/${number}/comments`).flatMap((c) => {
+    const upload = parseUpload(
+      /** @type {import('../describe/describe.mjs').Comment} */ (c),
+      io.uploader,
+    );
+    return upload && upload.bot === BOT ? [upload] : [];
+  });
 }
 
 /**
- * The `Visual changes` description on a commit, or null: only the Actions
+ * The `Visual changes` status on a commit, or null: only the Actions
  * token's, since a PR's own workflow could post one under that name.
  *
  * @param {Io} io
  * @param {string} sha
  */
-function statusOn(io, sha) {
-  return statusFrom(io.api, io.repo, sha, CONTEXT)?.description ?? null;
+const statusOn = (io, sha) => statusFrom(io.api, io.repo, sha, CONTEXT);
+
+/** How many of a PR's commits, and of the heads its force-pushes made and replaced, earlierResult looks at, at most, each. */
+export const HEADS_LOOKED_AT = 30;
+
+/**
+ * A force-push, as GraphQL gives it here.
+ *
+ * @typedef {{ beforeCommit?: { oid: string } | null, afterCommit?: { oid: string } | null }} ForcePush
+ */
+
+/**
+ * The heads a PR's force-pushes replaced and made, newest first, from
+ * GraphQL: the REST timeline names only the head a force-push made, and the
+ * one it replaced is where an accepted result's status sits after a rebase.
+ *
+ * @param {Io} io
+ * @param {number} number
+ * @returns {string[]}
+ */
+function forcePushedHeads(io, number) {
+  const [owner, name] = io.repo.split('/');
+  const data =
+    /** @type {{ repository: { pullRequest: { timelineItems: { nodes: ForcePush[] } } } }} */ (
+      io.graphql(
+        `query($owner: String!, $name: String!, $number: Int!, $last: Int!) {
+        repository(owner: $owner, name: $name) {
+          pullRequest(number: $number) {
+            timelineItems(last: $last, itemTypes: [HEAD_REF_FORCE_PUSHED_EVENT]) {
+              nodes { ... on HeadRefForcePushedEvent { beforeCommit { oid } afterCommit { oid } } }
+            }
+          }
+        }
+      }`,
+        { owner, name, number, last: HEADS_LOOKED_AT },
+      )
+    );
+  return data.repository.pullRequest.timelineItems.nodes
+    .toReversed()
+    .flatMap((n) => [n.afterCommit?.oid, n.beforeCommit?.oid])
+    .filter((sha) => typeof sha === 'string');
+}
+
+/**
+ * The description of the result the PR shows, or showed last: the Actions
+ * token's `Visual changes` on `head`, then on the PR's earlier heads, newest
+ * first (its commits, then the heads its force-pushes made and replaced, so
+ * a rebase keeps an acceptance), from the first that holds a result: a mark,
+ * or a success with none ("No visual changes"), so a result that went away
+ * and came back is shown afresh. A pending or a failed status is no result,
+ * and the walk passes it. At most HEADS_LOOKED_AT commits (of the 250
+ * oldest, all the REST API lists) and as many force-pushes. A commit that
+ * is also another PR's head counts too (a PR stacked on another): its mark
+ * carries over only to the same fingerprint, the same pictures that PR
+ * already showed.
+ *
+ * @param {Io} io
+ * @param {number} number
+ * @param {string} head
+ */
+export function earlierResult(io, number, head) {
+  const commits = /** @type {{ sha: string }[]} */ (
+    pages(io.api, `repos/${io.repo}/pulls/${number}/commits`)
+  )
+    .map((c) => c.sha)
+    .reverse()
+    .filter((sha) => sha !== head)
+    .slice(0, HEADS_LOOKED_AT);
+  const heads = [...new Set([head, ...commits, ...forcePushedHeads(io, number)])];
+  for (const sha of heads) {
+    const found = statusOn(io, sha);
+    if (found && (readMark(found.description) || found.state === 'success')) {
+      return found.description;
+    }
+  }
+  return null;
 }
 
 /**
@@ -259,23 +348,41 @@ const layoutOf = (rows, minor) =>
     .slice(0, 8);
 
 /**
- * The layout an upload comment records, or null.
+ * The section's local path for a picture, which the attach job swaps for
+ * its link once it has uploaded it.
  *
- * @param {string} body
+ * @param {number} i
  */
-const layoutIn = (body) => /^layout: ([0-9a-f]{8})$/m.exec(body)?.[1] ?? null;
+export const pictureFile = (i) => `${String(i + 1).padStart(2, '0')}.png`;
+
+/** An attachment's id, as long as GitHub's are (a UUID). */
+const SAMPLE_ID = '00000000-0000-0000-0000-000000000000';
 
 /**
- * Posts the upload comment: the pictures, then the finished section.
+ * How much longer a section with `count` pictures grows once attach has
+ * uploaded them: each local path (`./01.png`) becomes a link, and the record
+ * line gains each picture's id and a comma.
+ *
+ * @param {string} section
+ * @param {number} count
+ */
+export function growth(section, count) {
+  let n = count * (SAMPLE_ID.length + 1);
+  for (let i = 0; i < count; i++) {
+    const local = `./${pictureFile(i)}`;
+    n += (section.split(`"${local}"`).length - 1) * (assetLink(SAMPLE_ID).length - local.length);
+  }
+  return n;
+}
+
+/**
+ * The pictures' bytes, in pick's order.
  *
  * @param {Io} io
- * @param {{ kind: 'pr' | 'issue', number: number, sha: string, hash: string,
- *   rows: import('./table.mjs').Line[], changes: import('./compare.mjs').Change[],
- *   before: string, after: string, base: string, minor: number }} upload
+ * @param {{ pictures: import('./table.mjs').Picture[], changes: import('./compare.mjs').Change[],
+ *   before: string, after: string }} input
  */
-function post(io, { kind, number, sha, hash, rows, changes, before, after, base, minor }) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'upload-'));
-  const pictures = pick(rows);
+function pictureBytes(io, { pictures, changes, before, after }) {
   const byFile = new Map(changes.map((c) => [c.file, c]));
   /** @type {Map<string, import('../lib/pixels.mjs').Image>} */
   const decoded = new Map();
@@ -319,42 +426,25 @@ function post(io, { kind, number, sha, hash, rows, changes, before, after, base,
       ]),
     );
   };
-  const files = pictures.map((p, i) => {
-    const file = path.join(dir, `${String(i + 1).padStart(2, '0')}.png`);
-    writeFileSync(
-      file,
-      bytes(p, /** @type {import('./compare.mjs').Change} */ (byFile.get(p.file))),
-    );
-    return file;
-  });
-  const head = [
-    uploadMarker(BOT, sha),
-    "Pictures for this PR's visual-review table. A newer one hides this comment as outdated.",
-    '',
-    `fingerprint: ${hash}`,
-    `format: ${UPLOAD_FORMAT}`,
-    `layout: ${layoutOf(rows, minor)}`,
-    '',
-  ];
-  const id = io.upload(
-    kind,
-    number,
-    [...head, ...files.map((f, i) => `![${keyOf(pictures[i])}](${f})`)].join('\n'),
-    files,
-  );
-  const posted = String(
-    /** @type {{ body?: string }} */ (io.api('GET', `repos/${io.repo}/issues/comments/${id}`)).body,
-  );
-  /** @type {Map<string, string>} */
-  const links = new Map();
-  for (const m of posted.matchAll(
-    /!\[([^\]]+)\]\((https:\/\/github\.com\/user-attachments\/assets\/[0-9a-f-]+)\)/g,
-  )) {
-    links.set(m[1], m[2]);
-  }
-  // GitHub refuses a description over 65,536 characters, and describe adds
-  // the section to the rest of it. A table over SECTION_BUDGET drops its last
-  // (smallest) screens and says how many.
+  return pictures.map((p, i) => ({
+    name: pictureFile(i),
+    bytes: bytes(p, /** @type {import('./compare.mjs').Change} */ (byFile.get(p.file))),
+  }));
+}
+
+/**
+ * The finished section for `links`, each picture's link by keyOf. GitHub
+ * refuses a description over 65,536 characters, and the section goes in
+ * beside the rest of it: a table over SECTION_BUDGET, less `slack`, drops
+ * its last (smallest) screens and says how many.
+ *
+ * @param {Io} io
+ * @param {{ rows: import('./table.mjs').Line[], links: Map<string, string>, base: string,
+ *   minor: number, slack: (section: string) => number }} input
+ *   slack: how much longer the section will grow once written (its local
+ *   paths swapped for links)
+ */
+function render(io, { rows, links, base, minor, slack }) {
   let shown = rows;
   /** @type {string} */
   let section;
@@ -370,17 +460,17 @@ function post(io, { kind, number, sha, hash, rows, changes, before, after, base,
             minor,
             omitted: dropped(rows, shown),
           });
-    if (section.length <= SECTION_BUDGET || shown.length <= 1) break;
+    if (section.length + slack(section) <= SECTION_BUDGET || shown.length <= 1) break;
     const last = shown[shown.length - 1];
     const screen = last.state ?? last.label;
     shown = shown.filter((r) => (r.state ?? r.label) !== screen);
   }
-  io.editComment(id, `${posted.trimEnd()}\n\n${SECTION}\n${section}`);
+  return section;
 }
 
 /**
- * Does one review. Returns the PR's or issue's number, for describe, or
- * null when there was nothing to do.
+ * Does one review. Returns the PR's or issue's number, or null when there
+ * was nothing to do.
  *
  * @param {Target} target
  * @param {{ s: import('./settings.mjs').Settings, io: Io }} context
@@ -400,31 +490,36 @@ export function review(target, { s, io }) {
     throw new Error(`the shots say they're of ${manifest.sha.slice(0, 7)}, not the run's commit`);
   }
 
-  /** @type {number} */
-  let number;
+  const number = target.number;
+  /** @type {string} */
+  let body;
   if (target.kind === 'issue') {
     if (!manifest?.mockupIssue) {
       io.log('visual-review: a run by hand that is no mockup: nothing to do');
       return null;
     }
-    number = manifest.mockupIssue;
-    const issue = /** @type {{ state?: string, pull_request?: unknown }} */ (
+    // find read the number from the same manifest; read here, it's checked.
+    if (manifest.mockupIssue !== number) {
+      throw new Error(`the mockup's shots are for #${manifest.mockupIssue}, not #${number}`);
+    }
+    const issue = /** @type {{ state?: string, pull_request?: unknown, body?: string | null }} */ (
       io.api('GET', `repos/${io.repo}/issues/${number}`)
     );
     if (issue.state !== 'open' || issue.pull_request) {
       throw new Error(`mockup_issue #${number} isn't an open issue in ${io.repo}`);
     }
+    body = issue.body ?? '';
   } else {
-    number = target.number;
     // A run for a head the PR has moved on from posts nothing: that head's
     // own run follows.
-    const pr = /** @type {{ head: { sha: string } }} */ (
+    const pr = /** @type {{ head: { sha: string }, body?: string | null }} */ (
       io.api('GET', `repos/${io.repo}/pulls/${number}`)
     );
     if (pr.head.sha !== run.head_sha) {
       io.log(`visual-review: #${number} has moved on from ${run.head_sha.slice(0, 7)}`);
       return number;
     }
+    body = pr.body ?? '';
   }
 
   const theirs = mkdtempSync(path.join(tmpdir(), 'main-'));
@@ -464,32 +559,75 @@ export function review(target, { s, io }) {
   if (manifest) checkBase(io, manifest.base, target.kind === 'pr' ? run.head_sha : null);
   let { result, compared } = assess();
 
-  const previous = uploads(io, number).at(-1) ?? null;
+  // What the description shows now: its record, or, on a PR whose table
+  // came from an upload comment, that comment.
+  const record = parseRecord(body);
+  const legacy = record ? [] : uploads(io, number);
   const publish = () => {
     if (result.kind !== 'compared' || !compared || !manifest) return;
-    // Only when the result differs from the last upload's: the same
-    // pictures on a new head ("Update branch") upload nothing.
+    const { rows, changes } = compared;
+    const layout = layoutOf(rows, s.minor);
+    const pictures = pick(rows);
+    /** @param {Omit<Handoff, 'version' | 'kind' | 'number' | 'head' | 'run'>} rest */
+    const hand = (rest, /** @type {{ name: string, bytes: Buffer }[]} */ files = []) =>
+      io.handoff(
+        { version: 1, kind: target.kind, number, head: run.head_sha, run: target.run, ...rest },
+        files,
+      );
+    // The same result as the record's: the same pictures on a new head
+    // ("Update branch") upload nothing. The table is rendered again from
+    // the record's links, for a slot added since.
     if (
-      previous &&
-      fingerprintIn(previous.body) === result.fingerprint &&
-      formatIn(previous.body) === UPLOAD_FORMAT &&
-      layoutIn(previous.body) === layoutOf(compared.rows, s.minor)
+      record &&
+      record.fingerprint === result.fingerprint &&
+      record.format === UPLOAD_FORMAT &&
+      record.layout === layout &&
+      record.assets.length === pictures.length
     ) {
+      const links = new Map(pictures.map((p, i) => [keyOf(p), assetLink(record.assets[i])]));
+      const { assets, ...kept } = record;
+      hand({
+        // A newer mockup run keeps the table: an older one never overwrites it.
+        record: { ...kept, run: Math.max(kept.run, target.run) },
+        // Sized as the upload was, its record's ids counted alike.
+        section: render(io, {
+          rows,
+          links,
+          base: manifest.base,
+          minor: s.minor,
+          slack: () => assets.length * (SAMPLE_ID.length + 1),
+        }),
+        pictures: [],
+        assets,
+        legacy: [],
+      });
       return;
     }
-    if (result.screens === 0 && !previous) return;
-    post(io, {
-      kind: target.kind,
-      number,
-      sha: run.head_sha,
-      hash: result.fingerprint,
-      rows: compared.rows,
-      changes: compared.changes,
-      before: theirs,
-      after: mine,
-      base: manifest.base,
-      minor: s.minor,
-    });
+    if (result.screens === 0 && !record && legacy.length === 0) return;
+    const files = pictureBytes(io, { pictures, changes, before: theirs, after: mine });
+    const links = new Map(pictures.map((p, i) => [keyOf(p), `./${files[i].name}`]));
+    hand(
+      {
+        record: {
+          sha: run.head_sha,
+          fingerprint: result.fingerprint,
+          format: UPLOAD_FORMAT,
+          layout,
+          run: target.run,
+        },
+        section: render(io, {
+          rows,
+          links,
+          base: manifest.base,
+          minor: s.minor,
+          slack: (section) => growth(section, files.length),
+        }),
+        pictures: files.map((f) => f.name),
+        assets: [],
+        legacy: legacy.map((u) => u.nodeId),
+      },
+      files,
+    );
   };
 
   if (target.kind === 'issue') {
@@ -499,7 +637,7 @@ export function review(target, { s, io }) {
   }
 
   const facts = pullFacts(io, number);
-  const before = statusOn(io, run.head_sha) ?? (previous ? statusOn(io, previous.sha) : null);
+  const before = earlierResult(io, number, run.head_sha);
   const postStatus = () => {
     const shown =
       result.kind === 'compared' ? shownAt(result.fingerprint, before, io.now()) : io.now();

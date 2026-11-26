@@ -503,7 +503,8 @@ const NUMBERED = /^ {0,3}### +\d+\.[ \t]+\S/;
  * What is wrong with the GIF and screen blocks the tools wrote: a GIF that
  * didn't attach, a recording marked stale, a block outside the changes, a
  * marker pair twice. Visual review's own block (`describe:visual-review`)
- * isn't judged: its edits start no run of this check, and what it holds
+ * isn't judged: its upload edit (BOT_PR_TOKEN, ci#144) runs this check
+ * with the block half written, its table edit runs none, and what it holds
  * can't be told from its summary line.
  *
  * @param {{ key: string, inner: string[], at: number }[]} blocks every complete tool block
