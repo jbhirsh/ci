@@ -1,0 +1,51 @@
+# One-off (ci#144, the cleanup's step 2: the dry run), on a throwaway
+# `oneoff/upload-comments` branch only: never on main. The same file goes on
+# that branch in jbhirsh/ci, BoardGames, fog-and-frontier and sift. It deletes
+# and edits nothing: the Actions token only reads, and BOT_PR_TOKEN is used
+# only for its login (`gh api user`), as describe did. The script is ci's
+# branch's (oneoff/dry-run.mjs, with describe's own parseUpload). The
+# artifact holds each picture's bytes, each comment, where each picture is
+# linked and the descriptions, for the owner to keep before any deletion.
+name: ci#144 upload comments dry run (throwaway)
+
+on:
+  push:
+    branches: [oneoff/upload-comments]
+
+permissions: {}
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: jbhirsh/ci
+          ref: oneoff/upload-comments
+          path: ci-tools
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: BOT_PR_TOKEN's login
+        id: login
+        env:
+          GH_TOKEN: ${{ secrets.BOT_PR_TOKEN }}
+        run: echo "login=$(gh api user --jq .login)" >> "$GITHUB_OUTPUT"
+      - name: Dry run (reads only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          LOGIN: ${{ steps.login.outputs.login }}
+        run: OUT="$RUNNER_TEMP/out" node ci-tools/oneoff/dry-run.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: upload-comments-${{ github.event.repository.name }}
+          path: ${{ runner.temp }}/out
+          retention-days: 90
+          if-no-files-found: error
