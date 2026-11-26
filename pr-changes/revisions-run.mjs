@@ -6,7 +6,8 @@
 // no workflow, and the description check must run again on the description it
 // now reads (its current revision names the new head). The check's run for the
 // push read the old description, was red, and is superseded by the run this
-// edit starts (the apps' PR description workflows cancel an older run per PR).
+// edit starts, which stays red until the author fills the new revision's row
+// (ci#140; the apps' PR description workflows cancel an older run per PR).
 //
 //   node revisions-run.mjs   (env: GH_TOKEN, GITHUB_REPOSITORY, NUMBER;
 //                             optional: UPLOAD_TOKEN, BEFORE)
@@ -403,7 +404,7 @@ export function revisions(io, { repo, before }) {
     }
     if (!io.canWrite) {
       throw new Error(
-        "pr-changes: Revisions needs BOT_PR_TOKEN (a person's token, Pull requests write): an edit by the Actions token starts no run of the description check, so the check would stay red until a hand edit",
+        "pr-changes: Revisions needs BOT_PR_TOKEN (a person's token, Pull requests write): an edit by the Actions token starts no run of the description check, so the check would go on naming the old head, and the revision would have to be added by hand",
       );
     }
     const out = putPair(base, planned.at, planned.text);

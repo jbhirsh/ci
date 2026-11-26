@@ -29,7 +29,7 @@ The checks CI runs: `npm run lint`, `npm run typecheck`, `npm run format:check`,
 pins and actionlint) and `Against fog-and-frontier`, `Against sift` and `Against BoardGames`
 (each tool's self-test against that app's `main`, with its dependencies installed), and
 `PR description` (a PR's description held to the shared shape, as in the apps, including the
-Revisions marker pair once a push has moved the PR's head;
+Revisions marker pair once a push has moved the PR's head, and a filled row in its current revision;
 `.github/workflows/pr-description.yml` and `pr-template/body.mjs`'s header say how). `.github/workflows/ci.yml` says what the others run.
 
 ## The shared Claude rules
@@ -100,7 +100,6 @@ Claude Review runs on the Claude Agent SDK (`review/sdk.mjs`). An app's settings
     - Under it is a table `| What changed | Why |` that the AUTHOR fills: one row for each change, in plain words.
     - The tool never derives a row from a commit, because this repo reworks and squashes commits: it writes one empty row for a revision with none, and keeps every row an author wrote.
     - A table in HTML with set widths, one with three columns, a list and a heading per revision were tried on github.com at 402px and left: the owner found a table of two columns under a label easier to read on a phone.
-  - **What the check reads:** only the summary's head link, never the table, so an unfilled row isn't flagged (an empty Why never was).
   - **What an author can type:**
     - A pipe in a cell is written `\|`: a row with other than two cells is written as GitHub reads it (the cells after the second joined into it, or an empty second cell).
     - A tag that would end a block, a cell or the table (`</details>`, `<summary>`, a table's tags) is made harmless (`&lt;`) in what an author or a commit subject wrote.

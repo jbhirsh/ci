@@ -10,6 +10,15 @@ const B = 'b'.repeat(40);
 const C = 'c'.repeat(40);
 const PAIR = '<!-- pr-changes:revisions -->\n<!-- /pr-changes:revisions -->';
 const BODY = `## Goal\n\nMake it work. More.\n\n## Changes\n\n### 1. c\n\nwhy\n\n## Checklist\n\nNothing to do.\n\n${PAIR}\n`;
+/** The check's Revisions problems for a description at `head`. */
+const revisionsProblems = (/** @type {string} */ text, /** @type {string} */ head) =>
+  bodyProblems(text, head).filter((p) => /Revisions/.test(p));
+/** The description with the current revision's placeholder row filled, as its author would (ci#140). */
+const filled = (/** @type {string} */ text) => text.replace('|  |  |', '| A change | Its reason |');
+/** The check's one problem with a fresh write: the current revision's row, for `head`, is to fill. */
+const toFill = (/** @type {string} */ head) => [
+  expect.stringMatching(new RegExp(`^fill Revisions' current revision, \`${head.slice(0, 7)}\`: `)),
+];
 
 /**
  * A fake io: a description that writes replace, and a PR at a head.
@@ -84,7 +93,9 @@ describe('revisions', () => {
     expect(
       out.replace(/<!-- pr-changes:revisions -->[\s\S]*<!-- \/pr-changes:revisions -->/, PAIR),
     ).toBe(BODY);
-    expect(bodyProblems(out, B).filter((p) => /Revisions/.test(p))).toEqual([]);
+    // The check names the head and asks for the row the author writes (ci#140), then passes.
+    expect(revisionsProblems(out, B)).toEqual(toFill(B));
+    expect(revisionsProblems(filled(out), B)).toEqual([]);
   });
 
   describe('a description without the revisions pair', () => {
@@ -98,7 +109,8 @@ describe('revisions', () => {
       expect(out.indexOf('## Revisions')).toBeLessThan(out.indexOf('pr-changes:index'));
       expect(out).toContain('<b>👉 <a href="https://github.com/o/r/commit/bbbb');
       expect(out.match(/pr-changes:revisions -->/g)).toHaveLength(2);
-      expect(bodyProblems(out, B).filter((p) => /Revisions/.test(p))).toEqual([]);
+      expect(revisionsProblems(out, B)).toEqual(toFill(B));
+      expect(revisionsProblems(filled(out), B)).toEqual([]);
     });
 
     it('is written at the end, or ahead of a footer, when there is no index block', () => {
@@ -171,7 +183,10 @@ describe('revisions', () => {
       expect(out).toMatch(
         new RegExp(`rewritten from <code>${short(2)}</code> \\(2 commits dropped\\)`),
       );
-      expect(bodyProblems(out, h3).filter((p) => /Revisions/.test(p))).toEqual([]);
+      // Only the current revision is judged: the rebuilt older ones keep their empty rows.
+      expect(revisionsProblems(out, h3)).toEqual(toFill(h3));
+      expect(revisionsProblems(filled(out), h3)).toEqual([]);
+      expect(filled(out)).toContain('|  |  |');
     });
 
     it('writes no commit of the PR: a compare link on every revision after the first, an empty row to fill', () => {

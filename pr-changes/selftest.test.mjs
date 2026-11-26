@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { writeFiles } from '../review/testApp.mjs';
 import { cli, selftest } from './selftest.mjs';
 
@@ -28,6 +28,31 @@ describe('selftest', () => {
 
   it("writes the master template's Revisions table and reads it back as current", () => {
     expect(selftest(app({ [TEMPLATE]: master }))[1]).toMatch(/gets its Revisions table/);
+  });
+
+  it("fails when the check doesn't ask for the new revision's row, or rejects it filled (ci#140)", async () => {
+    const real = await import('../pr-template/body.mjs');
+    /** @type {(body: string, sha: string) => string[]} */
+    let check = () => [];
+    vi.resetModules();
+    vi.doMock('../pr-template/body.mjs', () => ({
+      ...real,
+      bodyProblems: (/** @type {string} */ body, /** @type {string} */ sha) => check(body, sha),
+    }));
+    try {
+      const fresh = (await import('./selftest.mjs')).selftest;
+      // A check that accepts the placeholder.
+      expect(() => fresh(app({ [TEMPLATE]: master }))).toThrow(
+        /ask only for the new revision's row/,
+      );
+      // A check that keeps asking once the row is filled.
+      check = (body, sha) =>
+        real.bodyProblems(body.replace('| A change | Its reason |', '|  |  |'), sha);
+      expect(() => fresh(app({ [TEMPLATE]: master }))).toThrow(/once filled; it says/);
+    } finally {
+      vi.doUnmock('../pr-template/body.mjs');
+      vi.resetModules();
+    }
   });
 
   it('leaves Revisions unused for a template with a slot but no revisions pair', () => {

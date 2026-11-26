@@ -1,6 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { bodyProblems, maskFences, renderedLines, revisionsPair } from './body.mjs';
+import {
+  bodyProblems,
+  holdsText,
+  maskFences,
+  renderedLines,
+  revisionRowProblems,
+  revisionsPair,
+} from './body.mjs';
 
 const fixture = (/** @type {string} */ name) =>
   readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
@@ -827,5 +834,220 @@ describe('bodyProblems for changes the tool titles (no numbered heading)', () =>
     expect(bodyProblems(withChanges(`${pair(1, title(1))}\n\nWhy this change.\n`))[0]).toMatch(
       /replace the template's sample change/,
     );
+  });
+});
+
+describe("bodyProblems: the current revision's rows (ci#140)", () => {
+  const base = GOOD.slice(0, GOOD.indexOf('## Revisions')).trimEnd();
+  const HEAD = 'abcdef0'.padEnd(40, '1');
+  const OLD = '1111111'.padEnd(40, '0');
+  const html = (/** @type {string} */ sha) =>
+    `<a href="https://github.com/o/r/commit/${sha}"><code>${sha.slice(0, 7)}</code></a>`;
+  /** A revision as the tool writes it: the current one bold, its table's rows as given. */
+  const block = (/** @type {string} */ sha, /** @type {string[]} */ rows, current = true) =>
+    [
+      current ? '<details open>' : '<details>',
+      current
+        ? `<summary><b>👉 ${html(sha)}</b> (current) · <a href="https://github.com/o/r/compare/${OLD}...${sha}">compare <code>1111111…${sha.slice(0, 7)}</code></a></summary>`
+        : `<summary>${html(sha)} · Opened</summary>`,
+      '',
+      '| What changed | Why |',
+      '| --- | --- |',
+      ...rows,
+      '',
+      '</details>',
+    ].join('\n');
+  const wrap = (/** @type {string} */ inner) =>
+    `${base}\n\n<!-- pr-changes:revisions -->\n## Revisions\n\n${inner}\n<!-- /pr-changes:revisions -->\n`;
+  const revisions = (/** @type {string} */ body, head = HEAD) =>
+    bodyProblems(body, head).filter((p) => /Revisions/.test(p));
+  const NONE =
+    "fill Revisions' current revision, `abcdef0`: its table has no row with both cells filled. In the description, write one row for each change this push made, both cells in plain words, such as `| The cap fails closed | It's the only paid API |` (each row opens with `|`; write a pipe in a cell as `\\|`). Do it once this push's `PR changes` run has ended: a run still going can write an older copy over your edit";
+  const HALF = (/** @type {number} */ n) =>
+    `fill both cells of every row in Revisions' current revision, \`abcdef0\`: ${n === 1 ? '1 row has' : `${n} rows have`} an empty What changed or Why`;
+  const rowsOf = (/** @type {string[]} */ ...rows) =>
+    revisions(wrap(`${block(HEAD, rows)}\n\n${block(OLD, ['|  |  |'], false)}`));
+
+  it.each([
+    ['the placeholder', ['|  |  |'], [NONE]],
+    ['dashes', ['| — | — |'], [NONE]],
+    ['a filled What and an empty Why', ['| The cap | |'], [NONE]],
+    ['an empty What and a filled Why', ['| — | It is paid |'], [NONE]],
+    ['a filled row', ['| The cap fails closed | It is the only paid API |'], []],
+    ['a filled row beside the placeholder', ['| The cap | Paid |', '|  |  |'], []],
+    ['a filled row beside a row of dashes', ['| The cap | Paid |', '| - | - |'], []],
+    ['a filled row beside a half row', ['| The cap | Paid |', '| Docs | |'], [HALF(1)]],
+    ['two half rows beside a filled one', ['| a | b |', '| c | |', '| | d |'], [HALF(2)]],
+    ['a pipe written `\\|` in a cell', ['| `a \\| b` | c |'], []],
+    ['a cell of only `\\|`', ['| \\| | Paid |'], [NONE]],
+    ['a cell of tags and `&nbsp;` only', ['| <br>&nbsp;<b></b> | Paid |'], [NONE]],
+    ['code in a cell', ['| <code>x</code> | `y` |'], []],
+    ['a comment-only cell', ['| <!-- what --> | Paid |'], [NONE]],
+    ['an emoji alone', ['| 🎉 | Paid |'], [NONE]],
+    ['CJK text', ['| 修正 | 理由 |'], []],
+    ['a digit alone', ['| 2 | 3 |'], []],
+    ['a one-cell row', ['| The cap |'], [NONE]],
+    ['a row with no closing pipe', ['| The cap | Paid'], []],
+    ['a third cell, which GitHub does not show', ['| The cap | | Paid |'], [NONE]],
+    [
+      "a `</details>` in a row's code span",
+      ['| Close it with `</details>` | GitHub needs it |'],
+      [],
+    ],
+    ['the header in another case, which is the frame', ['| what changed | why |'], [NONE]],
+    ['an entity for a letter, an autolink, an image', ['| &#65; | <https://x.example> |'], [NONE]],
+    ['a tag or an entity in a code span, which shows as text', ['| `<summary>` | `&nbsp;` |'], []],
+    ['a typed comment the tool made text', ['| &lt;!-- why --> | Paid |'], []],
+  ])('%s', (_name, rows, expected) => {
+    expect(rowsOf(...rows)).toEqual(expected);
+  });
+
+  it('reads only the current revision: an older one, filled or not, decides nothing', () => {
+    const older = block(OLD, ['| Opened | For the goal |'], false);
+    expect(revisions(wrap(`${block(HEAD, ['|  |  |'])}\n\n${older}`))).toEqual([NONE]);
+    const filled = block(HEAD, ['| The cap | Paid |']);
+    expect(revisions(wrap(`${filled}\n\n${block(OLD, ['|  |  |'], false)}`))).toEqual([]);
+  });
+
+  it('reads the current revision wherever it stands: after an older one, or after an author block', () => {
+    const older = block(OLD, ['| Opened | For the goal, in a long row of words |'], false);
+    expect(revisions(wrap(`${older}\n\n${block(HEAD, ['|  |  |'])}`))).toEqual([NONE]);
+    expect(
+      revisions(wrap(`${block(OLD, ['|  |  |'], false)}\n\n${block(HEAD, ['| a | b |'])}`)),
+    ).toEqual([]);
+    const mine = '<details>\n<summary>My notes</summary>\n\n| Notes | Here |\n\n</details>';
+    expect(revisions(wrap(`${mine}\n\n${block(HEAD, ['|  |  |'])}`))).toEqual([NONE]);
+  });
+
+  it('reads rows to the end of the pair when the block has no closing line, and pipe rows after a blank line', () => {
+    const open = block(HEAD, ['| The cap | Paid |']).replace(/\n<\/details>$/, '');
+    expect(revisions(wrap(open))).toEqual([]);
+    const empty = block(HEAD, ['|  |  |']).replace(/\n<\/details>$/, '');
+    expect(revisions(wrap(empty))).toEqual([NONE]);
+    // A row after the pair is not the revision's.
+    expect(revisions(wrap(empty).replace(/\n$/, '\n\n| The cap | Paid |\n'))).toEqual([NONE]);
+    expect(rowsOf('|  |  |', '', '| The cap | Paid |')).toEqual([]);
+  });
+
+  it("stops at the next revision's block when the current one isn't closed", () => {
+    const open = block(HEAD, ['|  |  |']).replace(/\n<\/details>$/, '');
+    expect(revisions(wrap(`${open}\n\n${block(OLD, ['| Opened | Goal |'], false)}`))).toEqual([
+      NONE,
+    ]);
+  });
+
+  it('does not read a row in an HTML comment block, which a reader does not see', () => {
+    expect(rowsOf('<!--', '| a | b |', '-->')).toEqual([NONE]);
+    expect(rowsOf('<!-- note', '| a | b |', 'more -->', '| The cap | Paid |')).toEqual([]);
+    expect(rowsOf('<!-- one line --> | a | b |')).toEqual([NONE]);
+    expect(rowsOf('<!-- -->', '| The cap | Paid |')).toEqual([]);
+  });
+
+  it('reads the rows after a summary that wraps onto a second line', () => {
+    const wrapped = (/** @type {string} */ row) =>
+      block(HEAD, [row]).replace(' · <a href=', '\n· <a href=');
+    expect(wrapped('|  |  |')).toContain('(current)\n· <a');
+    expect(revisions(wrap(wrapped('|  |  |')))).toEqual([NONE]);
+    expect(revisions(wrap(wrapped('| The cap | Paid |')))).toEqual([]);
+    // A summary that never closes before the block ends is no block: its rows are not judged.
+    const unclosed = block(HEAD, ['|  |  |']).replace('</summary>', '');
+    expect(revisions(wrap(unclosed))).toEqual([]);
+  });
+
+  it('reads the rows under a summary that ends with `</details>` on its own line, as the tool does', () => {
+    const own = `<details open>\n<summary><b>👉 ${html(HEAD)}</b> (current)</summary></details>\n\n| What changed | Why |\n| --- | --- |\n`;
+    expect(revisions(wrap(`${own}| A | B |`))).toEqual([]);
+    expect(revisions(wrap(`${own}|  |  |`))).toEqual([NONE]);
+  });
+
+  it('reads nothing on a summary line that ends the block', () => {
+    const one = `<details open><summary><b>👉 ${html(HEAD)}</b> (current)</summary></details>\n\n| The cap | Paid |`;
+    expect(revisions(wrap(one))).toEqual([NONE]);
+  });
+
+  it('gives the same verdict for a CRLF description', () => {
+    for (const rows of [['|  |  |'], ['| The cap | Paid |'], ['| a | b |', '| c | |']]) {
+      const lf = wrap(block(HEAD, rows));
+      expect(revisions(lf.replace(/\n/g, '\r\n'))).toEqual(revisions(lf));
+    }
+  });
+
+  it('does not read a block in fenced code, nor take a fenced row as a row', () => {
+    const fenced = `${base}\n\n\`\`\`\n${block(HEAD, ['|  |  |'])}\n\`\`\`\n`;
+    expect(revisions(fenced)).toEqual([]);
+    const row = block(HEAD, ['```', '| The cap | Paid |', '```']);
+    expect(revisions(wrap(row))).toEqual([NONE]);
+  });
+
+  it("does not read an author's own details block, a stale head's rows, or a description with no block", () => {
+    const mine = `<details>\n<summary>My notes</summary>\n\n|  |  |\n\n</details>`;
+    expect(revisions(wrap(mine))).toEqual([]);
+    // A stale head: only the existing problem, never the rows'.
+    const stale = revisions(wrap(block(OLD, ['|  |  |'])));
+    expect(stale).toHaveLength(1);
+    expect(stale[0]).toMatch(/names another commit than this PR's head, `abcdef0`/);
+    expect(revisions(base)).toEqual([]);
+    // With no head given, nothing is read.
+    expect(bodyProblems(wrap(block(HEAD, ['|  |  |']))).filter((p) => /Revisions/.test(p))).toEqual(
+      [],
+    );
+  });
+
+  it('does not judge the shapes from before the details blocks', () => {
+    const link = `[\`abcdef0\`](https://github.com/o/r/commit/${HEAD})`;
+    for (const table of [
+      `| What changed | Why |\n| --- | --- |\n| **👉 ${link}** (current)<br> | |`,
+      `| Rev | Head | What changed | Why |\n| --- | --- | --- | --- |\n| 2 (current) | ${link} | | |`,
+      `<table>\n<tbody>\n<tr><td><b>👉 ${html(HEAD)}</b> (current)</td><td></td></tr>\n</tbody>\n</table>`,
+    ]) {
+      expect(revisions(wrap(table))).toEqual([]);
+    }
+  });
+
+  it('says the sha, what to write and when, on a push as on an edit', () => {
+    const body = wrap(block(HEAD, ['|  |  |']));
+    expect(bodyProblems(body, HEAD, { pushed: true }).filter((p) => /Revisions/.test(p))).toEqual([
+      NONE,
+    ]);
+  });
+});
+
+describe('holdsText and revisionRowProblems', () => {
+  it.each([
+    ['', false],
+    ['   ', false],
+    ['—', false],
+    ['-', false],
+    ['<br>', false],
+    ['&nbsp;', false],
+    ['<!-- why -->', false],
+    ['🎉', false],
+    ['&#65;', false],
+    ['<img src="x.png">', false],
+    ['`x`', true],
+    ['n/a', true],
+    ['<code>x</code>', true],
+    ['修正', true],
+    ['<3 it', true],
+    ['a <!-- never closed', true],
+    ['<b never closed', true],
+    ['`<br>`', true],
+    ['`&nbsp;`', true],
+    ['` `', false],
+    ['`` ` ``', false],
+    ['`unclosed <br>', true],
+    ['<a title="`">x', true],
+  ])('holdsText(%j) is %s', (cell, text) => {
+    expect(holdsText(cell)).toBe(text);
+  });
+
+  it('reads a long hostile cell in linear time', () => {
+    for (const cell of ['<!--'.repeat(20_000), '<a'.repeat(30_000), '&a'.repeat(30_000)]) {
+      expect(holdsText(cell)).toBe(cell !== '<!--'.repeat(20_000));
+    }
+  });
+
+  it('asks for a row with no rows at all', () => {
+    expect(revisionRowProblems([], 'abcdef0123')).toHaveLength(1);
   });
 });

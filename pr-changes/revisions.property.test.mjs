@@ -472,7 +472,14 @@ describe('addRevision and budgeted', () => {
           if (had && had.length > 0) expect(r.rows).toEqual(had);
         }
         expect(kept.rows.filter((r) => r.current && r.sha === head)).toHaveLength(1);
-        expect(bodyProblems(wrap(out), head).filter((p) => /Revisions/.test(p))).toEqual([]);
+        // The new revision's placeholder is the author's to fill (ci#140): the one problem, until
+        // its row is written. The newest revision is the first block, so its placeholder is the first.
+        const revisionsProblems = (/** @type {string} */ text) =>
+          bodyProblems(wrap(text), head).filter((p) => /Revisions/.test(p));
+        expect(revisionsProblems(out)).toEqual([
+          `fill Revisions' current revision, \`${head.slice(0, 7)}\`: its table has no row with both cells filled. In the description, write one row for each change this push made, both cells in plain words, such as \`| The cap fails closed | It's the only paid API |\` (each row opens with \`|\`; write a pipe in a cell as \`\\|\`). Do it once this push's \`PR changes\` run has ended: a run still going can write an older copy over your edit`,
+        ]);
+        expect(revisionsProblems(out.replace('|  |  |', '| A change | Its reason |'))).toEqual([]);
       }),
       { ...RUN, numRuns: Math.max(100, Math.floor(RUN.numRuns / 10)) },
     );

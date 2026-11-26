@@ -75,9 +75,10 @@ description: >-
   before it from the PR's timeline (read with the Actions token; revisions.mjs
   says what that gives, and what it does not). The row is written after the change
   slots, with the person's token (`token`), because an edit by the Actions
-  token starts no workflow: the description check, which reads the table's
-  current row for the PR's head, runs again on the edit and supersedes the run
-  for the push, which read the old description. A same-repo PR that needs a row
+  token starts no workflow: the description check, which reads the current
+  revision's head and its rows, runs again on the edit and supersedes the run
+  for the push, which read the old description; it then fails until the author
+  fills the new revision's row (ci#140). A same-repo PR that needs a row
   and has no token fails this job (never a required check), saying why; a
   fork's PR only gets a notice.
 

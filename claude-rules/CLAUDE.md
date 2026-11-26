@@ -97,16 +97,14 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
   description later, keep its empty marker pairs (`pr-changes:change`, `pr-changes:revisions`,
   `pr-gif`) and the `pr-changes:index` block: the tools fill only inside them, and a
   description rewritten without them gets no table.
-- **Every push needs its Revisions rows filled before you finish it.** A push adds a revision
-  to the description's Revisions block, and the tool writes only an empty placeholder row
-  for it (`pr-changes/revisions.mjs`'s header has the grammar).
-  - Fill the current revision's table: one row for each change, two cells (what changed, why),
-    in plain words and never a commit's subject. Write a pipe in a cell as `\|`.
-  - The tool keeps every row you write. Never leave the placeholder empty, and never leave the
-    PR with an empty current revision.
-  - After the push, wait for the PR's `PR changes` run to end, then re-read the live
-    description once. A run your push started can write an older copy over your edit; redo
-    your rows if it did.
+- **After every push, wait for `PR changes`, then write that push's Revisions rows.** A
+  push adds a revision to the description's Revisions block (`pr-changes/revisions.mjs`'s
+  header has the grammar).
+  - Wait for the PR's `PR changes` run to end, then fill the current revision's table: one
+    row for each change, in plain words and never a commit's subject. A rebase is a change
+    too: say what it brought in.
+  - Re-read the live description once. A run your push started can write an older copy over
+    your edit; redo your rows if it did.
     ```sh
     gh run watch <id> --exit-status
     ```
