@@ -24,8 +24,9 @@
 // and dark), paired by lib/baselines.mjs's rules. A shot no column takes gets
 // a row of its own, named by its path.
 //
-// The pictures are GitHub attachments, uploaded first (review.mjs),
-// and at most UPLOAD_LIMIT go up per result: gh attaches at most 50 files a
+// The pictures are GitHub attachments, uploaded into the description by
+// the attach job (attach.mjs, ci#144), which swaps each picture's local path
+// in the table for its link; at most UPLOAD_LIMIT go up per result: gh attaches at most 50 files a
 // command. pick() decides which: one picture a row first (a big row's after,
 // a minor row's zoom), then the rest of each row, then the diffs. A picture
 // left out says so in its cell.
