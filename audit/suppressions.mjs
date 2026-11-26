@@ -253,7 +253,7 @@ function pluginSuppression(value, dir, tracked) {
   return real ? null : [`config: ${JSON.stringify(config)}, which names no tracked file`];
 }
 
-/** @typedef {typeof import('@typescript/typescript6')} TypeScript */
+/** @typedef {typeof import('typescript')} TypeScript */
 
 /**
  * Each tag knip skips an export for, in the comments of one source file,
@@ -275,16 +275,14 @@ export function suppressionTags(text, ts, fileName = 'file.ts') {
         ? ts.ScriptKind.JS
         : ts.ScriptKind.TS;
   const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, false, kind);
-  /** @type {Map<number, import('@typescript/typescript6').CommentRange>} */
+  /** @type {Map<number, import('typescript').CommentRange>} */
   const comments = new Map();
   /** @type {[number, number][]} JSX text, which the comment scan would misread */
   const jsxText = [];
-  const add = (
-    /** @type {import('@typescript/typescript6').CommentRange[] | undefined} */ ranges,
-  ) => {
+  const add = (/** @type {import('typescript').CommentRange[] | undefined} */ ranges) => {
     for (const range of ranges ?? []) comments.set(range.pos, range);
   };
-  const visit = (/** @type {import('@typescript/typescript6').Node} */ node) => {
+  const visit = (/** @type {import('typescript').Node} */ node) => {
     if (node.kind === ts.SyntaxKind.JsxText) jsxText.push([node.pos, node.end]);
     add(ts.getLeadingCommentRanges(text, node.pos));
     add(ts.getTrailingCommentRanges(text, node.end));

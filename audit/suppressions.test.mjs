@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs';
 import path from 'node:path';
-import ts from '@typescript/typescript6';
+import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isolateGit } from '../mutation/test-repo.mjs';
 import { parseJsonc } from './jsonc.mjs';
