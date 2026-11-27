@@ -47,6 +47,15 @@ describe('the canonical callers', () => {
   it('are found by what they use, not what they are called', () => {
     expect(lintGifCallers('anything.yml', { jobs: { x: { uses: './other.yml' } } })).toEqual([]);
   });
+
+  it('refuses a local call of either workflow, which no rule would check', () => {
+    for (const name of ['pr-gif', 'pr-gif-attach']) {
+      const doc = { jobs: { x: { uses: `./.github/workflows/${name}.yml`, secrets: 'inherit' } } };
+      expect(lintGifCallers('f.yml', doc, NAMES)).toEqual([
+        `f.yml: job x: call \`jbhirsh/ci/.github/workflows/${name}.yml@main\`, as the apps do, not \`./.github/workflows/${name}.yml\`, which no rule here checks`,
+      ]);
+    }
+  });
 });
 
 describe('the recording caller', () => {

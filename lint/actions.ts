@@ -18,8 +18,8 @@
 // inside an action, so it must come in as an input. A `jbhirsh/ci/<path>`
 // reference must name an action or workflow here. A caller may pass only
 // inputs (and, to a workflow, secrets) the target declares, and must pass
-// every required one that has no default. An app's calls of the PR GIF
-// workflows also meet lint/gif-callers.ts's rules.
+// every required one that has no default. Calls of the PR GIF workflows, an
+// app's and this repo's own alike, also meet lint/gif-callers.ts's rules.
 //
 // Every path into this repo a step names must be here, so a renamed or
 // moved script fails the PR that moves it rather than every app's job after
@@ -398,8 +398,9 @@ export function lintCall(where: string, target: Target, given: unknown, secrets?
  * @param file
  * @param doc
  * @param resolve
- * @param appNames the names of the app's workflows, to
- *   check what a PR GIF attach caller waits for; null for this repo's own
+ * @param appNames the names of the workflows beside it (an app's, or this
+ *   repo's own), to check what a PR GIF attach caller waits for; null
+ *   leaves its PR GIF callers unchecked
  */
 export function lintWorkflow(
   file: string,
@@ -599,19 +600,25 @@ export function main(root: string, app: string | null) {
     const dir = path.join(base, '.github', 'workflows');
     return existsSync(dir) ? files(dir, (name) => /\.ya?ml$/.test(name)) : [];
   };
-  for (const file of workflows(root)) {
-    const doc = read(file);
+  // GitHub names a workflow with no `name:` by its path.
+  const named = (base: string) => {
+    const docs = workflows(base).map((file) => [file, read(file)] as const);
+    const names = new Set(docs.map(([file, doc]) => String(doc?.name ?? rel(base, file))));
+    return { docs, names };
+  };
+  // This repo's own callers of the PR GIF workflows are held to the apps'
+  // rules too (ci#176), with this repo's workflow names.
+  const own = named(root);
+  for (const [file, doc] of own.docs) {
     errors.push(
-      ...lintWorkflow(rel(root, file), doc, resolve),
+      ...lintWorkflow(rel(root, file), doc, resolve, own.names),
       ...lintScripts(rel(root, file), doc, tree),
     );
   }
   if (app) {
-    const mine = workflows(app).map((file) => [file, read(file)]);
-    // GitHub names a workflow with no `name:` by its path.
-    const names = new Set(mine.map(([file, doc]) => String(doc?.name ?? rel(app, file))));
-    for (const [file, doc] of mine) {
-      errors.push(...lintWorkflow(rel(app, file), doc, resolve, names));
+    const theirs = named(app);
+    for (const [file, doc] of theirs.docs) {
+      errors.push(...lintWorkflow(rel(app, file), doc, resolve, theirs.names));
     }
   }
   return errors;

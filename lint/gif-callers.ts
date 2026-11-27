@@ -1,12 +1,15 @@
 // Rules for an app's callers of jbhirsh/ci's PR GIF workflows (ci#92), run by
-// lint/actions.ts on every workflow of an app ("Against <app>") whose job
-// uses `pr-gif.yml` or `pr-gif-attach.yml`, found by what it `uses`, never by
-// its file name. gif/callers/ holds the shape every app's copy takes (the
-// sync keeps the copies in step, sync/manifest.json, with sift's and fog's
-// differences as variants); these are the lines in it that matter, checked
-// here as defence in depth, because a wrong copy puts BOT_PR_TOKEN, the one
-// token that may attach files, in a run that holds a PR's code, or wakes
-// nothing:
+// lint/actions.ts on every workflow of an app ("Against <app>"), and of this
+// repo itself (ci#176), whose job uses `pr-gif.yml` or `pr-gif-attach.yml`,
+// found by what it `uses`, never by its file name. A local call
+// (`./.github/workflows/pr-gif.yml`, a form this repo uses for its other
+// reusable workflows) is refused outright: every caller names
+// `jbhirsh/ci/...@main`, so none can slip past these rules. gif/callers/ holds
+// the shape every app's copy takes (the sync keeps the copies in step,
+// sync/manifest.json, with sift's and fog's differences as variants); these
+// are the lines in it that matter, checked here as defence in depth, because a
+// wrong copy puts BOT_PR_TOKEN, the one token that may attach files, in a run
+// that holds a PR's code, or wakes nothing:
 //
 //   any caller   no `secrets: inherit`; no `pull_request_target` trigger
 //   pr-gif.yml   its job asks for nothing past `contents: read`, but
@@ -162,6 +165,13 @@ export function lintGifCallers(
   const errors: string[] = [];
   for (const [id, raw] of Object.entries(jobs)) {
     const job = isObject(raw) ? (raw as Doc) : {};
+    const local = /^\.\/\.github\/workflows\/(pr-gif|pr-gif-attach)\.yml$/i.exec(String(job.uses));
+    if (local) {
+      errors.push(
+        `${file}: job ${id}: call \`jbhirsh/ci/.github/workflows/${local[1]}.yml@main\`, as the apps do, not \`${String(job.uses)}\`, which no rule here checks`,
+      );
+      continue;
+    }
     const m = /^jbhirsh\/ci\/\.github\/workflows\/(pr-gif|pr-gif-attach)\.yml@/i.exec(
       String(job.uses),
     );
