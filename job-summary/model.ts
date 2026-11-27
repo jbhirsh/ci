@@ -9,92 +9,120 @@
 
 import { KEEP_DAYS } from './report.ts';
 import { jobSeconds, stepTrends, testTrends, usual } from './trends.ts';
+import type { TestCase } from './junit.ts';
+import type { Job, PastRun, Run } from './history.ts';
+import type { Outcome, StepRow } from './trends.ts';
+import type { Located } from './source.ts';
 
-/** @typedef {import('./junit.ts').TestCase} TestCase */
-/** @typedef {import('./history.ts').PastRun} PastRun */
-/** @typedef {import('./history.ts').Run} Run */
-/** @typedef {import('./history.ts').Job} Job */
-/** @typedef {import('./trends.ts').StepRow} StepRow */
-/** @typedef {import('./trends.ts').Outcome} Outcome */
-/** @typedef {import('./source.ts').Located} Located */
+/** One CPU sample: seconds into the job, the load average, % busy. */
+export type Sample = { t: number; load: number; busy: number };
 
-/**
- * One CPU sample: seconds into the job, the load average, % busy.
- *
- * @typedef {{ t: number, load: number, busy: number }} Sample
- */
+/** What the model is made from. */
+export type Input = {
+  /** owner/name */
+  repo: string;
+  workflow: string;
+  job: string;
+  /** what a test is called */
+  noun: string;
+  /** milliseconds */
+  now: number;
+  /** this run */
+  run: Run | null;
+  /** this job */
+  current: Job | null;
+  /** this job's */
+  steps: StepRow[];
+  /** why there are no steps or history ('' when there are) */
+  problem: string;
+  /** one per test, null without reports */
+  tests: TestCase[] | null;
+  /** newest first */
+  past: PastRun[];
+  /** by test name */
+  located: Map<string, Located>;
+  /** files each commit changed, oldest run first, this one last */
+  changed: (Set<string> | null)[];
+  /** an earlier run's report page */
+  reportOf: (runId: number) => string;
+  notes: [string, string][];
+  load: Sample[];
+  /** the settle wait's limit, % busy */
+  settle: number | null;
+};
 
-/**
- * What the model is made from.
- *
- * @typedef {object} Input
- * @property {string} repo owner/name
- * @property {string} workflow
- * @property {string} job
- * @property {string} noun what a test is called
- * @property {number} now milliseconds
- * @property {Run | null} run this run
- * @property {Job | null} current this job
- * @property {StepRow[]} steps this job's
- * @property {string} problem why there are no steps or history ('' when there are)
- * @property {TestCase[] | null} tests one per test, null without reports
- * @property {PastRun[]} past newest first
- * @property {Map<string, Located>} located by test name
- * @property {(Set<string> | null)[]} changed files each commit changed, oldest run first, this one last
- * @property {(runId: number) => string} reportOf an earlier run's report page
- * @property {[string, string][]} notes
- * @property {Sample[]} load
- * @property {number | null} settle the settle wait's limit, % busy
- */
+/** A test in the model. */
+export type ModelTest = {
+  /** its full name, the key across runs */
+  name: string;
+  /** its file's folder, with a trailing slash */
+  folder: string;
+  /** its file's name ('' for a Maestro flow) */
+  file: string;
+  /** the describe blocks around it, joined by " › " */
+  block: string;
+  title: string;
+  /** its file in the repository ('' when not found) */
+  path: string;
+  line: number;
+  seconds: number;
+  usual: number | null;
+  result: TestCase['result'];
+  slower: boolean;
+  flaky: boolean;
+  /** a failure's whole message ('' otherwise) */
+  message: string;
+  /** its result in each earlier run */
+  hist: Outcome[];
+  /** its time in each earlier run (null where it didn't run) */
+  times: (number | null)[];
+  /** the runs (0 = oldest, runs.length = this one) whose commit changed its file */
+  edited: number[];
+  /** its snippet */
+  code: [number, string, boolean][] | null;
+};
 
-/**
- * A test in the model.
- *
- * @typedef {object} ModelTest
- * @property {string} name its full name, the key across runs
- * @property {string} folder its file's folder, with a trailing slash
- * @property {string} file its file's name ('' for a Maestro flow)
- * @property {string} block the describe blocks around it, joined by " › "
- * @property {string} title
- * @property {string} path its file in the repository ('' when not found)
- * @property {number} line
- * @property {number} seconds
- * @property {number | null} usual
- * @property {TestCase['result']} result
- * @property {boolean} slower
- * @property {boolean} flaky
- * @property {string} message a failure's whole message ('' otherwise)
- * @property {Outcome[]} hist its result in each earlier run
- * @property {(number | null)[]} times its time in each earlier run (null where it didn't run)
- * @property {number[]} edited the runs (0 = oldest, runs.length = this one) whose commit changed its file
- * @property {[number, string, boolean][] | null} code its snippet
- */
-
-/**
- * @typedef {object} Model
- * @property {string} repo
- * @property {string} workflow
- * @property {string} job
- * @property {string} noun
- * @property {string} problem
- * @property {{ number: number, url: string, sha: string, branch: string, when: string } | null} run
- * @property {number} seconds this job's time so far
- * @property {number | null} usual the usual time (median of the earlier runs that passed)
- * @property {{ i: number, name: string, start: number, seconds: number, conclusion: string, usual: number | null, slower: boolean, past: (number | null)[] }[]} steps
- * @property {{ number: number, url: string, sha: string, branch: string, when: string, seconds: number, conclusion: string }[]} runs
- * @property {ModelTest[] | null} tests
- * @property {[string, string][]} notes
- * @property {Sample[]} load
- * @property {number | null} settle
- */
+export type Model = {
+  repo: string;
+  workflow: string;
+  job: string;
+  noun: string;
+  problem: string;
+  run: { number: number; url: string; sha: string; branch: string; when: string } | null;
+  /** this job's time so far */
+  seconds: number;
+  /** the usual time (median of the earlier runs that passed) */
+  usual: number | null;
+  steps: {
+    i: number;
+    name: string;
+    start: number;
+    seconds: number;
+    conclusion: string;
+    usual: number | null;
+    slower: boolean;
+    past: (number | null)[];
+  }[];
+  runs: {
+    number: number;
+    url: string;
+    sha: string;
+    branch: string;
+    when: string;
+    seconds: number;
+    conclusion: string;
+  }[];
+  tests: ModelTest[] | null;
+  notes: [string, string][];
+  load: Sample[];
+  settle: number | null;
+};
 
 /**
  * A test's place: the folder and file its suite names, the describe blocks
  * around it and its own title, from its full name.
- *
- * @param {TestCase} t
  */
-export function parts(t) {
+export function parts(t: TestCase) {
   const rest =
     t.suite && t.name.startsWith(`${t.suite} › `) ? t.name.slice(t.suite.length + 3) : t.name;
   const names = rest.split(/ › | > /);
@@ -106,17 +134,14 @@ export function parts(t) {
 
 /**
  * The model.
- *
- * @param {Input} input
- * @returns {Model}
  */
-export function buildModel(input) {
+export function buildModel(input: Input): Model {
   const { now, past, steps } = input;
   const ordered = [...past].reverse();
   const began = Date.parse(input.current?.started_at ?? '');
   const zero = Number.isFinite(began) ? began : (steps[0]?.start ?? now);
   const sTrends = stepTrends(steps, past, now);
-  const pathOf = (/** @type {TestCase} */ t) => input.located.get(t.name)?.path ?? '';
+  const pathOf = (t: TestCase) => input.located.get(t.name)?.path ?? '';
   const tTrends = testTrends(
     input.tests ?? [],
     past,
@@ -124,7 +149,7 @@ export function buildModel(input) {
     input.changed,
     pathOf,
   );
-  const pastSeconds = (/** @type {PastRun} */ p) => p.seconds ?? jobSeconds(p.job, now);
+  const pastSeconds = (p: PastRun) => p.seconds ?? jobSeconds(p.job, now);
   return {
     repo: input.repo,
     workflow: input.workflow,
@@ -200,10 +225,9 @@ export function buildModel(input) {
  * The tests worth a snippet: failed, passed on a re-run, slower than usual
  * or flaky.
  *
- * @param {Model} model
- * @returns {Set<string>} their names
+ * @returns their names
  */
-export function noteworthy(model) {
+export function noteworthy(model: Model): Set<string> {
   return new Set(
     (model.tests ?? [])
       .filter(

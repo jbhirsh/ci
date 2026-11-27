@@ -33,41 +33,35 @@ import { MAX_CHARS, findComment as findMarked, ghApi, statusOf } from '../lib/co
 import { artifactName } from './history.ts';
 import { cell } from './render.ts';
 import { pagesBase } from './report.ts';
+import type { Api } from '../lib/comment.mjs';
 
-/** @typedef {import('../lib/comment.mjs').Api} Api */
-/**
- * Downloads a run's job-summary-* artifacts into a folder, throwing when
- * there are none.
- *
- * @typedef {(runId: string, dir: string) => void} Download
- */
+/** Downloads a run's job-summary-* artifacts into a folder, throwing when there are none. */
+export type Download = (runId: string, dir: string) => void;
 
-/**
- * One job's part of the comment.
- *
- * @typedef {object} Section
- * @property {string} workflow the workflow's name
- * @property {string} job its job-summary artifact's slug
- * @property {string} sha the commit its run was for
- * @property {string} text its Markdown (render.ts section)
- */
+/** One job's part of the comment. */
+export type Section = {
+  /** the workflow's name */
+  workflow: string;
+  /** its job-summary artifact's slug */
+  job: string;
+  /** the commit its run was for */
+  sha: string;
+  /** its Markdown (render.ts section) */
+  text: string;
+};
 
-/**
- * The run that last updated the comment, for its footer.
- *
- * @typedef {{ workflow: string, number: number, url: string }} Updater
- */
+/** The run that last updated the comment, for its footer. */
+export type Updater = { workflow: string; number: number; url: string };
 
-/**
- * What a run looks like to the API, as far as this reads it.
- *
- * @typedef {object} RunInfo
- * @property {string} name its workflow's name
- * @property {number} run_number
- * @property {string} head_sha
- * @property {string} html_url
- * @property {{ number: number, url?: string }[]} [pull_requests]
- */
+/** What a run looks like to the API, as far as this reads it. */
+export type RunInfo = {
+  /** its workflow's name */
+  name: string;
+  run_number: number;
+  head_sha: string;
+  html_url: string;
+  pull_requests?: { number: number; url?: string }[];
+};
 
 /** The marker the comment starts with, to find it again. */
 export const MARKER = '<!-- job-reports -->';
@@ -84,10 +78,8 @@ const SECTION =
 /**
  * Text with any lone surrogate replaced, which encodeURIComponent can't
  * take.
- *
- * @param {string} text
  */
-function wellFormed(text) {
+function wellFormed(text: string) {
   return text.replace(
     /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
     '�',
@@ -96,10 +88,8 @@ function wellFormed(text) {
 
 /**
  * A marker's value: no space, nothing that would end the comment.
- *
- * @param {string} value
  */
-const encode = (value) => encodeURIComponent(wellFormed(value));
+const encode = (value: string) => encodeURIComponent(wellFormed(value));
 
 /**
  * A section's text as the comment holds it: trimmed, with nothing that
@@ -107,10 +97,8 @@ const encode = (value) => encodeURIComponent(wellFormed(value));
  * scoped package ("@types/node") would otherwise notify whoever holds that
  * name, so a zero-width space goes after each @ that starts one. Cleaning
  * twice changes nothing.
- *
- * @param {string} text
  */
-export function clean(text) {
+export function clean(text: string) {
   return text
     .replace(/\r/g, '')
     .replace(/<!--/g, '&lt;!--')
@@ -122,13 +110,9 @@ export function clean(text) {
  * The sections a comment holds, in its order, each workflow and job once
  * (the first). Anything else in it (the heading, notes, the footer, text
  * someone added) is left out, as are markers that don't decode.
- *
- * @param {string} body
- * @returns {Section[]}
  */
-export function parseSections(body) {
-  /** @type {Section[]} */
-  const sections = [];
+export function parseSections(body: string): Section[] {
+  const sections: Section[] = [];
   const seen = new Set();
   for (const m of body.replace(/\r\n/g, '\n').matchAll(SECTION)) {
     try {
@@ -155,12 +139,11 @@ export function parseSections(body) {
  * too), every other workflow's kept, ordered by workflow name, each
  * workflow's in the order it came (the run's job order for this run's).
  *
- * @param {Section[]} existing
- * @param {Section[]} own this run's, in its job order
- * @param {string} workflow this run's
- * @returns {Section[]}
+ * @param existing
+ * @param own this run's, in its job order
+ * @param workflow this run's
  */
-export function mergeSections(existing, own, workflow) {
+export function mergeSections(existing: Section[], own: Section[], workflow: string): Section[] {
   const all = [...existing.filter((s) => s.workflow !== workflow), ...own];
   return all
     .map((s, i) => ({ s, i }))
@@ -172,19 +155,17 @@ export function mergeSections(existing, own, workflow) {
 
 /**
  * A commit as people read it, or '' for what isn't one.
- *
- * @param {string} sha
  */
-const short = (sha) => (/^[0-9a-f]{7,40}$/i.test(sha) ? sha.slice(0, 7) : '');
+const short = (sha: string) => (/^[0-9a-f]{7,40}$/i.test(sha) ? sha.slice(0, 7) : '');
 
 /**
  * One section as the comment holds it: its marker, its text, its end, and
  * a note when it's from an earlier commit than the comment's.
  *
- * @param {Section} s
- * @param {string} head the commit the comment is for
+ * @param s
+ * @param head the commit the comment is for
  */
-function block(s, head) {
+function block(s: Section, head: string) {
   const marker = `<!-- job-reports:section workflow=${encode(s.workflow)} job=${encode(s.job)} sha=${encode(s.sha)} -->`;
   const lines = [marker, clean(s.text), END];
   if (s.sha !== head) {
@@ -199,13 +180,17 @@ function block(s, head) {
  * naming the run that last updated it, cut to MAX_CHARS with a note
  * pointing to the reports.
  *
- * @param {string} repo owner/name
- * @param {string} head the commit
- * @param {Section[]} sections in order
- * @param {Updater} by
- * @returns {string}
+ * @param repo owner/name
+ * @param head the commit
+ * @param sections in order
+ * @param by
  */
-export function composeComment(repo, head, sections, by) {
+export function composeComment(
+  repo: string,
+  head: string,
+  sections: Section[],
+  by: Updater,
+): string {
   const top = `${MARKER}\n### Job reports · \`${short(head) || 'unknown'}\``;
   const footer = `<sub>Updated by Job reports after each run, last after [${cell(by.workflow)} #${by.number}](${by.url}).</sub>`;
   const site = pagesBase(repo);
@@ -240,11 +225,9 @@ export function composeComment(repo, head, sections, by) {
 
 /**
  * The first line of what went wrong, for a log.
- *
- * @param {unknown} error
  */
-function reason(error) {
-  const e = /** @type {{ stderr?: unknown }} */ (error ?? {});
+function reason(error: unknown) {
+  const e = (error ?? {}) as { stderr?: unknown };
   const text =
     (typeof e.stderr === 'string' && e.stderr.trim()) ||
     (error instanceof Error ? error.message : String(error));
@@ -256,13 +239,17 @@ function reason(error) {
  * into: each job-summary-<job>/section.md, in the run's job order (jobs
  * the order doesn't name last, by name).
  *
- * @param {string} dir
- * @param {Map<string, number>} order by artifact slug
- * @param {string} workflow
- * @param {string} sha
- * @returns {Section[]}
+ * @param dir
+ * @param order by artifact slug
+ * @param workflow
+ * @param sha
  */
-export function readSections(dir, order, workflow, sha) {
+export function readSections(
+  dir: string,
+  order: Map<string, number>,
+  workflow: string,
+  sha: string,
+): Section[] {
   return readdirSync(dir)
     .filter((name) => name.startsWith('job-summary-'))
     .filter((name) => existsSync(path.join(dir, name, 'section.md')))
@@ -280,19 +267,13 @@ export function readSections(dir, order, workflow, sha) {
 /**
  * The run's jobs in their order, by artifact slug; none when the API won't
  * say.
- *
- * @param {Api} api
- * @param {string} repo
- * @param {string} runId
- * @returns {Map<string, number>}
  */
-export function jobOrder(api, repo, runId) {
+export function jobOrder(api: Api, repo: string, runId: string): Map<string, number> {
   try {
-    const answer = /** @type {{ jobs?: { name?: string }[] }} */ (
-      api('GET', `repos/${repo}/actions/runs/${runId}/jobs?per_page=100`)
-    );
-    /** @type {Map<string, number>} */
-    const order = new Map();
+    const answer = api('GET', `repos/${repo}/actions/runs/${runId}/jobs?per_page=100`) as {
+      jobs?: { name?: string }[];
+    };
+    const order: Map<string, number> = new Map();
     for (const [i, job] of (answer?.jobs ?? []).entries()) {
       const slug = artifactName(String(job.name ?? '')).replace(/^job-summary-/, '');
       if (!order.has(slug)) order.set(slug, i);
@@ -306,25 +287,18 @@ export function jobOrder(api, repo, runId) {
 /**
  * The run's pull requests: those the run names (in this repository), or
  * else the open ones from this repository whose head is the run's commit.
- *
- * @param {Api} api
- * @param {string} repo
- * @param {RunInfo} run
- * @returns {number[]}
  */
-export function pullRequestsOf(api, repo, run) {
+export function pullRequestsOf(api: Api, repo: string, run: RunInfo): number[] {
   const listed = (run.pull_requests ?? [])
     .filter((p) => !p.url || p.url.toLowerCase().includes(`/repos/${repo.toLowerCase()}/pulls/`))
     .map((p) => p.number);
   if (listed.length) return [...new Set(listed)];
-  const found = /** @type {unknown} */ (api('GET', `repos/${repo}/commits/${run.head_sha}/pulls`));
+  const found = api('GET', `repos/${repo}/commits/${run.head_sha}/pulls`) as unknown;
   if (!Array.isArray(found)) return [];
   return found
     .map(
       (p) =>
-        /** @type {{ number: number, state?: string, head?: { repo?: { full_name?: string } | null } }} */ (
-          p
-        ),
+        p as { number: number; state?: string; head?: { repo?: { full_name?: string } | null } },
     )
     .filter(
       (p) =>
@@ -337,13 +311,12 @@ export function pullRequestsOf(api, repo, run) {
 /**
  * The comment this keeps on a pull request, or null before the first: the
  * marker alone could be anyone's, so it's also AUTHOR's.
- *
- * @param {Api} api
- * @param {string} repo
- * @param {number} pr
- * @returns {{ id: number, body: string } | null}
  */
-export function findComment(api, repo, pr) {
+export function findComment(
+  api: Api,
+  repo: string,
+  pr: number,
+): { id: number; body: string } | null {
   return findMarked(api, repo, pr, MARKER);
 }
 
@@ -351,15 +324,16 @@ export function findComment(api, repo, pr) {
  * Puts the run's sections in one pull request's comment, making it or
  * editing it, unless the pull request has moved on to a newer commit.
  *
- * @param {Api} api
- * @param {string} repo
- * @param {number} pr
- * @param {RunInfo} run
- * @param {Section[]} own
- * @returns {string} what happened
+ * @returns what happened
  */
-export function updateComment(api, repo, pr, run, own) {
-  const pull = /** @type {{ head?: { sha?: string } }} */ (api('GET', `repos/${repo}/pulls/${pr}`));
+export function updateComment(
+  api: Api,
+  repo: string,
+  pr: number,
+  run: RunInfo,
+  own: Section[],
+): string {
+  const pull = api('GET', `repos/${repo}/pulls/${pr}`) as { head?: { sha?: string } };
   const head = pull?.head?.sha ?? '';
   if (head !== run.head_sha) {
     return `::notice::job-reports: #${pr} is at ${short(head) || 'another commit'} now, newer than this run's ${short(run.head_sha)}; its comment is left to that commit's runs.`;
@@ -384,11 +358,8 @@ export function updateComment(api, repo, pr, run, own) {
 /**
  * What a failed call means for the log: a notice when the token may not
  * comment, a warning otherwise.
- *
- * @param {unknown} error
- * @param {string} what
  */
-export function explain(error, what) {
+export function explain(error: unknown, what: string) {
   const status = statusOf(error);
   if (status === 403) {
     return `::notice::job-reports: no comment on ${what}: the token can't write it (HTTP 403; the caller's job-reports workflow needs pull-requests: write, which a Dependabot or fork run never has).`;
@@ -399,12 +370,13 @@ export function explain(error, what) {
 /**
  * Keeps the comment on each of the run's pull requests.
  *
- * @param {Record<string, string | undefined>} env
- * @param {Api} api
- * @param {Download} download
- * @returns {string[]} what happened, a line each
+ * @returns what happened, a line each
  */
-export function keepComments(env, api, download) {
+export function keepComments(
+  env: Record<string, string | undefined>,
+  api: Api,
+  download: Download,
+): string[] {
   const repo = env.GITHUB_REPOSITORY ?? '';
   const runId = env.RUN_ID ?? '';
   if (!repo || !/^\d+$/.test(runId)) {
@@ -417,7 +389,7 @@ export function keepComments(env, api, download) {
     } catch {
       return [`Run ${runId} has no job reports, so no comment.`];
     }
-    const run = /** @type {RunInfo} */ (api('GET', `repos/${repo}/actions/runs/${runId}`));
+    const run = api('GET', `repos/${repo}/actions/runs/${runId}`) as RunInfo;
     const own = readSections(work, jobOrder(api, repo, runId), run.name, run.head_sha);
     if (!own.length) return [`Run ${runId} has no job sections, so no comment.`];
     const prs = pullRequestsOf(api, repo, run);
@@ -436,36 +408,34 @@ export function keepComments(env, api, download) {
   }
 }
 
-/**
- * @param {Record<string, string | undefined>} env
- * @returns {Download}
- */
-const realDownload = (env) => (runId, dir) => {
-  execFileSync(
-    'gh',
-    [
-      'run',
-      'download',
-      runId,
-      '--repo',
-      env.GITHUB_REPOSITORY ?? '',
-      '--pattern',
-      'job-summary-*',
-      '--dir',
-      dir,
-    ],
-    { stdio: ['ignore', 'pipe', 'pipe'], timeout: 120_000 },
-  );
-};
+const realDownload =
+  (env: Record<string, string | undefined>): Download =>
+  (runId, dir) => {
+    execFileSync(
+      'gh',
+      [
+        'run',
+        'download',
+        runId,
+        '--repo',
+        env.GITHUB_REPOSITORY ?? '',
+        '--pattern',
+        'job-summary-*',
+        '--dir',
+        dir,
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 120_000 },
+    );
+  };
 
 /**
  * Logs what happened. Never throws.
- *
- * @param {Record<string, string | undefined>} [env]
- * @param {Api} [api]
- * @param {Download} [download]
  */
-export function main(env = process.env, api = ghApi, download = realDownload(env)) {
+export function main(
+  env: Record<string, string | undefined> = process.env,
+  api: Api = ghApi,
+  download: Download = realDownload(env),
+) {
   try {
     for (const line of keepComments(env, api, download)) console.log(line);
   } catch (error) {

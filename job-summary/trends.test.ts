@@ -9,20 +9,22 @@ import {
   testTrends,
   usual,
 } from './trends.ts';
+import type { PastRun } from './history.ts';
+import type { TestCase } from './junit.ts';
 
 const T0 = Date.parse('2026-10-29T10:00:00Z');
-/** @param {number} s seconds after T0 */
-const at = (s) => new Date(T0 + s * 1000).toISOString();
+/** @param s seconds after T0 */
+const at = (s: number) => new Date(T0 + s * 1000).toISOString();
 
 /**
  * A step as the Actions API gives it.
- *
- * @param {string} name
- * @param {string | null} conclusion
- * @param {string | null} start
- * @param {string | null} end
  */
-const step = (name, conclusion, start, end) => ({
+const step = (
+  name: string,
+  conclusion: string | null,
+  start: string | null,
+  end: string | null,
+) => ({
   name,
   conclusion,
   started_at: start,
@@ -32,13 +34,17 @@ const step = (name, conclusion, start, end) => ({
 /**
  * An earlier run of the job.
  *
- * @param {string} conclusion
- * @param {Record<string, number>} times each step's seconds
- * @param {import('./history.ts').PastRun['tests']} [tests]
- * @param {string} [sha]
- * @returns {import('./history.ts').PastRun}
+ * @param conclusion
+ * @param times each step's seconds
+ * @param tests
+ * @param sha
  */
-const pastRun = (conclusion, times, tests = null, sha = '') => ({
+const pastRun = (
+  conclusion: string,
+  times: Record<string, number>,
+  tests: PastRun['tests'] = null,
+  sha = '',
+): PastRun => ({
   run: {
     id: 1,
     run_number: 1,
@@ -123,13 +129,7 @@ describe('slower', () => {
 });
 
 describe('byTest', () => {
-  /**
-   * @param {string} name
-   * @param {import('./junit.ts').TestCase['result']} result
-   * @param {number} seconds
-   * @returns {import('./junit.ts').TestCase}
-   */
-  const tc = (name, result, seconds) => ({
+  const tc = (name: string, result: TestCase['result'], seconds: number): TestCase => ({
     name,
     seconds,
     result,
@@ -190,21 +190,23 @@ describe('stepTrends', () => {
 });
 
 describe('testTrends', () => {
-  /**
-   * @param {import('./junit.ts').TestCase['result']} result
-   * @param {number} [seconds]
-   */
-  const t = (result, seconds = 10) => [{ name: 'T', seconds, result }];
+  const t = (result: TestCase['result'], seconds = 10) => [{ name: 'T', seconds, result }];
   /**
    * The trend of test T, given its earlier results (oldest first) and this run's.
    *
-   * @param {(import('./history.ts').PastRun['tests'])[]} earlier
-   * @param {import('./junit.ts').TestCase['result']} result
-   * @param {number} [seconds]
-   * @param {string[]} [shas] the earlier runs' commits, then this run's
-   * @param {(Set<string> | null)[]} [changed] files each commit changed
+   * @param earlier
+   * @param result
+   * @param seconds
+   * @param shas the earlier runs' commits, then this run's
+   * @param changed files each commit changed
    */
-  const trend = (earlier, result, seconds = 10, shas = [], changed = []) =>
+  const trend = (
+    earlier: PastRun['tests'][],
+    result: TestCase['result'],
+    seconds = 10,
+    shas: string[] = [],
+    changed: (Set<string> | null)[] = [],
+  ) =>
     testTrends(
       [{ name: 'T', seconds, result, file: '', message: '', detail: '', suite: '', source: '' }],
       earlier.map((tests, i) => pastRun('success', {}, tests, shas[i])).reverse(),

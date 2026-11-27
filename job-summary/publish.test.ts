@@ -12,10 +12,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BRANCH, TRIES, addRun, indexPage, prune, publish, runsIn } from './publish.ts';
+import type { Run } from './publish.ts';
 
 const NOW = Date.parse('2026-10-29T12:00:00Z');
-/** @type {string[]} */
-const made = [];
+const made: string[] = [];
 const temp = () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'publish-test-'));
   made.push(dir);
@@ -28,9 +28,9 @@ afterEach(() => {
 /**
  * A folder of downloaded artifacts: each name's report.html.
  *
- * @param {Record<string, string | null>} artifacts null for one with no report
+ * @param artifacts null for one with no report
  */
-function downloads(artifacts) {
+function downloads(artifacts: Record<string, string | null>) {
   const dir = temp();
   for (const [name, html] of Object.entries(artifacts)) {
     mkdirSync(path.join(dir, name));
@@ -41,11 +41,8 @@ function downloads(artifacts) {
 
 /**
  * A run's facts.
- *
- * @param {number} id
- * @param {string} created
  */
-const meta = (id, created) => ({
+const meta = (id: number, created: string) => ({
   id,
   number: id,
   workflow: 'CI',
@@ -118,20 +115,17 @@ describe('publish', () => {
    * pushes are tried starts no git process (each start costs ~250 ms on a
    * loaded runner, and six attempts make about 40 of them); the path where a
    * fetch of the branch fails is then covered only by the tests with real git.
-   *
-   * @param {Record<string, string | null>} artifacts
-   * @param {{ failPushes?: number, noArtifacts?: boolean, fakeGit?: boolean }} [opts]
    */
-  function setup(artifacts, opts = {}) {
+  function setup(
+    artifacts: Record<string, string | null>,
+    opts: { failPushes?: number; noArtifacts?: boolean; fakeGit?: boolean } = {},
+  ) {
     const remote = temp();
     if (!opts.fakeGit) execFileSync('git', ['init', '-q', '--bare', remote]);
     let failures = opts.failPushes ?? 0;
-    /** @type {string[][]} */
-    const calls = [];
-    /** @type {Record<string, string>[]} */
-    const envs = [];
-    /** @type {import('./publish.ts').Run} */
-    const run = (args, cwd, extra = {}) => {
+    const calls: string[][] = [];
+    const envs: Record<string, string>[] = [];
+    const run: Run = (args, cwd, extra = {}) => {
       calls.push(args);
       envs.push(extra);
       if (args[0] === 'gh' && args[1] === 'run') {

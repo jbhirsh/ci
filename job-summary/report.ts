@@ -6,8 +6,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-/** @typedef {import('./model.ts').Model} Model */
+import type { Model } from './model.ts';
 
 /** How many days of reports the Pages site keeps (publish.ts prunes older). */
 export const KEEP_DAYS = 30;
@@ -18,10 +17,8 @@ const SLOT = /\/\* __REPORT_DATA__ \*\/ null/;
 
 /**
  * The page's template.
- *
- * @returns {string}
  */
-export function template() {
+export function template(): string {
   return readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), 'report.html'),
     'utf8',
@@ -32,10 +29,8 @@ export function template() {
  * JSON that can sit inside a script element: every "<" written as its
  * Unicode escape, so no test name or message holding "</script>" can end
  * it, and the two characters JavaScript reads as line ends escaped too.
- *
- * @param {unknown} value
  */
-export function scriptJson(value) {
+export function scriptJson(value: unknown) {
   return JSON.stringify(value)
     .replace(/</g, '\\u003c')
     .replace(/\u2028/g, '\\u2028')
@@ -45,10 +40,10 @@ export function scriptJson(value) {
 /**
  * The page, with the model in it.
  *
- * @param {Model} model
- * @param {string} [page] the template
+ * @param model
+ * @param page the template
  */
-export function report(model, page = template()) {
+export function report(model: Model, page: string = template()) {
   if (!SLOT.test(page)) throw new Error('report.html has no data slot');
   return page.replace(SLOT, () => scriptJson(model));
 }
@@ -56,20 +51,20 @@ export function report(model, page = template()) {
 /**
  * Where an earlier run's report is: under the Pages site, by run and job.
  *
- * @param {string} base the site's address, e.g. https://jbhirsh.github.io/sift
- * @param {number | string} runId
- * @param {string} artifact the job's artifact name (history.ts artifactName)
+ * @param base the site's address, e.g. https://jbhirsh.github.io/sift
+ * @param runId
+ * @param artifact the job's artifact name (history.ts artifactName)
  */
-export function reportUrl(base, runId, artifact) {
+export function reportUrl(base: string, runId: number | string, artifact: string) {
   return `${base.replace(/\/+$/, '')}/runs/${runId}/${artifact.replace(/^job-summary-/, '')}/`;
 }
 
 /**
  * The Pages site's address for a repository: GitHub's default for it.
  *
- * @param {string} repo owner/name
+ * @param repo owner/name
  */
-export function pagesBase(repo) {
+export function pagesBase(repo: string) {
   const [owner, name] = repo.split('/');
   if (!owner || !name) return '';
   return name.toLowerCase() === `${owner.toLowerCase()}.github.io`

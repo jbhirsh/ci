@@ -11,14 +11,12 @@ import {
   section,
   verdict,
 } from './render.ts';
+import type { Model, ModelTest } from './model.ts';
 
 /**
  * A test in a model.
- *
- * @param {Partial<import('./model.ts').ModelTest>} over
- * @returns {import('./model.ts').ModelTest}
  */
-const mt = (over) => ({
+const mt = (over: Partial<ModelTest>): ModelTest => ({
   name: 'T',
   folder: '',
   file: '',
@@ -41,11 +39,8 @@ const mt = (over) => ({
 
 /**
  * A model, with what a test changes.
- *
- * @param {Partial<import('./model.ts').Model>} [over]
- * @returns {import('./model.ts').Model}
  */
-const model = (over = {}) => ({
+const model = (over: Partial<Model> = {}): Model => ({
   repo: 'jbhirsh/sift',
   workflow: 'CI',
   job: 'E2E Tests (Maestro)',

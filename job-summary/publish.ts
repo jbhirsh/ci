@@ -34,7 +34,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { KEEP_DAYS } from './report.ts';
 
-/** @typedef {(args: string[], cwd?: string, env?: Record<string, string>) => string} Run */
+export type Run = (args: string[], cwd?: string, env?: Record<string, string>) => string;
 
 /** The branch Pages serves. */
 export const BRANCH = 'job-reports';
@@ -49,26 +49,24 @@ export const VERCEL_JSON = `${JSON.stringify({ git: { deploymentEnabled: false }
 /** How many times a push is tried when another publish got there first. */
 export const TRIES = 6;
 
-/**
- * A run's facts, kept beside its reports for the index.
- *
- * @typedef {object} RunMeta
- * @property {number} id
- * @property {number} number
- * @property {string} workflow
- * @property {string} branch
- * @property {string} sha
- * @property {string} created ISO time
- * @property {string} url
- * @property {string[]} jobs the report folders
- */
+/** A run's facts, kept beside its reports for the index. */
+export type RunMeta = {
+  id: number;
+  number: number;
+  workflow: string;
+  branch: string;
+  sha: string;
+  /** ISO time */
+  created: string;
+  url: string;
+  /** the report folders */
+  jobs: string[];
+};
 
 /**
  * Text escaped for HTML.
- *
- * @param {string} text
  */
-function esc(text) {
+function esc(text: string) {
   return text.replace(
     /[&<>"]/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c,
@@ -77,18 +75,14 @@ function esc(text) {
 
 /**
  * The runs the site holds, newest first, each from its meta.json.
- *
- * @param {string} site
- * @returns {RunMeta[]}
  */
-export function runsIn(site) {
+export function runsIn(site: string): RunMeta[] {
   const dir = path.join(site, 'runs');
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .flatMap((id) => {
       try {
-        /** @type {RunMeta} */
-        const meta = JSON.parse(readFileSync(path.join(dir, id, 'meta.json'), 'utf8'));
+        const meta: RunMeta = JSON.parse(readFileSync(path.join(dir, id, 'meta.json'), 'utf8'));
         return [meta];
       } catch {
         return [];
@@ -101,12 +95,12 @@ export function runsIn(site) {
  * Puts a run's reports in the site: each artifact folder's report.html at
  * runs/<run>/<job>/index.html, with the run's facts beside them.
  *
- * @param {string} site
- * @param {string} downloaded the folder the artifacts were downloaded into
- * @param {Omit<RunMeta, 'jobs'>} meta
- * @returns {string[]} the jobs added
+ * @param site
+ * @param downloaded the folder the artifacts were downloaded into
+ * @param meta
+ * @returns the jobs added
  */
-export function addRun(site, downloaded, meta) {
+export function addRun(site: string, downloaded: string, meta: Omit<RunMeta, 'jobs'>): string[] {
   const jobs = readdirSync(downloaded)
     .filter((name) => name.startsWith('job-summary-'))
     .filter((name) => existsSync(path.join(downloaded, name, 'report.html')))
@@ -120,7 +114,7 @@ export function addRun(site, downloaded, meta) {
     return slug;
   });
   const before = existsSync(path.join(runDir, 'meta.json'))
-    ? /** @type {RunMeta} */ (JSON.parse(readFileSync(path.join(runDir, 'meta.json'), 'utf8')))
+    ? (JSON.parse(readFileSync(path.join(runDir, 'meta.json'), 'utf8')) as RunMeta)
     : null;
   const all = [...new Set([...(before?.jobs ?? []), ...slugs])].sort();
   writeFileSync(path.join(runDir, 'meta.json'), JSON.stringify({ ...meta, jobs: all }, null, 2));
@@ -130,12 +124,12 @@ export function addRun(site, downloaded, meta) {
 /**
  * Deletes runs older than `days`, or with no facts to date them by.
  *
- * @param {string} site
- * @param {number} days
- * @param {number} now milliseconds
- * @returns {string[]} the run folders deleted
+ * @param site
+ * @param days
+ * @param now milliseconds
+ * @returns the run folders deleted
  */
-export function prune(site, days, now) {
+export function prune(site: string, days: number, now: number): string[] {
   const dir = path.join(site, 'runs');
   if (!existsSync(dir)) return [];
   const kept = new Set(
@@ -152,10 +146,10 @@ export function prune(site, days, now) {
  * The site's front page: its runs, newest first, each with its jobs'
  * reports.
  *
- * @param {string} repo owner/name
- * @param {RunMeta[]} runs newest first
+ * @param repo owner/name
+ * @param runs newest first
  */
-export function indexPage(repo, runs) {
+export function indexPage(repo: string, runs: RunMeta[]) {
   const rows = runs
     .map(
       (r) =>
@@ -185,10 +179,8 @@ ${rows || '<li>No reports yet.</li>'}
 
 /**
  * A command, run in a folder, its output returned, throwing when it fails.
- *
- * @type {Run}
  */
-function realRun(args, cwd, env) {
+function realRun(args: string[], cwd?: string, env?: Record<string, string>): string {
   const [cmd, ...rest] = args;
   return execFileSync(cmd, rest, {
     cwd,
@@ -204,12 +196,16 @@ function realRun(args, cwd, env) {
  * times reads the branch, adds the run, prunes, writes the index and pushes
  * one parentless commit with a lease on the one it replaces.
  *
- * @param {Record<string, string | undefined>} env
- * @param {Run} [run]
- * @param {number} [now] milliseconds
- * @returns {string} what happened
+ * @param env
+ * @param run
+ * @param now milliseconds
+ * @returns what happened
  */
-export function publish(env, run = realRun, now = Date.now()) {
+export function publish(
+  env: Record<string, string | undefined>,
+  run: Run = realRun,
+  now: number = Date.now(),
+): string {
   const repo = env.GITHUB_REPOSITORY ?? '';
   const runId = env.RUN_ID ?? '';
   const token = env.GH_TOKEN ?? '';
@@ -235,8 +231,14 @@ export function publish(env, run = realRun, now = Date.now()) {
     } catch {
       return `Run ${runId} has no job reports.`;
     }
-    /** @type {{ run_number: number, name: string, head_branch: string | null, head_sha: string, created_at: string, html_url: string }} */
-    const info = JSON.parse(run(['gh', 'api', `repos/${repo}/actions/runs/${runId}`]));
+    const info: {
+      run_number: number;
+      name: string;
+      head_branch: string | null;
+      head_sha: string;
+      created_at: string;
+      html_url: string;
+    } = JSON.parse(run(['gh', 'api', `repos/${repo}/actions/runs/${runId}`]));
     const meta = {
       id: Number(runId),
       number: info.run_number,
@@ -255,7 +257,7 @@ export function publish(env, run = realRun, now = Date.now()) {
       GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
       GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
     };
-    const git = (/** @type {string[]} */ args) => run(['git', ...args], site, auth);
+    const git = (args: string[]) => run(['git', ...args], site, auth);
     git(['init', '-q']);
     git(['remote', 'add', 'origin', env.REMOTE || `https://github.com/${repo}.git`]);
     git(['config', 'user.name', 'github-actions[bot]']);

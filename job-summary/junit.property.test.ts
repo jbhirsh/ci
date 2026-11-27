@@ -4,10 +4,8 @@ import { MESSAGE_LENGTH, parseJunit, unescapeXml } from './junit.ts';
 
 /**
  * An attribute value as XML would carry it.
- *
- * @param {string} text
  */
-const escape = (text) =>
+const escape = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 describe('parseJunit, for any input', () => {
@@ -28,12 +26,7 @@ describe('parseJunit, for any input', () => {
     const testCase = fc.record({
       name: fc.string({ minLength: 1, maxLength: 40 }).filter((s) => s.trim() !== ''),
       seconds: fc.double({ min: 0, max: 1e5, noNaN: true }),
-      result: fc.constantFrom(
-        /** @type {const} */ ('passed'),
-        'failed',
-        'skipped',
-        'passed on re-run',
-      ),
+      result: fc.constantFrom('passed' as const, 'failed', 'skipped', 'passed on re-run'),
     });
     fc.assert(
       fc.property(fc.array(testCase, { maxLength: 8 }), (cases) => {

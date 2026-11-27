@@ -1,16 +1,15 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { MAX_CHARS, clean, composeComment, mergeSections, parseSections } from './comment.ts';
+import type { Section } from './comment.ts';
 
 const by = { workflow: 'CI', number: 1, url: 'https://gh/run/1' };
 const head = 'a'.repeat(40);
 
 /**
  * A section, its text up to the given length.
- *
- * @param {number} maxLength
  */
-const sectionOf = (maxLength) =>
+const sectionOf = (maxLength: number) =>
   fc.record({
     workflow: fc.string({ unit: 'binary', maxLength: 30 }),
     job: fc.string({ unit: 'binary', maxLength: 30 }),
@@ -21,17 +20,13 @@ const section = sectionOf(300);
 
 /**
  * A string as a marker carries it: lone surrogates replaced.
- *
- * @param {string} text
  */
-const wellFormed = (text) => Buffer.from(text, 'utf8').toString('utf8');
+const wellFormed = (text: string) => Buffer.from(text, 'utf8').toString('utf8');
 
 /**
  * Sections as they go in: each workflow and job once, with some text.
- *
- * @param {import('./comment.ts').Section[]} list
  */
-const distinct = (list) => {
+const distinct = (list: Section[]) => {
   const seen = new Set();
   return list.filter((s) => {
     const key = JSON.stringify([wellFormed(s.workflow), wellFormed(s.job)]);

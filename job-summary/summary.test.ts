@@ -12,10 +12,13 @@ import {
   record,
   reportFiles,
 } from './summary.ts';
+import type { Gh } from './history.ts';
+import type { Git } from './source.ts';
+import type { Model } from './model.ts';
 
 const T0 = Date.parse('2026-10-29T10:00:00Z');
-/** @param {number} s seconds after T0 */
-const at = (s) => new Date(T0 + s * 1000).toISOString();
+/** @param s seconds after T0 */
+const at = (s: number) => new Date(T0 + s * 1000).toISOString();
 
 const env = {
   JOB: 'Accessibility audit',
@@ -37,15 +40,11 @@ const thisRun = {
 
 /**
  * A fake gh: this run, its jobs, and no earlier runs unless given.
- *
- * @param {Record<string, unknown>} [more]
- * @returns {import('./history.ts').Gh}
  */
 const fakeGh =
-  (more = {}) =>
+  (more: Record<string, unknown> = {}): Gh =>
   (args) => {
-    /** @type {Record<string, unknown>} */
-    const answers = {
+    const answers: Record<string, unknown> = {
       'repos/jbhirsh/sift/actions/runs/42/attempts/2/jobs?per_page=100': {
         jobs: [
           {
@@ -72,8 +71,7 @@ const fakeGh =
     return JSON.stringify(answers[args[1]]);
   };
 
-/** @type {Record<string, string>} */
-const files = {
+const files: Record<string, string> = {
   'r/a.xml': '<testcase name="T" time="2" status="ERROR"/><testcase name="U" time="5"/>',
   'r/T.retry.xml': '<testcase name="T" time="3"/>',
   'r/b.xml': 'garbage',
@@ -82,8 +80,7 @@ const files = {
   'a/x.test.mjs':
     "describe('x', () => {\n  it('reads it', () => {\n    expect(1).toBe(2);\n  });\n});",
 };
-/** @type {import('./source.ts').Git} */
-const git = (args) => {
+const git: Git = (args) => {
   if (args[0] === 'ls-files') return 'a/x.test.mjs\n';
   if (args[0] === 'diff') return '';
   return '';
@@ -91,7 +88,7 @@ const git = (args) => {
 const io = {
   git,
   page: '<script>const data = /* __REPORT_DATA__ */ null;</script>',
-  read: (/** @type {string} */ f) => {
+  read: (f: string) => {
     if (!(f in files)) throw new Error('ENOENT');
     return files[f];
   },
@@ -101,8 +98,7 @@ const io = {
 
 describe('reportFiles', () => {
   it('expands each pattern, sorted, each file once, blank lines ignored', () => {
-    /** @type {Record<string, string[]>} */
-    const tree = {
+    const tree: Record<string, string[]> = {
       'r/*.xml': ['r/suite.xml', 'r/19.retry.xml'],
       'r/suite.xml': ['r/suite.xml'],
     };
@@ -183,11 +179,8 @@ describe('record', () => {
 
 /**
  * The model a built report carries.
- *
- * @param {string | null} page
- * @returns {import('./model.ts').Model}
  */
-const modelOf = (page) => {
+const modelOf = (page: string | null): Model => {
   const m = (page ?? '').match(/const data = (.*);<\/script>/s);
   return JSON.parse((m?.[1] ?? 'null').replace(/\\u003c/g, '<'));
 };
@@ -280,8 +273,7 @@ describe('build', () => {
   });
 
   it("finds each test's file, and a snippet of the ones worth reading", () => {
-    /** @type {Record<string, string>} */
-    const more = {
+    const more: Record<string, string> = {
       ...files,
       'v.xml':
         '<testcase classname="a/x.test.mjs" name="x &gt; reads it" time="0.2"><failure message="expected 1 to be 2">AssertionError: expected 1 to be 2\n ❯ a/x.test.mjs:3:15</failure></testcase><testcase classname="a/x.test.mjs" name="x &gt; other" time="0.1"/>',
@@ -337,10 +329,8 @@ describe('build', () => {
         ],
       },
     });
-    /** @type {[number, string][]} */
-    const asked = [];
-    /** @type {string[][]} */
-    const gitCalls = [];
+    const asked: [number, string][] = [];
+    const gitCalls: string[][] = [];
     const built = build(env, gh, {
       ...io,
       git: (args) => {
@@ -405,7 +395,7 @@ describe('build', () => {
     const left = path.join('/rt', 'job-summary');
     const withLeft = {
       ...io,
-      read: (/** @type {string} */ f) => {
+      read: (f: string) => {
         if (f === path.join(left, 'notes.json')) return '{"Cores": "4"}';
         if (f === path.join(left, 'machine-cpu.csv')) return files['load.csv'];
         return io.read(f);

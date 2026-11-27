@@ -49,11 +49,10 @@ import { pagesBase, report, reportUrl } from './report.ts';
 import { changedFiles, locate, realGit, trackedFiles } from './source.ts';
 import { telemetryFiles } from './telemetry.mjs';
 import { byTest, jobSeconds, stepRows } from './trends.ts';
-
-/** @typedef {import('./history.ts').Gh} Gh */
-/** @typedef {import('./junit.ts').TestCase} TestCase */
-/** @typedef {import('./source.ts').Git} Git */
-/** @typedef {import('./model.ts').Sample} Sample */
+import type { Gh, Job, PastRun, Run } from './history.ts';
+import type { TestCase } from './junit.ts';
+import type { Git } from './source.ts';
+import type { Sample } from './model.ts';
 
 /** How many earlier runs are compared. */
 export const HISTORY = 9;
@@ -66,11 +65,13 @@ export const LOAD_MARGIN = 60;
  * The files the JUnit patterns match, each once, in order. A pattern's `*`
  * and `**` don't enter dot-folders; name one outright to read it.
  *
- * @param {string} patterns one per line
- * @param {(pattern: string) => string[]} [glob]
- * @returns {string[]}
+ * @param patterns one per line
+ * @param glob
  */
-export function reportFiles(patterns, glob = (p) => globSync(p)) {
+export function reportFiles(
+  patterns: string,
+  glob: (pattern: string) => string[] = (p) => globSync(p),
+): string[] {
   const files = patterns
     .split('\n')
     .map((p) => p.trim())
@@ -81,13 +82,12 @@ export function reportFiles(patterns, glob = (p) => globSync(p)) {
 
 /**
  * This run's tests, one per test, or null when no reports were asked for.
- *
- * @param {string} patterns
- * @param {(file: string) => string} read
- * @param {(pattern: string) => string[]} [glob]
- * @returns {TestCase[] | null}
  */
-export function readTests(patterns, read, glob) {
+export function readTests(
+  patterns: string,
+  read: (file: string) => string,
+  glob?: (pattern: string) => string[],
+): TestCase[] | null {
   if (!patterns.trim()) return null;
   const cases = reportFiles(patterns, glob).flatMap((f) => {
     try {
@@ -104,12 +104,8 @@ export function readTests(patterns, read, glob) {
  * its tests (null without reports), and the job's time so far, which later
  * runs compare theirs with, as both stop at the summary (a job's end
  * includes its summary's downloads and the post-job steps).
- *
- * @param {string} job
- * @param {TestCase[] | null} tests
- * @param {number | null} seconds
  */
-export function record(job, tests, seconds) {
+export function record(job: string, tests: TestCase[] | null, seconds: number | null) {
   return JSON.stringify({
     version: 2,
     job,
@@ -121,13 +117,9 @@ export function record(job, tests, seconds) {
 /**
  * The notes a job's steps wrote (NOTES): a JSON object, or a list of
  * [label, value] pairs, shown in the report's Environment section.
- *
- * @param {string} text
- * @returns {[string, string][]}
  */
-export function parseNotes(text) {
-  /** @type {unknown} */
-  let data;
+export function parseNotes(text: string): [string, string][] {
+  let data: unknown;
   try {
     data = JSON.parse(text);
   } catch {
@@ -148,12 +140,11 @@ export function parseNotes(text) {
  * it, or more than LOAD_MARGIN seconds after it so far: a time in
  * milliseconds, say) are left out.
  *
- * @param {string} text
- * @param {number} start the job's start, milliseconds
- * @param {number} seconds the job's time so far
- * @returns {Sample[]}
+ * @param text
+ * @param start the job's start, milliseconds
+ * @param seconds the job's time so far
  */
-export function parseLoad(text, start, seconds) {
+export function parseLoad(text: string, start: number, seconds: number): Sample[] {
   return text
     .split('\n')
     .map((line) => line.split(',').map((v) => Number(v.trim())))
@@ -167,37 +158,35 @@ export function parseLoad(text, start, seconds) {
     .map((p) => ({ ...p, t: Math.max(0, p.t) }));
 }
 
-/**
- * Options for build, each replaceable in a test.
- *
- * @typedef {object} Io
- * @property {(file: string) => string} [read]
- * @property {(pattern: string) => string[]} [glob]
- * @property {number} [now] milliseconds
- * @property {(runId: number, artifact: string) => string | null} [download] an
- *   earlier run's record
- * @property {() => number} [clock] milliseconds, for the history's time limit
- * @property {Git} [git] git in the checkout
- * @property {string} [page] the report's template
- */
+/** Options for build, each replaceable in a test. */
+export type Io = {
+  read?: (file: string) => string;
+  glob?: (pattern: string) => string[];
+  /** milliseconds */
+  now?: number;
+  /** an earlier run's record */
+  download?: (runId: number, artifact: string) => string | null;
+  /** milliseconds, for the history's time limit */
+  clock?: () => number;
+  /** git in the checkout */
+  git?: Git;
+  /** the report's template */
+  page?: string;
+};
 
-/**
- * What build makes.
- *
- * @typedef {object} Built
- * @property {string} markdown the summary
- * @property {string} section the job's part of the pull request's comment
- * @property {string | null} record this run's record, null when there's nothing to keep
- * @property {string | null} report the report page, null without a run
- */
+/** What build makes. */
+export type Built = {
+  /** the summary */
+  markdown: string;
+  /** the job's part of the pull request's comment */
+  section: string;
+  /** this run's record, null when there's nothing to keep */
+  record: string | null;
+  /** the report page, null without a run */
+  report: string | null;
+};
 
-/**
- * @param {Record<string, string | undefined>} env
- * @param {Gh} gh
- * @param {Io} [io]
- * @returns {Built}
- */
-export function build(env, gh, io = {}) {
+export function build(env: Record<string, string | undefined>, gh: Gh, io: Io = {}): Built {
   const read = io.read ?? ((f) => readFileSync(f, 'utf8'));
   const clock = io.clock ?? Date.now;
   const git = io.git ?? realGit;
@@ -206,7 +195,7 @@ export function build(env, gh, io = {}) {
   if (!job) throw new Error('JOB is not set');
   const repo = env.GITHUB_REPOSITORY ?? '';
   const tests = readTests(env.JUNIT ?? '', read, io.glob);
-  const optional = (/** @type {string | undefined} */ file) => {
+  const optional = (file: string | undefined) => {
     if (!file) return null;
     try {
       return read(file);
@@ -218,8 +207,7 @@ export function build(env, gh, io = {}) {
   // job-summary/sample-load left in RUNNER_TEMP, if they ran.
   const left = telemetryFiles(env);
   const notesText = optional(env.NOTES || left?.notes);
-  /** @type {[string, string][]} */
-  const notes =
+  const notes: [string, string][] =
     notesText !== null
       ? parseNotes(notesText)
       : env.NOTES
@@ -228,12 +216,9 @@ export function build(env, gh, io = {}) {
   const settle = Number(env.SETTLE);
 
   let problem = '';
-  /** @type {import('./history.ts').Run | null} */
-  let run = null;
-  /** @type {import('./history.ts').Job | null} */
-  let thisJob = null;
-  /** @type {import('./history.ts').PastRun[]} */
-  let past = [];
+  let run: Run | null = null;
+  let thisJob: Job | null = null;
+  let past: PastRun[] = [];
   // One time limit for reading the history and asking git about it.
   const until = clock() + HISTORY_MS;
   const found = current(env, gh);
@@ -309,8 +294,7 @@ export function build(env, gh, io = {}) {
   };
 }
 
-/** @type {Gh} */
-function realGh(args) {
+function realGh(args: string[]): string {
   return execFileSync('gh', args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -323,12 +307,12 @@ function realGh(args) {
  * section in one folder, named in the step's outputs for action.yml to
  * upload as the job's artifact. Never throws: a summary that can't be
  * written is a warning.
- *
- * @param {Record<string, string | undefined>} [env]
- * @param {Gh} [gh]
- * @param {Io} [io]
  */
-export function main(env = process.env, gh = realGh, io = {}) {
+export function main(
+  env: Record<string, string | undefined> = process.env,
+  gh: Gh = realGh,
+  io: Io = {},
+) {
   try {
     const built = build(env, gh, io);
     summary(built.markdown);

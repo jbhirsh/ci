@@ -13,8 +13,7 @@ function runnerTemp() {
 }
 
 describe('reading', () => {
-  /** @type {Record<string, string>} */
-  const proc = {
+  const proc: Record<string, string> = {
     '/proc/loadavg': '1.25 0.9 0.8 2/300 999\n',
     '/proc/stat': 'cpu  10 0 10 70 10 0 0 0 0 0\ncpu0 1 1 1 1\n',
   };
@@ -67,8 +66,7 @@ describe('loop', () => {
       null,
       { load: 3, cpu: { idle: 5, total: 20 } },
     ];
-    /** @type {(() => void)[]} */
-    const timers = [];
+    const timers: (() => void)[] = [];
     let now = 1_700_000_000_000;
     loop(
       file,
@@ -86,8 +84,7 @@ describe('loop', () => {
   });
 
   it("skips a row it can't write, and carries on", () => {
-    /** @type {(() => void)[]} */
-    const timers = [];
+    const timers: (() => void)[] = [];
     let n = 0;
     loop(
       path.join(tmpdir(), 'no-such-folder-here', 'x', 'cpu.csv'),

@@ -1,22 +1,18 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import { pagesBase, report, reportUrl, scriptJson, template } from './report.ts';
+import type { Model } from './model.ts';
 
-/**
- * jsdom, which ships no types: the part of it these tests use.
- *
- * @typedef {typeof globalThis} Win
- * @typedef {{ runScripts: string, beforeParse: (window: Win) => void }} DomOptions
- * @type {{ JSDOM: new (html: string, options: DomOptions) => { window: Win } }}
- */
-const { JSDOM } = createRequire(import.meta.url)('jsdom');
+type Win = typeof globalThis;
+type DomOptions = { runScripts: string; beforeParse: (window: Win) => void };
+/** jsdom, which ships no types: the part of it these tests use. */
+const { JSDOM }: { JSDOM: new (html: string, options: DomOptions) => { window: Win } } =
+  createRequire(import.meta.url)('jsdom');
 
 /**
  * A model with one of everything the page draws.
- *
- * @returns {import('./model.ts').Model}
  */
-const model = () => ({
+const model = (): Model => ({
   repo: 'jbhirsh/ci',
   workflow: 'CI',
   job: 'Check',
@@ -133,11 +129,8 @@ const model = () => ({
 
 /**
  * An element the page drew, to click or check.
- *
- * @param {Win} w
- * @param {string} selector
  */
-function el(w, selector) {
+function el(w: Win, selector: string) {
   const found = w.document.querySelector(selector);
   if (!(found instanceof w.HTMLElement)) throw new Error(`no ${selector}`);
   return found;
@@ -145,16 +138,12 @@ function el(w, selector) {
 
 /**
  * The report page, run in jsdom.
- *
- * @param {import('./model.ts').Model} m
  */
-function open(m) {
+function open(m: Model) {
   const dom = new JSDOM(report(m), {
     runScripts: 'dangerously',
     beforeParse(window) {
-      window.matchMedia = /** @type {Win['matchMedia']} */ (
-        /** @type {unknown} */ (() => ({ matches: false }))
-      );
+      window.matchMedia = (() => ({ matches: false })) as unknown as Win['matchMedia'];
       window.HTMLElement.prototype.scrollIntoView = () => {};
       window.alert = () => {
         throw new Error('the page ran a test name as HTML');
@@ -185,7 +174,7 @@ describe('report', () => {
 
   it('draws the run: the verdict, what needs attention, the steps, the tests and the history', () => {
     const w = open(model());
-    const $ = (/** @type {string} */ s) => w.document.querySelector(s);
+    const $ = (s: string) => w.document.querySelector(s);
     expect(w.document.title).toBe('Check · run #12');
     expect($('#title')?.textContent).toBe('Check 1 of 2 tests failed');
     expect($('#facts')?.textContent).toContain('Usual 1m 00s 17% slower');
@@ -301,7 +290,7 @@ describe('report', () => {
       load: [],
       problem: 'the run could not be read',
     });
-    const hidden = (/** @type {string} */ id) => el(w, `#${id}`).hidden;
+    const hidden = (id: string) => el(w, `#${id}`).hidden;
     expect(hidden('tests-card')).toBe(true);
     expect(hidden('history-card')).toBe(true);
     expect(hidden('notes-card')).toBe(true);

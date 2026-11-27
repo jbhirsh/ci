@@ -15,27 +15,30 @@
 // message survives. Anything that isn't JUnit yields no tests, never an
 // error.
 
-/**
- * One test (a flow, a spec) from a JUnit report.
- *
- * @typedef {object} TestCase
- * @property {string} name
- * @property {number} seconds
- * @property {'passed' | 'failed' | 'skipped' | 'passed on re-run'} result
- * @property {string} file the report it came from
- * @property {string} message a failure's first line ('' otherwise)
- * @property {string} detail a failure's whole message, up to DETAIL_LENGTH
- * @property {string} suite its classname: Vitest's and Playwright's file
- * @property {string} source its file attribute: Maestro's flow
- */
+/** One test (a flow, a spec) from a JUnit report. */
+export type TestCase = {
+  name: string;
+  seconds: number;
+  result: 'passed' | 'failed' | 'skipped' | 'passed on re-run';
+  /** the report it came from */
+  file: string;
+  /** a failure's first line ('' otherwise) */
+  message: string;
+  /** a failure's whole message, up to DETAIL_LENGTH */
+  detail: string;
+  /** its classname: Vitest's and Playwright's file */
+  suite: string;
+  /** its file attribute: Maestro's flow */
+  source: string;
+};
 
-const ENTITIES = /** @type {Record<string, string>} */ ({
+const ENTITIES = {
   amp: '&',
   lt: '<',
   gt: '>',
   quot: '"',
   apos: "'",
-});
+} as Record<string, string>;
 
 /** How much of a failure's first line to keep. */
 export const MESSAGE_LENGTH = 300;
@@ -44,10 +47,8 @@ export const DETAIL_LENGTH = 4000;
 
 /**
  * Text with XML's entities replaced.
- *
- * @param {string} text
  */
-export function unescapeXml(text) {
+export function unescapeXml(text: string) {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, code) => {
     if (code[0] !== '#') return ENTITIES[code.toLowerCase()] ?? whole;
     const n =
@@ -58,22 +59,18 @@ export function unescapeXml(text) {
 
 /**
  * Text escaped as XML would carry it.
- *
- * @param {string} text
  */
-export function escapeXml(text) {
+export function escapeXml(text: string) {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /**
  * A tag's attributes.
  *
- * @param {string} tag the text after the element's name, up to its `>`
- * @returns {Record<string, string>}
+ * @param tag the text after the element's name, up to its `>`
  */
-function attributes(tag) {
-  /** @type {Record<string, string>} */
-  const found = {};
+function attributes(tag: string): Record<string, string> {
+  const found: Record<string, string> = {};
   for (const m of tag.matchAll(/([\w:.-]+)\s*=\s*("([^"]*)"|'([^']*)')/g)) {
     found[m[1]] = unescapeXml(m[3] ?? m[4] ?? '');
   }
@@ -82,10 +79,8 @@ function attributes(tag) {
 
 /**
  * The first line of a failure's message, trimmed to MESSAGE_LENGTH.
- *
- * @param {string} text
  */
-function firstLine(text) {
+function firstLine(text: string) {
   const line =
     text
       .split('\n')
@@ -99,10 +94,8 @@ function firstLine(text) {
  * so tests named alike in two files stay apart (every tool's selftest.test.mjs
  * here has a "selftest" block); just one of them when the other is missing or
  * the same (Maestro's flows).
- *
- * @param {Record<string, string>} attrs
  */
-function testName(attrs) {
+function testName(attrs: Record<string, string>) {
   const suite = (attrs.classname ?? '').trim();
   const title = (attrs.name ?? '').trim();
   if (suite && title && suite !== title) return `${suite} › ${title}`;
@@ -118,11 +111,10 @@ const ATTRS = /((?:[^>"']|"[^"]*"|'[^']*')*?)/.source;
  * A failure's first line and whole message, from its element's `message`
  * attribute and its text.
  *
- * @param {string} attr the attribute, unescaped
- * @param {string} body the text, unescaped
- * @returns {{ message: string, detail: string }}
+ * @param attr the attribute, unescaped
+ * @param body the text, unescaped
  */
-function describeFailure(attr, body) {
+function describeFailure(attr: string, body: string): { message: string; detail: string } {
   const message = firstLine(attr || body);
   // The text usually repeats the attribute ("Error: " and all), so it
   // stands alone then; stack frames inside node_modules are left out.
@@ -143,17 +135,12 @@ function describeFailure(attr, body) {
  * is a skip. A pass with a `<flakyFailure>` or `<flakyError>` inside passed
  * on re-run, its message the first one's `message` attribute or else its
  * `<stackTrace>`.
- *
- * @param {string} xml
- * @param {string} [file]
- * @returns {TestCase[]}
  */
-export function parseJunit(xml, file = '') {
+export function parseJunit(xml: string, file = ''): TestCase[] {
   const text = xml
     .replace(/<!--[\s\S]*?(-->|$)/g, '')
     .replace(/<!\[CDATA\[([\s\S]*?)(\]\]>|$)/g, (_, inner) => escapeXml(inner));
-  /** @type {TestCase[]} */
-  const cases = [];
+  const cases: TestCase[] = [];
   const testcase = new RegExp(`<testcase\\b${ATTRS}(\\/>|>([\\s\\S]*?)<\\/testcase\\s*>)`, 'g');
   const failure = new RegExp(`<(failure|error)\\b${ATTRS}(\\/>|>([\\s\\S]*?)<\\/\\1\\s*>)`);
   const flaky = new RegExp(`<(flakyFailure|flakyError)\\b${ATTRS}(\\/>|>([\\s\\S]*?)<\\/\\1\\s*>)`);
@@ -162,8 +149,7 @@ export function parseJunit(xml, file = '') {
     const inner = m[3] ?? '';
     const status = (attrs.status ?? '').toLowerCase();
     const failed = inner.match(failure);
-    /** @type {TestCase['result']} */
-    let result = 'passed';
+    let result: TestCase['result'] = 'passed';
     let message = '';
     let detail = '';
     if (/<skipped\b/.test(inner) || /^(skip|skipped)$/.test(status)) result = 'skipped';
@@ -210,11 +196,8 @@ export function parseJunit(xml, file = '') {
  * sift's 19_swipe_decisions.retry.xml sorts before its suite.xml. So the
  * reports should be one suite and its re-runs: two suites sharing a test's
  * name would hide a failure.
- *
- * @param {TestCase[]} cases
- * @returns {TestCase[]}
  */
-export function settleReruns(cases) {
+export function settleReruns(cases: TestCase[]): TestCase[] {
   return cases.map((c) =>
     c.result === 'failed' &&
     cases.some((o) => o.file !== c.file && o.name === c.name && o.result === 'passed')

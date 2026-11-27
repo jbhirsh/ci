@@ -19,6 +19,8 @@ import {
   pullRequestsOf,
   statusOf,
 } from './comment.ts';
+import type { Api } from '../lib/comment.mjs';
+import type { Download, Section } from './comment.ts';
 
 const REPO = 'jbhirsh/BoardGames';
 const HEAD = '69e83c5aa1b2c3d4e5f60718293a4b5c6d7e8f90';
@@ -26,14 +28,13 @@ const OLD = '1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d';
 
 /**
  * A section.
- *
- * @param {string} workflow
- * @param {string} job
- * @param {string} [text]
- * @param {string} [sha]
- * @returns {import('./comment.ts').Section}
  */
-const sec = (workflow, job, text = `**${job}:** ✅ no step failed`, sha = HEAD) => ({
+const sec = (
+  workflow: string,
+  job: string,
+  text: string = `**${job}:** ✅ no step failed`,
+  sha: string = HEAD,
+): Section => ({
   workflow,
   job,
   sha,
@@ -48,10 +49,8 @@ const by = {
 
 /**
  * An HTTP error as gh reports one.
- *
- * @param {number} status
  */
-const httpError = (status) =>
+const httpError = (status: number) =>
   Object.assign(new Error(`Command failed: gh api\ngh: Something (HTTP ${status})`), {
     stderr: `gh: Something (HTTP ${status})\n`,
   });
@@ -59,25 +58,31 @@ const httpError = (status) =>
 /**
  * A fake GitHub: a run with its jobs, its pull requests and their comments,
  * and the artifacts its jobs left.
- *
- * @param {object} [opts]
- * @param {string} [opts.workflow]
- * @param {{ number: number, url?: string }[]} [opts.listed] the run's pull_requests
- * @param {unknown[]} [opts.byCommit] what commits/<sha>/pulls answers
- * @param {string} [opts.prHead] the pull request's head now
- * @param {{ id: number, body: string }[]} [opts.comments]
- * @param {Record<string, string>} [opts.sections] artifact slug to section.md
- * @param {string[]} [opts.jobs] the run's jobs, in order
- * @param {Record<string, unknown>} [opts.fail] a route prefix ("POST repos/…") to the error it throws
  */
-function fakeGitHub(opts = {}) {
+function fakeGitHub(
+  opts: {
+    workflow?: string;
+    /** the run's pull_requests */
+    listed?: { number: number; url?: string }[];
+    /** what commits/<sha>/pulls answers */
+    byCommit?: unknown[];
+    /** the pull request's head now */
+    prHead?: string;
+    comments?: { id: number; body: string }[];
+    /** artifact slug to section.md */
+    sections?: Record<string, string>;
+    /** the run's jobs, in order */
+    jobs?: string[];
+    /** a route prefix ("POST repos/…") to the error it throws */
+    fail?: Record<string, unknown>;
+  } = {},
+) {
   const workflow = opts.workflow ?? 'CI';
-  /** @type {{ id: number, body: string, user: { login: string } }[]} */
-  const comments = (opts.comments ?? []).map((c) => ({ ...c, user: { login: AUTHOR } }));
-  /** @type {string[]} */
-  const calls = [];
-  /** @type {import('./comment.ts').Api} */
-  const api = (method, route, body) => {
+  const comments: { id: number; body: string; user: { login: string } }[] = (
+    opts.comments ?? []
+  ).map((c) => ({ ...c, user: { login: AUTHOR } }));
+  const calls: string[] = [];
+  const api: Api = (method, route, body) => {
     calls.push(`${method} ${route}`);
     for (const [prefix, error] of Object.entries(opts.fail ?? {})) {
       if (`${method} ${route}`.startsWith(prefix)) throw error;
@@ -118,8 +123,7 @@ function fakeGitHub(opts = {}) {
     }
     throw httpError(404);
   };
-  /** @type {import('./comment.ts').Download} */
-  const download = (_runId, dir) => {
+  const download: Download = (_runId, dir) => {
     const sections = opts.sections ?? {};
     if (!Object.keys(sections).length) throw new Error('no artifacts');
     for (const [slug, text] of Object.entries(sections)) {
@@ -278,8 +282,7 @@ describe('findComment and jobOrder', () => {
       body: `> ${MARKER} quoted`,
       user: bot,
     }));
-    /** @type {import('./comment.ts').Api} */
-    const api = (_m, route) =>
+    const api: Api = (_m, route) =>
       route.endsWith('page=1')
         ? page
         : [

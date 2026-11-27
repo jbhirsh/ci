@@ -9,6 +9,7 @@ import {
   testPath,
   trackedFiles,
 } from './source.ts';
+import type { TestCase } from './junit.ts';
 
 const FILES = [
   'job-summary/render.test.ts',
@@ -110,17 +111,14 @@ describe('snippet', () => {
 });
 
 describe('locate', () => {
-  /** @type {Record<string, string>} */
-  const files = {
+  const files: Record<string, string> = {
     'job-summary/render.test.ts':
       "describe('r', () => {\n  it('draws', () => {\n    expect(1).toBe(2);\n  });\n});",
     '.maestro/19_swipe.yaml': 'appId: x\n---\n- launchApp',
   };
-  /**
-   * @param {Partial<import('./junit.ts').TestCase> & { name: string, title: string }} t
-   * @returns {import('./junit.ts').TestCase & { title: string }}
-   */
-  const tc = (t) => ({
+  const tc = (
+    t: Partial<TestCase> & { name: string; title: string },
+  ): TestCase & { title: string } => ({
     seconds: 1,
     result: 'passed',
     file: 'r.xml',
@@ -177,15 +175,10 @@ describe('locate', () => {
 });
 
 describe('changedFiles', () => {
-  /**
-   * @param {string} sha
-   * @param {string} [branch]
-   */
-  const r = (sha, branch = 'main') => ({ sha, branch });
+  const r = (sha: string, branch = 'main') => ({ sha, branch });
 
   it("diffs each run with its own branch's previous run, fetching the missing commits together", () => {
-    /** @type {string[][]} */
-    const calls = [];
+    const calls: string[][] = [];
     const changed = changedFiles(
       [r('a'), r('p1', 'pr'), r('b'), r('b'), r('p2', 'pr'), r('c')],
       (args) => {
@@ -224,8 +217,7 @@ describe('changedFiles', () => {
   });
 
   it('fetches and diffs nothing once its time is up', () => {
-    /** @type {string[][]} */
-    const calls = [];
+    const calls: string[][] = [];
     const changed = changedFiles(
       [r('a'), r('b')],
       (args) => {

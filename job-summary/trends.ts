@@ -1,3 +1,6 @@
+import type { TestCase } from './junit.ts';
+import type { PastRun, Step } from './history.ts';
+
 // How this run of a job compares with its recent runs, for job-summary
 // (summary.ts): each step's and test's usual time, which are slower than
 // usual, and which tests are flaky. Pure: the runs come from history.ts.
@@ -15,10 +18,6 @@
 // commit and fixed by the next is not flaky, nor one that fails from this
 // run on.
 
-/** @typedef {import('./junit.ts').TestCase} TestCase */
-/** @typedef {import('./history.ts').Step} Step */
-/** @typedef {import('./history.ts').PastRun} PastRun */
-
 /** The fewest earlier times that make a usual time. */
 export const MIN_SAMPLES = 3;
 /** How much over its usual time is slower than usual. */
@@ -30,23 +29,23 @@ export const TEST_SLOWER_SECONDS = 1;
 /** Changes of result (pass to fail or back) that make a test flaky. */
 export const FLIPS = 3;
 
-/**
- * A step that ran, timed.
- *
- * @typedef {object} StepRow
- * @property {string} name
- * @property {number} start milliseconds
- * @property {number} seconds
- * @property {string} conclusion "running" for a step not finished yet
- */
+/** A step that ran, timed. */
+export type StepRow = {
+  name: string;
+  /** milliseconds */
+  start: number;
+  seconds: number;
+  /** "running" for a step not finished yet */
+  conclusion: string;
+};
 
 /**
  * Seconds between two times, never negative or NaN.
  *
- * @param {number} start milliseconds
- * @param {number} end milliseconds
+ * @param start milliseconds
+ * @param end milliseconds
  */
-function elapsed(start, end) {
+function elapsed(start: number, end: number) {
   const seconds = (end - start) / 1000;
   return Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
 }
@@ -57,11 +56,10 @@ function elapsed(start, end) {
  * still shows running (this one, or the one before it, which the API can be
  * slow to close) is timed up to `now`.
  *
- * @param {Step[]} steps
- * @param {number} [now] milliseconds
- * @returns {StepRow[]}
+ * @param steps
+ * @param now milliseconds
  */
-export function stepRows(steps, now = Date.now()) {
+export function stepRows(steps: Step[], now: number = Date.now()): StepRow[] {
   return steps
     .filter((s) => s.started_at && s.conclusion !== 'skipped')
     .map((s) => {
@@ -76,12 +74,12 @@ export function stepRows(steps, now = Date.now()) {
 }
 
 /**
- * A job's time, start to end (or now).
- *
- * @param {{ started_at: string | null, completed_at: string | null }} job
- * @param {number} [now] milliseconds
+ * A job's time, start to end (or `now`, in milliseconds).
  */
-export function jobSeconds(job, now = Date.now()) {
+export function jobSeconds(
+  job: { started_at: string | null; completed_at: string | null },
+  now: number = Date.now(),
+) {
   return elapsed(
     Date.parse(job.started_at ?? ''),
     job.completed_at ? Date.parse(job.completed_at) : now,
@@ -90,11 +88,8 @@ export function jobSeconds(job, now = Date.now()) {
 
 /**
  * The median, or null for fewer than MIN_SAMPLES values.
- *
- * @param {number[]} values
- * @returns {number | null}
  */
-export function usual(values) {
+export function usual(values: number[]): number | null {
   if (values.length < MIN_SAMPLES) return null;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -104,11 +99,11 @@ export function usual(values) {
 /**
  * Whether a time is slower than its usual one.
  *
- * @param {number} seconds
- * @param {number | null} typical
- * @param {number} [floor] the fewest seconds over it that count
+ * @param seconds
+ * @param typical
+ * @param floor the fewest seconds over it that count
  */
-export function slower(seconds, typical, floor = SLOWER_SECONDS) {
+export function slower(seconds: number, typical: number | null, floor: number = SLOWER_SECONDS) {
   return typical !== null && seconds >= typical * SLOWER_RATIO && seconds - typical >= floor;
 }
 
@@ -117,12 +112,10 @@ export function slower(seconds, typical, floor = SLOWER_SECONDS) {
  * name the same test, which the run reads as its first try's result and
  * time, or "passed on re-run". Order is kept.
  *
- * @param {TestCase[]} cases with re-runs settled (junit.ts settleReruns)
- * @returns {TestCase[]}
+ * @param cases with re-runs settled (junit.ts settleReruns)
  */
-export function byTest(cases) {
-  /** @type {Map<string, TestCase>} */
-  const tests = new Map();
+export function byTest(cases: TestCase[]): TestCase[] {
+  const tests: Map<string, TestCase> = new Map();
   const rank = { 'passed on re-run': 3, failed: 2, passed: 1, skipped: 0 };
   for (const c of cases) {
     const seen = tests.get(c.name);
@@ -131,32 +124,29 @@ export function byTest(cases) {
   return [...tests.values()];
 }
 
-/**
- * A test's result in a run, '' where it didn't appear in that run's record
- * or the run kept none.
- *
- * @typedef {TestCase['result'] | ''} Outcome
- */
+/** A test's result in a run, '' where it didn't appear in that run's record or the run kept none. */
+export type Outcome = TestCase['result'] | '';
 
-/**
- * How one step or test compares with its earlier runs.
- *
- * @typedef {object} Trend
- * @property {number | null} usual
- * @property {boolean} slower
- * @property {(number | null)[]} times earlier runs' times, oldest first
- *   (null where it didn't run)
- */
+/** How one step or test compares with its earlier runs. */
+export type Trend = {
+  usual: number | null;
+  slower: boolean;
+  /** earlier runs' times, oldest first (null where it didn't run) */
+  times: (number | null)[];
+};
 
 /**
  * The steps' trends, by name.
  *
- * @param {StepRow[]} rows this run's
- * @param {PastRun[]} past newest first
- * @param {number} [now] milliseconds
- * @returns {Map<string, Trend>}
+ * @param rows this run's
+ * @param past newest first
+ * @param now milliseconds
  */
-export function stepTrends(rows, past, now = Date.now()) {
+export function stepTrends(
+  rows: StepRow[],
+  past: PastRun[],
+  now: number = Date.now(),
+): Map<string, Trend> {
   const earlier = [...past].reverse().map((p) => ({
     passed: p.job.conclusion === 'success',
     rows: new Map(
@@ -183,26 +173,30 @@ export function stepTrends(rows, past, now = Date.now()) {
 }
 
 /**
- * A test's trend: its results in every earlier run ('' where the run kept
- * no record, or the test wasn't in it), this one last; whether it's flaky;
- * and the runs (the same indices) whose commit changed its file.
- *
- * @typedef {Trend & { outcomes: Outcome[], flaky: boolean, edited: number[] }} TestTrend
+ * A test's trend: its results in every earlier run ('' where the run kept no record, or the test
+ * wasn't in it), this one last; whether it's flaky; and the runs (the same indices) whose commit
+ * changed its file.
  */
+export type TestTrend = Trend & { outcomes: Outcome[]; flaky: boolean; edited: number[] };
 
 /**
  * The tests' trends, by name.
  *
- * @param {TestCase[]} tests this run's, one per test (byTest)
- * @param {PastRun[]} past newest first
- * @param {string} [sha] this run's commit
- * @param {(Set<string> | null)[]} [changed] the files each run's commit
+ * @param tests this run's, one per test (byTest)
+ * @param past newest first
+ * @param sha this run's commit
+ * @param changed the files each run's commit
  *   changed since the run before it, oldest run first and this one last
  *   (source.ts changedFiles); null where that isn't known
- * @param {(test: TestCase) => string} [pathOf] a test's file
- * @returns {Map<string, TestTrend>}
+ * @param pathOf a test's file
  */
-export function testTrends(tests, past, sha = '', changed = [], pathOf = () => '') {
+export function testTrends(
+  tests: TestCase[],
+  past: PastRun[],
+  sha = '',
+  changed: (Set<string> | null)[] = [],
+  pathOf: (test: TestCase) => string = () => '',
+): Map<string, TestTrend> {
   const ordered = [...past].reverse();
   const earlier = ordered.map((p) =>
     p.tests === null ? null : new Map(p.tests.map((t) => [t.name, t])),
@@ -212,15 +206,12 @@ export function testTrends(tests, past, sha = '', changed = [], pathOf = () => '
     tests.map((t) => {
       const runs = earlier.map((e) => e?.get(t.name));
       const typical = usual(runs.filter((r) => r?.result === 'passed').map((r) => r?.seconds ?? 0));
-      /** @type {Outcome[]} */
-      const outcomes = [...runs.map((r) => r?.result ?? ''), t.result];
+      const outcomes: Outcome[] = [...runs.map((r) => r?.result ?? ''), t.result];
       const path = pathOf(t);
       const edited = path ? changed.flatMap((files, i) => (files?.has(path) ? [i] : [])) : [];
-      /** @type {Record<string, Set<boolean>>} passed or not, by commit */
-      const byCommit = {};
+      const byCommit: Record<string, Set<boolean>> = {};
       let flips = 0;
-      /** @type {{ at: number, passed: boolean } | null} */
-      let last = null;
+      let last: { at: number; passed: boolean } | null = null;
       outcomes.forEach((o, i) => {
         if (o !== 'passed' && o !== 'failed') return;
         const passed = o === 'passed';
