@@ -32,12 +32,9 @@ const always = () => true;
 
 /**
  * A tree of these files (and their folders), which records each path asked.
- *
- * @param {string[]} files
  */
-const treeOf = (files) => {
-  /** @type {string[]} */
-  const asked = [];
+const treeOf = (files: string[]) => {
+  const asked: string[] = [];
   const all = new Set(['.', ...files]);
   for (const file of files) {
     for (let dir = path.posix.dirname(file); dir !== '.'; dir = path.posix.dirname(dir))
@@ -45,8 +42,8 @@ const treeOf = (files) => {
   }
   return {
     asked,
-    exists: (/** @type {string} */ file) => (asked.push(file), all.has(file)),
-    glob: (/** @type {string} */ pattern) => (
+    exists: (file: string) => (asked.push(file), all.has(file)),
+    glob: (pattern: string) => (
       asked.push(pattern),
       files.filter((file) => path.posix.matchesGlob(file, pattern))
     ),
@@ -54,8 +51,7 @@ const treeOf = (files) => {
 };
 const noFiles = treeOf([]);
 
-/** @param {Record<string, unknown>} overrides */
-const action = (overrides = {}) => ({
+const action = (overrides: Record<string, unknown> = {}) => ({
   name: 'x',
   description: 'y',
   inputs: { token: { required: true } },
@@ -231,8 +227,7 @@ describe('lintCall', () => {
 });
 
 describe('lintWorkflow', () => {
-  /** @param {string} target */
-  const resolve = (target) =>
+  const resolve = (target: string) =>
     target === 'tool' ? { inputs: new Map([['token', true]]), secrets: null } : null;
   it('checks every job-level and step-level call into this repo', () => {
     const doc = {
@@ -330,11 +325,7 @@ describe('scriptsIn, read as the shell reads it', () => {
 
 describe("lintAction's paths", () => {
   const tree = treeOf(['tool/a.mjs', 'tool/sub/action.yml', 'lib/gh.mjs', 'tool/b.ts']);
-  /**
-   * @param {string} file
-   * @param {unknown[]} steps
-   */
-  const at = (file, steps) =>
+  const at = (file: string, steps: unknown[]) =>
     lintAction(file, action({ runs: { using: 'composite', steps } }), always, tree);
 
   it("resolves each path from the action's folder, `..` included", () => {
@@ -383,9 +374,8 @@ describe('lintScripts', () => {
     'sync/prepare/action.yml',
     '.github/workflows/job-reports.yml',
   ]);
-  /** @param {Record<string, unknown>} doc */
-  const lint = (doc) => lintScripts('.github/workflows/w.yml', doc, tree);
-  const checkout = (/** @type {Record<string, unknown>} */ given = {}) => ({
+  const lint = (doc: Record<string, unknown>) => lintScripts('.github/workflows/w.yml', doc, tree);
+  const checkout = (given: Record<string, unknown> = {}) => ({
     uses: 'actions/checkout@v7',
     with: given,
   });
@@ -530,7 +520,7 @@ describe('main', () => {
   it("holds an app's GIF callers to their rules, with the app's workflow names", () => {
     const app = mkdtempSync(path.join(tmpdir(), 'app-'));
     mkdirSync(path.join(app, '.github', 'workflows'), { recursive: true });
-    const put = (/** @type {string} */ name, /** @type {string} */ file) =>
+    const put = (name: string, file: string) =>
       writeFileSync(
         path.join(app, '.github', 'workflows', name),
         readFileSync(path.join(root, 'gif', 'callers', file), 'utf8'),

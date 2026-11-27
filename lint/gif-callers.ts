@@ -29,27 +29,23 @@
 // Pure functions over the parsed workflow, so a test can mutate the canonical
 // copies and see each rule fail.
 
-/** @typedef {Record<string, unknown>} Doc */
+export type Doc = Record<string, unknown>;
 
-/** @param {unknown} value */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+const isObject = (value: unknown) =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * The workflow's trigger names (`on:`; the yaml package reads YAML 1.2, where
  * `on` is a plain key).
- *
- * @param {Doc} doc
- * @returns {Set<string>}
  */
-function triggers(doc) {
+function triggers(doc: Doc): Set<string> {
   const on = doc.on;
   if (typeof on === 'string') return new Set([on]);
   if (Array.isArray(on)) return new Set(on.map(String));
-  return new Set(isObject(on) ? Object.keys(/** @type {Doc} */ (on)) : []);
+  return new Set(isObject(on) ? Object.keys(on as Doc) : []);
 }
 
-/** @param {unknown} expression */
-const squash = (expression) => String(expression ?? '').replace(/\s+/g, '');
+const squash = (expression: unknown) => String(expression ?? '').replace(/\s+/g, '');
 
 /** The token expression a recording caller may pass. */
 const EVENT = "${{ github.event_name == 'workflow_dispatch' && secrets.BOT_PR_TOKEN || '' }}";
@@ -58,24 +54,28 @@ const EVENT_ONLY = squash(EVENT);
 /**
  * Problems in one job that calls a PR GIF workflow.
  *
- * @param {string} where
- * @param {'record' | 'attach'} kind
- * @param {Doc} job
- * @param {Doc} doc the whole workflow
- * @param {Set<string> | null} appNames the names of the app's workflows, when known
- * @returns {string[]}
+ * @param where
+ * @param kind
+ * @param job
+ * @param doc the whole workflow
+ * @param appNames the names of the app's workflows, when known
  */
-function lintJob(where, kind, job, doc, appNames) {
-  /** @type {string[]} */
-  const errors = [];
+function lintJob(
+  where: string,
+  kind: 'record' | 'attach',
+  job: Doc,
+  doc: Doc,
+  appNames: Set<string> | null,
+): string[] {
+  const errors: string[] = [];
   const on = triggers(doc);
   const secrets = job.secrets;
   if (secrets === 'inherit') errors.push(`${where}: \`secrets: inherit\` hands every secret to it`);
   if (on.has('pull_request_target')) {
     errors.push(`${where}: pull_request_target runs with secrets in the PR's reach: never`);
   }
-  const permissions = isObject(job.permissions) ? /** @type {Doc} */ (job.permissions) : {};
-  const token = isObject(secrets) ? /** @type {Doc} */ (secrets)['bot-token'] : undefined;
+  const permissions = isObject(job.permissions) ? (job.permissions as Doc) : {};
+  const token = isObject(secrets) ? (secrets as Doc)['bot-token'] : undefined;
   /** The workflow runs only when started by hand (sift: its CI is the recording). */
   const manual = on.size === 1 && on.has('workflow_dispatch');
   if (kind === 'record') {
@@ -102,8 +102,8 @@ function lintJob(where, kind, job, doc, appNames) {
       `${where}: the attach caller runs only on \`workflow_run\` (this copy has ${[...on].join(', ') || 'no trigger'}): any other trigger runs a branch's copy with the token`,
     );
   }
-  const run = isObject(doc.on) ? /** @type {Doc} */ (doc.on).workflow_run : undefined;
-  const wanted = isObject(run) ? /** @type {Doc} */ (run).workflows : undefined;
+  const run = isObject(doc.on) ? (doc.on as Doc).workflow_run : undefined;
+  const wanted = isObject(run) ? (run as Doc).workflows : undefined;
   const listed = (Array.isArray(wanted) ? wanted : typeof wanted === 'string' ? [wanted] : []).map(
     String,
   );
@@ -120,8 +120,7 @@ function lintJob(where, kind, job, doc, appNames) {
     }
   }
   /** What the reusable workflow's jobs ask for, and no more. */
-  /** @type {[string, string[]][]} */
-  const grants = [
+  const grants: [string, string[]][] = [
     ['contents', ['read']],
     ['pull-requests', ['read']],
     ['actions', ['read', 'write']],
@@ -150,17 +149,19 @@ function lintJob(where, kind, job, doc, appNames) {
 /**
  * Problems in an app workflow's calls of the PR GIF workflows.
  *
- * @param {string} file
- * @param {Doc} doc the parsed workflow
- * @param {Set<string> | null} [appNames] the names of the app's workflows
- * @returns {string[]}
+ * @param file
+ * @param doc the parsed workflow
+ * @param appNames the names of the app's workflows
  */
-export function lintGifCallers(file, doc, appNames = null) {
-  const jobs = isObject(doc.jobs) ? /** @type {Doc} */ (doc.jobs) : {};
-  /** @type {string[]} */
-  const errors = [];
+export function lintGifCallers(
+  file: string,
+  doc: Doc,
+  appNames: Set<string> | null = null,
+): string[] {
+  const jobs = isObject(doc.jobs) ? (doc.jobs as Doc) : {};
+  const errors: string[] = [];
   for (const [id, raw] of Object.entries(jobs)) {
-    const job = isObject(raw) ? /** @type {Doc} */ (raw) : {};
+    const job = isObject(raw) ? (raw as Doc) : {};
     const m = /^jbhirsh\/ci\/\.github\/workflows\/(pr-gif|pr-gif-attach)\.yml@/i.exec(
       String(job.uses),
     );
