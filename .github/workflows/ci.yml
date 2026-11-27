@@ -6,7 +6,7 @@
 #     actionlint never reads), formatting, types, tests (80% lines per
 #     file) and actionlint over its workflows.
 #   - Against <app>: the app's calls into this repo checked against what
-#     they call, and each tool's self-test (`<tool>/selftest.mjs`, listed
+#     they call, and each tool's self-test (`<tool>/selftest.ts`, or .mjs, listed
 #     in lib/selftests.mjs) run
 #     against fog-and-frontier, sift and BoardGames as their `main` stands,
 #     with the app's dependencies installed, as the tools see them in the
