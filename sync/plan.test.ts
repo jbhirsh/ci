@@ -13,16 +13,16 @@ import {
   prBody,
   report,
   sameBytes,
-} from './plan.mjs';
+} from './plan.ts';
 
 const SHA = 'abcdef0123456789abcdef0123456789abcdef01';
 
-/** @type {import('./manifest.mjs').Companion} */
+/** @type {import('./manifest.ts').Companion} */
 const exempt = { key: ['autofix', 'exempt', 'Hello'], value: 'reads the PR as data' };
 
 /**
- * @param {Partial<import('./plan.mjs').Change>} [over]
- * @returns {import('./plan.mjs').Change}
+ * @param {Partial<import('./plan.ts').Change>} [over]
+ * @returns {import('./plan.ts').Change}
  */
 const change = (over = {}) => ({
   path: '.github/workflows/hello.yml',
@@ -78,7 +78,7 @@ describe('holds', () => {
 });
 
 describe('changesFor', () => {
-  /** @type {import('./manifest.mjs').Resolved[]} */
+  /** @type {import('./manifest.ts').Resolved[]} */
   const files = [
     { path: 'same.md', source: 's/same.md', why: undefined, companions: [] },
     { path: 'old.yml', source: 's/old.yml', why: 'its own build', companions: [exempt] },

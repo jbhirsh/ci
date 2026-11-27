@@ -1,7 +1,7 @@
 # The sync (ci#109): keeps each app's copies of the files in
 # sync/manifest.json byte-identical to their source here, through one PR per
 # app from bot/sync-files that merges itself once the app's required checks
-# pass. sync/sync.mjs's header says what a run does; sync/prepare/action.yml
+# pass. sync/sync.ts's header says what a run does; sync/prepare/action.yml
 # and sync/action.yml run it.
 #
 # When it runs:
@@ -81,7 +81,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The manifest's apps (sync/manifest.mjs's APPS; a test holds them equal).
+        # The manifest's apps (sync/manifest.ts's APPS; a test holds them equal).
         app: ${{ fromJSON(inputs.app && inputs.app != 'all' && format('["{0}"]', inputs.app) || '["BoardGames","fog-and-frontier","sift"]') }}
     permissions:
       contents: read

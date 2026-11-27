@@ -151,8 +151,8 @@ The sync (ci#109) keeps each app's copies of the files in `sync/manifest.json` b
 to their source here, through one `bot/sync-files` PR per app that merges itself once the
 app's required checks pass.
 [`.github/workflows/sync-files.yml`](https://github.com/jbhirsh/ci/blob/main/.github/workflows/sync-files.yml)
-says when it runs, [`sync/sync.mjs`](https://github.com/jbhirsh/ci/blob/main/sync/sync.mjs) what a run does and
-[`sync/manifest.mjs`](https://github.com/jbhirsh/ci/blob/main/sync/manifest.mjs) the manifest's fields and rules.
+says when it runs, [`sync/sync.ts`](https://github.com/jbhirsh/ci/blob/main/sync/sync.ts) what a run does and
+[`sync/manifest.ts`](https://github.com/jbhirsh/ci/blob/main/sync/manifest.ts) the manifest's fields and rules.
 
 - **One-time setup (the owner):** this repo's `BOT_PR_TOKEN`, a fine-grained token on the
   three apps (and on this repo, for the pictures route), with the permissions
@@ -161,12 +161,12 @@ says when it runs, [`sync/sync.mjs`](https://github.com/jbhirsh/ci/blob/main/syn
   app.
 - **Adding a synced file:** its canonical file here and one entry in `sync/manifest.json`
   (its path in the apps, its source here, which apps hold it).
-  - `sync/coverage.test.mjs` fails a canonical caller or reusable workflow that is neither
+  - `sync/coverage.test.ts` fails a canonical caller or reusable workflow that is neither
     synced nor listed in `unsynced` with a reason.
   - A workflow that runs on `pull_request` or `pull_request_target` carries its
     `autofix.exempt` entry as a `companions` key: the sync sets it in the app's
     `.github/ci.json` in the same commit, never overwriting a key the app holds.
-  - Try it before the PR: `node sync/sync.mjs dry-run sift ../sift` prints the PR the sync
+  - Try it before the PR: `node sync/sync.ts dry-run sift ../sift` prints the PR the sync
     would open for that checkout and changes nothing; each `Against` job's self-test prints
     the same for the app's `main`.
 - **A deliberate difference in one app** is a variant: the app's whole file under

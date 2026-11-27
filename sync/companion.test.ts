@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { addCompanions, formatSettings, settingsProblems } from './companion.mjs';
+import { addCompanions, formatSettings, settingsProblems } from './companion.ts';
 
 /** @param {string[]} key */
 const companion = (key, value = 'its reason') => ({ key, value });

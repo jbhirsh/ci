@@ -5,10 +5,10 @@
 
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { addCompanions, settingsProblems } from './companion.mjs';
-import { holds } from './plan.mjs';
+import { addCompanions, settingsProblems } from './companion.ts';
+import { holds } from './plan.ts';
 
-// The manifest refuses a key that reaches a prototype (manifest.mjs).
+// The manifest refuses a key that reaches a prototype (manifest.ts).
 const keyName = fc
   .oneof(
     fc.constantFrom('autofix', 'exempt', 'PR GIFs', 'a"b', 'x\\y', '', ' '),

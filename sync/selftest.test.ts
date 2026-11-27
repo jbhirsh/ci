@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { writeFiles } from '../review/testApp.ts';
-import { CI_ROOT, loadManifest, parseManifest, resolve } from './manifest.mjs';
-import { appName, cli, selftest } from './selftest.mjs';
+import { CI_ROOT, loadManifest, parseManifest, resolve } from './manifest.ts';
+import { appName, cli, selftest } from './selftest.ts';
 
 const app = (/** @type {Record<string, string>} */ files) => {
   const root = mkdtempSync(path.join(tmpdir(), 'app-'));

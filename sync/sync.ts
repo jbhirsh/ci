@@ -4,19 +4,19 @@
 // pass. .github/workflows/sync-files.yml runs it for each app after this
 // repo's CI passes on main, or by hand, in two jobs:
 //
-//   node sync/sync.mjs check     (both jobs) refuses before anything reaches an
+//   node sync/sync.ts check     (both jobs) refuses before anything reaches an
 //                                app: an empty BOT_PR_TOKEN, or a ci commit whose
 //                                CI didn't pass; skips one that isn't main's head,
 //                                or isn't the checkout (main) the job runs
-//   node sync/sync.mjs prepare   (sync/prepare: no token, the only place an
+//   node sync/sync.ts prepare   (sync/prepare: no token, the only place an
 //                                app's code runs) writes the app's ci.json for
 //                                each file that adds a companion, formatted by
 //                                the app's own Prettier (installed only then),
 //                                into prepared.json, the next job's artifact
-//   node sync/sync.mjs publish   (sync, BOT_PR_TOKEN, no app code) opens,
+//   node sync/sync.ts publish   (sync, BOT_PR_TOKEN, no app code) opens,
 //                                rebuilds, leaves or closes the PR, then fails
 //                                naming whatever keeps it from merging
-//   node sync/sync.mjs dry-run <app> <app dir>
+//   node sync/sync.ts dry-run <app> <app dir>
 //                                prints the PR the sync would open for that
 //                                checkout, from this checkout's manifest; reads
 //                                nothing else and writes nothing
@@ -24,17 +24,17 @@
 // What publish does, every run, for one app:
 //   1. Reads the app's main as it is now, by git (a shallow, blobless fetch:
 //      the apps are hundreds of MB), and works out which files differ
-//      (plan.mjs). The template is checked first (its shape), and a bad one
+//      (plan.ts). The template is checked first (its shape), and a bad one
 //      is refused before anything is pushed. The workflows it writes are
-//      linted by this repo's CI (sync/content.test.mjs), which must have
+//      linted by this repo's CI (sync/content.test.ts), which must have
 //      passed on the commit: that lint reads YAML, and the sync imports no
 //      package, so its jobs install none. prepared.json is data: only its
 //      ci.json texts are used, each held to the guard, and only when its
 //      commit is still main's head.
 //   2. Finds the open sync PR (into main, from the app's own bot/sync-files,
-//      its description carrying plan.mjs's MARKER; one from that branch
+//      its description carrying plan.ts's MARKER; one from that branch
 //      without it is a person's, and the run refuses it) and decides
-//      (plan.mjs's decide): nothing differs and none is open, nothing to do
+//      (plan.ts's decide): nothing differs and none is open, nothing to do
 //      but delete a stale branch; nothing differs any more, close it with a
 //      comment and delete the branch; its branch already holds these bytes
 //      and can merge, leave it (rebuilding would rerun every check: sift's
@@ -54,7 +54,7 @@
 //      ci.json, for a companion), each added or modified, never renamed,
 //      deleted or a mode change, every one a plain file, each blob
 //      byte-identical to its source, and ci.json the app's plus exactly the
-//      companion keys (companion.mjs's settingsProblems). Only then is the PR
+//      companion keys (companion.ts's settingsProblems). Only then is the PR
 //      opened or its description rewritten, and auto-merge (squash) turned on
 //      bound to that head (expectedHeadOid, gh's --match-head-commit), unless
 //      the run's auto-merge setting is off, which leaves it for a person. A
@@ -91,8 +91,8 @@ import { ghApi, statusOf } from '../lib/comment.mjs';
 import { SETTINGS_FILE } from '../lib/app.mjs';
 import { pages } from '../lib/github.mjs';
 import { problems as templateProblems } from '../pr-template/structure.ts';
-import { addCompanions, formatSettings, settingsProblems } from './companion.mjs';
-import { APPS, CI_ROOT, loadManifest, resolve } from './manifest.mjs';
+import { addCompanions, formatSettings, settingsProblems } from './companion.ts';
+import { APPS, CI_ROOT, loadManifest, resolve } from './manifest.ts';
 import {
   BRANCH,
   blobSha,
@@ -105,11 +105,11 @@ import {
   PR_TITLE,
   prBody,
   report,
-} from './plan.mjs';
+} from './plan.ts';
 
 /** @typedef {import('../lib/comment.mjs').Api} Api */
-/** @typedef {import('./plan.mjs').Change} Change */
-/** @typedef {import('./manifest.mjs').Resolved} Resolved */
+/** @typedef {import('./plan.ts').Change} Change */
+/** @typedef {import('./manifest.ts').Resolved} Resolved */
 /** @typedef {(query: string, variables: Record<string, unknown>) => unknown} Graphql */
 /** @typedef {(args: string[], options?: { input?: string | Buffer, env?: Record<string, string> }) => string} Git */
 
@@ -155,7 +155,7 @@ function shaOf(value, name) {
 /**
  * What is wrong with the files the sync would write, before any is written:
  * the template's shape (structure.ts). The workflows it writes are linted
- * by this repo's CI instead (sync/content.test.mjs, with lint/actions.mjs),
+ * by this repo's CI instead (sync/content.test.ts, with lint/actions.mjs),
  * which must have passed on the commit before the sync runs: that lint reads
  * YAML, and the sync imports no package, so its jobs install none.
  *
@@ -495,7 +495,7 @@ function modeAt(api, repo, commit, file) {
  *
  * @param {{ api: Api, repo: string, base: string, head: string, commits: number,
  *   expected: Map<string, Buffer>, settingsBefore: string,
- *   companions: import('./manifest.mjs').Companion[] }} input
+ *   companions: import('./manifest.ts').Companion[] }} input
  * @returns {string[]}
  */
 export function guard({ api, repo, base, head, commits, expected, settingsBefore, companions }) {
@@ -657,7 +657,7 @@ function autoMergeOff(graphql, pull) {
  * @param {Graphql} graphql
  * @param {string} repo
  * @param {number} number
- * @returns {import('./plan.mjs').Thread[]}
+ * @returns {import('./plan.ts').Thread[]}
  */
 function threadsOf(graphql, repo, number) {
   const [owner, name] = repo.split('/');
@@ -1193,7 +1193,7 @@ export async function main(argv, env, log = console.log, deps = {}) {
       for (const line of dryRun(rest[0], path.resolve(rest[1]), ciRoot)) log(line);
       return 0;
     }
-    log('usage: node sync/sync.mjs check | prepare | publish | dry-run <app> <app dir>');
+    log('usage: node sync/sync.ts check | prepare | publish | dry-run <app> <app dir>');
     return 2;
   } catch (error) {
     for (const line of /** @type {{ done?: string[] }} */ (error)?.done ?? []) log(line);

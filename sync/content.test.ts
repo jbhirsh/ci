@@ -1,7 +1,7 @@
 // The workflows the sync writes into each app, linted here, in this repo's
 // CI, rather than by the sync as it runs: lint/actions.mjs reads YAML, and the
 // sync imports no package, so its jobs install none. The sync runs only from
-// a commit whose CI passed (sync.mjs's check), so a synced workflow that
+// a commit whose CI passed (sync.ts's check), so a synced workflow that
 // fails here never reaches an app. The Against jobs' `lint/actions.mjs --app`
 // still lints each app's copies as they stand.
 
@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { lintWorkflow, targetsIn } from '../lint/actions.mjs';
 import { writeFiles } from '../review/testApp.ts';
-import { APPS, CI_ROOT, loadManifest, resolve } from './manifest.mjs';
+import { APPS, CI_ROOT, loadManifest, resolve } from './manifest.ts';
 
 /**
  * The workflows of each app that a synced PR GIF attach caller may wait for

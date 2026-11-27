@@ -2,9 +2,9 @@
 // which synced files differ from their source in this repo, by how many
 // lines, the commit each gets, the PR that carries them, and, once a sync PR
 // is open, what to do with it and what keeps it from merging. Pure functions
-// over bytes and API answers, so sync.mjs, the dry run and the self-test share
-// them and the tests need no GitHub. manifest.mjs says which files are synced;
-// sync.mjs says how a run uses this.
+// over bytes and API answers, so sync.ts, the dry run and the self-test share
+// them and the tests need no GitHub. manifest.ts says which files are synced;
+// sync.ts says how a run uses this.
 //
 // A file differs when its bytes do (Buffer.equals), never "once parsed":
 // the sync makes each app's copy byte-identical to its source. The line
@@ -14,8 +14,8 @@
 import { createHash } from 'node:crypto';
 import { newest } from '../lib/github.mjs';
 
-/** @typedef {import('./manifest.mjs').Resolved} Resolved */
-/** @typedef {import('./manifest.mjs').Companion} Companion */
+/** @typedef {import('./manifest.ts').Resolved} Resolved */
+/** @typedef {import('./manifest.ts').Companion} Companion */
 
 /** The one branch every sync PR comes from, in every app. */
 export const BRANCH = 'bot/sync-files';
@@ -145,7 +145,7 @@ export function holds(settings, key) {
  * it becomes. A companion comes with a file only when the sync adds that file
  * and the app's settings lack its key.
  *
- * @param {Resolved[]} files the app's synced files (manifest.mjs's resolve)
+ * @param {Resolved[]} files the app's synced files (manifest.ts's resolve)
  * @param {(source: string) => Buffer} readSource a file of this repo
  * @param {(file: string) => Buffer | null} readApp a file of the app, or null when absent
  * @param {Record<string, unknown>} settings the app's `.github/ci.json`

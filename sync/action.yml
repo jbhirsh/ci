@@ -1,6 +1,6 @@
 name: Sync files
 description: >-
-  The sync's publish job for one app (ci#109; sync/sync.mjs's header says
+  The sync's publish job for one app (ci#109; sync/sync.ts's header says
   what it does): keeps the app's copies of the files in sync/manifest.json
   byte-identical to their source in jbhirsh/ci, through one PR from
   bot/sync-files that merges itself once the app's required checks pass.
@@ -52,7 +52,7 @@ runs:
         TOKEN_SET: ${{ inputs.token != '' }}
         GH_TOKEN: ${{ inputs.ci-token }}
         CI_SHA: ${{ inputs.ci-sha }}
-      run: node "$GITHUB_ACTION_PATH/sync.mjs" check
+      run: node "$GITHUB_ACTION_PATH/sync.ts" check
 
     # A missing artifact (the prepare job failed) is reported by publish,
     # which names that job.
@@ -73,4 +73,4 @@ runs:
         SYNC_OUT: ${{ runner.temp }}/sync-files
         AUTO_MERGE: ${{ inputs.auto-merge }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      run: node "$GITHUB_ACTION_PATH/sync.mjs" publish
+      run: node "$GITHUB_ACTION_PATH/sync.ts" publish

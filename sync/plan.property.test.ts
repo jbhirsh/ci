@@ -3,7 +3,7 @@
 
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { blockers, codeCell, diffStat, lineDiff, sameBytes } from './plan.mjs';
+import { blockers, codeCell, diffStat, lineDiff, sameBytes } from './plan.ts';
 
 /** Text made of a few short lines, so that runs share lines often. */
 const lines = fc
