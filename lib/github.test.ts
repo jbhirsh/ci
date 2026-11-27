@@ -3,8 +3,7 @@ import { PAGES, newest, pages, prTarget, statusFrom } from './github.ts';
 
 describe('pages', () => {
   it('reads until a short page, adding the page to any query', () => {
-    /** @type {string[]} */
-    const routes = [];
+    const routes: string[] = [];
     const full = Array.from({ length: 100 }, (_, i) => i);
     const got = pages((_, route) => {
       routes.push(route);

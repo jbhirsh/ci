@@ -45,12 +45,8 @@ const LIST = 'lib/selftests.ts';
 /**
  * Every `selftest.<ext>` under a folder (node_modules and dot folders
  * aside), relative to it.
- *
- * @param {string} root
- * @param {string} [dir]
- * @returns {string[]}
  */
-function selftestsUnder(root, dir = '') {
+function selftestsUnder(root: string, dir = ''): string[] {
   return readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap((entry) => {
     const rel = dir ? `${dir}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
@@ -65,15 +61,16 @@ function selftestsUnder(root, dir = '') {
 /**
  * The self-tests in a checkout of this repo, and what's wrong with them.
  *
- * @param {string} root this repo's checkout
- * @param {readonly string[]} [tools]
- * @returns {{ files: string[], problems: string[] }} `files` relative to root
+ * @param root this repo's checkout
+ * @param tools
+ * @returns `files` relative to root
  */
-export function findSelftests(root, tools = TOOLS) {
-  /** @type {string[]} */
-  const files = [];
-  /** @type {string[]} */
-  const problems = [];
+export function findSelftests(
+  root: string,
+  tools: readonly string[] = TOOLS,
+): { files: string[]; problems: string[] } {
+  const files: string[] = [];
+  const problems: string[] = [];
   for (const tool of tools) {
     const found = EXTENSIONS.map((extension) => `${tool}/selftest${extension}`).filter((file) =>
       existsSync(path.join(root, file)),

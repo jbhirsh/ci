@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { AUTHOR, PAGES, findComment, ghApi, statusOf } from './comment.ts';
+import type { Api } from './comment.ts';
 
 describe('statusOf', () => {
   it("reads an error's status, or the one gh's message names", () => {
@@ -17,8 +18,7 @@ describe('findComment', () => {
   const marker = '<!-- tool -->';
 
   it("finds the marked comment AUTHOR wrote, not anyone else's", () => {
-    /** @type {import('./comment.ts').Api} */
-    const api = () => [
+    const api: Api = () => [
       { id: 1, body: `${marker} x`, user: { login: 'someone' } },
       { id: 2, body: 'other', user: { login: AUTHOR } },
       { id: 3, body: `${marker}\nmine`, user: { login: AUTHOR } },
@@ -29,11 +29,9 @@ describe('findComment', () => {
   });
 
   it('pages until a short page, at most PAGES', () => {
-    /** @type {string[]} */
-    const routes = [];
+    const routes: string[] = [];
     const full = Array.from({ length: 100 }, (_, i) => ({ id: i, body: '', user: null }));
-    /** @type {import('./comment.ts').Api} */
-    const api = (_method, route) => (routes.push(route), full);
+    const api: Api = (_method, route) => (routes.push(route), full);
     expect(findComment(api, 'o/r', 5, marker)).toBeNull();
     expect(routes).toHaveLength(PAGES);
     expect(routes[1]).toBe('repos/o/r/issues/5/comments?per_page=100&page=2');

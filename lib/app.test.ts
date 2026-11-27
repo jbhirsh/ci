@@ -13,8 +13,8 @@ import {
   requireFromApp,
 } from './app.ts';
 
-const roots = /** @type {string[]} */ ([]);
-function fakeApp(/** @type {string | undefined} */ ciJson) {
+const roots = [] as string[];
+function fakeApp(ciJson: string | undefined) {
   const root = mkdtempSync(path.join(tmpdir(), 'app-'));
   roots.push(root);
   writeFileSync(path.join(root, 'package.json'), '{}');
@@ -73,7 +73,7 @@ describe('importFromApp', () => {
       '{"name":"only-in-app","main":"index.js"}',
     );
     writeFileSync(path.join(root, 'node_modules', 'only-in-app', 'index.js'), 'exports.hi = 1;');
-    const mod = /** @type {{ hi: number }} */ (await importFromApp('only-in-app', root));
+    const mod = (await importFromApp('only-in-app', root)) as { hi: number };
     expect(mod.hi).toBe(1);
   });
 });
@@ -87,18 +87,14 @@ describe('requireFromApp', () => {
       '{"name":"only-in-app","main":"index.js"}',
     );
     writeFileSync(path.join(root, 'node_modules', 'only-in-app', 'index.js'), 'exports.hi = 1;');
-    expect(/** @type {{ hi: number }} */ (requireFromApp('only-in-app', root)).hi).toBe(1);
+    expect((requireFromApp('only-in-app', root) as { hi: number }).hi).toBe(1);
   });
 });
 
 /**
  * Puts a CommonJS package in the app's node_modules.
- *
- * @param {string} root
- * @param {string} name
- * @param {string} code
  */
-function addPackage(root, name, code) {
+function addPackage(root: string, name: string, code: string) {
   const dir = path.join(root, 'node_modules', name);
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name, main: 'index.cjs' }));
@@ -124,8 +120,7 @@ describe('appPlaywright', () => {
 });
 
 describe('appPackageVersion', () => {
-  /** @param {unknown} lock */
-  function withLock(lock) {
+  function withLock(lock: unknown) {
     const root = fakeApp(undefined);
     writeFileSync(
       path.join(root, 'package-lock.json'),

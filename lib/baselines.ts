@@ -28,58 +28,55 @@
 import path from 'node:path';
 
 /**
- * One column of the table: its label, the basename patterns that pick its
- * shots (first match wins), and the width its pictures show at, if set.
- *
- * @typedef {object} Column
- * @property {string} label
- * @property {string[]} file
- * @property {number} [width]
+ * One column of the table: its label, the basename patterns that pick its shots (first match wins),
+ * and the width its pictures show at, if set.
  */
+export type Column = {
+  label: string;
+  file: string[];
+  width?: number;
+};
 
 /**
- * A changed shot: its path before the PR (null for a new one) and after it
- * (null for a removed one), its status, and its folder.
- *
- * @typedef {object} Changed
- * @property {string | null} before
- * @property {string | null} after
- * @property {string} status
- * @property {string} folder
+ * A changed shot: its path before the PR (null for a new one) and after it (null for a removed
+ * one), its status, and its folder.
  */
+export type Changed = {
+  before: string | null;
+  after: string | null;
+  status: string;
+  folder: string;
+};
 
 /**
- * One state's row: its cells by column label, in the columns' order, and the
- * folder when the state makes a row per folder.
- *
- * @typedef {object} Row
- * @property {string} state
- * @property {string} [folder]
- * @property {Record<string, Changed>} cells
+ * One state's row: its cells by column label, in the columns' order, and the folder when the state
+ * makes a row per folder.
  */
+export type Row = {
+  state: string;
+  folder?: string;
+  cells: Record<string, Changed>;
+};
 
 /** The placeholder a column's pattern holds once. */
 const STATE = '{state}';
 
 /**
  * A pattern as an anchored regular expression capturing its state.
- *
- * @param {string} pattern
  */
-function patternRegex(pattern) {
+function patternRegex(pattern: string) {
   const [head, tail] = pattern.split(STATE);
-  /** @param {string} s */
-  const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`^${escape(head)}([^/]+)${escape(tail)}$`);
 }
 
 /**
  * The state a basename holds under a pattern, or null when it doesn't match.
  *
- * @param {string} pattern a basename holding `{state}` once
- * @param {string} name a basename
+ * @param pattern a basename holding `{state}` once
+ * @param name a basename
  */
-export function stateOf(pattern, name) {
+export function stateOf(pattern: string, name: string) {
   const match = patternRegex(pattern).exec(name);
   return match ? match[1] : null;
 }
@@ -88,11 +85,13 @@ export function stateOf(pattern, name) {
  * The column a shot goes to, and its state there: the first column with
  * a pattern that matches, that column's first such pattern.
  *
- * @param {string} name a basename
- * @param {readonly Column[]} columns
- * @returns {{ label: string, state: string } | null}
+ * @param name a basename
+ * @param columns
  */
-export function columnOf(name, columns) {
+export function columnOf(
+  name: string,
+  columns: readonly Column[],
+): { label: string; state: string } | null {
   for (const column of columns) {
     for (const pattern of column.file) {
       const state = stateOf(pattern, name);
@@ -105,21 +104,15 @@ export function columnOf(name, columns) {
 /**
  * The changed shots as rows by state, in the order their first shot comes,
  * and the ones no column takes.
- *
- * @param {readonly Changed[]} changed
- * @param {readonly Column[]} columns
- * @returns {{ rows: Row[], unpaired: Changed[] }}
  */
-export function pairBaselines(changed, columns) {
-  /** @type {Map<string, { label: string, change: Changed }[]>} */
-  const byState = new Map();
-  /** @type {Changed[]} */
-  const unpaired = [];
+export function pairBaselines(
+  changed: readonly Changed[],
+  columns: readonly Column[],
+): { rows: Row[]; unpaired: Changed[] } {
+  const byState: Map<string, { label: string; change: Changed }[]> = new Map();
+  const unpaired: Changed[] = [];
   for (const change of changed) {
-    const found = columnOf(
-      path.posix.basename(/** @type {string} */ (change.after ?? change.before)),
-      columns,
-    );
+    const found = columnOf(path.posix.basename((change.after ?? change.before) as string), columns);
     if (!found) {
       unpaired.push(change);
       continue;
@@ -134,15 +127,14 @@ export function pairBaselines(changed, columns) {
     cells.push({ label: found.label, change });
     byState.set(found.state, cells);
   }
-  /** @param {{ label: string, change: Changed }[]} cells in the columns' order */
-  const cellsOf = (cells) =>
+  /** @param cells in the columns' order */
+  const cellsOf = (cells: { label: string; change: Changed }[]) =>
     Object.fromEntries(
       columns
         .flatMap((c) => cells.filter((cell) => cell.label === c.label))
         .map((cell) => [cell.label, cell.change]),
     );
-  /** @type {Row[]} */
-  const rows = [];
+  const rows: Row[] = [];
   for (const [state, cells] of byState) {
     const labels = cells.map((c) => c.label);
     if (new Set(labels).size === labels.length) {
@@ -161,24 +153,19 @@ export function pairBaselines(changed, columns) {
 /**
  * A `columns` setting, checked: undefined when absent. `key` names it in
  * errors (visual-review.columns).
- *
- * @param {unknown} value
- * @param {string} key
- * @returns {Column[] | undefined}
  */
-export function parseColumns(value, key) {
+export function parseColumns(value: unknown, key: string): Column[] | undefined {
   if (value === undefined) return undefined;
-  const fail = (/** @type {string} */ why) => {
+  const fail = (why: string) => {
     throw new Error(`.github/ci.json: ${key} ${why}`);
   };
   if (!Array.isArray(value) || value.length === 0) fail('must list { label, file } columns');
-  /** @type {Column[]} */
-  const out = [];
-  for (const raw of /** @type {unknown[]} */ (value)) {
+  const out: Column[] = [];
+  for (const raw of value as unknown[]) {
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
       fail('must list { label, file } columns');
     }
-    const c = /** @type {Record<string, unknown>} */ (raw);
+    const c = raw as Record<string, unknown>;
     const unknown = Object.keys(c).filter((k) => !['label', 'file', 'width'].includes(k));
     if (unknown.length > 0) fail(`has an unknown key: ${unknown.join(', ')}`);
     // A label heads a Markdown table's column.
@@ -189,7 +176,7 @@ export function parseColumns(value, key) {
     ) {
       fail('labels must be text, with no | < > ` or line break');
     }
-    const label = /** @type {string} */ (c.label);
+    const label = c.label as string;
     if (out.some((o) => o.label === label)) fail(`repeats the label ${label}`);
     const files = typeof c.file === 'string' ? [c.file] : c.file;
     if (
@@ -210,8 +197,8 @@ export function parseColumns(value, key) {
     }
     out.push({
       label,
-      file: /** @type {string[]} */ (files),
-      ...(c.width === undefined ? {} : { width: /** @type {number} */ (c.width) }),
+      file: files as string[],
+      ...(c.width === undefined ? {} : { width: c.width as number }),
     });
   }
   return out;

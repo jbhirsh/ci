@@ -3,13 +3,12 @@
 // numbers readable. Not part of any tool.
 
 import { PIXELS } from './pixels.ts';
+import type { Pixels } from './pixels.ts';
 
 /**
  * A real PNG `width`×`height`, white with its first `marked` pixels black.
- *
- * @returns {Buffer}
  */
-export function testPng(width = 10, height = 10, marked = 0) {
+export function testPng(width = 10, height = 10, marked = 0): Buffer {
   const data = new Uint8Array(width * height * 4).fill(255);
   for (let i = 0; i < marked; i++) data.fill(0, i * 4, i * 4 + 3);
   return PIXELS.write({ width, height, data });
@@ -18,10 +17,8 @@ export function testPng(width = 10, height = 10, marked = 0) {
 /**
  * Stand-in pixels: a "PNG" is JSON `{w, h, px}` (fakePng), and `match`
  * counts the positions where the lists differ, marking them in `out`.
- *
- * @type {import('./pixels.ts').Pixels}
  */
-export const fakePixels = {
+export const fakePixels: Pixels = {
   read: (png) => {
     const { w, h, px } = JSON.parse(png.toString());
     return { width: w, height: h, data: Uint8Array.from(px) };

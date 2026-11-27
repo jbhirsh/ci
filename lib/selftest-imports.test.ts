@@ -36,31 +36,26 @@ const DYNAMIC =
  * A module's text without its comments, so a JSDoc type isn't read as an
  * import. Naive about a comment marker inside a string, which only hides an
  * import that sits on the same line.
- *
- * @param {string} text
  */
-const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+const code = (text: string) =>
+  text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
 
 /**
  * Whether a static import's clause is erased whole: `type X`, `type { X }`,
  * `type * as X`. Braces whose every name is marked `type` are not: the
  * import stays, with no names.
- *
- * @param {string} clause
  */
-const typeOnly = (clause) => /^type\s+[\w${*]/.test(clause.trim());
+const typeOnly = (clause: string) => /^type\s+[\w${*]/.test(clause.trim());
 
 /**
  * The specifiers a module loads at run time.
  *
- * @param {string} text the module's source
- * @param {boolean} ts whether it is TypeScript, where `import('x').T` is a type
- * @returns {string[]}
+ * @param text the module's source
+ * @param ts whether it is TypeScript, where `import('x').T` is a type
  */
-function specifiers(text, ts) {
+function specifiers(text: string, ts: boolean): string[] {
   const source = code(text);
-  /** @type {string[]} */
-  const found = [];
+  const found: string[] = [];
   for (const [, clause, specifier] of source.matchAll(STATIC)) {
     if (clause === undefined || !typeOnly(clause)) found.push(specifier);
   }
@@ -74,13 +69,12 @@ function specifiers(text, ts) {
 /**
  * The packages a module and everything it imports import.
  *
- * @param {string} file an absolute path to a module of this repo
- * @param {Set<string>} [seen]
- * @returns {Map<string, string>} each package, with the module that imports it
+ * @param file an absolute path to a module of this repo
+ * @param seen
+ * @returns each package, with the module that imports it
  */
-function packagesOf(file, seen = new Set()) {
-  /** @type {Map<string, string>} */
-  const found = new Map();
+function packagesOf(file: string, seen: Set<string> = new Set()): Map<string, string> {
+  const found: Map<string, string> = new Map();
   if (seen.has(file)) return found;
   seen.add(file);
   for (const specifier of specifiers(readFileSync(file, 'utf8'), file.endsWith('.ts'))) {

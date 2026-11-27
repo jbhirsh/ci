@@ -10,32 +10,31 @@
 // so this asks `commits/{sha}/pulls`, which works for every same-repository
 // commit.
 
-/**
- * The run, as far as this reads it.
- *
- * @typedef {{ head_sha: string, event: string }} Run
- */
+import type { Api } from './comment.ts';
 
-/**
- * A pull request, as far as this reads it.
- *
- * @typedef {{ number: number, state: string, head: { sha: string,
- *   repo: { full_name: string } | null }, base?: { ref: string } }} Pull
- */
+/** The run, as far as this reads it. */
+export type Run = { head_sha: string; event: string };
+
+/** A pull request, as far as this reads it. */
+export type Pull = {
+  number: number;
+  state: string;
+  head: { sha: string; repo: { full_name: string } | null };
+  base?: { ref: string };
+};
 
 /**
  * The open same-repository PR whose head is the run's commit, or why there
  * is none.
  *
- * @param {Run} run
- * @param {string} repo owner/name
- * @param {import('./comment.ts').Api} api
- * @returns {{ pull: Pull } | { why: string }}
+ * @param run
+ * @param repo owner/name
+ * @param api
  */
-export function pullOfRun(run, repo, api) {
+export function pullOfRun(run: Run, repo: string, api: Api): { pull: Pull } | { why: string } {
   const got = api('GET', `repos/${repo}/commits/${run.head_sha}/pulls?per_page=100`);
   if (!Array.isArray(got)) throw new Error(`expected a list of PRs for ${run.head_sha}`);
-  const open = /** @type {Pull[]} */ (got).filter((p) => p.state === 'open');
+  const open = (got as Pull[]).filter((p) => p.state === 'open');
   const own = open.filter((p) => p.head.repo?.full_name === repo);
   const pull = own.find((p) => p.head.sha === run.head_sha);
   if (pull) return { pull };

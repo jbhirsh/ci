@@ -13,7 +13,7 @@ describe('ghVersion', () => {
 });
 
 describe('checkGh', () => {
-  const at = (/** @type {string} */ v) => () => `gh version ${v} (2026-09-01)\n`;
+  const at = (v: string) => () => `gh version ${v} (2026-09-01)\n`;
 
   it.each(['2.99.0', '2.99.1', '2.103.2', '3.0.0'])('passes %s', (v) => {
     expect(() => checkGh(at(v))).not.toThrow();
@@ -44,7 +44,7 @@ describe('checkGh', () => {
 });
 
 describe('checkGh, for an issue', () => {
-  const at = (/** @type {string} */ v) => () => `gh version ${v} (2026-11-01)\n`;
+  const at = (v: string) => () => `gh version ${v} (2026-11-01)\n`;
   const lists = () => 'Flags:\n  -a, --attach file   Attach a file\n  -b, --body string\n';
 
   it('passes 2.104.0 or newer whose gh issue edit lists --attach', () => {
@@ -77,10 +77,8 @@ describe('checkGh, for an issue', () => {
 describe('checkGh, running gh', () => {
   /**
    * Runs checkGh with a fake gh first on PATH, printing this version (or no gh at all).
-   *
-   * @param {string | null} version
    */
-  function withFakeGh(version) {
+  function withFakeGh(version: string | null) {
     const dir = mkdtempSync(path.join(tmpdir(), 'fake-gh-'));
     if (version) {
       const gh = path.join(dir, 'gh');
@@ -141,12 +139,11 @@ describe('commandIn and ghIn', () => {
 });
 
 describe('main, the command line', () => {
-  const at = (/** @type {string} */ v) => () => `gh version ${v} (2026-09-01)\n`;
+  const at = (v: string) => () => `gh version ${v} (2026-09-01)\n`;
 
   it('exits 0 for a gh that can attach, and 1 saying what to install', () => {
-    /** @type {string[]} */
-    const errors = [];
-    const error = (/** @type {string} */ line) => errors.push(line);
+    const errors: string[] = [];
+    const error = (line: string) => errors.push(line);
     expect(main(['check'], { version: at('2.99.0'), error })).toBe(0);
     expect(main(['check'], { version: at('2.89.0'), error })).toBe(1);
     expect(errors).toEqual([
@@ -155,8 +152,7 @@ describe('main, the command line', () => {
   });
 
   it('says how to call it', () => {
-    /** @type {string[]} */
-    const errors = [];
+    const errors: string[] = [];
     expect(main([], { error: (l) => errors.push(l) })).toBe(2);
     expect(main(['check', 'x'], { error: (l) => errors.push(l) })).toBe(2);
     expect(main(['check', '--issue', 'x'], { error: (l) => errors.push(l) })).toBe(2);
@@ -164,9 +160,8 @@ describe('main, the command line', () => {
   });
 
   it('checks for an issue with --issue', () => {
-    /** @type {string[]} */
-    const errors = [];
-    const error = (/** @type {string} */ line) => errors.push(line);
+    const errors: string[] = [];
+    const error = (line: string) => errors.push(line);
     const help = () => '  --attach file\n';
     expect(main(['check', '--issue'], { version: at('2.104.0'), help, error })).toBe(0);
     expect(main(['check', '--issue'], { version: at('2.99.0'), help, error })).toBe(1);

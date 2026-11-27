@@ -41,8 +41,7 @@ const columns = fc
     ),
   );
 /** The name a pattern gives a state. */
-const fill = (/** @type {string} */ p, /** @type {string} */ state) =>
-  p.replace('{state}', () => state);
+const fill = (p: string, state: string) => p.replace('{state}', () => state);
 
 describe('pairing, for any changed files', () => {
   it('never throws, and puts every changed shot in one cell or in unpaired', () => {

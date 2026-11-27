@@ -8,39 +8,44 @@ import { readFileSync } from 'node:fs';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 
-/**
- * @typedef {{ width: number, height: number, data: Uint8Array }} Image
- * @typedef {object} Pixels
- * @property {(png: Buffer) => Image} read decodes a PNG
- * @property {(image: Image) => Buffer} write encodes one
- * @property {(a: Uint8Array, b: Uint8Array, out: Uint8Array | null, width: number,
- *   height: number, options: { threshold: number, diffMask?: boolean }) => number} match
- *   counts the pixels that differ, painting them into `out` when it's given
- *   (with `diffMask`, only the differing ones, so a pixel with alpha 0 matches)
- */
+export type Image = { width: number; height: number; data: Uint8Array };
+
+export type Pixels = {
+  /** decodes a PNG */
+  read: (png: Buffer) => Image;
+  /** encodes one */
+  write: (image: Image) => Buffer;
+  /**
+   * counts the pixels that differ, painting them into `out` when it's given (with `diffMask`, only
+   * the differing ones, so a pixel with alpha 0 matches)
+   */
+  match: (
+    a: Uint8Array,
+    b: Uint8Array,
+    out: Uint8Array | null,
+    width: number,
+    height: number,
+    options: { threshold: number; diffMask?: boolean },
+  ) => number;
+};
 
 /**
  * pixelmatch and pngjs.
- *
- * @type {Pixels}
  */
-export const PIXELS = Object.freeze({
+export const PIXELS: Pixels = Object.freeze({
   read: (png) => PNG.sync.read(png),
-  write: (image) => PNG.sync.write(/** @type {import('pngjs').PNG} */ (image)),
+  write: (image) => PNG.sync.write(image as PNG),
   match: pixelmatch,
 });
 
 /**
  * Decodes the PNG at `file`, naming it when pngjs can't.
- *
- * @param {string} file
- * @returns {Image}
  */
-export function readPng(file) {
+export function readPng(file: string): Image {
   try {
     return PIXELS.read(readFileSync(file));
   } catch (error) {
-    throw new Error(`${file} is not a PNG pngjs reads: ${/** @type {Error} */ (error).message}`, {
+    throw new Error(`${file} is not a PNG pngjs reads: ${(error as Error).message}`, {
       cause: error,
     });
   }
@@ -53,15 +58,20 @@ export function readPng(file) {
  * the diff image pixelmatch paints (none when the sizes differ), and with
  * `maskBelow` (when fewer than that share differs) which pixels differ (`mask`, one byte a pixel, 1 where they do)
  * and the size.
- *
- * @param {Buffer} a
- * @param {Buffer} b
- * @param {Pixels} pixels
- * @param {{ withImage?: boolean, maskBelow?: number }} [options]
- * @returns {{ ratio: number, resized?: true, image?: Buffer, mask?: Uint8Array,
- *   width?: number, height?: number }}
  */
-export function diff(a, b, pixels, { withImage = false, maskBelow = 0 } = {}) {
+export function diff(
+  a: Buffer,
+  b: Buffer,
+  pixels: Pixels,
+  { withImage = false, maskBelow = 0 }: { withImage?: boolean; maskBelow?: number } = {},
+): {
+  ratio: number;
+  resized?: true;
+  image?: Buffer;
+  mask?: Uint8Array;
+  width?: number;
+  height?: number;
+} {
   const before = pixels.read(a);
   const after = pixels.read(b);
   const { width, height } = before;
@@ -71,8 +81,13 @@ export function diff(a, b, pixels, { withImage = false, maskBelow = 0 } = {}) {
   const out = withImage ? new Uint8Array(width * height * 4) : null;
   const differing = pixels.match(before.data, after.data, out, width, height, { threshold: 0.1 });
   const ratio = differing / (width * height);
-  /** @type {{ ratio: number, image?: Buffer, mask?: Uint8Array, width?: number, height?: number }} */
-  const result = { ratio };
+  const result: {
+    ratio: number;
+    image?: Buffer;
+    mask?: Uint8Array;
+    width?: number;
+    height?: number;
+  } = { ratio };
   if (out) result.image = pixels.write({ width, height, data: out });
   if (ratio > 0 && ratio < maskBelow) {
     const painted = new Uint8Array(width * height * 4);

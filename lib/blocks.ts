@@ -7,36 +7,42 @@
 // it. A marker left without its pair (an edit gone wrong) is never taken for
 // a block: it stays as it is, with what follows it.
 
-/**
- * @typedef {object} Blocks One tool's blocks, by key.
- * @property {(key: string) => { start: string; end: string }} markers the
- *   markers around a key's block; throws for a key that could end the HTML
- *   comment a marker is (a space, `<`, `>` or `--`)
- * @property {(body: string, key: string) => { from: number; to: number } | null} find
- *   where the key's block is, markers included, or null: the last start
- *   that an end follows
- * @property {(body: string, key: string, block: string) => string} write
- *   the description with the key's block in it (`block` without its
- *   markers): in place of an earlier one, or after the rest
- * @property {(body: string, key: string) => string} remove the description
- *   without the key's block, nor the blank line that kept it apart from
- *   what came before; unchanged when it has none
- * @property {(body: string) => string[]} keys the keys of every block of
- *   this prefix in the description, in order
- */
+/** One tool's blocks, by key. */
+export type Blocks = {
+  /**
+   * the markers around a key's block; throws for a key that could end the HTML comment a marker is
+   * (a space, `<`, `>` or `--`)
+   */
+  markers: (key: string) => { start: string; end: string };
+  /** where the key's block is, markers included, or null: the last start that an end follows */
+  find: (body: string, key: string) => { from: number; to: number } | null;
+  /**
+   * the description with the key's block in it (`block` without its markers): in place of an
+   * earlier one, or after the rest
+   */
+  write: (body: string, key: string, block: string) => string;
+  /**
+   * the description without the key's block, nor the blank line that kept it apart from what came
+   * before; unchanged when it has none
+   */
+  remove: (body: string, key: string) => string;
+  /** the keys of every block of this prefix in the description, in order */
+  keys: (body: string) => string[];
+};
 
 /**
  * The blocks marked with `prefix`.
  *
- * @param {string} prefix the tool's name in its markers: letters, digits, `-`
- * @param {{ named?: string; where?: string }} [words] how a refused key's
+ * @param prefix the tool's name in its markers: letters, digits, `-`
+ * @param words how a refused key's
  *   error names it ("a scenario named") and where its block goes ("a PR
  *   description")
- * @returns {Blocks}
  */
-export function blocksFor(prefix, { named = 'a block named', where = 'a description' } = {}) {
-  /** @param {string} key */
-  const markers = (key) => {
+export function blocksFor(
+  prefix: string,
+  { named = 'a block named', where = 'a description' }: { named?: string; where?: string } = {},
+): Blocks {
+  const markers = (key: string) => {
     if (!/^[^\s<>]+$/.test(key) || key.includes('--')) {
       throw new Error(
         `${prefix}: ${named} ${JSON.stringify(key)} can't mark its block in ${where}; rename it`,
@@ -45,11 +51,7 @@ export function blocksFor(prefix, { named = 'a block named', where = 'a descript
     return { start: `<!-- ${prefix}:${key} -->`, end: `<!-- /${prefix}:${key} -->` };
   };
 
-  /**
-   * @param {string} body
-   * @param {string} key
-   */
-  const find = (body, key) => {
+  const find = (body: string, key: string) => {
     const { start, end } = markers(key);
     for (
       let from = body.lastIndexOf(start);
@@ -63,12 +65,7 @@ export function blocksFor(prefix, { named = 'a block named', where = 'a descript
     return null;
   };
 
-  /**
-   * @param {string} body
-   * @param {string} key
-   * @param {string} block
-   */
-  const write = (body, key, block) => {
+  const write = (body: string, key: string, block: string) => {
     const { start, end } = markers(key);
     const marked = `${start}\n${block}\n${end}`;
     const found = find(body, key);
@@ -76,11 +73,7 @@ export function blocksFor(prefix, { named = 'a block named', where = 'a descript
     return body.trimEnd() ? `${body.trimEnd()}\n\n${marked}\n` : `${marked}\n`;
   };
 
-  /**
-   * @param {string} body
-   * @param {string} key
-   */
-  const remove = (body, key) => {
+  const remove = (body: string, key: string) => {
     const found = find(body, key);
     if (!found) return body;
     const head = body.slice(0, found.from).trimEnd();
@@ -89,8 +82,7 @@ export function blocksFor(prefix, { named = 'a block named', where = 'a descript
   };
 
   const opening = new RegExp(`<!-- ${prefix}:([^\\s<>]+) -->`, 'g');
-  /** @param {string} body */
-  const keys = (body) => {
+  const keys = (body: string) => {
     const found = [...body.matchAll(opening)].map((m) => m[1]);
     return [...new Set(found)].filter((key) => {
       try {

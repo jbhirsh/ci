@@ -4,17 +4,19 @@ import { pullOfRun } from './run-pr.ts';
 const REPO = 'jbhirsh/app';
 const SHA = 'a'.repeat(40);
 const run = { head_sha: SHA, event: 'pull_request' };
-/**
- * @param {number} number
- * @param {Partial<{ state: string, sha: string, repo: string | null }>} [over]
- */
-const pr = (number, { state = 'open', sha = SHA, repo = REPO } = {}) => ({
+const pr = (
+  number: number,
+  {
+    state = 'open',
+    sha = SHA,
+    repo = REPO,
+  }: Partial<{ state: string; sha: string; repo: string | null }> = {},
+) => ({
   number,
   state,
   head: { sha, repo: repo ? { full_name: repo } : null },
 });
-/** @param {unknown} answer */
-const api = (answer) => () => answer;
+const api = (answer: unknown) => () => answer;
 
 describe('pullOfRun', () => {
   it('finds the open same-repository PR whose head is the run', () => {

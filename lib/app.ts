@@ -26,12 +26,8 @@ export function appRoot() {
 
 /**
  * Imports `name` from the app's node_modules, not this repo's.
- *
- * @param {string} name
- * @param {string} [root]
- * @returns {Promise<unknown>}
  */
-export async function importFromApp(name, root = appRoot()) {
+export async function importFromApp(name: string, root: string = appRoot()): Promise<unknown> {
   const require = createRequire(path.join(root, 'package.json'));
   return import(pathToFileURL(require.resolve(name)).href);
 }
@@ -39,12 +35,8 @@ export async function importFromApp(name, root = appRoot()) {
 /**
  * Requires `name` from the app's node_modules, for a CommonJS package a
  * synchronous caller needs (TypeScript's API).
- *
- * @param {string} name
- * @param {string} [root]
- * @returns {unknown}
  */
-export function requireFromApp(name, root = appRoot()) {
+export function requireFromApp(name: string, root: string = appRoot()): unknown {
   return createRequire(path.join(root, 'package.json'))(name);
 }
 
@@ -53,53 +45,41 @@ export const SETTINGS_FILE = '.github/ci.json';
 
 /**
  * The app's whole `.github/ci.json`, or `{}` when it has none.
- *
- * @param {string} [root]
- * @returns {Record<string, unknown>}
  */
-export function appSettings(root = appRoot()) {
+export function appSettings(root: string = appRoot()): Record<string, unknown> {
   let text;
   try {
     text = readFileSync(path.join(root, SETTINGS_FILE), 'utf8');
   } catch {
     return {};
   }
-  /** @type {unknown} */
-  const parsed = JSON.parse(text);
+  const parsed: unknown = JSON.parse(text);
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     throw new Error(`${SETTINGS_FILE} must hold an object`);
   }
-  return /** @type {Record<string, unknown>} */ (parsed);
+  return parsed as Record<string, unknown>;
 }
 
 /**
  * The app's settings for one tool: its key in `.github/ci.json`, or `{}` when
  * the file or the key is missing.
- *
- * @param {string} tool
- * @param {string} [root]
- * @returns {Record<string, unknown>}
  */
-export function appConfig(tool, root = appRoot()) {
+export function appConfig(tool: string, root: string = appRoot()): Record<string, unknown> {
   const section = appSettings(root)[tool];
   if (section === undefined) return {};
   if (typeof section !== 'object' || section === null || Array.isArray(section)) {
     throw new Error(`${SETTINGS_FILE}: "${tool}" must be an object`);
   }
-  return /** @type {Record<string, unknown>} */ (section);
+  return section as Record<string, unknown>;
 }
 
 /**
  * The app's Playwright: `@playwright/test`, or else `playwright`, from the
  * node_modules at `root` (the app's, or a folder that holds only Playwright,
  * as the probe installs it).
- *
- * @param {string} root
- * @returns {Promise<typeof import('playwright')>}
  */
-export async function appPlaywright(root) {
-  /** @type {unknown} */
-  let module;
+export async function appPlaywright(root: string): Promise<typeof import('playwright')> {
+  let module: unknown;
   try {
     module = await importFromApp('@playwright/test', root);
   } catch {
@@ -107,12 +87,12 @@ export async function appPlaywright(root) {
   }
   // Resolved as CommonJS, its exports come as the default export (Playwright
   // Test's is a function, `test`, carrying the rest).
-  const { default: cjs } = /** @type {{ default?: unknown }} */ (module);
-  return /** @type {typeof import('playwright')} */ (
+  const { default: cjs } = module as { default?: unknown };
+  return (
     (typeof cjs === 'object' || typeof cjs === 'function') && cjs !== null && 'webkit' in cjs
       ? cjs
       : module
-  );
+  ) as typeof import('playwright');
 }
 
 /** The app's npm lockfile, relative to its checkout. */
@@ -125,17 +105,13 @@ const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
  * The version of `name` a parsed npm lockfile (lockfileVersion 2 or 3, its
  * `packages` map) pins at the top of node_modules. Throws, naming the file,
  * when it pins none, or something that isn't a plain release.
- *
- * @param {unknown} lock
- * @param {string} name
- * @returns {string}
  */
-export function lockedVersion(lock, name) {
+export function lockedVersion(lock: unknown, name: string): string {
   const packages =
     typeof lock === 'object' && lock !== null && 'packages' in lock ? lock.packages : undefined;
   const entry =
     typeof packages === 'object' && packages !== null
-      ? /** @type {Record<string, unknown>} */ (packages)[`node_modules/${name}`]
+      ? (packages as Record<string, unknown>)[`node_modules/${name}`]
       : undefined;
   const version =
     typeof entry === 'object' && entry !== null && 'version' in entry ? entry.version : undefined;
@@ -150,20 +126,15 @@ export function lockedVersion(lock, name) {
  * The version of `name` the app's lockfile pins, so a tool can install that
  * one release without the app's other packages (the probe's Playwright).
  * Throws, naming the file, when it has none, or pins none.
- *
- * @param {string} root
- * @param {string} name
- * @returns {string}
  */
-export function appPackageVersion(root, name) {
+export function appPackageVersion(root: string, name: string): string {
   let text;
   try {
     text = readFileSync(path.join(root, LOCKFILE), 'utf8');
   } catch {
     throw new Error(`no ${LOCKFILE}: the app's lockfile pins its packages' versions`);
   }
-  /** @type {unknown} */
-  let lock;
+  let lock: unknown;
   try {
     lock = JSON.parse(text);
   } catch {

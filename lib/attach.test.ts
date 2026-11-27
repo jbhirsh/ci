@@ -8,6 +8,7 @@ import {
   attachToDescription,
   attachmentLinksIn,
 } from './attach.ts';
+import type { Command } from './gh.ts';
 
 describe('the limits', () => {
   it("are gh's 50 files an edit and GitHub's 10 MB a file", () => {
@@ -31,15 +32,10 @@ describe('attachToDescription', () => {
   /**
    * A fake gh over one PR's description, which `--attach` rewrites as gh's
    * manual says: each local reference to an attached file becomes its URL.
-   *
-   * @param {string} body
-   * @param {{ keepLocal?: boolean; fail?: boolean }} [opts]
    */
-  function fakeGh(body, opts = {}) {
-    /** @type {string[][]} */
-    const calls = [];
-    /** @type {import('./gh.ts').Command} */
-    const gh = (args) => {
+  function fakeGh(body: string, opts: { keepLocal?: boolean; fail?: boolean } = {}) {
+    const calls: string[][] = [];
+    const gh: Command = (args) => {
       calls.push(args);
       if (opts.fail) throw new Error('gh pr failed: too large');
       let next = readFileSync(args[args.indexOf('--body-file') + 1], 'utf8');
@@ -53,15 +49,13 @@ describe('attachToDescription', () => {
     return { gh, calls, view: () => body };
   }
 
-  /**
-   * @param {ReturnType<typeof fakeGh>} fake
-   * @param {readonly string[]} files
-   * @param {string} [was]
-   */
-  function attach(fake, files, was = fake.view()) {
+  function attach(
+    fake: ReturnType<typeof fakeGh>,
+    files: readonly string[],
+    was: string = fake.view(),
+  ) {
     const cwd = mkdtempSync(path.join(tmpdir(), 'lib-attach-'));
-    /** @type {string[]} */
-    const logs = [];
+    const logs: string[] = [];
     const body = `${was}\n${files.map((f) => `![${f}](./${f})`).join('\n')}`;
     const after = attachToDescription({
       repo: 'o/r',
@@ -139,14 +133,13 @@ describe('attachToDescription', () => {
   it('edits once with nothing to attach when the body changed, and not at all when not', () => {
     const fake = fakeGh('Old');
     const cwd = mkdtempSync(path.join(tmpdir(), 'lib-attach-'));
-    /** @type {string[]} */
-    const logs = [];
+    const logs: string[] = [];
     const common = { repo: 'o/r', pr: '9', cwd, files: [], view: fake.view, gh: fake.gh };
     const options = {
       ...common,
       prefix: 'pictures',
       noun: 'picture',
-      log: (/** @type {string} */ l) => logs.push(l),
+      log: (l: string) => logs.push(l),
     };
     expect(attachToDescription({ ...options, was: 'Old', body: 'New' })).toBe('New');
     expect(fake.calls).toHaveLength(1);
@@ -163,8 +156,7 @@ describe('attachToDescription', () => {
     // An earlier run's leftover, before ---, isn't this run's to fix: a gh
     // that rewrites only the reference after it.
     let body = 'Old block: ![x](./a.png)\n---';
-    /** @type {import('./gh.ts').Command} */
-    const gh = (args) => {
+    const gh: Command = (args) => {
       const next = readFileSync(args[args.indexOf('--body-file') + 1], 'utf8');
       const at = next.indexOf('---');
       body =
@@ -208,16 +200,15 @@ describe('attachToDescription', () => {
   });
 
   it('says how far it got when an edit fails, keeping the cause', () => {
-    /** @type {Error} */
-    let thrown = new Error('none');
+    let thrown: Error = new Error('none');
     try {
       attach(fakeGh('', { fail: true }), ['a.png', 'b.png']);
     } catch (error) {
-      thrown = /** @type {Error} */ (error);
+      thrown = error as Error;
     }
     expect(thrown.message).toBe(
       'pictures: attaching to #9 stopped after 0 of 2 pictures; its description may still reference the rest locally (./…): run it again to attach them',
     );
-    expect(/** @type {Error} */ (thrown.cause).message).toBe('gh pr failed: too large');
+    expect((thrown.cause as Error).message).toBe('gh pr failed: too large');
   });
 });

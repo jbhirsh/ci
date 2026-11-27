@@ -18,13 +18,12 @@ describe('lockedVersion, for any lockfile JSON', () => {
   it('returns a release or throws an Error naming the file, never anything else', () => {
     fc.assert(
       fc.property(lockfiles, (lock) => {
-        /** @type {unknown} */
-        let version;
+        let version: unknown;
         try {
           version = lockedVersion(lock, 'playwright');
         } catch (error) {
           expect(error).toBeInstanceOf(Error);
-          expect(/** @type {Error} */ (error).message).toMatch(/^package-lock\.json/);
+          expect((error as Error).message).toMatch(/^package-lock\.json/);
           return;
         }
         expect(version).toMatch(/^\d+\.\d+\.\d+/);
