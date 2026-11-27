@@ -346,7 +346,7 @@ describe('review', () => {
     expect(f.posted()?.description).toBe('No visual changes');
   });
 
-  it("blocks a bot's PR with auto-merge on, and leaves turning it on to enable.mjs", () => {
+  it("blocks a bot's PR with auto-merge on, and leaves turning it on to enable.ts", () => {
     const f = fake({
       typename: 'Bot',
       author: 'dependabot',

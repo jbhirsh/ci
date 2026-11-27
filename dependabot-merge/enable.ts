@@ -15,7 +15,7 @@
 // clock. main's settings are read through the API, since this runs before
 // anything is checked out.
 //
-//   node enable.mjs   (env: GITHUB_REPOSITORY; PR_NUMBER, or HEAD_BRANCH to
+//   node enable.ts   (env: GITHUB_REPOSITORY; PR_NUMBER, or HEAD_BRANCH to
 //                      look it up; GH_TOKEN for gh)
 
 import { execFileSync } from 'node:child_process';

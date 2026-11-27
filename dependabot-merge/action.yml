@@ -4,7 +4,7 @@ description: >-
   once, as a rebase merge: the one method all four repositories allow (this
   one allows no other), and for a one-commit bump it lands the same commit a
   squash would. Dependabot can't enable auto-merge on its own PRs. The apps
-  get this from their autofix workflow, which runs enable.mjs whenever a
+  get this from their autofix workflow, which runs enable.ts whenever a
   check on a bot's PR completes; this action is for a repository without
   autofix (this one), whose workflow calls it when CI completes
   (workflow_run: a run on that event puts no check on the PR, so PRs don't
@@ -39,4 +39,4 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
         PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || github.event.pull_request.number }}
         HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.event.pull_request.head.ref }}
-      run: node "$GITHUB_ACTION_PATH/enable.mjs"
+      run: node "$GITHUB_ACTION_PATH/enable.ts"

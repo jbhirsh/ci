@@ -17,7 +17,7 @@
 #     review:
 #       permissions:
 #         actions: read
-#         contents: write     # enable.mjs turns Dependabot's auto-merge on
+#         contents: write     # enable.ts turns Dependabot's auto-merge on
 #         statuses: write
 #         pull-requests: write
 #         issues: write

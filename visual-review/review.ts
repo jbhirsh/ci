@@ -25,7 +25,7 @@
 //      a slot added later fills with no new upload. A PR whose table came
 //      from an upload comment (before ci#144) has no record: its newest
 //      genuine comment stands in for it, and attach hides it;
-//   6. for Dependabot's npm bump, enable.mjs, which turns auto-merge on only
+//   6. for Dependabot's npm bump, enable.ts, which turns auto-merge on only
 //      after "No visual changes".
 // A mockup does 1 to 3 and 5 on its issue, and sets no status.
 //
@@ -79,7 +79,7 @@ export type Io = {
   handoff: (handoff: Handoff, files: { name: string; bytes: Buffer }[]) => void;
   /** BOT_PR_TOKEN's account, whose upload comments (before ci#144) count */
   uploader: string;
-  /** enable.mjs, for one PR */
+  /** enable.ts, for one PR */
   enable: (number: number) => string;
   pixels: Pixels;
   /** epoch seconds */
@@ -637,7 +637,7 @@ export function review(target: Target, { s, io }: { s: Settings; io: Io }): numb
       io.log(io.enable(number));
     } catch (error) {
       // Auto-merge is a convenience: its status is posted, and autofix
-      // tries enable.mjs again when the PR's next check completes.
+      // tries enable.ts again when the PR's next check completes.
       io.log(`::warning::couldn't turn auto-merge on: ${(error as Error).message}`);
     }
   }
