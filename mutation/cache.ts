@@ -28,11 +28,8 @@ import { readSettings } from './settings.ts';
 /**
  * A hash of the files the globs match under `root` (names and contents, in
  * path order), or '' when there are no globs.
- *
- * @param {string[]} globs
- * @param {string} root
  */
-export function filesHash(globs, root) {
+export function filesHash(globs: string[], root: string) {
   if (globs.length === 0) return '';
   const files = [...new Set(globs.flatMap((glob) => globSync(glob, { cwd: root })))].sort();
   const hash = createHash('sha256');
@@ -51,11 +48,22 @@ export function filesHash(globs, root) {
 
 /**
  * This run's key and the prefixes to restore from.
- *
- * @param {{ prefix: string, pr: number | null, hash: string, restoreMain: boolean,
- *   runId: string, attempt: string }} args
  */
-export function cacheKeys({ prefix, pr, hash, restoreMain, runId, attempt }) {
+export function cacheKeys({
+  prefix,
+  pr,
+  hash,
+  restoreMain,
+  runId,
+  attempt,
+}: {
+  prefix: string;
+  pr: number | null;
+  hash: string;
+  restoreMain: boolean;
+  runId: string;
+  attempt: string;
+}) {
   const main = `${prefix}-main-`;
   if (pr === null) return { key: `${main}${runId}-${attempt}`, restoreKeys: [main] };
   const own = `${prefix}-pr-${pr}-${hash ? `${hash}-` : ''}`;
@@ -64,12 +72,12 @@ export function cacheKeys({ prefix, pr, hash, restoreMain, runId, attempt }) {
 
 /**
  * The command line. Returns the exit code.
- *
- * @param {string[]} args
- * @param {string} [root]
- * @param {Record<string, string | undefined>} [env]
  */
-export function main(args, root = appRoot(), env = process.env) {
+export function main(
+  args: string[],
+  root: string = appRoot(),
+  env: Record<string, string | undefined> = process.env,
+) {
   const [kind, number] = args;
   const pr = Number(number);
   if (!(kind === 'main' || (kind === 'pr' && Number.isInteger(pr) && pr > 0))) {

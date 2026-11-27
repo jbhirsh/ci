@@ -6,12 +6,8 @@ import { main, narrow, narrowFile, staysPut } from './narrow.ts';
 
 /**
  * A mutant on lines `start` to `end`, as Stryker's report places it.
- *
- * @param {string} id
- * @param {number} start
- * @param {number} [end]
  */
-const at = (id, start, end = start) => ({
+const at = (id: string, start: number, end: number = start) => ({
   id,
   location: { start: { line: start, column: 1 }, end: { line: end, column: 5 } },
 });
@@ -33,10 +29,8 @@ const thirteen = Array.from({ length: 13 }, (_, i) => `line ${i + 1}`).join('\n'
 
 /**
  * A `read` answering `text` for every file.
- *
- * @param {string | null} text
  */
-const reads = (text) => () => text;
+const reads = (text: string | null) => () => text;
 
 describe('narrow', () => {
   it('drops the files out of scope and keeps a whole file whole, and every test file', () => {
@@ -137,7 +131,7 @@ describe('narrow', () => {
   });
 
   it('keeps no line-range mutant without a source to compare, or a file to read', () => {
-    const one = (/** @type {unknown} */ source) => ({
+    const one = (source: unknown) => ({
       files: { 'src/a.ts': { source, mutants: [at('1', 1)] } },
     });
     expect(
@@ -196,9 +190,7 @@ describe('narrowFile', () => {
     narrowFile(file, ['src/a.ts:1-3', 'src/b.ts'], cwd, log);
     const narrowed = JSON.parse(readFileSync(file, 'utf8'));
     expect(Object.keys(narrowed.files)).toEqual(['src/a.ts', 'src/b.ts']);
-    expect(
-      narrowed.files['src/a.ts'].mutants.map((/** @type {{ id: string }} */ m) => m.id),
-    ).toEqual(['1']);
+    expect(narrowed.files['src/a.ts'].mutants.map((m: { id: string }) => m.id)).toEqual(['1']);
     expect(narrowed.testFiles).toEqual(report.testFiles);
     expect(log).toHaveBeenCalledWith(
       "Kept 2 of 3 file(s) from the incremental file for this run's scope.",

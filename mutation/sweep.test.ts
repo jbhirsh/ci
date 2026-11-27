@@ -18,10 +18,9 @@ import {
 } from './sweep.ts';
 import { allMutants, counts } from './report.ts';
 import { cleanRepos, isolateGit, repo, writeFiles } from './test-repo.ts';
+import type { Report } from './report.ts';
 
 const CWD = '/home/runner/work/sift/sift';
-
-/** @typedef {import('./report.ts').Report} Report */
 
 describe('mutantWeight', () => {
   it('counts one run plus each covering test', () => {
@@ -36,8 +35,7 @@ describe('mutantWeight', () => {
 
 describe('reportWeights', () => {
   it("sums each file's mutants, by cwd-relative name", () => {
-    /** @type {Report} */
-    const report = {
+    const report: Report = {
       files: {
         [`${CWD}/src/utils/a.ts`]: {
           mutants: [
@@ -65,8 +63,7 @@ describe('reportWeights', () => {
 });
 
 describe('fileWeights', () => {
-  /** @param {string} file */
-  const lines = (file) => ({ 'a.ts': 100, 'b.ts': 50, 'c.ts': 30 })[file] ?? 0;
+  const lines = (file: string) => ({ 'a.ts': 100, 'b.ts': 50, 'c.ts': 30 })[file] ?? 0;
 
   it('weighs files by line count when nothing is known', () => {
     expect(fileWeights(['a.ts', 'b.ts'], lines, new Map())).toEqual(
@@ -173,10 +170,12 @@ describe('plan', () => {
     'src/App.tsx',
     'README.md',
   ];
-  /** @type {Record<string, number>} */
-  const text = { 'src/utils/a.ts': 10, 'src/utils/b.ts': 20, 'src/App.tsx': 30 };
-  /** @param {string} file */
-  const lines = (file) => text[file];
+  const text: Record<string, number> = {
+    'src/utils/a.ts': 10,
+    'src/utils/b.ts': 20,
+    'src/App.tsx': 30,
+  };
+  const lines = (file: string) => text[file];
 
   it('refuses a scope with no file in it, naming the globs', () => {
     expect(() =>
@@ -257,17 +256,8 @@ describe('shardConfig', () => {
   });
 });
 
-/**
- * @param {number} line
- * @param {number} [column]
- */
-const at = (line, column = 1) => ({ start: { line, column } });
-/**
- * @param {string} id
- * @param {string} status
- * @param {Record<string, unknown>} [extra]
- */
-const mutant = (id, status, extra = {}) => ({
+const at = (line: number, column = 1) => ({ start: { line, column } });
+const mutant = (id: string, status: string, extra: Record<string, unknown> = {}) => ({
   id,
   status,
   mutatorName: 'X',
@@ -281,8 +271,7 @@ const config = {
 };
 
 // Two shards whose runs met the same three tests in different orders.
-/** @type {Report} */
-const shardA = {
+const shardA: Report = {
   schemaVersion: '1.0',
   projectRoot: '/repo',
   config: { mutate: ['src/a.ts'], thresholds: { break: null }, concurrency: 3 },
@@ -308,8 +297,7 @@ const shardA = {
     'src/__tests__/b.test.ts': { tests: [{ id: '2', name: 'b' }] },
   },
 };
-/** @type {Report} */
-const shardB = {
+const shardB: Report = {
   schemaVersion: '1.0',
   config: { mutate: ['src/b.ts'], thresholds: { break: null } },
   files: {
@@ -383,8 +371,7 @@ describe('mergeReports', () => {
   });
 
   it('tells apart tests of one name at different places', () => {
-    /** @type {Report} */
-    const other = {
+    const other: Report = {
       testFiles: {
         'src/__tests__/a.test.ts': { tests: [{ id: '0', name: 'reads', location: at(9) }] },
       },
@@ -496,10 +483,8 @@ describe('verdict', () => {
 
 // The command line, in a throwaway app.
 describe('main', () => {
-  /** @type {() => void} */
-  let restore;
-  /** @type {string} */
-  let out;
+  let restore: () => void;
+  let out: string;
   beforeAll(() => {
     restore = isolateGit();
   });
@@ -510,8 +495,7 @@ describe('main', () => {
     vi.unstubAllEnvs();
   });
 
-  /** @param {Record<string, unknown>} [mutation] */
-  function app(mutation = {}) {
+  function app(mutation: Record<string, unknown> = {}) {
     const dir = mkdtempSync(path.join(tmpdir(), 'sweep-out-'));
     out = path.join(dir, 'out');
     writeFileSync(out, '');
@@ -553,11 +537,7 @@ describe('main', () => {
     expect(written).toEqual({ ...config, thresholds: { ...config.thresholds, break: null } });
   });
 
-  /**
-   * @param {string} root
-   * @param {Record<string, unknown>} shards
-   */
-  const shardDir = (root, shards) => {
+  const shardDir = (root: string, shards: Record<string, unknown>) => {
     for (const [name, report] of Object.entries(shards)) {
       writeFiles(root, {
         [`shards/${name}/stryker-incremental.json`]:

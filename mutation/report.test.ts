@@ -18,12 +18,8 @@ const CWD = '/home/runner/work/sift/sift';
 
 /**
  * A mutant on lines `start` to `end`, with `status`.
- *
- * @param {number} start
- * @param {number} end
- * @param {string} [status]
  */
-const at = (start, end, status = 'Killed') => ({
+const at = (start: number, end: number, status = 'Killed') => ({
   status,
   location: { start: { line: start }, end: { line: end } },
 });
@@ -134,8 +130,7 @@ describe('parseScope', () => {
 });
 
 describe('inRanges', () => {
-  /** @type {Array<[number, number]>} */
-  const ranges = [
+  const ranges: Array<[number, number]> = [
     [4, 6],
     [10, 10],
   ];

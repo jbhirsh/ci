@@ -20,21 +20,15 @@ import { readText } from './report.ts';
 import { gitIn, inMutateScope, scopeFor } from './scope.ts';
 import { readSettings, readStrykerConfig, wiringGlobs } from './settings.ts';
 import { plan, shardConfig } from './sweep.ts';
+import type { Settings, StrykerConfig } from './settings.ts';
 
 /**
  * Runs the checks against the app at `root`, reporting through `log`.
  * Returns the number of failures.
- *
- * @param {string} root
- * @param {(line: string) => void} [log]
  */
-export async function selftest(root, log = console.log) {
+export async function selftest(root: string, log: (line: string) => void = console.log) {
   let failed = 0;
-  /**
-   * @param {string} name
-   * @param {() => unknown} check
-   */
-  const step = async (name, check) => {
+  const step = async (name: string, check: () => unknown) => {
     try {
       const note = await check();
       log(`ok    ${name}${note ? `: ${String(note)}` : ''}`);
@@ -43,10 +37,8 @@ export async function selftest(root, log = console.log) {
       log(`FAIL  ${name}: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
-  /** @type {import('./settings.ts').Settings | undefined} */
-  let settings;
-  /** @type {import('./settings.ts').StrykerConfig | undefined} */
-  let config;
+  let settings: Settings | undefined;
+  let config: StrykerConfig | undefined;
   await step('settings parse', () => {
     settings = readSettings(root);
     config = readStrykerConfig(settings, root);
@@ -100,7 +92,7 @@ export async function selftest(root, log = console.log) {
       throw new Error('the shards do not hold every in-scope file exactly once');
     }
     const shard = shardConfig(c.raw);
-    if (/** @type {{ break?: unknown }} */ (shard.thresholds).break !== null) {
+    if ((shard.thresholds as { break?: unknown }).break !== null) {
       throw new Error('the shard config keeps a break threshold');
     }
     return `${inScope.length} file(s) in ${shards.length} shard(s)`;
@@ -110,10 +102,8 @@ export async function selftest(root, log = console.log) {
 
 /**
  * The command line: `<app checkout>`. Returns the exit code.
- *
- * @param {string[]} args
  */
-export async function main(args) {
+export async function main(args: string[]) {
   const [dir] = args;
   if (!dir) {
     console.error('Usage: selftest.ts <app checkout>');

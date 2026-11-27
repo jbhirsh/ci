@@ -15,11 +15,8 @@ import {
 
 /**
  * An app with `.github/ci.json` holding `ci` and the Stryker config `stryker`.
- *
- * @param {unknown} ci
- * @param {string} [stryker]
  */
-function app(ci, stryker = '{"mutate":["src/**/*.ts"]}') {
+function app(ci: unknown, stryker = '{"mutate":["src/**/*.ts"]}') {
   const root = mkdtempSync(path.join(tmpdir(), 'settings-'));
   mkdirSync(path.join(root, '.github'));
   writeFileSync(path.join(root, '.github', 'ci.json'), JSON.stringify(ci));

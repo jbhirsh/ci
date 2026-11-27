@@ -52,16 +52,13 @@ import { setOutput } from '../lib/actions.mjs';
 import { appRoot, importFromApp } from '../lib/app.mjs';
 import { matches } from '../lib/match.mjs';
 import { readSettings, readStrykerConfig, wiringGlobs } from './settings.ts';
-
-/** @typedef {import('./report.ts').LineRange} LineRange */
+import type { Settings } from './settings.ts';
+import type { LineRange } from './report.ts';
 
 /**
  * Whether the ordered `mutate` globs select `file` (a repo-relative path).
- *
- * @param {string} file
- * @param {string[]} patterns
  */
-export function inMutateScope(file, patterns) {
+export function inMutateScope(file: string, patterns: string[]) {
   let selected = false;
   for (const pattern of patterns) {
     const negated = pattern.startsWith('!');
@@ -72,11 +69,8 @@ export function inMutateScope(file, patterns) {
 
 /**
  * Whether any of `files` is one the `globs` name.
- *
- * @param {string[]} files
- * @param {string[]} globs
  */
-export function wiringChanged(files, globs) {
+export function wiringChanged(files: string[], globs: string[]) {
   return files.some((file) => globs.some((glob) => matches(file, glob)));
 }
 
@@ -87,14 +81,11 @@ const SUBJECT_EXTENSIONS = ['.ts', '.tsx', '.mjs'];
 
 /**
  * The source files a changed file stands for: itself, or a test's subject.
- *
- * @param {string} file
- * @param {(file: string) => boolean} exists
  */
-export function subjects(file, exists) {
+export function subjects(file: string, exists: (file: string) => boolean) {
   if (!TEST_FILE.test(file)) return [file];
   const base = file.replace(TEST_FILE, '').replace(/(^|\/)__tests__\//, '$1');
-  const sources = (/** @type {string} */ b) =>
+  const sources = (b: string) =>
     SUBJECT_EXTENSIONS.map((extension) => b + extension).filter(
       (c) => !TEST_FILE.test(c) && exists(c),
     );
@@ -105,13 +96,9 @@ export function subjects(file, exists) {
 /**
  * The line ranges a diff with no context lines (`git diff -U0`) adds to its
  * new side, as `[first, last]` pairs; a hunk that only deletes adds none.
- *
- * @param {string} diff
- * @returns {LineRange[]}
  */
-export function addedRanges(diff) {
-  /** @type {LineRange[]} */
-  const ranges = [];
+export function addedRanges(diff: string): LineRange[] {
+  const ranges: LineRange[] = [];
   for (const [, start, count] of diff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
     const lines = count === undefined ? 1 : Number(count);
     if (lines > 0) ranges.push([Number(start), Number(start) + lines - 1]);
@@ -122,37 +109,33 @@ export function addedRanges(diff) {
 /**
  * `file` as --mutate entries: whole when `ranges` is null, else one
  * `file:first-last` per range, so none when it only lost lines.
- *
- * @param {string} file
- * @param {LineRange[] | null} ranges
  */
-export function mutateEntries(file, ranges) {
+export function mutateEntries(file: string, ranges: LineRange[] | null) {
   return ranges === null ? [file] : ranges.map(([first, last]) => `${file}:${first}-${last}`);
 }
 
 /**
- * How the scope reads the repository: a file at the merge base (null when it
- * isn't there) and as the PR has it, the base version as Prettier writes it
- * (null when Prettier ignores or can't read it), whether a file exists, and
- * the lines a file adds or changes (null for a file new to the branch).
- *
- * @typedef {{
- *   before: (file: string) => string | null,
- *   now: (file: string) => string | null,
- *   format: (text: string, file: string) => Promise<string | null>,
- *   exists: (file: string) => boolean,
- *   ranges: (file: string) => LineRange[] | null,
- * }} ScopeIo
+ * How the scope reads the repository: a file at the merge base (null when it isn't there) and as
+ * the PR has it, the base version as Prettier writes it (null when Prettier ignores or can't read
+ * it), whether a file exists, and the lines a file adds or changes (null for a file new to the
+ * branch).
  */
+export type ScopeIo = {
+  before: (file: string) => string | null;
+  now: (file: string) => string | null;
+  format: (text: string, file: string) => Promise<string | null>;
+  exists: (file: string) => boolean;
+  ranges: (file: string) => LineRange[] | null;
+};
 
 /**
  * Whether `file` changed only in formatting. Any failure counts as a real
  * change.
- *
- * @param {string} file
- * @param {Pick<ScopeIo, 'before' | 'now' | 'format'>} io
  */
-export async function formatOnly(file, { before, now, format }) {
+export async function formatOnly(
+  file: string,
+  { before, now, format }: Pick<ScopeIo, 'before' | 'now' | 'format'>,
+) {
   try {
     const base = before(file);
     if (base === null) return false;
@@ -166,14 +149,17 @@ export async function formatOnly(file, { before, now, format }) {
 /**
  * The --mutate entries for the changed files (deletions already left out),
  * each in-scope file once, in the order first met.
- *
- * @param {string[]} changed
- * @param {{ mutate: string[], testSubjects: boolean, formatCheck: boolean }} rules
- * @param {ScopeIo} io
  */
-export async function scopeEntries(changed, { mutate, testSubjects, formatCheck }, io) {
-  /** @type {Map<string, LineRange[] | null>} */
-  const lines = new Map();
+export async function scopeEntries(
+  changed: string[],
+  {
+    mutate,
+    testSubjects,
+    formatCheck,
+  }: { mutate: string[]; testSubjects: boolean; formatCheck: boolean },
+  io: ScopeIo,
+) {
+  const lines: Map<string, LineRange[] | null> = new Map();
   for (const file of changed) {
     const isTest = testSubjects && TEST_FILE.test(file);
     const inScope = (isTest ? subjects(file, io.exists) : [file]).filter((f) =>
@@ -190,20 +176,26 @@ export async function scopeEntries(changed, { mutate, testSubjects, formatCheck 
   return [...lines].flatMap(([file, ranges]) => mutateEntries(file, ranges));
 }
 
-/**
- * @typedef {{ entries: string[], reason: 'changed' | 'smoke' | 'none' }} PrScope
- */
+export type PrScope = { entries: string[]; reason: 'changed' | 'smoke' | 'none' };
 
 /**
  * The PR run's entries: its changed lines, else the smoke scope when
  * `touched` (every file the PR changes, deletions included) changes the
  * setup, else none.
- *
- * @param {{ changed: string[], touched: string[], mutate: string[],
- *   settings: import('./settings.ts').Settings, io: ScopeIo }} args
- * @returns {Promise<PrScope>}
  */
-export async function prScope({ changed, touched, mutate, settings, io }) {
+export async function prScope({
+  changed,
+  touched,
+  mutate,
+  settings,
+  io,
+}: {
+  changed: string[];
+  touched: string[];
+  mutate: string[];
+  settings: Settings;
+  io: ScopeIo;
+}): Promise<PrScope> {
   const entries = await scopeEntries(changed, { ...settings, mutate }, io);
   if (entries.length > 0) return { entries, reason: 'changed' };
   if (settings.smoke.length > 0 && wiringChanged(touched, wiringGlobs(settings))) {
@@ -212,36 +204,32 @@ export async function prScope({ changed, touched, mutate, settings, io }) {
   return { entries: [], reason: 'none' };
 }
 
-/**
- * @typedef {{
- *   getFileInfo: (file: string, options: { ignorePath: string }) =>
- *     Promise<{ ignored: boolean, inferredParser: string | null }>,
- *   resolveConfig: (file: string) => Promise<Record<string, unknown> | null>,
- *   format: (text: string, options: Record<string, unknown>) => Promise<string>,
- * }} Prettier
- */
+export type Prettier = {
+  getFileInfo: (
+    file: string,
+    options: { ignorePath: string },
+  ) => Promise<{ ignored: boolean; inferredParser: string | null }>;
+  resolveConfig: (file: string) => Promise<Record<string, unknown> | null>;
+  format: (text: string, options: Record<string, unknown>) => Promise<string>;
+};
 
 /**
  * The app's Prettier, or null when it isn't installed (or isn't Prettier).
- *
- * @param {string} root
- * @returns {Promise<Prettier | null>}
  */
-export async function loadPrettier(root) {
+export async function loadPrettier(root: string): Promise<Prettier | null> {
   // Only the app's own: Node would also find one through NODE_PATH or a
   // global folder, which isn't the version the app formats with.
   if (!existsSync(path.join(root, 'node_modules', 'prettier', 'package.json'))) return null;
-  /** @type {unknown} */
-  let mod;
+  let mod: unknown;
   try {
     mod = await importFromApp('prettier', root);
   } catch {
     return null;
   }
-  for (const candidate of [mod, /** @type {{ default?: unknown }} */ (mod).default]) {
-    const p = /** @type {Partial<Prettier> | undefined} */ (candidate);
+  for (const candidate of [mod, (mod as { default?: unknown }).default]) {
+    const p = candidate as Partial<Prettier> | undefined;
     if (typeof p?.format === 'function' && typeof p.getFileInfo === 'function') {
-      return /** @type {Prettier} */ (p);
+      return p as Prettier;
     }
   }
   return null;
@@ -252,12 +240,8 @@ export async function loadPrettier(root) {
  * app's config and ignore file, or null when it ignores the file or has no
  * parser for it. Throws when the text won't parse (formatOnly counts that as
  * a real change).
- *
- * @param {Prettier | null} prettier
- * @param {string} root
- * @returns {ScopeIo['format']}
  */
-export function prettierFormat(prettier, root) {
+export function prettierFormat(prettier: Prettier | null, root: string): ScopeIo['format'] {
   return async (text, file) => {
     if (prettier === null) return null;
     const abs = path.join(root, file);
@@ -273,11 +257,9 @@ export function prettierFormat(prettier, root) {
 /**
  * Runs git in `root`, its stderr kept (a missing file's `cat-file -e` is an
  * answer, not an error to show).
- *
- * @param {string} root
  */
-export function gitIn(root) {
-  return (/** @type {string[]} */ ...args) =>
+export function gitIn(root: string) {
+  return (...args: string[]) =>
     execFileSync('git', args, {
       cwd: root,
       encoding: 'utf8',
@@ -289,31 +271,22 @@ export function gitIn(root) {
 /**
  * The PR's files and readers over git: what changed between the merge base
  * of `baseRef` and HEAD, and both sides' versions.
- *
- * @param {string} root
- * @param {string} baseRef
- * @param {Prettier | null} prettier
  */
-export function gitScope(root, baseRef, prettier) {
+export function gitScope(root: string, baseRef: string, prettier: Prettier | null) {
   const git = gitIn(root);
   const base = git('merge-base', baseRef, 'HEAD').trim();
-  const names = (/** @type {string[]} */ ...filter) =>
+  const names = (...filter: string[]) =>
     git('diff', '--name-only', '-z', ...filter, base, 'HEAD')
       .split('\0')
       .filter(Boolean);
-  /**
-   * @param {string} rev
-   * @param {string} file
-   */
-  const show = (rev, file) => {
+  const show = (rev: string, file: string) => {
     try {
       return git('show', `${rev}:${file}`);
     } catch {
       return null;
     }
   };
-  /** @type {ScopeIo} */
-  const io = {
+  const io: ScopeIo = {
     before: (file) => show(base, file),
     now: (file) => show('HEAD', file),
     format: prettierFormat(prettier, root),
@@ -336,12 +309,8 @@ export function gitScope(root, baseRef, prettier) {
 
 /**
  * The PR scope for the app at `root` against `baseRef`.
- *
- * @param {string} root
- * @param {string} baseRef
- * @returns {Promise<PrScope>}
  */
-export async function scopeFor(root, baseRef) {
+export async function scopeFor(root: string, baseRef: string): Promise<PrScope> {
   const settings = readSettings(root);
   const { mutate } = readStrykerConfig(settings, root);
   const prettier = settings.formatCheck ? await loadPrettier(root) : null;
@@ -357,11 +326,8 @@ const MESSAGES = {
 
 /**
  * The command line: `<base ref>`. Returns the exit code.
- *
- * @param {string[]} args
- * @param {string} [root]
  */
-export async function main(args, root = appRoot()) {
+export async function main(args: string[], root: string = appRoot()) {
   const [baseRef] = args;
   if (!baseRef) {
     console.error('Usage: scope.ts <base ref>');

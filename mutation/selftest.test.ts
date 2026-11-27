@@ -4,8 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { main, selftest } from './selftest.ts';
 import { cleanRepos, isolateGit, repo } from './test-repo.ts';
 
-/** @type {() => void} */
-let restore;
+let restore: () => void;
 beforeAll(() => {
   restore = isolateGit();
 });
@@ -17,11 +16,11 @@ afterEach(() => {
 
 /**
  * An app with these settings and Stryker config, two commits deep.
- *
- * @param {unknown} mutation
- * @param {unknown} [stryker]
  */
-function app(mutation, stryker = { mutate: ['src/**/*.ts'], reporters: ['json'] }) {
+function app(
+  mutation: unknown,
+  stryker: unknown = { mutate: ['src/**/*.ts'], reporters: ['json'] },
+) {
   const made = repo({
     '.github/ci.json': JSON.stringify({ mutation }),
     'stryker.config.json': JSON.stringify(stryker),
@@ -33,10 +32,8 @@ function app(mutation, stryker = { mutate: ['src/**/*.ts'], reporters: ['json'] 
   return made;
 }
 
-/** @param {string} root */
-async function run(root) {
-  /** @type {string[]} */
-  const lines = [];
+async function run(root: string) {
+  const lines: string[] = [];
   const failed = await selftest(root, (line) => lines.push(line));
   return { failed, lines };
 }

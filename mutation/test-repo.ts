@@ -38,8 +38,7 @@ export function isolateGit() {
   };
 }
 
-/** @type {string[]} */
-const made = [];
+const made: string[] = [];
 
 /** Removes every repository `repo` made. */
 export function cleanRepos() {
@@ -48,11 +47,8 @@ export function cleanRepos() {
 
 /**
  * Writes files under `root`, making their directories.
- *
- * @param {string} root
- * @param {Record<string, string>} files
  */
-export function writeFiles(root, files) {
+export function writeFiles(root: string, files: Record<string, string>) {
   for (const [name, text] of Object.entries(files)) {
     mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
     writeFileSync(path.join(root, name), text);
@@ -62,17 +58,15 @@ export function writeFiles(root, files) {
 /**
  * A repository on `main` whose first commit holds `files`, with a function
  * to commit more and one to run git in it.
- *
- * @param {Record<string, string>} files
  */
-export function repo(files) {
+export function repo(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), 'mutation-app-'));
   made.push(root);
   const env = {
     ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))),
     ...IDENTITY,
   };
-  const git = (/** @type {string[]} */ ...args) =>
+  const git = (...args: string[]) =>
     execFileSync('git', args, {
       cwd: root,
       env,
@@ -81,11 +75,7 @@ export function repo(files) {
     });
   symlinkSync(path.join(HERE, '..', 'node_modules'), path.join(root, 'node_modules'));
   git('init', '-q', '-b', 'main');
-  /**
-   * @param {Record<string, string>} more
-   * @param {string[]} [remove]
-   */
-  const commit = (more, remove = []) => {
+  const commit = (more: Record<string, string>, remove: string[] = []) => {
     writeFiles(root, more);
     for (const file of remove) git('rm', '-q', file);
     if (Object.keys(more).length > 0) git('add', '--', ...Object.keys(more));

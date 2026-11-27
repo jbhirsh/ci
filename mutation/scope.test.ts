@@ -20,10 +20,9 @@ import {
 } from './scope.ts';
 import { parseSettings, wiringGlobs } from './settings.ts';
 import { cleanRepos, isolateGit, repo, writeFiles } from './test-repo.ts';
+import type { ScopeIo } from './scope.ts';
 
 const CI_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-
-/** @typedef {import('./scope.ts').ScopeIo} ScopeIo */
 
 // The apps' mutate globs as their Stryker configs had them when this moved.
 const BOARDGAMES_MUTATE = [
@@ -52,12 +51,18 @@ const SIFT_MUTATE = [
  * A fake repository: base and head contents, a "formatter" that collapses
  * runs of spaces, standing in for Prettier, and the lines each file changed
  * (`lines`, else line 1 of a file the base has; a new file has none).
- *
- * @param {{ base?: Record<string, string>, head?: Record<string, string>,
- *   ignored?: string[], lines?: Record<string, Array<[number, number]>> }} [contents]
- * @returns {ScopeIo}
  */
-function fakeRepo({ base = {}, head = {}, ignored = [], lines = {} } = {}) {
+function fakeRepo({
+  base = {},
+  head = {},
+  ignored = [],
+  lines = {},
+}: {
+  base?: Record<string, string>;
+  head?: Record<string, string>;
+  ignored?: string[];
+  lines?: Record<string, Array<[number, number]>>;
+} = {}): ScopeIo {
   return {
     ranges: (file) => (file in base ? (lines[file] ?? [[1, 1]]) : null),
     before: (file) => base[file] ?? null,
@@ -263,8 +268,7 @@ describe('wiringChanged', () => {
 });
 
 describe('subjects', () => {
-  /** @param {string} f */
-  const exists = (f) =>
+  const exists = (f: string) =>
     ['src/a.ts', 'src/b.tsx', 'src/x.helpers.ts', 'src/x.ts', 'App.tsx'].includes(f);
 
   it('maps a test to the source it covers, and a source to itself', () => {
@@ -282,8 +286,7 @@ describe('subjects', () => {
   });
 
   it('maps a .mjs test to its .mjs source, and either to the other while one is renamed', () => {
-    /** @param {string} f */
-    const mixed = (f) =>
+    const mixed = (f: string) =>
       ['lib/a.mjs', 'lib/b.ts', 'lib/c.mjs', 'lib/c.ts', 'lib/x.helpers.mjs'].includes(f);
     expect(subjects('lib/a.test.mjs', mixed)).toEqual(['lib/a.mjs']);
     expect(subjects('lib/__tests__/a.test.mjs', mixed)).toEqual(['lib/a.mjs']);
@@ -498,8 +501,8 @@ describe('scopeEntries', () => {
   });
 
   it('reads and formats only the files that would count', async () => {
-    const read = /** @type {string[]} */ ([]);
-    const io = { ...r, before: (/** @type {string} */ f) => (read.push(f), r.before(f)) };
+    const read = [] as string[];
+    const io = { ...r, before: (f: string) => (read.push(f), r.before(f)) };
     await scopeEntries(
       ['README.md', 'src/legacy.ts', 'src/fmt.ts', 'src/tested.test.ts'],
       rules,
@@ -509,13 +512,9 @@ describe('scopeEntries', () => {
   });
 
   it('diffs only the files in scope', async () => {
-    const asked = /** @type {string[]} */ ([]);
-    const io = { ...r, ranges: (/** @type {string} */ f) => (asked.push(f), [[1, 1]]) };
-    await scopeEntries(
-      ['src/real.ts', 'README.md', 'src/legacy.ts'],
-      rules,
-      /** @type {ScopeIo} */ (io),
-    );
+    const asked = [] as string[];
+    const io = { ...r, ranges: (f: string) => (asked.push(f), [[1, 1]]) };
+    await scopeEntries(['src/real.ts', 'README.md', 'src/legacy.ts'], rules, io as ScopeIo);
     expect(asked).toEqual(['src/real.ts']);
   });
 });
@@ -523,11 +522,8 @@ describe('scopeEntries', () => {
 describe('prScope', () => {
   const settings = parseSettings({ smoke: ['src/utils/formatTime.ts', 'src/utils/sorting.ts'] });
   const io = fakeRepo({ base: { 'src/a.ts': 'a', 'src/gone.ts': 'g' }, head: { 'src/a.ts': 'b' } });
-  /**
-   * @param {string[]} changed
-   * @param {string[]} [touched]
-   */
-  const run = (changed, touched = changed) => prScope({ changed, touched, mutate, settings, io });
+  const run = (changed: string[], touched: string[] = changed) =>
+    prScope({ changed, touched, mutate, settings, io });
 
   it('mutates the changed lines when there are any', async () => {
     expect(await run(['src/a.ts', 'package.json'])).toEqual({
@@ -600,8 +596,7 @@ describe("the app's Prettier", () => {
 // A real history in a throwaway repository: the base on main, the PR a
 // branch from it.
 describe('against a base in git', () => {
-  /** @type {() => void} */
-  let restore;
+  let restore: () => void;
   beforeAll(() => {
     restore = isolateGit();
   });
