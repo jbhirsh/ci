@@ -2,8 +2,9 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MIN_GH, MIN_GH_ISSUE, checkGh, commandIn, ghIn, ghVersion, main } from './gh.ts';
+import { importOnly, runAsScript } from './test-script.ts';
 
 describe('ghVersion', () => {
   it("reads gh's first line", () => {
@@ -187,5 +188,48 @@ describe('main, the command line', () => {
     expect(
       execFileSync(process.execPath, [script, 'check', '--issue'], { env, encoding: 'utf8' }),
     ).toBe('');
+  });
+});
+
+describe('main, run as a script in this process', () => {
+  // The child-process test above, in process, so coverage and Stryker see the
+  // script's own lines run (lib/test-script.ts).
+  const script = path.join(import.meta.dirname, 'gh.ts');
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('runs as a script, with a fake gh first on PATH', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    // The child test's empty stdout: neither console.log nor a write to it.
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const dir = mkdtempSync(path.join(tmpdir(), 'fake-gh-'));
+    writeFileSync(path.join(dir, 'gh'), '#!/bin/sh\necho "gh version 2.89.0 (2026-03-26)"\n');
+    chmodSync(path.join(dir, 'gh'), 0o755);
+    const env = { ...process.env, PATH: `${dir}${path.delimiter}${process.env.PATH}` };
+    expect(await runAsScript(script, ['check'], env)).toBe(1);
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error.mock.calls[0][0]).toContain('yours is 2.89.0');
+    error.mockClear();
+    writeFileSync(path.join(dir, 'gh'), '#!/bin/sh\necho "gh version 2.99.0 (2026-09-01)"\n');
+    expect(await runAsScript(script, ['check'], env)).toBe(0);
+    // gh 2.104 whose issue edit's help lists --attach, asked as gh is.
+    writeFileSync(
+      path.join(dir, 'gh'),
+      '#!/bin/sh\n[ "$1" = issue ] && { echo "  --attach file"; exit 0; }\necho "gh version 2.104.0 (2026-11-01)"\n',
+    );
+    expect(await runAsScript(script, ['check', '--issue'], env)).toBe(0);
+    expect(error).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
+    expect(stdout).not.toHaveBeenCalled();
+  });
+
+  it('runs no command line when imported', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    expect(await importOnly(script)).toBe(undefined);
+    expect(error).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
   });
 });

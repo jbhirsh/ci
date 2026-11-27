@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { importOnly, runAsScript } from '../lib/test-script.ts';
 import { parseBlock, parseFiles, parseInputs } from './inputs.ts';
 
 const env = {
@@ -126,5 +127,31 @@ describe('node pictures/inputs.ts', () => {
     const bad = run({ ...env, HOST_PR: '' });
     expect(bad.status).toBe(1);
     expect(bad.stderr).toContain('pictures: HOST_PR is the number of a PR');
+  });
+});
+
+describe('node pictures/inputs.ts, in this process', () => {
+  // The child-process test above, in process, so coverage and Stryker see the
+  // script's own lines run (lib/test-script.ts).
+  const script = path.join(import.meta.dirname, 'inputs.ts');
+  const run = (values: Record<string, string>) =>
+    runAsScript(script, [], { PATH: process.env.PATH, ...values });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('exits 0 for good inputs, and 1 saying what is wrong', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await run(env)).toBe(0);
+    expect(error).not.toHaveBeenCalled();
+    expect(await run({ ...env, HOST_PR: '' })).toBe(1);
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error.mock.calls[0][0]).toContain('pictures: HOST_PR is the number of a PR');
+  });
+
+  it('runs no command line when imported', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await importOnly(script)).toBe(undefined);
+    expect(error).not.toHaveBeenCalled();
   });
 });
