@@ -10,10 +10,9 @@ import { appConfig } from '../lib/app.mjs';
 import { missingPaths, semgrepArgs, settings } from './scan.ts';
 
 /**
- * @param {string} root
- * @returns {string[]} what to print
+ * @returns what to print
  */
-export function selftest(root) {
+export function selftest(root: string): string[] {
   const options = settings(appConfig('semgrep', root));
   const missing = missingPaths(options, root);
   if (missing.length > 0)
@@ -23,12 +22,8 @@ export function selftest(root) {
 
 /**
  * Runs the self-test on the app at `argv[0]` and returns the exit code.
- *
- * @param {string[]} argv
- * @param {(line: string) => void} [log]
- * @returns {number}
  */
-export function cli(argv, log = console.log) {
+export function cli(argv: string[], log: (line: string) => void = console.log): number {
   try {
     for (const line of selftest(path.resolve(argv[0] ?? '.'))) log(line);
     return 0;
