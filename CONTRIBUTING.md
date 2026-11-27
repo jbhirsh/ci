@@ -21,6 +21,9 @@ APP_ROOT=../BoardGames node <tool>/<script>.ts
 node <tool>/selftest.ts ../BoardGames
 ```
 
+The GIF tool runs as the apps run it, `node gif/cli.mjs <scenario>`: `gif/cli.ts` only exports its
+`main`.
+
 The checks CI runs: `npm run lint`, `npm run typecheck`, `npm run format:check`,
 `npm run test:coverage`.
 
