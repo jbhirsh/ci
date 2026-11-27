@@ -1,13 +1,13 @@
 // The tools' self-tests, which CI's "Against <app>" jobs run against each
-// app's `main` (.github/workflows/ci.yml): each `<tool>/selftest.mjs` or
-// `<tool>/selftest.ts`, for every tool in TOOLS.
+// app's `main` (.github/workflows/ci.yml): each `<tool>/selftest.ts`, for
+// every tool in TOOLS.
 //
 // The list is written down so that a self-test can't stop running unseen: a
 // glob over `*/selftest.mjs` runs nothing for a tool whose self-test was
-// renamed (to `.ts` while the repo moves to TypeScript, ci#155) or deleted,
-// and the job still passes. Here a listed tool with no self-test, one with
-// both extensions, and a self-test the list doesn't name (or of another
-// extension, which CI wouldn't run) each fail the job, naming the fix.
+// renamed (as each moved to `.ts`, ci#155) or deleted, and the job still
+// passes. Here a listed tool with no self-test, and a self-test the list
+// doesn't name (or of another extension, which CI wouldn't run) each fail
+// the job, naming the fix.
 //
 //   node lib/selftests.ts   prints the self-tests to run, one a line,
 //                            relative to this repo; exits 1 on a problem
@@ -36,9 +36,6 @@ export const TOOLS = [
   'unmeasured',
   'visual-review',
 ];
-
-/** The extensions CI runs a self-test with. */
-export const EXTENSIONS = ['.mjs', '.ts'];
 
 const LIST = 'lib/selftests.ts';
 
@@ -72,24 +69,20 @@ export function findSelftests(
   const files: string[] = [];
   const problems: string[] = [];
   for (const tool of tools) {
-    const found = EXTENSIONS.map((extension) => `${tool}/selftest${extension}`).filter((file) =>
-      existsSync(path.join(root, file)),
-    );
-    if (found.length === 0) {
+    const file = `${tool}/selftest.ts`;
+    if (existsSync(path.join(root, file))) files.push(file);
+    else {
       problems.push(
-        `${tool}: no selftest.mjs or selftest.ts, so CI would run no self-test for it: restore it, or take ${tool} out of TOOLS in ${LIST}`,
+        `${tool}: no selftest.ts, so CI would run no self-test for it: restore it, or take ${tool} out of TOOLS in ${LIST}`,
       );
-    } else if (found.length > 1) {
-      problems.push(`${tool}: both ${found.join(' and ')}: keep one`);
     }
-    files.push(...found);
   }
   for (const file of selftestsUnder(root).sort()) {
     const [tool, ...rest] = file.split('/');
-    if (!EXTENSIONS.includes(path.extname(file))) {
-      problems.push(`${file}: CI runs only selftest.mjs or selftest.ts: rename it`);
+    if (path.extname(file) !== '.ts') {
+      problems.push(`${file}: CI runs only selftest.ts: rename it`);
     } else if (rest.length > 1) {
-      problems.push(`${file}: CI runs only a tool's own <tool>/selftest.mjs or .ts: move it there`);
+      problems.push(`${file}: CI runs only a tool's own <tool>/selftest.ts: move it there`);
     } else if (!tools.includes(tool)) {
       problems.push(`${file}: ${tool} is not in TOOLS in ${LIST}: add it, so CI runs it`);
     }

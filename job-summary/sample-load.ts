@@ -1,6 +1,6 @@
 // Samples the machine's CPU for the rest of the job (job-summary/sample-load's
 // action.yml, a job's first step): a row of `time,load,busy` every SAMPLE_MS
-// into RUNNER_TEMP/job-summary/machine-cpu.csv (telemetry.mjs), which
+// into RUNNER_TEMP/job-summary/machine-cpu.csv (telemetry.ts), which
 // job-summary charts across the job when its own `load` input is empty.
 //
 // `start` writes the header and starts the sampler, detached, with nothing
@@ -13,15 +13,15 @@
 //
 // It never fails the job: a sampler that won't start is a warning.
 //
-// Plain JavaScript, typed in JSDoc, where the rest of this repo is
-// TypeScript (ci#155): the action runs on the runner's own Node, which may
-// be older than 22.18 and strip no types, so this file and what it imports
-// (telemetry.mjs, Node's built-ins only) stay .mjs.
+// The action runs on the runner's own Node, which may be older than 22.18
+// and strip no types: its step checks first and warns instead (action.yml).
+// It imports only Node's built-ins and telemetry.ts, as nothing is installed.
 //
-//   node sample-load.mjs          start the sampler (env: RUNNER_TEMP)
-//   node sample-load.mjs --loop <file>   the sampler itself
+//   node sample-load.ts          start the sampler (env: RUNNER_TEMP)
+//   node sample-load.ts --loop <file>   the sampler itself
 
 import { spawn } from 'node:child_process';
+import type { SpawnOptions } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -34,19 +34,20 @@ import {
   parseLoadavg,
   parseProcStat,
   telemetryFiles,
-} from './telemetry.mjs';
+} from './telemetry.ts';
+import type { CpuTimes } from './telemetry.ts';
 
-/** @typedef {import('./telemetry.mjs').CpuTimes} CpuTimes */
+/** A load average and the CPU's times at one moment. */
+type Reading = { load: number; cpu: CpuTimes };
 
 /**
  * The machine's load average and CPU times now, or null when they can't be
  * read.
- *
- * @param {string} [platform]
- * @param {(file: string) => string} [read]
- * @returns {{ load: number, cpu: CpuTimes } | null}
  */
-export function reading(platform = process.platform, read = (f) => readFileSync(f, 'utf8')) {
+export function reading(
+  platform: string = process.platform,
+  read: (file: string) => string = (f) => readFileSync(f, 'utf8'),
+): Reading | null {
   try {
     if (platform === 'linux') {
       const load = parseLoadavg(read('/proc/loadavg'));
@@ -63,25 +64,23 @@ export function reading(platform = process.platform, read = (f) => readFileSync(
  * The next row, from the reading before it and the one now; null when
  * either is missing or no time passed.
  *
- * @param {{ load: number, cpu: CpuTimes } | null} before
- * @param {{ load: number, cpu: CpuTimes } | null} now
- * @param {number} ms the time now
+ * @param before the last row's reading
+ * @param now the reading now
+ * @param ms the time now
  */
-export function nextRow(before, now, ms) {
+export function nextRow(before: Reading | null, now: Reading | null, ms: number) {
   if (!before || !now) return null;
   const busy = busyPercent(before.cpu, now.cpu);
   return busy === null ? null : loadRow(ms, now.load, busy);
 }
 
-/**
- * The sampler: a row every SAMPLE_MS, until the runner ends it.
- *
- * @param {string} file
- * @param {() => ({ load: number, cpu: CpuTimes } | null)} [read]
- * @param {(fn: () => void, ms: number) => unknown} [later]
- * @param {() => number} [clock]
- */
-export function loop(file, read = reading, later = setTimeout, clock = Date.now) {
+/** The sampler: a row every SAMPLE_MS, until the runner ends it. */
+export function loop(
+  file: string,
+  read: () => Reading | null = reading,
+  later: (fn: () => void, ms: number) => unknown = setTimeout,
+  clock: () => number = Date.now,
+) {
   let before = read();
   const tick = () => {
     const now = read();
@@ -99,24 +98,22 @@ export function loop(file, read = reading, later = setTimeout, clock = Date.now)
   later(tick, SAMPLE_MS);
 }
 
-/**
- * Spawns a process: child_process.spawn, or a stand-in in a test.
- *
- * @callback Spawn
- * @param {string} command
- * @param {string[]} args
- * @param {import('node:child_process').SpawnOptions} options
- * @returns {{ on: (event: 'error', listener: () => void) => unknown, unref: () => void }}
- */
+/** Spawns a process: child_process.spawn, or a stand-in in a test. */
+type Spawn = (
+  command: string,
+  args: string[],
+  options: SpawnOptions,
+) => { on: (event: 'error', listener: () => void) => unknown; unref: () => void };
 
 /**
  * Starts the sampler, unless this job's already has (its file is there).
  *
- * @param {Record<string, string | undefined>} [env]
- * @param {Spawn} [run]
- * @returns {string} what it did
+ * @returns what it did
  */
-export function start(env = process.env, run = spawn) {
+export function start(
+  env: Record<string, string | undefined> = process.env,
+  run: Spawn = spawn,
+): string {
   try {
     const files = telemetryFiles(env);
     if (!files) return '::warning::job-summary/sample-load: RUNNER_TEMP is not set';

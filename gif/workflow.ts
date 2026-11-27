@@ -19,7 +19,7 @@
 // SIDE_BY_SIDE and AFTER_ONLY ("true" or "false"), and for an automatic run
 // AUTOMATIC ("true") with the rest each step's header names.
 //
-// record runs cli.mjs once a scenario, without --dir, so each one's GIFs are
+// record runs cli.ts once a scenario, without --dir, so each one's GIFs are
 // left in pr-gif/<scenario name>/ as a run on the owner's machine leaves
 // them; for an app whose CI records videos (sift), it runs videos.ts once
 // with --out pr-gif, which takes every scenario the PR's run recorded, so
@@ -170,7 +170,7 @@ export function parseInputs(env: Record<string, string | undefined>): Inputs {
 }
 
 /**
- * The command lines cli.mjs is run with, one a run. An automatic run of a
+ * The command lines cli.ts is run with, one a run. An automatic run of a
  * web app lets "before" fail (a screen main doesn't have); sift's takes its
  * CI run for "after", at the commit that run recorded, and only the named
  * scenarios (SCENARIOS holds names there, not files).
@@ -629,7 +629,7 @@ function folders(dir: string): Set<string> {
 export type Context = {
   env?: Record<string, string | undefined>;
   cwd?: string;
-  /** runs cli.mjs with these arguments, returning its exit code */
+  /** runs cli.ts with these arguments, returning its exit code */
   run?: (args: string[]) => number;
   /** runs `gh api` with these arguments, returning what it printed */
   api?: (args: string[]) => string;
@@ -811,7 +811,7 @@ function recordStep(
   const { source } = loadSettings(root);
   const inputs = parseInputs(env);
   const runs = recordRuns(source, inputs);
-  const cli = fileURLToPath(new URL('./cli.mjs', import.meta.url));
+  const cli = fileURLToPath(new URL('./cli.ts', import.meta.url));
   const run =
     context.run ??
     ((args: string[]) =>

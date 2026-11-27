@@ -10,8 +10,7 @@ into their own copy of it.
 ## Changing a tool
 
 Clone this repo beside the apps (`../ci`), change it, and run it against an app before opening
-the PR, either the script itself or its self-test (`.ts`, or `.mjs` in a tool not yet moved to
-TypeScript, ci#155):
+the PR, either the script itself or its self-test:
 
 ```bash
 APP_ROOT=../BoardGames node <tool>/<script>.ts
@@ -21,11 +20,10 @@ APP_ROOT=../BoardGames node <tool>/<script>.ts
 node <tool>/selftest.ts ../BoardGames
 ```
 
-The GIF tool runs as the apps run it, `node gif/cli.mjs <scenario>`: `gif/cli.ts` only exports its
-`main`.
+The GIF tool runs as the apps run it, `node gif/cli.ts <scenario>`.
 
 This repo records its job-summary report page the same way (ci#176), from scenarios in
-`job-summary/gif/scenarios/`: `node gif/cli.mjs job-summary/gif/scenarios/<scenario>.ts`.
+`job-summary/gif/scenarios/`: `node gif/cli.ts job-summary/gif/scenarios/<scenario>.ts`.
 
 The probe runs against a deployment rather than a checkout (`probe/web/run.ts`'s header lists
 its inputs; WebKit comes from `npx playwright install --with-deps webkit`):

@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
-import { loop, nextRow, reading, start } from './sample-load.mjs';
-import { SAMPLE_MS } from './telemetry.mjs';
+import { loop, nextRow, reading, start } from './sample-load.ts';
+import { SAMPLE_MS } from './telemetry.ts';
 
 /** A fresh RUNNER_TEMP, and where the samples go in it. */
 function runnerTemp() {
@@ -109,7 +109,7 @@ describe('start', () => {
     expect(readFileSync(file, 'utf8')).toBe('time,load,busy\n');
     expect(run).toHaveBeenCalledWith(
       process.execPath,
-      [fileURLToPath(new URL('./sample-load.mjs', import.meta.url)), '--loop', file],
+      [fileURLToPath(new URL('./sample-load.ts', import.meta.url)), '--loop', file],
       { detached: true, stdio: 'ignore' },
     );
     expect(child.unref).toHaveBeenCalled();

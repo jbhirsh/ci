@@ -1,13 +1,14 @@
 name: Job summary note
 description: >-
   Notes labels and values about the job for its summary's report, which
-  shows them in its Environment section (../note.mjs says how): the
+  shows them in its Environment section (../note.ts says how): the
   simulator, a tool's version, how long a warm-up took. Call it as often as
   the job has something to note; its first call also notes the runner image,
   the cores, the memory and the Node on the PATH. job-summary, the job's last
   step, reads them when its own notes input is empty. Runs on the runner's
   own Node rather than setting one up, which would change the Node every
-  later step gets. It never fails the job.
+  later step gets; on one that can't strip types (before 22.18, or 23.0 to
+  23.5) it warns and notes nothing. It never fails the job.
 
 inputs:
   notes:
@@ -25,11 +26,17 @@ runs:
     - name: Note it for the job summary
       continue-on-error: true
       shell: bash
+      # The GitHub-hosted images' own Node strips types (22.18 or later:
+      # 22.23 on ubuntu-24.04 and macos-15, 24.22 on ubuntu-26.04 and
+      # macos-26, ci#180); the check is for an older one (a self-hosted
+      # runner, say), which gets a warning rather than a failed step.
       env:
         NOTES: ${{ inputs.notes }}
       run: |
-        if command -v node > /dev/null; then
-          node "$GITHUB_ACTION_PATH/../note.mjs"
-        else
+        if ! command -v node > /dev/null; then
           echo "::warning::job-summary/note: no node on the PATH, so nothing was noted"
+        elif ! node -e 'process.exit(process.features.typescript ? 0 : 1)'; then
+          echo "::warning::job-summary/note: Node $(node --version) on the PATH can't run TypeScript, so nothing was noted: call it after actions/setup-node, or on a runner image whose Node is 22.18 or later"
+        else
+          node "$GITHUB_ACTION_PATH/../note.ts"
         fi

@@ -10,7 +10,7 @@ import {
   parseNoteLines,
   parseProcStat,
   telemetryFiles,
-} from './telemetry.mjs';
+} from './telemetry.ts';
 import { parseLoad, parseNotes } from './summary.ts';
 
 describe('telemetryFiles', () => {

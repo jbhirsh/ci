@@ -6,7 +6,7 @@
 #     actionlint never reads), formatting, types, tests (80% lines per
 #     file) and actionlint over its workflows.
 #   - Against <app>: the app's calls into this repo checked against what
-#     they call, and each tool's self-test (`<tool>/selftest.ts`, or .mjs, listed
+#     they call, and each tool's self-test (`<tool>/selftest.ts`, listed
 #     in lib/selftests.ts) run
 #     against fog-and-frontier, sift and BoardGames as their `main` stands,
 #     with the app's dependencies installed, as the tools see them in the
@@ -129,7 +129,7 @@ jobs:
         # (this repo's GITHUB_REPOSITORY is no app's).
         env:
           APP_NAME: ${{ matrix.app }}
-        # lib/selftests.ts lists them, either extension, and fails when a
+        # lib/selftests.ts lists them, and fails when a
         # listed tool has none, so a self-test can't silently stop running.
         run: |
           tests=$(node ci/lib/selftests.ts) || exit 1

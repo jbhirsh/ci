@@ -3,7 +3,7 @@ description: >-
   Records a PR's before/after GIFs on this runner and uploads them as the
   run's pr-gif artifact, one folder a scenario (gif/workflow.ts's header
   says how). For a web app it installs the app, the browsers and ffmpeg and
-  runs cli.mjs once a scenario, building main and the checkout; for an app
+  runs cli.ts once a scenario, building main and the checkout; for an app
   whose CI records videos (sift) it runs videos.ts, which waits for the
   PR's run, starts one on main for "before" and turns the videos into GIFs.
   The record job of pr-gif.yml, after a checkout of the PR's head; it holds

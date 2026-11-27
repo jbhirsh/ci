@@ -3,7 +3,7 @@
 // each touch drawn as a ring). cli.ts hands over to this. Needs gh (signed
 // in), git, unzip and ffmpeg.
 //
-//   node ../ci/gif/cli.mjs <pr> [--side-by-side] [--no-before] [--width <px>] [--fps <n>] [--repo owner/name] [--out <dir>]
+//   node ../ci/gif/cli.ts <pr> [--side-by-side] [--no-before] [--width <px>] [--fps <n>] [--repo owner/name] [--out <dir>]
 //                          [--after-run <id>] [--head <sha>] [--only <names>]
 //
 // The last three are pr-gif-attach.yml's, which runs this once the PR's CI

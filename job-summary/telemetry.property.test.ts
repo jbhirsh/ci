@@ -8,7 +8,7 @@ import {
   parseLoadavg,
   parseNoteLines,
   parseProcStat,
-} from './telemetry.mjs';
+} from './telemetry.ts';
 
 describe('parseNoteLines and mergeNotes, for any notes input', () => {
   it('never throws, accounts for every line with text, and writes notes summary.ts reads back', () => {

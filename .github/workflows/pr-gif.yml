@@ -45,7 +45,7 @@
 #     output.
 #   - record (gif/record) checks out the PR's head and records each
 #     scenario, "before" from main and "after" from the head, as a run of
-#     the gif tool on the owner's machine does (cli.mjs; videos.ts for
+#     the gif tool on the owner's machine does (cli.ts; videos.ts for
 #     sift, from its CI's videos), and uploads the GIFs and pr-gif.json as
 #     the pr-gif artifact. It holds only the caller's Actions token. On
 #     pull_request, a newer push's recording cancels an older one's, whose

@@ -1,9 +1,19 @@
 // A PR's before/after GIFs in one command, run from an app's checkout (or
-// with APP_ROOT set) by the app's bootstrap (its scripts/gif.mjs):
+// with APP_ROOT set) by the app's `npm run gif` (scripts/gif.mjs in
+// BoardGames and fog-and-frontier, scripts/pr-gifs.ts in sift), which clones
+// this repo beside the app as ../ci and runs
 //
-//   node ../ci/gif/cli.mjs <scenario> [options]      (options.ts lists them)
+//   node ../ci/gif/cli.ts <scenario> [options]      (options.ts lists them)
 //
-// cli.mjs is the entry that path names, and calls main here.
+// The apps name this path, so moving it breaks their command until each
+// changes. Until ci#180 they ran gif/cli.mjs, so each app's bootstrap runs
+// cli.mjs when its ../ci clone still has it, else this file (sift#255,
+// BoardGames#365, fog-and-frontier#381); that fallback can be dropped from
+// the apps once no clone they use predates cli.ts.
+//
+// Run as a script, it calls main and turns a failure into its message (and
+// its cause's) and exit code 1 (runEntry); imported, it only exports main.
+// Node strips its types as it loads it, so a Node below 22.18 fails here.
 //
 // For a web app (the `gif.source` setting, settings.ts), it builds the app
 // twice, from --base (origin/main, in a temporary worktree sharing the
@@ -53,6 +63,7 @@
 import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { appPlaywright, appRoot } from '../lib/app.ts';
 import { addBaseTree, build, git, serve, stopServers } from './build.ts';
 import { checkFfmpeg, framesToGif, sideBySide } from './ffmpeg.ts';
@@ -361,7 +372,7 @@ export async function main(argv: readonly string[]) {
         gitIn(root),
         made.map((file) => [`${dir}/${file}`, path.join(out, file)] as const),
         {
-          message: `Add the ${name} GIFs for ${dir}\n\nRecorded from local builds of ${from} (with any uncommitted changes) by jbhirsh/ci's gif/cli.mjs.`,
+          message: `Add the ${name} GIFs for ${dir}\n\nRecorded from local builds of ${from} (with any uncommitted changes) by jbhirsh/ci's gif/cli.ts.`,
           branch: options.branch,
           push: options.push,
         },
@@ -384,4 +395,30 @@ export async function main(argv: readonly string[]) {
     process.off('SIGINT', interrupted);
     process.off('SIGTERM', interrupted);
   }
+}
+
+/**
+ * The command line's own part: runs `run` (main) on the arguments and turns
+ * a failure into its message, its cause's, and exit code 1.
+ */
+export async function runEntry(
+  argv: readonly string[],
+  run: (argv: readonly string[]) => Promise<unknown> = main,
+) {
+  try {
+    await run(argv);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    if (error instanceof Error && error.cause instanceof Error) console.error(error.cause.message);
+    process.exitCode = 1;
+  }
+}
+
+// Run as a script: import.meta.main, or on a Node that strips types but has
+// no import.meta.main yet (23.6 to 24.1), the path Node was given.
+if (
+  import.meta.main ??
+  (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+) {
+  await runEntry(process.argv.slice(2));
 }

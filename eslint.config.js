@@ -3,8 +3,11 @@ import jsdoc from 'eslint-plugin-jsdoc';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-/** The JavaScript files, while the repo moves to TypeScript (ci#155). */
-const JS = ['**/*.mjs', '**/*.js', '**/*.cjs'];
+/**
+ * The JavaScript: only this config, which stays .js as ESLint loads a .ts
+ * one only through jiti or an unstable flag.
+ */
+const JS = ['**/*.js'];
 /** The TypeScript files Node runs by stripping their types. */
 const TS = ['**/*.ts'];
 
@@ -45,9 +48,9 @@ export default [
   // The probe waits on events and conditions only, never on a timer (ci#58,
   // ci#151): a fixed wait is a guess, too short a flaky number, too long a
   // held runner. Playwright's waits with a `timeout` are only a hang limit.
-  // Its files of either extension, tests included.
+  // Its files, tests included.
   {
-    files: ['probe/**/*.ts', 'probe/**/*.mjs'],
+    files: ['probe/**/*.ts'],
     rules: {
       'no-restricted-globals': [
         'error',

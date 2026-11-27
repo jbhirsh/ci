@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
-    // The .mjs files, typed in JSDoc, while the repo moves to TypeScript
-    // (ci#155): PR 6 narrows these to the files that stay .mjs.
+    // For the one JavaScript file, eslint.config.js, typed in JSDoc.
     "allowJs": true,
     "checkJs": true,
     "noEmit": true,
@@ -20,6 +19,6 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["**/*.ts", "**/*.mjs", "**/*.js"],
+  "include": ["**/*.ts", "eslint.config.js"],
   "exclude": ["node_modules", "coverage"]
 }

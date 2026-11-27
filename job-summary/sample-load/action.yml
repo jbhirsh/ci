@@ -2,11 +2,12 @@ name: Job summary CPU samples
 description: >-
   Samples the machine's CPU every 10 s for the rest of the job, which
   job-summary, the job's last step, charts in its report when its own load
-  input is empty (../sample-load.mjs says how): a job's first step, so the
+  input is empty (../sample-load.ts says how): a job's first step, so the
   chart covers the whole job. It returns at once, leaving the sampler running
   detached; the runner stops it as the job ends. Linux and macOS. Runs on
   the runner's own Node rather than setting one up, which would change the
-  Node every later step gets. It never fails the job.
+  Node every later step gets; on one that can't strip types (before 22.18,
+  or 23.0 to 23.5) it warns and samples nothing. It never fails the job.
 
 runs:
   using: composite
@@ -14,9 +15,15 @@ runs:
     - name: Sample the CPU for the job summary
       continue-on-error: true
       shell: bash
+      # The GitHub-hosted images' own Node strips types (22.18 or later:
+      # 22.23 on ubuntu-24.04 and macos-15, 24.22 on ubuntu-26.04 and
+      # macos-26, ci#180); the check is for an older one (a self-hosted
+      # runner, say), which gets a warning rather than a failed step.
       run: |
-        if command -v node > /dev/null; then
-          node "$GITHUB_ACTION_PATH/../sample-load.mjs"
-        else
+        if ! command -v node > /dev/null; then
           echo "::warning::job-summary/sample-load: no node on the PATH, so nothing is sampled"
+        elif ! node -e 'process.exit(process.features.typescript ? 0 : 1)'; then
+          echo "::warning::job-summary/sample-load: Node $(node --version) on the PATH can't run TypeScript, so nothing is sampled: run the job on a runner image whose Node is 22.18 or later"
+        else
+          node "$GITHUB_ACTION_PATH/../sample-load.ts"
         fi

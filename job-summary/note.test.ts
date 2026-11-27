@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { main, thisMachine } from './note.mjs';
+import { main, thisMachine } from './note.ts';
 
 const machine = () => ({ cores: 2, memory: 7 * 2 ** 30, node: 'v24.0.0' });
 
