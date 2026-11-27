@@ -6,7 +6,7 @@ description: >-
   when type-coverage is told to ignore a path (typeCoverage.ignoreFiles,
   or --ignore-files in a script) with no reason in package.json's
   "//typeCoverage" list, or that list gives a reason for a path nothing
-  ignores. What counts, and where a reason goes, is in check.mjs's
+  ignores. What counts, and where a reason goes, is in check.ts's
   header. Runs as a step of the app's CI job after its checkout and
   install (Expo's list of the versions its SDK chooses comes from
   node_modules).
@@ -20,4 +20,4 @@ runs:
 
     - name: Check for pins without a reason
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/check.mjs"
+      run: node "$GITHUB_ACTION_PATH/check.ts"

@@ -1,6 +1,6 @@
 // Fails when a version is pinned with no reason written beside it.
 //
-//   node pins/check.mjs        from the app's checkout (or APP_ROOT)
+//   node pins/check.ts        from the app's checkout (or APP_ROOT)
 //
 // A pin holds something below its major: it keeps fixes out quietly, and
 // often for a reason nobody remembers or that stopped being true. The
@@ -619,7 +619,7 @@ export function main(
   log(
     found.length === 0
       ? 'pins: nothing is pinned or ignored without a reason.'
-      : `pins: ${found.length} pinned or ignored without a reason (pins/check.mjs says what counts).`,
+      : `pins: ${found.length} pinned or ignored without a reason (pins/check.ts says what counts).`,
   );
   return found.length === 0 ? 0 : 1;
 }

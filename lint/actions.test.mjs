@@ -506,10 +506,10 @@ describe('main', () => {
         recursive: true,
         filter: (from) => !/[/\\](node_modules|\.git|\.claude|coverage)$/.test(from),
       });
-      renameSync(path.join(copy, 'pins', 'check.mjs'), path.join(copy, 'pins', 'check.ts'));
+      renameSync(path.join(copy, 'pins', 'check.ts'), path.join(copy, 'pins', 'check.mjs'));
       expect(main(copy, null)).toEqual([
-        'pins/action.yml: step 2 (Check for pins without a reason): $GITHUB_ACTION_PATH/check.mjs: no pins/check.mjs in this repo',
-        '.github/workflows/ci.yml: job check step 9 (Pins (pins/check.mjs, as the apps run it)): runs pins/check.mjs: no pins/check.mjs in this repo',
+        'pins/action.yml: step 2 (Check for pins without a reason): $GITHUB_ACTION_PATH/check.ts: no pins/check.ts in this repo',
+        '.github/workflows/ci.yml: job check step 9 (Pins (pins/check.ts, as the apps run it)): runs pins/check.ts: no pins/check.ts in this repo',
       ]);
     } finally {
       rmSync(copy, { recursive: true, force: true });

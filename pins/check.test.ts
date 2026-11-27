@@ -18,7 +18,7 @@ import {
   typeCoverageFindings,
   yamlFiles,
   yamlFindings,
-} from './check.mjs';
+} from './check.ts';
 
 /** A throwaway checkout holding these files. */
 function checkout(/** @type {Record<string, string>} */ files) {
@@ -514,7 +514,7 @@ describe('findings and main', () => {
       '::error file=package.json,line=3::typescript ~6.0.2 holds it below its next major: use ^6.0.2, or say why in "//pins".',
     );
     expect(out.at(-1)).toBe(
-      'pins: 5 pinned or ignored without a reason (pins/check.mjs says what counts).',
+      'pins: 5 pinned or ignored without a reason (pins/check.ts says what counts).',
     );
   });
 
