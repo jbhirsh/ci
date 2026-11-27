@@ -4,7 +4,9 @@
 # nor exempt (`autofix.exempt` in `.github/ci.json`, with its reason), or a
 # listed or exempt name no workflow has. ../check-triggers.ts says why each
 # matters. A step of the app's CI job on pull requests, after `npm ci`: it
-# reads YAML with the app's own `yaml` package.
+# reads YAML with the app's own `yaml` package. check-triggers.ts runs on
+# the job's Node, which must strip types (Node 24, which each app's job
+# sets up first, ci#155): on an older one the step fails saying so.
 name: Autofix triggers
 description: >-
   Checks that every pull-request workflow wakes Claude autofix or is
@@ -15,4 +17,9 @@ runs:
   steps:
     - name: Check autofix's trigger list
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/../check-triggers.ts"
+      run: |
+        if ! node -e 'process.exit(process.features.typescript ? 0 : 1)'; then
+          echo "::error::autofix triggers: Node $(node --version) on the PATH can't run TypeScript: set up Node 24 (actions/setup-node) before this step"
+          exit 1
+        fi
+        node "$GITHUB_ACTION_PATH/../check-triggers.ts"
