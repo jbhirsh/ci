@@ -1,5 +1,5 @@
 // Self-test of the pins check against an app's checkout:
-// `node pins/selftest.mjs <app dir>`. It reads everything the check reads
+// `node pins/selftest.ts <app dir>`. It reads everything the check reads
 // (package.json and its type-coverage ignores, Expo's list when the app
 // uses Expo, Dependabot, every workflow and action.yml), so a file it can't
 // take fails here before it fails the app's CI. The pins and ignores main
@@ -8,7 +8,7 @@
 
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { findings } from './check.mjs';
+import { findings } from './check.ts';
 
 /**
  * Runs the check over the app and returns what to print; throws when a file

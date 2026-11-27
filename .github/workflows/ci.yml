@@ -57,8 +57,8 @@ jobs:
       # github-actions (its failures as annotations, and its own summary),
       # so github-actions is named again.
       - run: npm run test:coverage -- --reporter=default --reporter=github-actions --reporter=junit --outputFile.junit=reports/junit.xml
-      - name: Pins (pins/check.mjs, as the apps run it)
-        run: node pins/check.mjs
+      - name: Pins (pins/check.ts, as the apps run it)
+        run: node pins/check.ts
       - name: Lint workflows (actionlint)
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color
       # This checkout's job-summary, so a change to it shows on its own PR.
