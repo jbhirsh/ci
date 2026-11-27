@@ -1,9 +1,9 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { blocks } from '../describe/describe.ts';
-import { withoutAppended } from './attach.mjs';
-import { ownEdit } from './find.mjs';
-import { assetLink, BOT, outsideOwnBlocks, parseRecord, recordLine } from './record.mjs';
+import { withoutAppended } from './attach.ts';
+import { ownEdit } from './find.ts';
+import { assetLink, BOT, outsideOwnBlocks, parseRecord, recordLine } from './record.ts';
 
 const hex = (/** @type {number} */ n) =>
   fc.string({ unit: fc.constantFrom(...'0123456789abcdef'), minLength: n, maxLength: n });

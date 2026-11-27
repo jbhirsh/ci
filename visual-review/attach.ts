@@ -1,5 +1,5 @@
 // The attach job of visual review (ci#144): it puts the table a review
-// handed it (review.mjs's Handoff, the artifact `visual-review-attach-<run>`)
+// handed it (review.ts's Handoff, the artifact `visual-review-attach-<run>`)
 // into the PR's or the mockup issue's description, with no comment.
 //
 // For one target, in order:
@@ -25,7 +25,7 @@
 //      hidden as outdated, with the Actions token, before the record that
 //      ends their listing is written.
 // Edit 1 is the one edit a new result costs the PR that starts workflows:
-// PR changes and PR description run once on it, and find.mjs skips it, as
+// PR changes and PR description run once on it, and find.ts skips it, as
 // it changes only the contents of visual review's block.
 //
 // The job runs in PR GIFs' attach group (`pr-gif-attach-<repo>-<number>`),
@@ -33,13 +33,13 @@
 // description just before it writes. It checks nothing out and runs nothing
 // of the PR's: the hand-off is data, checked here where it's read.
 //
-//   node attach.mjs   (env: GH_TOKEN, the Actions token; UPLOAD_TOKEN,
+//   node attach.ts   (env: GH_TOKEN, the Actions token; UPLOAD_TOKEN,
 //                      BOT_PR_TOKEN; GITHUB_REPOSITORY; HANDOFF_DIR, the
 //                      downloaded artifact, which may be absent: a review
 //                      that handed nothing off; ARTIFACT and GITHUB_RUN_ID,
 //                      to tell that from a download that failed; KIND and
 //                      NUMBER, the target it must be for)
-//   node attach.mjs pictures   prints how many pictures the hand-off has (0
+//   node attach.ts pictures   prints how many pictures the hand-off has (0
 //                      for none), for the action's gh check
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -50,7 +50,7 @@ import { attachToDescription } from '../lib/attach.mjs';
 import { ghApi } from '../lib/comment.mjs';
 import { commandIn } from '../lib/gh.mjs';
 import { blocks, place } from '../describe/describe.ts';
-import { BOT, assetLink, parseRecord, recordLine } from './record.mjs';
+import { BOT, assetLink, parseRecord, recordLine } from './record.ts';
 
 /** A picture's file in the hand-off: `01.png` to `50.png`. */
 const PICTURE = /^\d{2}\.png$/;
@@ -63,7 +63,7 @@ const ASSET = /^[0-9a-f][0-9a-f-]{7,63}$/;
  *
  * @param {string} dir
  * @param {{ kind: string, number: number }} [target] the matrix target it must be for
- * @returns {import('./review.mjs').Handoff | null}
+ * @returns {import('./review.ts').Handoff | null}
  */
 export function readHandoff(dir, target) {
   const file = path.join(dir, 'attach.json');
@@ -98,7 +98,7 @@ export function readHandoff(dir, target) {
       `visual-review: the hand-off is for ${h.kind} #${h.number}, not ${target.kind} #${target.number}`,
     );
   }
-  const handoff = /** @type {import('./review.mjs').Handoff} */ (/** @type {unknown} */ (h));
+  const handoff = /** @type {import('./review.ts').Handoff} */ (/** @type {unknown} */ (h));
   for (const p of handoff.pictures) {
     if (!existsSync(path.join(dir, p))) throw new Error(`visual-review: the hand-off lacks ${p}`);
   }
@@ -154,7 +154,7 @@ export function withoutAppended(body, meant) {
  * Puts a hand-off into its description. Returns 'stale' when the head check
  * stopped it, 'written' when the description changed, 'unchanged' when not.
  *
- * @param {import('./review.mjs').Handoff} h
+ * @param {import('./review.ts').Handoff} h
  * @param {Io} io
  * @returns {'stale' | 'written' | 'unchanged'}
  */

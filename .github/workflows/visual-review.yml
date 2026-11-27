@@ -26,9 +26,9 @@
 #         bot-pr-token: ${{ secrets.BOT_PR_TOKEN }}
 #
 # Its settings are the app's `visual-review` key in .github/ci.json
-# (visual-review/settings.mjs). Three jobs:
+# (visual-review/settings.ts). Three jobs:
 #   - find (visual-review/find): which reviews the event calls for, from the
-#     event and the API alone (find.mjs's header), each with its PR's or
+#     event and the API alone (find.ts's header), each with its PR's or
 #     mockup issue's number;
 #   - review (visual-review), one per PR or mockup, in a concurrency group of
 #     its own so a PR's status writes take turns: compares, sets the status,

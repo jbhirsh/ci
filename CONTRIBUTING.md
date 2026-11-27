@@ -140,7 +140,7 @@ Claude Review runs on the Claude Agent SDK (`review/sdk.ts`). An app's settings 
 
 `.github/workflows/visual-review.yml`'s header says how an app calls it; nothing here needs an app's own change.
 
-- **No comment** (ci#144): its attach job uploads a result's pictures in one edit of the PR's description, or a mockup issue's, with `BOT_PR_TOKEN`, then writes the table with the Actions token (`visual-review/attach.mjs`'s header says in what order). That one edit runs `PR changes` and `PR description` once; visual review skips it.
+- **No comment** (ci#144): its attach job uploads a result's pictures in one edit of the PR's description, or a mockup issue's, with `BOT_PR_TOKEN`, then writes the table with the Actions token (`visual-review/attach.ts`'s header says in what order). That one edit runs `PR changes` and `PR description` once; visual review skips it.
 - **`BOT_PR_TOKEN`** needs Pull requests write for a PR's description and Issues write for a mockup issue's, on each app.
 - **Its attach job shares PR GIFs' attach group** (`pr-gif-attach-<repo>-<number>`), so neither overwrites the other's block.
 - **Upload comments from before ci#144** stay until the cleanup ci#144's plan describes: a PR with one and no record uploads once in the new form at its next review, and the old comment is hidden.

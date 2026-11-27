@@ -1,5 +1,5 @@
 // Which reviews an event calls for (ci#64), as the matrix the review job
-// runs: each a PR's or a mockup's screenshot run (review.mjs's Target).
+// runs: each a PR's or a mockup's screenshot run (review.ts's Target).
 // Every trigger lands here, and none waits on a clock:
 //
 //   - the screenshot workflow finished:
@@ -31,9 +31,9 @@ import { ghApi } from '../lib/comment.mjs';
 import { newest, pages, statusFrom } from '../lib/github.mjs';
 import { pullOfRun } from '../lib/run-pr.mjs';
 import { MANIFEST, parseManifest } from '../visual-shots/shots.mjs';
-import { outsideOwnBlocks } from './record.mjs';
-import { settings } from './settings.mjs';
-import { CONTEXT } from './status.mjs';
+import { outsideOwnBlocks } from './record.ts';
+import { settings } from './settings.ts';
+import { CONTEXT } from './status.ts';
 
 /**
  * The run, as far as this reads it.
@@ -70,7 +70,7 @@ export function downloadShots({ api, gh, repo, runId, dir }) {
 
 /**
  * Whether a pull_request_target event is an edit of the description that
- * changed only the contents of visual review's block and slots (record.mjs):
+ * changed only the contents of visual review's block and slots (record.ts):
  * the attach job's own upload. A retarget, a title edit, a slot added or
  * removed, or any change to the rest still calls for a review.
  *
@@ -117,7 +117,7 @@ export function latestRun(api, repo, workflow, sha) {
  *   mockupIssue: (run: number) => number | null }} event
  *   mockupIssue: the issue a run by hand's shots are a mockup for, from their
  *   manifest, or null when they're none
- * @returns {import('./review.mjs').Target[]}
+ * @returns {import('./review.ts').Target[]}
  */
 export function targets({ name, payload, repo, main, workflow, api, log, mockupIssue }) {
   /** @param {number} run */
@@ -185,7 +185,7 @@ export function targets({ name, payload, repo, main, workflow, api, log, mockupI
 
   // Main's shots of this commit are in: settle whatever waited on them.
   const short = run.head_sha.slice(0, 7);
-  /** @type {import('./review.mjs').Target[]} */
+  /** @type {import('./review.ts').Target[]} */
   const out = [];
   const pulls = /** @type {Pull[]} */ (
     pages(api, `repos/${repo}/pulls?state=open&base=${encodeURIComponent(main)}`)

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { settings } from '../visual-review/settings.mjs';
+import { settings } from '../visual-review/settings.ts';
 import {
   decodePatch,
   main,
@@ -17,7 +17,7 @@ import {
 } from './shots.mjs';
 
 const SHA = 'a'.repeat(40);
-const s = /** @type {import('../visual-review/settings.mjs').Settings} */ (
+const s = /** @type {import('../visual-review/settings.ts').Settings} */ (
   settings({ workflow: 'v.yml', job: 'v', folders: ['shots/*-snapshots'], mockupPaths: ['src/**'] })
 );
 

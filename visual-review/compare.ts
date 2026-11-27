@@ -14,7 +14,7 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { diff } from '../lib/pixels.mjs';
-import { lookAt } from './zoom.mjs';
+import { lookAt } from './zoom.ts';
 
 /** The most a shot may weigh, as GitHub caps an attached image. */
 export const MAX_SHOT_BYTES = 10 * 1024 * 1024;
@@ -69,7 +69,7 @@ export function shotsIn(root) {
  * @property {number} [ratio] the share of pixels that differ (1: resized)
  * @property {Buffer} [diff] pixelmatch's picture of the difference
  * @property {true} [resized] the two shots differ in size
- * @property {import('./zoom.mjs').Look} [look] where a change under `minor` is
+ * @property {import('./zoom.ts').Look} [look] where a change under `minor` is
  * @property {string} after the PR's shot's SHA-256, '' when it's gone
  */
 
@@ -79,7 +79,7 @@ export function shotsIn(root) {
  * @param {{ before: string, after: string, ratio: number, minor?: number,
  *   pixels: import('../lib/pixels.mjs').Pixels }} options
  *   `before`: main's tree; `after`: the PR's; `minor`: the share under which
- *   a change is small (0.001), and gets a look (zoom.mjs)
+ *   a change is small (0.001), and gets a look (zoom.ts)
  * @returns {Change[]} in path order
  */
 export function compareShots({ before, after, ratio, minor = 0.001, pixels }) {

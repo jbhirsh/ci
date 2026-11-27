@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { selftest } from './selftest.mjs';
+import { selftest } from './selftest.ts';
 
 const SHOTS = `name: Visual regression
 on: [pull_request, push]

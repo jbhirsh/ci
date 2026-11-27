@@ -9,7 +9,7 @@ import {
   scaleFor,
   sideBySide,
   zoomWidth,
-} from './zoom.mjs';
+} from './zoom.ts';
 
 /**
  * A mask `w`×`h` with these pixels set.

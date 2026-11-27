@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { fingerprint, mark, MAX_DESCRIPTION, readMark, shownAt, status } from './status.mjs';
+import { fingerprint, mark, MAX_DESCRIPTION, readMark, shownAt, status } from './status.ts';
 
 const OWNER = 'jbhirsh';
 const changed = { kind: /** @type {const} */ ('compared'), screens: 3, fingerprint: 'abcdef12' };
 const none = { kind: /** @type {const} */ ('compared'), screens: 0, fingerprint: '00000000' };
-/** @param {Partial<import('./status.mjs').Pull>} over */
+/** @param {Partial<import('./status.ts').Pull>} over */
 const pull = (over = {}) => ({ author: OWNER, bot: false, autoMerge: null, ...over });
 
 describe('status', () => {

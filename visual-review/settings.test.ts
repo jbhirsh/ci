@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mockupMayChange, settings } from './settings.mjs';
+import { mockupMayChange, settings } from './settings.ts';
 
 const ok = { workflow: 'visual.yml', job: 'visual', folders: ['tests/visual/*-snapshots/'] };
 
@@ -49,7 +49,7 @@ describe('settings', () => {
 
 describe('mockupMayChange', () => {
   it('takes only mockupPaths, and never a lockfile', () => {
-    const s = /** @type {import('./settings.mjs').Settings} */ (
+    const s = /** @type {import('./settings.ts').Settings} */ (
       settings({ ...ok, mockupPaths: ['src/**', 'package-lock.json', 'web/**'] })
     );
     expect(mockupMayChange('src/App.tsx', s)).toBe(true);

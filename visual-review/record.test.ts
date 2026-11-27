@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { blocks } from '../describe/describe.ts';
-import { assetLink, BOT, outsideOwnBlocks, parseRecord, recordLine } from './record.mjs';
+import { assetLink, BOT, outsideOwnBlocks, parseRecord, recordLine } from './record.ts';
 
-/** @type {import('./record.mjs').Record} */
+/** @type {import('./record.ts').Record} */
 const RECORD = {
   sha: 'a'.repeat(40),
   fingerprint: '203b5d6e',

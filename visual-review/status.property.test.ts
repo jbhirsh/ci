@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { fingerprint, mark, MAX_DESCRIPTION, readMark, status } from './status.mjs';
+import { fingerprint, mark, MAX_DESCRIPTION, readMark, status } from './status.ts';
 
 const login = fc.string({ minLength: 1, maxLength: 39 });
 const epoch = fc.integer({ min: 0, max: 99_999_999_999 });
