@@ -11,7 +11,7 @@
 //   runs, and the workflows the app exempts (`autofix.exempt` in
 //   `.github/ci.json`, read from the default branch), which don't wake
 //   autofix, so waiting for one could wait for a completion that starts
-//   nothing. check-triggers.mjs, a step of each app's CI, makes sure every
+//   nothing. check-triggers.ts, a step of each app's CI, makes sure every
 //   other pull-request workflow is in the stub's list, so the last of them
 //   to finish always wakes a run. Only `pull_request` runs count: they're
 //   the ones whose completion starts the autofix job (its `if:`), so a run
@@ -25,15 +25,15 @@
 //
 // CLI, run from the app's checkout with GH_TOKEN, GITHUB_REPOSITORY and
 // HEAD_SHA set; prints its answer on stdout (empty: go ahead):
-//   node gate.mjs pending   (WORKFLOW_REF: autofix's own, BASE_REF) the
+//   node gate.ts pending   (WORKFLOW_REF: autofix's own, BASE_REF) the
 //                           workflows still running on the head
-//   node gate.mjs green <file>...   the named workflow files not yet green
+//   node gate.ts green <file>...   the named workflow files not yet green
 //                           on the head, as `file (status/conclusion)`
 
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { appRoot } from '../lib/app.mjs';
-import { autofixSettings } from './settings.mjs';
+import { autofixSettings } from './settings.ts';
 
 /**
  * A workflow run as the REST API returns it, the fields read here.
@@ -182,7 +182,7 @@ function required(name, env) {
 export function main(args, env, { root, fetchRuns }) {
   const [mode, ...files] = args;
   if (mode !== 'pending' && mode !== 'green') {
-    throw new Error('usage: gate.mjs pending | gate.mjs green <workflow file>...');
+    throw new Error('usage: gate.ts pending | gate.ts green <workflow file>...');
   }
   if (mode === 'green' && files.length === 0) throw new Error('green needs workflow files');
   /** @type {{ self: string, exempt: string[] }} */

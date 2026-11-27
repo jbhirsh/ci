@@ -11,7 +11,7 @@
 //     or
 //   - the owner's.
 //
-// CLI: `node threads.mjs <owner>`, one page of the reviewThreads GraphQL
+// CLI: `node threads.ts <owner>`, one page of the reviewThreads GraphQL
 // answer on stdin (nodes with isResolved and the first comment's author
 // and body); prints how many unresolved threads count.
 

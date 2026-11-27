@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { describeWorkflow } from '../autofix/check-triggers.mjs';
+import { describeWorkflow } from '../autofix/check-triggers.ts';
 import { lintGifCallers } from '../lint/gif-callers.mjs';
 import { APPS, CI_ROOT, loadManifest } from './manifest.mjs';
 
@@ -90,7 +90,7 @@ describe('the manifest covers every canonical caller and reusable workflow', () 
 
 /**
  * What a synced workflow that runs on a pull request is missing: an
- * `autofix.exempt` companion naming it, or autofix/check-triggers.mjs fails
+ * `autofix.exempt` companion naming it, or autofix/check-triggers.ts fails
  * the app's CI for it (it is neither in claude-autofix.yml's list nor exempt).
  * A variant is read too: it may be named differently.
  *

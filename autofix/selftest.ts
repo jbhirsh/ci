@@ -1,21 +1,21 @@
 // Claude autofix's self-test against an app checkout, run by this repo's CI
-// for each app (`node autofix/selftest.mjs <app checkout>`). Offline, it
-// checks that the app's `autofix` settings parse (settings.mjs; an app with
+// for each app (`node autofix/selftest.ts <app checkout>`). Offline, it
+// checks that the app's `autofix` settings parse (settings.ts; an app with
 // no key is checked against the defaults), that every validation command
-// they list is one the app can run (commands.mjs), that both prompts render
+// they list is one the app can run (commands.ts), that both prompts render
 // with nothing left unfilled and the app's checks in them, and that the
 // stub's trigger list holds every pull-request workflow the app doesn't
-// exempt (check-triggers.mjs, reading YAML with the app's `yaml` package, so
+// exempt (check-triggers.ts, reading YAML with the app's `yaml` package, so
 // the app's dependencies must be installed). Prints what it checked; exits
 // 1 on the first problem.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { checkTriggers, STUB } from './check-triggers.mjs';
-import { appFacts, entryProblem } from './commands.mjs';
-import { renderPrompt } from './render.mjs';
-import { DEFAULT_CHECKS, autofixSettings } from './settings.mjs';
+import { checkTriggers, STUB } from './check-triggers.ts';
+import { appFacts, entryProblem } from './commands.ts';
+import { renderPrompt } from './render.ts';
+import { DEFAULT_CHECKS, autofixSettings } from './settings.ts';
 
 const USES = 'jbhirsh/ci/autofix@';
 

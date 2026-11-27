@@ -81,7 +81,7 @@ Claude Review runs on the Claude Agent SDK (`review/sdk.ts`). An app's settings 
   `workspace:developer`. An API key (`anthropic_api_key`) works instead.
 - **Comments.** It posts with the job's own token, as github-actions[bot]. Each inline comment
   ends with `<!-- claude-review -->`, which autofix's review fixer looks for
-  (`autofix/threads.mjs`).
+  (`autofix/threads.ts`).
 - **Dependabot.** With `skipBots`, a bump nobody has pushed to isn't reviewed, and auto-merges
   on CI alone: the owner's decision (#68). Once autofix pushes a fix, the PR is reviewed.
 - **Out of credit.** A pass the API refuses for credit or a spend or usage limit runs once more
@@ -98,7 +98,7 @@ Claude Review runs on the Claude Agent SDK (`review/sdk.ts`). An app's settings 
 
 - **It runs on `pull_request_target`**, which runs the workflow as it is on the default branch, never the PR's copy, so it may hold `BOT_PR_TOKEN` (the apps' fine-grained token: attaching a file needs a person's token). That is safe because the job checks out and runs nothing from the PR: keep it that way. `pr-changes/action.yml`'s description lists the rules (no checkout, no cache, no PR text in a `run:` line or an expression, the token only on the attach call and the one Revisions edit). A change to the workflow takes effect once it is on the default branch.
 - **Its own concurrency group**, not PR GIFs' attach group (which visual review's attach job shares): GitHub keeps one pending run per group, so sharing would let each cancel the other's pending run.
-- **`autofix.exempt`:** the app's `.github/ci.json` needs its entry, or `autofix/check-triggers.mjs` fails the app's CI for a `pull_request_target` workflow: the sync adds it with the file (a companion in `sync/manifest.json`).
+- **`autofix.exempt`:** the app's `.github/ci.json` needs its entry, or `autofix/check-triggers.ts` fails the app's CI for a `pull_request_target` workflow: the sync adds it with the file (a companion in `sync/manifest.json`).
 - **Revisions:** the same action keeps the description's Revisions block (`pr-changes/revisions.ts`'s header says the grammar and the rules).
   - **When it writes:**
     - A PR with one head gets nothing.
@@ -307,7 +307,7 @@ header says how it works and what it trusts.
 
 ## Claude autofix
 
-Claude autofix runs on the Claude Agent SDK too (`autofix/sdk.mjs`), signed in as the review
+Claude autofix runs on the Claude Agent SDK too (`autofix/sdk.ts`), signed in as the review
 is, with `"autofix": { "advisor": "opus" }` in `.github/ci.json`. An app's
 `claude-autofix.yml` stub passes `bot_token: ${{ secrets.BOT_PR_TOKEN }}` beside the four
 federation IDs. The fixer pushes and runs `gh` with that token, so its pushes start the PR's

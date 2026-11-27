@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { REVIEW_MARKER, countThreads, counts } from './threads.mjs';
+import { REVIEW_MARKER, countThreads, counts } from './threads.ts';
 
 /**
  * @param {string} typename

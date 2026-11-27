@@ -4,7 +4,7 @@
 // Autofix runs on each `completed` of the workflows its stub lists
 // (`on.workflow_run.workflows` in `.github/workflows/claude-autofix.yml`),
 // and the CI fixer acts once no pull-request run on the head is still going
-// (gate.mjs). A pull-request workflow left off the list would never wake
+// (gate.ts). A pull-request workflow left off the list would never wake
 // autofix: finishing last, it would leave the fix waiting for a run that
 // never comes, and its failures would never start one. So this fails when:
 //   - a workflow triggered by `pull_request` isn't in the list and isn't
@@ -25,7 +25,7 @@
 // node_modules (importFromApp; all three apps have it through knip), so
 // any form a workflow writes its triggers in is read as GitHub reads it.
 //
-// CLI: `node check-triggers.mjs`, from the app's checkout (APP_ROOT to point
+// CLI: `node check-triggers.ts`, from the app's checkout (APP_ROOT to point
 // elsewhere), after `npm ci`. Exits 1 with each problem as an error
 // annotation.
 
@@ -33,7 +33,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appRoot, importFromApp } from '../lib/app.mjs';
-import { autofixSettings } from './settings.mjs';
+import { autofixSettings } from './settings.ts';
 
 export const STUB = 'claude-autofix.yml';
 

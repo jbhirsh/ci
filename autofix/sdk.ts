@@ -17,13 +17,13 @@
 // Sign-in is the review's: federation with a fresh OIDC token, or an API
 // key. A pass refused for credit or a spend or usage limit (a
 // subscription's `usage_limit_reached` among them, ../review/sdk.ts's
-// stoppedBy) warns and passes, posting no failure. The execution file is the SDK's messages, the shape crash.mjs
+// stoppedBy) warns and passes, posting no failure. The execution file is the SDK's messages, the shape crash.ts
 // already reads.
 //
-// CLI: `node sdk.mjs`, run from the app's checkout, with PROMPT, ADVISOR,
+// CLI: `node sdk.ts`, run from the app's checkout, with PROMPT, ADVISOR,
 // GH_TOKEN (the bot token, for gh), OUT_FILE, RUNNER_TEMP, and the review's
 // sign-in variables. Step output `execution_file`. Exits 1 when the pass
-// didn't finish, for crash.mjs to judge.
+// didn't finish, for crash.ts to judge.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';

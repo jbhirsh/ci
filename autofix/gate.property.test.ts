@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { notGreen, pendingWorkflows } from './gate.mjs';
+import { notGreen, pendingWorkflows } from './gate.ts';
 
 // The runs come from the API and the exemptions from the app: anything at
 // all, as far as these functions know.

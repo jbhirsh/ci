@@ -83,7 +83,7 @@ description: >-
   fork's PR only gets a notice.
 
   An app's caller workflow, and the `autofix.exempt` entry it needs in
-  `.github/ci.json` (with its reason, or `autofix/check-triggers.mjs` fails the
+  `.github/ci.json` (with its reason, or `autofix/check-triggers.ts` fails the
   app's CI), are in this repository's CONTRIBUTING.md, under "PR changes".
 
 inputs:

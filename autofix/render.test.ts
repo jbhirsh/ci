@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { testApp, writeFiles } from '../review/testApp.ts';
 import { placeholders } from '../review/template.ts';
-import { main, renderPrompt, template } from './render.mjs';
+import { main, renderPrompt, template } from './render.ts';
 
 const settings = {
   ciFixChecks: ['`npm run lint`', '`npx vitest run --coverage`'],
@@ -13,7 +13,7 @@ const settings = {
 const run = { repo: 'jbhirsh/app', pr: '9', base: 'main', repoDir: '/r' };
 
 describe('the templates', () => {
-  it('ask only for the values render.mjs gives', () => {
+  it('ask only for the values render.ts gives', () => {
     const given = [
       'repo',
       'owner',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from '../review/testApp.ts';
-import { selftest } from './selftest.mjs';
+import { selftest } from './selftest.ts';
 
 // Workflows written as JSON, which is YAML, so JSON.parse can stand in for
 // the app's YAML parser.

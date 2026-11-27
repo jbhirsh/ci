@@ -1,14 +1,14 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { testApp } from '../review/testApp.ts';
-import { checkTriggers, describeWorkflow, STUB, triggerProblems } from './check-triggers.mjs';
+import { checkTriggers, describeWorkflow, STUB, triggerProblems } from './check-triggers.ts';
 
 /**
  * @param {string} file
  * @param {string} name
  * @param {string[]} events
  * @param {string[]} [workflowRun]
- * @returns {import('./check-triggers.mjs').Workflow}
+ * @returns {import('./check-triggers.ts').Workflow}
  */
 const wf = (file, name, events, workflowRun) => ({ file, name, events, workflowRun });
 

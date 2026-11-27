@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { allowedCommand } from './sdk.mjs';
+import { allowedCommand } from './sdk.ts';
 
 const PROGRAMS = ['git', 'npm', 'npx', 'gh', 'make'];
 

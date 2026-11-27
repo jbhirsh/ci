@@ -1,6 +1,6 @@
 // Checks that every validation command an app's `autofix` settings list is
 // one that app can run, so the lists can't rot silently when a script is
-// renamed or a step removed (selftest.mjs runs it against each app).
+// renamed or a step removed (selftest.ts runs it against each app).
 //
 // Those lists aren't a second CI: they're autofix proving its own fix
 // before it pushes, so it never pushes what CI will reject. Each app's list

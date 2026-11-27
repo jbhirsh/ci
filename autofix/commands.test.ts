@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { testApp } from '../review/testApp.ts';
-import { appFacts, commandProblem, entryProblem } from './commands.mjs';
+import { appFacts, commandProblem, entryProblem } from './commands.ts';
 
 const CI = `name: CI
 jobs:
@@ -13,7 +13,7 @@ jobs:
         run: true
 `;
 
-/** @type {import('./commands.mjs').AppFacts} */
+/** @type {import('./commands.ts').AppFacts} */
 const facts = {
   scripts: new Set(['lint', 'test', 'check']),
   bins: new Set(['vite', 'playwright']),
