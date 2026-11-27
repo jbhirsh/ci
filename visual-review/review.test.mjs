@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PIXELS } from '../lib/pixels.mjs';
 import { testPng } from '../lib/test-pixels.mjs';
-import { blocks, SECTION, uploadMarker } from '../describe/describe.mjs';
+import { blocks, SECTION, uploadMarker } from '../describe/describe.ts';
 import { recordLine } from './record.mjs';
 import {
   BOT,

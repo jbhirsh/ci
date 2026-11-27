@@ -11,7 +11,7 @@
 // Big rows are `Screen | Before | After | Diff`, the share under the name;
 // minor rows are `Screen | Where | Zoom` (the zoom picture holds before, after and diff).
 //
-// The section is parts (describe/describe.mjs says how they're written): the
+// The section is parts (describe/describe.ts says how they're written): the
 // summary line (`head`), the two tables' header rows (`header:big`,
 // `header:minor`), a part of rows a screen and kind (`big:<state>`,
 // `minor:<state>`; no state, for a shot no column takes, named by its path or
@@ -32,7 +32,7 @@
 // left out says so in its cell.
 
 import path from 'node:path';
-import { isScreenState, partMarker } from '../describe/describe.mjs';
+import { isScreenState, partMarker } from '../describe/describe.ts';
 import { pairBaselines } from '../lib/baselines.mjs';
 import { WHERE_WIDTH, zoomWidth } from './zoom.mjs';
 

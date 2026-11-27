@@ -113,7 +113,7 @@ export function main(env, { gh = realGh, api = ghApi } = {}) {
     if (!env.HANDOFF_DIR) {
       throw new Error('HANDOFF_DIR is missing: where the hand-off for the attach job goes');
     }
-    // Which account it is: an upload counts only from it (describe.mjs).
+    // Which account it is: an upload counts only from it (describe.ts).
     const login = gh(upload, ['api', 'user', '--jq', '.login']).trim();
     if (!login) throw new Error("BOT_PR_TOKEN's account couldn't be read");
     let handoff = false;

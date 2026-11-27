@@ -17,7 +17,7 @@
 //   3. the read-back: every picture must now have its link, or the job fails;
 //   4. edit 2 (the Actions token, which starts no workflow): the finished
 //      table, its local paths swapped for those links, with the record line
-//      and its asset ids, placed by describe.mjs, each screen in its slot.
+//      and its asset ids, placed by describe.ts, each screen in its slot.
 //      Anything gh appended at the end of the body after edit 1 is dropped
 //      here. With no pictures (the same result re-rendered, or a summary),
 //      this is the only edit;
@@ -49,7 +49,7 @@ import { execFileSync } from 'node:child_process';
 import { attachToDescription } from '../lib/attach.mjs';
 import { ghApi } from '../lib/comment.mjs';
 import { commandIn } from '../lib/gh.mjs';
-import { blocks, place } from '../describe/describe.mjs';
+import { blocks, place } from '../describe/describe.ts';
 import { BOT, assetLink, parseRecord, recordLine } from './record.mjs';
 
 /** A picture's file in the hand-off: `01.png` to `50.png`. */

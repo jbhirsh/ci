@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { blocks } from '../describe/describe.mjs';
+import { blocks } from '../describe/describe.ts';
 import { withoutAppended } from './attach.mjs';
 import { ownEdit } from './find.mjs';
 import { assetLink, BOT, outsideOwnBlocks, parseRecord, recordLine } from './record.mjs';

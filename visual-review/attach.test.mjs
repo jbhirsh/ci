@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { blocks, partMarker } from '../describe/describe.mjs';
+import { blocks, partMarker } from '../describe/describe.ts';
 import { attach, main, readHandoff, withoutAppended } from './attach.mjs';
 import { parseRecord, recordLine } from './record.mjs';
 
