@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { visibleText } from './structure.mjs';
+import { visibleText } from './structure.ts';
 
 // A description is whatever its author typed: build it from the pieces
 // visibleText treats specially.

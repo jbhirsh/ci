@@ -7,7 +7,7 @@
 // write, passes once it is filled, and asks again after the next push.
 
 import { describe, expect, it } from 'vitest';
-import { bodyProblems } from '../pr-template/body.mjs';
+import { bodyProblems } from '../pr-template/body.ts';
 import { revisions } from './revisions-run.mjs';
 import { parseTable } from './revisions.mjs';
 

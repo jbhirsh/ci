@@ -1,7 +1,7 @@
 // The description check, as the PR description action runs it (ci#79, ci#112):
-// `node pr-template/check-body.mjs`, with the PR in the environment (PR_BODY,
+// `node pr-template/check-body.ts`, with the PR in the environment (PR_BODY,
 // PR_AUTHOR, PR_STATE, PR_HEAD_REF, PR_HEAD_SHA, PR_ACTION). It holds a PR's description to
-// the shared shape (body.mjs says what that is), in every app: there is no
+// the shared shape (body.ts says what that is), in every app: there is no
 // setting to turn it off, and a draft is checked like any other PR (PRs are
 // opened as drafts, and a red draft blocks nothing, so the author hears at
 // once). It passes, saying why:
@@ -10,7 +10,7 @@
 //     and baseline refreshes): their text is a tool's, not an author's.
 
 import { pathToFileURL } from 'node:url';
-import { bodyProblems } from './body.mjs';
+import { bodyProblems } from './body.ts';
 
 /**
  * @typedef {object} Pr

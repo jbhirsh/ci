@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { bodyProblems, holdsText, maskFences, renderedLines, revisionsPair } from './body.mjs';
+import { bodyProblems, holdsText, maskFences, renderedLines, revisionsPair } from './body.ts';
 
 const GOOD = [
   '## Goal',

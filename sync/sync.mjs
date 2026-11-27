@@ -90,7 +90,7 @@ import { pathToFileURL } from 'node:url';
 import { ghApi, statusOf } from '../lib/comment.mjs';
 import { SETTINGS_FILE } from '../lib/app.mjs';
 import { pages } from '../lib/github.mjs';
-import { problems as templateProblems } from '../pr-template/structure.mjs';
+import { problems as templateProblems } from '../pr-template/structure.ts';
 import { addCompanions, formatSettings, settingsProblems } from './companion.mjs';
 import { APPS, CI_ROOT, loadManifest, resolve } from './manifest.mjs';
 import {
@@ -154,7 +154,7 @@ function shaOf(value, name) {
 
 /**
  * What is wrong with the files the sync would write, before any is written:
- * the template's shape (structure.mjs). The workflows it writes are linted
+ * the template's shape (structure.ts). The workflows it writes are linted
  * by this repo's CI instead (sync/content.test.mjs, with lint/actions.mjs),
  * which must have passed on the commit before the sync runs: that lint reads
  * YAML, and the sync imports no package, so its jobs install none.

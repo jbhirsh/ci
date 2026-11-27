@@ -31,11 +31,11 @@ describe('selftest', () => {
   });
 
   it("fails when the check doesn't ask for the new revision's row, or rejects it filled (ci#140)", async () => {
-    const real = await import('../pr-template/body.mjs');
+    const real = await import('../pr-template/body.ts');
     /** @type {(body: string, sha: string) => string[]} */
     let check = () => [];
     vi.resetModules();
-    vi.doMock('../pr-template/body.mjs', () => ({
+    vi.doMock('../pr-template/body.ts', () => ({
       ...real,
       bodyProblems: (/** @type {string} */ body, /** @type {string} */ sha) => check(body, sha),
     }));
@@ -50,7 +50,7 @@ describe('selftest', () => {
         real.bodyProblems(body.replace('| A change | Its reason |', '|  |  |'), sha);
       expect(() => fresh(app({ [TEMPLATE]: master }))).toThrow(/once filled; it says/);
     } finally {
-      vi.doUnmock('../pr-template/body.mjs');
+      vi.doUnmock('../pr-template/body.ts');
       vi.resetModules();
     }
   });

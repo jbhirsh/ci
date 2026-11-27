@@ -1,5 +1,5 @@
 // Whether a PR's description is in the shared shape (ci#79), in every app. The master is `.github/pull_request_template.md`;
-// structure.mjs checks a template against it, and this reads a description the
+// structure.ts checks a template against it, and this reads a description the
 // author, or a tool, has written from it. Shape only, never the words: a
 // description passes with any text in its sections, and a Revisions cell needs
 // only to hold some.
@@ -71,10 +71,10 @@
 // under a change, and to what a failed upload leaves: a GIF that is still a
 // local path, a recording the tool marked stale, a marker pair twice.
 //
-// Pure: a description in, what is wrong with it out. check-body.mjs decides
+// Pure: a description in, what is wrong with it out. check-body.ts decides
 // which PRs this holds (not a closed PR, Dependabot's, a bot's).
 
-import { HEADINGS } from './structure.mjs';
+import { HEADINGS } from './structure.ts';
 
 /** A tool's marker alone on its line: `<!-- x:y -->`, and `<!-- /x:y -->` ends its block. */
 const TOOL_START = /^ *<!-- ([a-z][a-z0-9-]*:[^\s<>]+) -->\s*$/;
