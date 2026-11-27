@@ -15,6 +15,12 @@
 // in a Claude cloud session too, where only Chromium comes installed),
 // with the pointer and key presses drawn in (overlay.ts),
 // each frame shown for as long as it was on screen (record.ts, ffmpeg.ts).
+// A repo that builds its page itself (the `gif.page` setting, as jbhirsh/ci
+// does its job-summary report) has that module build each side in place of
+// Vite, into this run's own work folder, and the recording's context routes
+// http://gif.test to the folder (route.ts) in place of `vite preview`: no
+// server, so nothing listens and nothing waits for one. The rest is the
+// same.
 // The GIFs land in pr-gif/<name>/ in the checkout: <name>-before.gif and
 // <name>-after.gif, or <name>-side-by-side.gif. With --dir <PR>, they're
 // committed to the pictures branch under <PR>/ and pushed (publish.ts), and
@@ -61,6 +67,7 @@ import {
   sizeNote,
 } from './publish.ts';
 import { recordFrames, showPointer, waitForPictures } from './record.ts';
+import { PAGE_ORIGIN, routePage } from './route.ts';
 import { loadModule, scenarioProblems, setupProblems } from './scenario.ts';
 import { loadSettings } from './settings.ts';
 import { main as videosMain } from './videos.ts';
@@ -129,7 +136,8 @@ async function loadChecked(
 
 /**
  * Plays the scenario against the build at `origin`, leaving its frames in
- * `frames`.
+ * `frames`. Given `dir` (a page the repo built itself), the context serves
+ * it at `origin` (PAGE_ORIGIN) by routing.
  */
 export async function recordSide({
   browser,
@@ -141,6 +149,7 @@ export async function recordSide({
   options,
   settings,
   root,
+  dir,
 }: {
   browser: Browser;
   scenario: Scenario;
@@ -151,6 +160,7 @@ export async function recordSide({
   options: Options;
   settings: GifSettings;
   root: string;
+  dir?: string;
 }) {
   const context = await browser.newContext({
     viewport: scenario.viewport ?? settings.viewport,
@@ -160,6 +170,7 @@ export async function recordSide({
     serviceWorkers: 'block',
   });
   try {
+    if (dir) await routePage(context, dir);
     await showPointer(context);
     const page = await context.newPage();
     const ctx: SetupContext = { side, origin, options: options.app, root };
@@ -264,7 +275,14 @@ export async function main(argv: readonly string[]) {
     };
     for (const { side, dist, tree } of [...sides]) {
       try {
-        build({ root, cwd: tree, outDir: dist, mode: options.mode, settings: settings.build });
+        build({
+          root,
+          cwd: tree,
+          outDir: dist,
+          mode: options.mode,
+          settings: settings.build,
+          page: settings.page,
+        });
       } catch (error) {
         failed(side, error);
       }
@@ -284,7 +302,9 @@ export async function main(argv: readonly string[]) {
       });
     for (const { side, dist } of [...sides]) {
       try {
-        const origin = await serve({ root, outDir: dist, host: settings.host, servers });
+        const origin = settings.page
+          ? PAGE_ORIGIN
+          : await serve({ root, outDir: dist, host: settings.host, servers });
         console.log(`pr-gif: recording ${side} at ${origin}`);
         const frames = path.join(work, `frames-${side}`);
         await recordSide({
@@ -297,6 +317,7 @@ export async function main(argv: readonly string[]) {
           options,
           settings,
           root,
+          dir: settings.page ? dist : undefined,
         });
       } catch (error) {
         failed(side, error);

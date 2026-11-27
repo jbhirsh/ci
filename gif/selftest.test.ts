@@ -66,6 +66,26 @@ describe('selftest', () => {
     ]);
   });
 
+  it('checks that a page builder is there, without running it', async () => {
+    const log = vi.fn();
+    const root = app({
+      '.github/ci.json': ciJson({ page: 'tools/page.mjs', scenarios: 'scenarios' }),
+      'tools/page.mjs': 'throw new Error("ran the builder");',
+      'scenarios/flow.mjs': 'export default { async play() {} };',
+    });
+    expect(await selftest(root, log)).toEqual([]);
+    expect(log).toHaveBeenCalledWith('gif: page builder tools/page.mjs is there');
+    expect(
+      await selftest(app({ '.github/ci.json': ciJson({ page: 'tools/gone.mjs' }) }), () => {}),
+    ).toEqual(['gif.page: no file tools/gone.mjs']);
+    expect(
+      await selftest(
+        app({ '.github/ci.json': ciJson({ page: 'tools' }), 'tools/page.mjs': '' }),
+        () => {},
+      ),
+    ).toEqual(['gif.page: no file tools']);
+  });
+
   it("names a Playwright from before page.screencast's frames", async () => {
     const root = app({ '.github/ci.json': ciJson({ fps: 10 }) }, undefined, '1.63.9');
     expect(await selftest(root, () => {})).toEqual([

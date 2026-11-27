@@ -4,9 +4,14 @@
 // included. Each is built with the app's own Vite and served by
 // `vite preview` on a free port: a production build, never the dev server,
 // which renders everything twice and runs unbundled code.
+//
+// A repo that builds its page itself (the `gif.page` setting) has its builder
+// run instead, `node <page> <outDir>` with no shell, in each side's root, and
+// isn't served here at all: cli.ts routes the page's origin to outDir
+// (route.ts).
 
 import { execFileSync, spawn } from 'node:child_process';
-import { symlinkSync } from 'node:fs';
+import { mkdirSync, statSync, symlinkSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
@@ -81,7 +86,12 @@ export function buildArgs(vite: string, outDir: string, mode: string | undefined
 const viteBin = (root: string) => path.join(root, 'node_modules', 'vite', 'bin', 'vite.js');
 
 /**
- * Builds the app at `cwd` into `outDir` with `root`'s Vite.
+ * Builds the app at `cwd` into `outDir`: with `root`'s Vite, or, given
+ * `page` (the `gif.page` setting, from the repo's root), by running that
+ * module of `cwd`'s with Node, handing it `outDir`. A base without the
+ * module (a builder main doesn't have yet) is a build that fails, saying so,
+ * as is a builder still running after `timeoutMs`: a limit on a hang, never
+ * the way it succeeds.
  */
 export function build({
   root,
@@ -89,19 +99,41 @@ export function build({
   outDir,
   mode,
   settings,
+  page,
+  timeoutMs = 10 * 60_000,
 }: {
   root: string;
   cwd: string;
   outDir: string;
   mode: string | undefined;
   settings: BuildSettings;
+  page?: string;
+  timeoutMs?: number;
 }) {
-  console.log(`pr-gif: building ${cwd === root ? 'this working tree' : 'the base'}`);
-  execFileSync(process.execPath, buildArgs(viteBin(root), outDir, mode), {
-    cwd,
-    env: buildEnv(process.env, settings),
-    stdio: ['ignore', 'ignore', 'inherit'],
-  });
+  const which = cwd === root ? 'this working tree' : 'the base';
+  console.log(`pr-gif: building ${which}${page ? ` with ${page}` : ''}`);
+  const env = buildEnv(process.env, settings);
+  const stdio: ['ignore', 'ignore', 'inherit'] = ['ignore', 'ignore', 'inherit'];
+  if (!page) {
+    execFileSync(process.execPath, buildArgs(viteBin(root), outDir, mode), { cwd, env, stdio });
+    return;
+  }
+  // Absolute, so a name starting with `-` can't be read as Node's option.
+  const module = path.resolve(cwd, page);
+  if (!statSync(module, { throwIfNoEntry: false })?.isFile()) {
+    throw new Error(`no ${page} in ${which}`);
+  }
+  mkdirSync(outDir, { recursive: true });
+  try {
+    execFileSync(process.execPath, [module, outDir], { cwd, env, stdio, timeout: timeoutMs });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {
+      throw new Error(`${page} didn't finish building within ${timeoutMs / 1000} s`, {
+        cause: error,
+      });
+    }
+    throw error;
+  }
 }
 
 /**

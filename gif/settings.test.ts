@@ -118,6 +118,41 @@ describe('parseSettings', () => {
   });
 });
 
+describe('parseSettings, gif.page', () => {
+  it('takes a builder module inside the repo, and is unset by default', () => {
+    expect(parseSettings({}).page).toBeUndefined();
+    expect(parseSettings({ page: 'job-summary/gif/page.ts' })).toMatchObject({
+      source: 'web',
+      page: 'job-summary/gif/page.ts',
+    });
+  });
+
+  it.each([
+    [{ page: '/tmp/page.ts' }, 'gif.page must be a path inside the app'],
+    [{ page: '../ci/page.ts' }, 'gif.page must be a path inside the app'],
+    [{ page: 'a/../../page.ts' }, 'gif.page must be a path inside the app'],
+    [{ page: 'my page.ts' }, 'gif.page must be a string'],
+    [{ page: 7 }, 'gif.page must be a string'],
+    [{ page: '--import=evil.mjs' }, 'gif.page must be a string'],
+    [{ page: '-p' }, 'gif.page must be a string'],
+    [{ source: 'ci-videos', page: 'page.ts' }, 'gif.page is for a web source'],
+  ])('refuses %j', (raw, why) => {
+    expect(() => parseSettings(raw)).toThrow(why);
+  });
+
+  it('never throws anything but its own errors, for any value of it', () => {
+    fc.assert(
+      fc.property(fc.anything(), fc.constantFrom('web', 'ci-videos', undefined), (page, source) => {
+        try {
+          parseSettings({ page, source });
+        } catch (error) {
+          expect(String(error)).toMatch(/^Error: gif[.:]/);
+        }
+      }),
+    );
+  });
+});
+
 describe('loadSettings', () => {
   it("reads the app's gif key, or the defaults when it has none", () => {
     const root = mkdtempSync(path.join(tmpdir(), 'gif-settings-'));
