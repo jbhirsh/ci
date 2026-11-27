@@ -10,14 +10,15 @@ into their own copy of it.
 ## Changing a tool
 
 Clone this repo beside the apps (`../ci`), change it, and run it against an app before opening
-the PR, either the script itself or its self-test:
+the PR, either the script itself or its self-test (`.ts`, or `.mjs` in a tool not yet moved to
+TypeScript, ci#155):
 
 ```bash
-APP_ROOT=../BoardGames node <tool>/<script>.mjs
+APP_ROOT=../BoardGames node <tool>/<script>.ts
 ```
 
 ```bash
-node <tool>/selftest.mjs ../BoardGames
+node <tool>/selftest.ts ../BoardGames
 ```
 
 The checks CI runs: `npm run lint`, `npm run typecheck`, `npm run format:check`,
