@@ -22,19 +22,19 @@ import { readAll } from '../lib/actions.mjs';
 export const REVIEW_MARKER = '<!-- claude-review -->';
 
 /**
- * @param {unknown} node one review thread
- * @param {string} owner
- * @returns {boolean}
+ * @param node one review thread
+ * @param owner
  */
-export function counts(node, owner) {
-  const thread = /** @type {{ isResolved?: unknown, comments?: { nodes?: unknown[] } }} */ (
-    node && typeof node === 'object' ? node : {}
-  );
+export function counts(node: unknown, owner: string): boolean {
+  const thread = (node && typeof node === 'object' ? node : {}) as {
+    isResolved?: unknown;
+    comments?: { nodes?: unknown[] };
+  };
   if (thread.isResolved !== false) return false;
-  const first =
-    /** @type {{ body?: unknown, author?: { __typename?: unknown, login?: unknown } | null }} */ (
-      thread.comments?.nodes?.[0] ?? {}
-    );
+  const first = (thread.comments?.nodes?.[0] ?? {}) as {
+    body?: unknown;
+    author?: { __typename?: unknown; login?: unknown } | null;
+  };
   const author = first.author ?? {};
   const bot = author.__typename === 'Bot';
   if (bot && author.login === 'claude') return true;
@@ -46,16 +46,13 @@ export function counts(node, owner) {
 
 /**
  * How many threads of one GraphQL page count.
- *
- * @param {unknown} page
- * @param {string} owner
- * @returns {number}
  */
-export function countThreads(page, owner) {
-  const nodes =
-    /** @type {{ data?: { repository?: { pullRequest?: { reviewThreads?: { nodes?: unknown } } } } }} */ (
-      page && typeof page === 'object' ? page : {}
-    ).data?.repository?.pullRequest?.reviewThreads?.nodes;
+export function countThreads(page: unknown, owner: string): number {
+  const nodes = (
+    (page && typeof page === 'object' ? page : {}) as {
+      data?: { repository?: { pullRequest?: { reviewThreads?: { nodes?: unknown } } } };
+    }
+  ).data?.repository?.pullRequest?.reviewThreads?.nodes;
   return Array.isArray(nodes) ? nodes.filter((n) => counts(n, owner)).length : 0;
 }
 

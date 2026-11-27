@@ -19,11 +19,7 @@ import { DEFAULT_CHECKS, autofixSettings } from './settings.ts';
 
 const USES = 'jbhirsh/ci/autofix@';
 
-/**
- * @param {string} file
- * @returns {string | null}
- */
-function readOrNull(file) {
+function readOrNull(file: string): string | null {
   try {
     return readFileSync(file, 'utf8');
   } catch {
@@ -34,12 +30,13 @@ function readOrNull(file) {
 /**
  * Runs every check; returns the lines to print, throwing on a failure.
  *
- * @param {string} root
- * @param {{ parse?: (text: string) => unknown }} [options] a YAML parser
- *   instead of the app's
- * @returns {Promise<string[]>}
+ * @param root
+ * @param options a YAML parser instead of the app's
  */
-export async function selftest(root, options = {}) {
+export async function selftest(
+  root: string,
+  options: { parse?: (text: string) => unknown } = {},
+): Promise<string[]> {
   const settings = autofixSettings({ root });
   const log = [
     `settings: ${settings.ciFixChecks.length} CI-fix check(s), ${settings.reviewFixChecks.length} review-fix check(s), can't run: ${settings.cannotRun.join(', ')}`,
@@ -60,7 +57,7 @@ export async function selftest(root, options = {}) {
     head: '0123456789abcdef0123456789abcdef01234567',
     failedChecks: 'ci',
   };
-  for (const fixer of /** @type {const} */ (['ci-fix', 'review-fix'])) {
+  for (const fixer of ['ci-fix', 'review-fix'] as const) {
     const prompt = renderPrompt(fixer, settings, run);
     const checks = fixer === 'ci-fix' ? settings.ciFixChecks : settings.reviewFixChecks;
     const missing = checks.find((check) => !prompt.includes(`- ${check}`));

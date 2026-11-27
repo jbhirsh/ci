@@ -37,30 +37,26 @@ import { autofixSettings } from './settings.ts';
 
 export const STUB = 'claude-autofix.yml';
 
-/**
- * A workflow as this check reads it.
- *
- * @typedef {object} Workflow
- * @property {string} file its file name in `.github/workflows/`
- * @property {string} name its `name:`, or its path when it has none
- * @property {string[]} events what triggers it
- * @property {string[] | undefined} workflowRun the workflows its
- *   `workflow_run` trigger lists, if it has one
- */
+/** A workflow as this check reads it. */
+export type Workflow = {
+  /** its file name in `.github/workflows/` */
+  file: string;
+  /** its `name:`, or its path when it has none */
+  name: string;
+  /** what triggers it */
+  events: string[];
+  /** the workflows its `workflow_run` trigger lists, if it has one */
+  workflowRun: string[] | undefined;
+};
 
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
- */
-function isObject(value) {
+function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**
- * @param {unknown} value a string or a list of strings
- * @returns {string[]}
+ * @param value a string or a list of strings
  */
-function strings(value) {
+function strings(value: unknown): string[] {
   if (typeof value === 'string') return [value];
   if (Array.isArray(value)) return value.filter((v) => typeof v === 'string');
   return [];
@@ -70,11 +66,10 @@ function strings(value) {
  * Reads one parsed workflow. A YAML 1.1 parser turns the `on` key into
  * `true`; both are read.
  *
- * @param {string} file
- * @param {unknown} doc the parsed YAML
- * @returns {Workflow}
+ * @param file
+ * @param doc the parsed YAML
  */
-export function describeWorkflow(file, doc) {
+export function describeWorkflow(file: string, doc: unknown): Workflow {
   const workflow = isObject(doc) ? doc : {};
   const name =
     typeof workflow.name === 'string' && workflow.name.trim() !== ''
@@ -90,11 +85,10 @@ export function describeWorkflow(file, doc) {
  * Everything wrong with the trigger list, given the app's workflows and its
  * exemptions; empty when it's right.
  *
- * @param {Workflow[]} workflows
- * @param {Record<string, string>} exempt workflow name → why
- * @returns {string[]}
+ * @param workflows
+ * @param exempt workflow name → why
  */
-export function triggerProblems(workflows, exempt) {
+export function triggerProblems(workflows: Workflow[], exempt: Record<string, string>): string[] {
   const stub = workflows.find((w) => w.file === STUB);
   if (!stub || !stub.workflowRun || stub.workflowRun.length === 0) {
     return [
@@ -103,8 +97,7 @@ export function triggerProblems(workflows, exempt) {
   }
   const listed = new Set(stub.workflowRun);
   const names = new Set(workflows.map((w) => w.name));
-  /** @type {string[]} */
-  const problems = [];
+  const problems: string[] = [];
   for (const name of listed) {
     if (!names.has(name)) problems.push(`${STUB} lists "${name}", which no workflow is named`);
   }
@@ -138,16 +131,16 @@ export function triggerProblems(workflows, exempt) {
 /**
  * Reads an app's workflows and exemptions and checks them.
  *
- * @param {string} root the app's checkout
- * @param {{ parse?: (text: string) => unknown, ref?: string }} [options]
- *   `parse` instead of the app's `yaml` package; `ref` to read the
+ * @param root the app's checkout
+ * @param options `parse` instead of the app's `yaml` package; `ref` to read the
  *   exemptions from (default: the working tree)
- * @returns {Promise<{ workflows: Workflow[], problems: string[] }>}
  */
-export async function checkTriggers(root, { parse, ref } = {}) {
+export async function checkTriggers(
+  root: string,
+  { parse, ref }: { parse?: (text: string) => unknown; ref?: string } = {},
+): Promise<{ workflows: Workflow[]; problems: string[] }> {
   const read =
-    parse ??
-    /** @type {{ parse: (text: string) => unknown }} */ (await importFromApp('yaml', root)).parse;
+    parse ?? ((await importFromApp('yaml', root)) as { parse: (text: string) => unknown }).parse;
   const dir = path.join(root, '.github', 'workflows');
   const workflows = readdirSync(dir)
     .filter((file) => /\.ya?ml$/.test(file))

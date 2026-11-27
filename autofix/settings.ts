@@ -61,20 +61,16 @@ export const DEFAULT_CANNOT_RUN = [
   'mutation testing',
 ];
 
-/**
- * @typedef {object} AutofixSettings
- * @property {string[]} ciFixChecks
- * @property {string[]} reviewFixChecks
- * @property {string[]} cannotRun
- * @property {Record<string, string>} exempt workflow name → why
- * @property {string | null} advisor
- */
+export type AutofixSettings = {
+  ciFixChecks: string[];
+  reviewFixChecks: string[];
+  cannotRun: string[];
+  /** workflow name → why */
+  exempt: Record<string, string>;
+  advisor: string | null;
+};
 
-/**
- * @param {unknown} value
- * @returns {Record<string, string>}
- */
-function reasons(value) {
+function reasons(value: unknown): Record<string, string> {
   if (value === undefined) return {};
   if (
     typeof value !== 'object' ||
@@ -86,14 +82,10 @@ function reasons(value) {
       '.github/ci.json: "autofix.exempt" must map each workflow name to the reason it is exempt',
     );
   }
-  return /** @type {Record<string, string>} */ (value);
+  return value as Record<string, string>;
 }
 
-/**
- * @param {{ root: string, ref?: string }} where
- * @returns {AutofixSettings}
- */
-export function autofixSettings(where) {
+export function autofixSettings(where: { root: string; ref?: string }): AutofixSettings {
   const section = loadConfig('autofix', where);
   onlyKnownKeys('autofix', section, [
     'ciFixChecks',

@@ -21,21 +21,19 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-/**
- * What an app can run, as the checks read it.
- *
- * @typedef {object} AppFacts
- * @property {Set<string>} scripts package.json's scripts
- * @property {Set<string>} bins the bins its locked packages install
- * @property {Set<string>} makeTargets its Makefile's targets
- * @property {(file: string) => string | null} read a repo file's text, or null
- */
+/** What an app can run, as the checks read it. */
+export type AppFacts = {
+  /** package.json's scripts */
+  scripts: Set<string>;
+  /** the bins its locked packages install */
+  bins: Set<string>;
+  /** its Makefile's targets */
+  makeTargets: Set<string>;
+  /** a repo file's text, or null */
+  read: (file: string) => string | null;
+};
 
-/**
- * @param {string} file
- * @returns {string | null}
- */
-function readOrNull(file) {
+function readOrNull(file: string): string | null {
   try {
     return readFileSync(file, 'utf8');
   } catch {
@@ -45,23 +43,17 @@ function readOrNull(file) {
 
 /**
  * Reads an app checkout's scripts, bins and make targets.
- *
- * @param {string} root
- * @returns {AppFacts}
  */
-export function appFacts(root) {
-  const read = (/** @type {string} */ file) => readOrNull(path.join(root, file));
-  /** @type {unknown} */
-  const pkg = JSON.parse(read('package.json') ?? '{}');
-  const scripts = new Set(
-    Object.keys(/** @type {{ scripts?: Record<string, string> }} */ (pkg).scripts ?? {}),
-  );
-  /** @type {Set<string>} */
-  const bins = new Set();
+export function appFacts(root: string): AppFacts {
+  const read = (file: string) => readOrNull(path.join(root, file));
+  const pkg: unknown = JSON.parse(read('package.json') ?? '{}');
+  const scripts = new Set(Object.keys((pkg as { scripts?: Record<string, string> }).scripts ?? {}));
+  const bins: Set<string> = new Set();
   const lock = read('package-lock.json');
   if (lock !== null) {
-    /** @type {{ packages?: Record<string, { bin?: Record<string, string> | string, name?: string }> }} */
-    const parsed = JSON.parse(lock);
+    const parsed: {
+      packages?: Record<string, { bin?: Record<string, string> | string; name?: string }>;
+    } = JSON.parse(lock);
     for (const [where, entry] of Object.entries(parsed.packages ?? {})) {
       if (typeof entry.bin === 'string')
         bins.add(entry.name ?? where.replace(/^.*node_modules\//, ''));
@@ -84,11 +76,10 @@ export function appFacts(root) {
 /**
  * Why one part of a command can't run in the app, or null when it can.
  *
- * @param {string} part one `&&`-joined part, e.g. `npm run lint`
- * @param {AppFacts} facts
- * @returns {string | null}
+ * @param part one `&&`-joined part, e.g. `npm run lint`
+ * @param facts
  */
-export function commandProblem(part, facts) {
+export function commandProblem(part: string, facts: AppFacts): string | null {
   const words = part.trim().split(/\s+/).filter(Boolean);
   const [tool = '', ...rest] = words;
   const args = rest.filter((word) => !word.startsWith('-'));
@@ -115,22 +106,17 @@ export function commandProblem(part, facts) {
   return `"${tool}" isn't a command autofix knows (npm, npx, make, git, test)`;
 }
 
-/**
- * @param {string} text
- * @returns {string}
- */
-function escape(text) {
+function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
  * Why a validation entry names something the app can't run, or null.
  *
- * @param {string} entry one item of `ciFixChecks` / `reviewFixChecks`
- * @param {AppFacts} facts
- * @returns {string | null}
+ * @param entry one item of `ciFixChecks` / `reviewFixChecks`
+ * @param facts
  */
-export function entryProblem(entry, facts) {
+export function entryProblem(entry: string, facts: AppFacts): string | null {
   const step = /^the "([^"]+)" step of `([^`]+)`/.exec(entry);
   if (step) {
     const [, name, file] = step;

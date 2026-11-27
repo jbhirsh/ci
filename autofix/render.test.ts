@@ -27,7 +27,7 @@ describe('the templates', () => {
       'checks',
       'cannotRun',
     ];
-    for (const fixer of /** @type {const} */ (['ci-fix', 'review-fix'])) {
+    for (const fixer of ['ci-fix', 'review-fix'] as const) {
       for (const name of placeholders(template(fixer))) expect(given).toContain(name);
     }
   });
