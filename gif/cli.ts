@@ -64,64 +64,63 @@ import { recordFrames, showPointer, waitForPictures } from './record.ts';
 import { loadModule, scenarioProblems, setupProblems } from './scenario.ts';
 import { loadSettings } from './settings.ts';
 import { main as videosMain } from './videos.ts';
+import type { ChildProcess } from 'node:child_process';
+import type { OptionSpecs, Options } from './options.ts';
+import type { GifSettings } from './settings.ts';
+import type { Clip } from './timeline.ts';
+import type { Browser, Page } from 'playwright';
 
-/** @typedef {import('./options.ts').Options} Options */
-/** @typedef {import('./settings.ts').GifSettings} GifSettings */
-/** @typedef {import('./timeline.ts').Clip} Clip */
-/** @typedef {import('playwright').Page} Page */
-/** @typedef {import('playwright').Browser} Browser */
-/** @typedef {'before' | 'after'} Side */
+export type Side = 'before' | 'after';
 
-/**
- * @typedef {object} Helpers What a scenario's functions get as `gif`.
- * @property {typeof glide} glide
- * @property {typeof click} click
- * @property {typeof drag} drag
- * @property {typeof scroll} scroll
- * @property {typeof swipe} swipe
- * @property {Side} side
- * @property {string} origin
- */
+/** What a scenario's functions get as `gif`. */
+export type Helpers = {
+  glide: typeof glide;
+  click: typeof click;
+  drag: typeof drag;
+  scroll: typeof scroll;
+  swipe: typeof swipe;
+  side: Side;
+  origin: string;
+};
 
-/**
- * @typedef {object} Scenario A scenario module's default export (scenario.ts).
- * @property {string} [name]
- * @property {string} [path]
- * @property {{ width: number; height: number }} [viewport]
- * @property {'light' | 'dark'} [colorScheme]
- * @property {Clip | ((page: Page) => Promise<Clip>)} [clip]
- * @property {number} [width]
- * @property {(page: Page, gif: Helpers) => Promise<void>} [setup]
- * @property {(page: Page, gif: Helpers) => Promise<void>} [ready]
- * @property {(page: Page, gif: Helpers) => Promise<void>} play
- */
+/** A scenario module's default export (scenario.ts). */
+export type Scenario = {
+  name?: string;
+  path?: string;
+  viewport?: { width: number; height: number };
+  colorScheme?: 'light' | 'dark';
+  clip?: Clip | ((page: Page) => Promise<Clip>);
+  width?: number;
+  setup?: (page: Page, gif: Helpers) => Promise<void>;
+  ready?: (page: Page, gif: Helpers) => Promise<void>;
+  play: (page: Page, gif: Helpers) => Promise<void>;
+};
 
-/**
- * @typedef {object} SetupContext What a setup module's functions get.
- * @property {Side} side
- * @property {string} origin
- * @property {Record<string, string | boolean | undefined>} options
- * @property {string} root
- */
+/** What a setup module's functions get. */
+export type SetupContext = {
+  side: Side;
+  origin: string;
+  options: Record<string, string | boolean | undefined>;
+  root: string;
+};
 
-/**
- * @typedef {object} Setup A setup module's default export (scenario.ts).
- * @property {import('./options.ts').OptionSpecs} [options]
- * @property {(page: Page, ctx: SetupContext) => Promise<void>} [beforeSetup]
- * @property {(page: Page, ctx: SetupContext) => Promise<void>} [afterSetup]
- * @property {(page: Page, ctx: SetupContext) => Promise<void>} [check]
- */
+/** A setup module's default export (scenario.ts). */
+export type Setup = {
+  options?: OptionSpecs;
+  beforeSetup?: (page: Page, ctx: SetupContext) => Promise<void>;
+  afterSetup?: (page: Page, ctx: SetupContext) => Promise<void>;
+  check?: (page: Page, ctx: SetupContext) => Promise<void>;
+};
 
 /**
  * Loads the module `file` and checks its default export, saying what's
  * wrong with it.
- *
- * @param {string} file
- * @param {string} root
- * @param {(value: unknown) => string[]} problemsOf
- * @returns {Promise<unknown>}
  */
-async function loadChecked(file, root, problemsOf) {
+async function loadChecked(
+  file: string,
+  root: string,
+  problemsOf: (value: unknown) => string[],
+): Promise<unknown> {
   const module = await loadModule(file, root);
   const problems = problemsOf(module.default);
   if (problems.length > 0) throw new Error(`pr-gif: ${file}: ${problems.join('; ')}`);
@@ -130,13 +129,9 @@ async function loadChecked(file, root, problemsOf) {
 
 /**
  * The app's Playwright: `@playwright/test`, or else `playwright`.
- *
- * @param {string} root
- * @returns {Promise<typeof import('playwright')>}
  */
-export async function appPlaywright(root) {
-  /** @type {unknown} */
-  let module;
+export async function appPlaywright(root: string): Promise<typeof import('playwright')> {
+  let module: unknown;
   try {
     module = await importFromApp('@playwright/test', root);
   } catch {
@@ -144,19 +139,17 @@ export async function appPlaywright(root) {
   }
   // Resolved as CommonJS, its exports come as the default export (Playwright
   // Test's is a function, `test`, carrying the rest).
-  const { default: cjs } = /** @type {{ default?: unknown }} */ (module);
-  return /** @type {typeof import('playwright')} */ (
+  const { default: cjs } = module as { default?: unknown };
+  return (
     (typeof cjs === 'object' || typeof cjs === 'function') && cjs !== null && 'webkit' in cjs
       ? cjs
       : module
-  );
+  ) as typeof import('playwright');
 }
 
 /**
  * Plays the scenario against the build at `origin`, leaving its frames in
  * `frames`.
- *
- * @param {{ browser: Browser; scenario: Scenario; setup: Setup; side: Side; origin: string; frames: string; options: Options; settings: GifSettings; root: string }} run
  */
 export async function recordSide({
   browser,
@@ -168,6 +161,16 @@ export async function recordSide({
   options,
   settings,
   root,
+}: {
+  browser: Browser;
+  scenario: Scenario;
+  setup: Setup;
+  side: Side;
+  origin: string;
+  frames: string;
+  options: Options;
+  settings: GifSettings;
+  root: string;
 }) {
   const context = await browser.newContext({
     viewport: scenario.viewport ?? settings.viewport,
@@ -179,10 +182,8 @@ export async function recordSide({
   try {
     await showPointer(context);
     const page = await context.newPage();
-    /** @type {SetupContext} */
-    const ctx = { side, origin, options: options.app, root };
-    /** @type {Helpers} */
-    const gif = { glide, click, drag, scroll, swipe, side, origin };
+    const ctx: SetupContext = { side, origin, options: options.app, root };
+    const gif: Helpers = { glide, click, drag, scroll, swipe, side, origin };
     await setup.beforeSetup?.(page, ctx);
     await scenario.setup?.(page, gif);
     await setup.afterSetup?.(page, ctx);
@@ -210,21 +211,16 @@ export async function recordSide({
   }
 }
 
-/**
- * @param {readonly string[]} argv
- */
-export async function main(argv) {
+export async function main(argv: readonly string[]) {
   const root = appRoot();
   const settings = loadSettings(root);
   if (settings.source === 'ci-videos') return videosMain(argv, { root, settings });
-  const setup = /** @type {Setup} */ (
+  const setup = (
     settings.setup ? await loadChecked(settings.setup, root, setupProblems) : {}
-  );
+  ) as Setup;
   const options = parseOptions(argv, { settings, appOptions: setup.options });
   checkFfmpeg(options.sideBySide);
-  const scenario = /** @type {Scenario} */ (
-    await loadChecked(options.scenario, root, scenarioProblems)
-  );
+  const scenario = (await loadChecked(options.scenario, root, scenarioProblems)) as Scenario;
   const name = scenarioName(options.scenario, scenario.name);
   const files = gifNames(name);
   // Before anything is built, so a remote it can't read stops the run first.
@@ -235,18 +231,14 @@ export async function main(argv) {
   mkdirSync(out, { recursive: true });
 
   const work = mkdtempSync(path.join(tmpdir(), 'pr-gif-'));
-  /** @type {import('node:child_process').ChildProcess[]} */
-  const servers = [];
-  /** @type {string[]} */
-  const trees = [];
-  /** @type {Browser | undefined} */
-  let browser;
+  const servers: ChildProcess[] = [];
+  const trees: string[] = [];
+  let browser: Browser | undefined;
   let stopping = false;
   // Each step on its own, so one that fails can't keep the rest from running
   // or hide the error that stopped the run. Started once: a second call (the
   // finally below, after an interruption) waits for the first to finish.
-  /** @type {Promise<void> | undefined} */
-  let cleaning;
+  let cleaning: Promise<void> | undefined;
   const cleanUp = () =>
     (cleaning ??= (async () => {
       await stopServers(servers);
@@ -261,16 +253,14 @@ export async function main(argv) {
       if (options.keep) console.log(`pr-gif: kept ${work}`);
       else rmSync(work, { recursive: true, force: true });
     })());
-  /** @param {string} signal */
-  const interrupted = (signal) => {
+  const interrupted = (signal: string) => {
     stopping = true;
     void cleanUp().finally(() => process.exit(signal === 'SIGINT' ? 130 : 143));
   };
   process.once('SIGINT', interrupted);
   process.once('SIGTERM', interrupted);
   try {
-    /** @type {{ side: Side; dist: string; tree: string }[]} */
-    const sides = [];
+    const sides: { side: Side; dist: string; tree: string }[] = [];
     if (!options.afterOnly) {
       const tree = path.join(work, 'base');
       addBaseTree(root, options.base, tree);
@@ -281,11 +271,8 @@ export async function main(argv) {
     /**
      * Passes on a side's failure, unless it's "before" and --before-may-fail
      * says to go on with "after" alone.
-     *
-     * @param {Side} side
-     * @param {unknown} error
      */
-    const failed = (side, error) => {
+    const failed = (side: Side, error: unknown) => {
       if (stopping || side !== 'before' || !options.beforeMayFail) throw error;
       console.warn(
         `pr-gif: "before" failed (${error instanceof Error ? error.message : error}); "after" alone, as for a screen main doesn't have`,
@@ -309,7 +296,7 @@ export async function main(argv) {
     // machine's PLAYWRIGHT_CHROMIUM_EXECUTABLE is no use to it.
     browser = await webkit
       .launch({ handleSIGINT: false, handleSIGTERM: false })
-      .catch((/** @type {unknown} */ error) => {
+      .catch((error: unknown) => {
         throw new Error(
           "pr-gif: WebKit didn't start. Install it with: npx playwright install --with-deps webkit",
           { cause: error },
@@ -339,8 +326,7 @@ export async function main(argv) {
     }
 
     const viewportWidth = (scenario.viewport ?? settings.viewport).width;
-    /** @type {string[]} */
-    const made = [];
+    const made: string[] = [];
     if (options.sideBySide) {
       const width = options.width ?? defaultWidth(viewportWidth, true);
       sideBySide(
@@ -372,14 +358,14 @@ export async function main(argv) {
       const from = sides.some((s) => s.side === 'before') ? `${options.base} and ${head}` : head;
       const sha = publishFiles(
         gitIn(root),
-        made.map((file) => /** @type {const} */ ([`${dir}/${file}`, path.join(out, file)])),
+        made.map((file) => [`${dir}/${file}`, path.join(out, file)] as const),
         {
           message: `Add the ${name} GIFs for ${dir}\n\nRecorded from local builds of ${from} (with any uncommitted changes) by jbhirsh/ci's gif/cli.mjs.`,
           branch: options.branch,
           push: options.push,
         },
       );
-      const at = (/** @type {string} */ file) => (made.includes(file) ? `${dir}/${file}` : null);
+      const at = (file: string) => (made.includes(file) ? `${dir}/${file}` : null);
       const table = markdownTable(
         repo,
         sha,

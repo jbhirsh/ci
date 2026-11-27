@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STEP_MS, click, drag, glide, scroll, smoothstep, swipe, touchStep } from './moves.ts';
+import type { TouchStep } from './moves.ts';
 
 // jsdom's, which touchStep's tests run in (the repo's lint knows Node's globals).
 const { document } = globalThis;
@@ -16,11 +17,8 @@ afterEach(() => {
 
 /**
  * Runs the fake clock until `move`, started on it, is done.
- *
- * @template T
- * @param {Promise<T>} move
  */
-async function play(move) {
+async function play<T>(move: Promise<T>) {
   const [done] = await Promise.all([move, vi.runAllTimersAsync()]);
   return done;
 }
@@ -36,53 +34,32 @@ describe('smoothstep', () => {
   });
 });
 
-/** @typedef {{ at: number; what: string; x?: number; y?: number }} Sent */
+type Sent = { at: number; what: string; x?: number; y?: number };
 
 // A page whose mouse notes what it's sent, and when, by the fake clock.
 function fakePage() {
   const start = performance.now();
-  /** @type {Sent[]} */
-  const sent = [];
-  /**
-   * @param {string} what
-   * @param {number} [x]
-   * @param {number} [y]
-   */
-  const note = (what, x, y) => {
+  const sent: Sent[] = [];
+  const note = (what: string, x?: number, y?: number) => {
     sent.push({ at: performance.now() - start, what, x, y });
     return Promise.resolve();
   };
   const mouse = {
-    /**
-     * @param {number} x
-     * @param {number} y
-     */
-    move: (x, y) => note('move', x, y),
+    move: (x: number, y: number) => note('move', x, y),
     down: () => note('down'),
     up: () => note('up'),
-    /**
-     * @param {number} _dx
-     * @param {number} dy
-     */
-    wheel: (_dx, dy) => note('wheel', 0, dy),
+    wheel: (_dx: number, dy: number) => note('wheel', 0, dy),
   };
   // What it's asked to run in the page notes the touch step it runs: its
   // type and point.
-  const evaluate = (
-    /** @type {(step: import('./moves.ts').TouchStep) => void} */ fn,
-    /** @type {import('./moves.ts').TouchStep} */ step,
-  ) => {
+  const evaluate = (fn: (step: TouchStep) => void, step: TouchStep) => {
     expect(fn).toBe(touchStep);
     return note(`touch ${step.type}`, step.at.x, step.at.y);
   };
   return { page: { mouse, evaluate }, sent };
 }
 
-/**
- * @param {Sent[]} sent
- * @param {string} what
- */
-const first = (sent, what) => {
+const first = (sent: Sent[], what: string) => {
   const found = sent.find((s) => s.what === what);
   if (!found) throw new Error(`no ${what}`);
   return found;
@@ -231,8 +208,7 @@ describe('swipe', () => {
 describe('touchStep', () => {
   // jsdom lays nothing out, so it has no elementFromPoint: each test says
   // what is under the finger.
-  /** @type {EventTarget | null} */
-  let under = null;
+  let under: EventTarget | null = null;
   beforeEach(() => {
     Object.defineProperty(document, 'elementFromPoint', {
       configurable: true,
@@ -247,8 +223,14 @@ describe('touchStep', () => {
     const start = document.createElement('div');
     const elsewhere = document.createElement('div');
     document.body.append(start, elsewhere);
-    /** @type {{ type: string; on: string; x?: number; touches?: number; changed?: number; pointerType?: string }[]} */
-    const seen = [];
+    const seen: {
+      type: string;
+      on: string;
+      x?: number;
+      touches?: number;
+      changed?: number;
+      pointerType?: string;
+    }[] = [];
     let prevented = false;
     for (const type of [
       'pointerdown',
@@ -261,10 +243,12 @@ describe('touchStep', () => {
       // On the element, as a swipe's listener is: a document's touch
       // listeners are passive, and can't claim a move.
       start.addEventListener(type, (event) => {
-        const e =
-          /** @type {Event & { clientX?: number; pointerType?: string; touches?: { clientX: number }[]; changedTouches?: { clientX: number; target: EventTarget }[] }} */ (
-            event
-          );
+        const e = event as Event & {
+          clientX?: number;
+          pointerType?: string;
+          touches?: { clientX: number }[];
+          changedTouches?: { clientX: number; target: EventTarget }[];
+        };
         const touch = e.touches?.[0] ?? e.changedTouches?.[0];
         seen.push({
           type,
@@ -326,9 +310,8 @@ describe('touchStep', () => {
   });
 
   it('touches the page itself where nothing is under the finger, and does nothing for a touch never started', () => {
-    /** @type {string[]} */
-    const seen = [];
-    const note = (/** @type {Event} */ e) =>
+    const seen: string[] = [];
+    const note = (e: Event) =>
       seen.push(`${e.type} ${e.target === document.documentElement ? 'root' : 'other'}`);
     document.addEventListener('touchstart', note);
     document.addEventListener('touchend', note);

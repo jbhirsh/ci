@@ -14,11 +14,8 @@ import {
 /**
  * An app with these files, and, if `vite` is given, a Vite whose
  * runnerImport is that source.
- *
- * @param {Record<string, string>} files
- * @param {string} [vite]
  */
-function app(files, vite) {
+function app(files: Record<string, string>, vite?: string) {
   const root = mkdtempSync(path.join(tmpdir(), 'gif-scenario-'));
   writeFileSync(path.join(root, 'package.json'), '{"type": "module"}');
   for (const [file, text] of Object.entries(files)) {
@@ -42,7 +39,7 @@ describe('loadModule', () => {
   it("imports with Node's import when the app has no Vite", async () => {
     const root = app({ 'scripts/flow.mjs': PLAY });
     const module = await loadModule('scripts/flow.mjs', root);
-    expect(typeof (/** @type {{ play?: unknown }} */ (module.default).play)).toBe('function');
+    expect(typeof (module.default as { play?: unknown }).play).toBe('function');
   });
 
   it("imports through the app's Vite, from the app's root, when it has one", async () => {
@@ -201,6 +198,6 @@ describe('isScenarioFile', () => {
     ['a.ts', 'ci-videos', false],
     ['shared/a.yaml', 'ci-videos', false],
   ])('%s for %s: %s', (name, source, is) => {
-    expect(isScenarioFile(name, /** @type {'web' | 'ci-videos'} */ (source))).toBe(is);
+    expect(isScenarioFile(name, source as 'web' | 'ci-videos')).toBe(is);
   });
 });

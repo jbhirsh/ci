@@ -90,8 +90,7 @@ import {
 import { scenarioName } from './options.ts';
 import { isScenarioFile } from './scenario.ts';
 import { loadSettings } from './settings.ts';
-
-/** @typedef {import('./publish.ts').Published} Published */
+import type { Published } from './publish.ts';
 
 /** Where record leaves the GIFs and attach reads them, from the step's folder. */
 export const OUT = 'pr-gif';
@@ -111,31 +110,30 @@ export const STATUS_CONTEXT = 'PR GIFs';
 /** A scenario's name as it goes into a marker and a folder. */
 const NAME = /^\w[\w.-]*$/;
 
-/** @param {string} name */
-const isName = (name) => NAME.test(name) && !name.includes('--');
+const isName = (name: string) => NAME.test(name) && !name.includes('--');
 
 /** A full commit SHA. */
 const SHA = /^[0-9a-f]{40}$/;
 
-/**
- * @typedef {object} Inputs The workflow's inputs.
- * @property {string} pr
- * @property {string[]} scenarios
- * @property {boolean} sideBySide
- * @property {boolean} afterOnly
- * @property {boolean} automatic recorded on its own (ci#49), not run by hand
- * @property {string} [head] the commit the scenarios are recorded at
- * @property {string} [afterRun] for sift's automatic run: its CI run, "after"
- */
+/** The workflow's inputs. */
+export type Inputs = {
+  pr: string;
+  scenarios: string[];
+  sideBySide: boolean;
+  afterOnly: boolean;
+  /** recorded on its own (ci#49), not run by hand */
+  automatic: boolean;
+  /** the commit the scenarios are recorded at */
+  head?: string;
+  /** for sift's automatic run: its CI run, "after" */
+  afterRun?: string;
+};
 
 /**
  * Reads the workflow's inputs from the environment, refusing any it can't
  * pass on safely as arguments.
- *
- * @param {Record<string, string | undefined>} env
- * @returns {Inputs}
  */
-export function parseInputs(env) {
+export function parseInputs(env: Record<string, string | undefined>): Inputs {
   const pr = env.PR ?? '';
   if (!/^[1-9]\d*$/.test(pr)) throw new Error(`pr-gif: PR is the PR's number, not "${pr}"`);
   const scenarios = (env.SCENARIOS ?? '').split(/[\s,]+/).filter(Boolean);
@@ -145,8 +143,7 @@ export function parseInputs(env) {
       throw new Error(`pr-gif: "${file}" isn't a scenario file in the app`);
     }
   }
-  /** @param {string} name */
-  const flag = (name) => {
+  const flag = (name: string) => {
     const value = env[name] ?? 'false';
     if (value !== 'true' && value !== 'false') {
       throw new Error(`pr-gif: ${name} is "true" or "false", not "${value}"`);
@@ -178,14 +175,13 @@ export function parseInputs(env) {
  * CI run for "after", at the commit that run recorded, and only the named
  * scenarios (SCENARIOS holds names there, not files).
  *
- * @param {'web' | 'ci-videos'} source the app's `gif.source`
- * @param {Inputs} inputs
- * @returns {string[][]}
+ * @param source the app's `gif.source`
+ * @param inputs
  */
 export function recordRuns(
-  source,
-  { pr, scenarios, sideBySide, afterOnly, automatic, head, afterRun },
-) {
+  source: 'web' | 'ci-videos',
+  { pr, scenarios, sideBySide, afterOnly, automatic, head, afterRun }: Inputs,
+): string[][] {
   const both = sideBySide ? ['--side-by-side'] : [];
   if (source === 'ci-videos' && automatic) {
     if (!head || !afterRun) {
@@ -215,36 +211,33 @@ export function recordRuns(
   ]);
 }
 
-/**
- * @typedef {object} Manifest What record wrote in OUT/MANIFEST.
- * @property {number} pr
- * @property {string} head the commit the scenarios were recorded at
- * @property {boolean} automatic
- * @property {string[]} recorded the scenarios with GIFs
- * @property {string[]} failed the ones without
- */
+/** What record wrote in OUT/MANIFEST. */
+export type Manifest = {
+  pr: number;
+  /** the commit the scenarios were recorded at */
+  head: string;
+  automatic: boolean;
+  /** the scenarios with GIFs */
+  recorded: string[];
+  /** the ones without */
+  failed: string[];
+};
 
 /**
  * The manifest as record writes it.
- *
- * @param {Manifest} manifest
  */
-export function writeManifest(manifest) {
+export function writeManifest(manifest: Manifest) {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
 /**
  * The manifest from the artifact, which the PR's run wrote: so data, of
  * exactly the shape writeManifest writes, or an error saying what's wrong.
- *
- * @param {string | Buffer} text
- * @returns {Manifest}
  */
-export function readManifest(text) {
-  const fail = (/** @type {string} */ why) => new Error(`pr-gif: ${OUT}/${MANIFEST} ${why}`);
+export function readManifest(text: string | Buffer): Manifest {
+  const fail = (why: string) => new Error(`pr-gif: ${OUT}/${MANIFEST} ${why}`);
   if (Buffer.byteLength(text) > MANIFEST_MAX_BYTES) throw fail('is over 64 KB');
-  /** @type {unknown} */
-  let value;
+  let value: unknown;
   try {
     value = JSON.parse(String(text));
   } catch {
@@ -253,7 +246,7 @@ export function readManifest(text) {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw fail("isn't an object");
   }
-  const m = /** @type {Record<string, unknown>} */ (value);
+  const m = value as Record<string, unknown>;
   const keys = ['pr', 'head', 'automatic', 'recorded', 'failed'];
   if (Object.keys(m).some((k) => !keys.includes(k)) || keys.some((k) => !(k in m))) {
     throw fail(`must hold exactly ${keys.join(', ')}`);
@@ -263,29 +256,25 @@ export function readManifest(text) {
   }
   if (typeof m.head !== 'string' || !SHA.test(m.head)) throw fail("'s head isn't a commit SHA");
   if (typeof m.automatic !== 'boolean') throw fail("'s automatic isn't true or false");
-  /** @param {unknown} list */
-  const names = (list) =>
+  const names = (list: unknown) =>
     Array.isArray(list) && list.every((n) => typeof n === 'string' && isName(n));
   if (!names(m.recorded) || !names(m.failed)) throw fail("'s lists aren't scenario names");
-  return /** @type {Manifest} */ (m);
+  return m as Manifest;
 }
 
-/**
- * @typedef {object} Change One file a PR changes.
- * @property {string} file its path, from the repository's root
- * @property {boolean} removed
- */
+/** One file a PR changes. */
+export type Change = {
+  /** its path, from the repository's root */
+  file: string;
+  removed: boolean;
+};
 
 /**
  * The files `git diff --name-status --no-renames -z` lists.
- *
- * @param {string} text
- * @returns {Change[]}
  */
-export function parseNameStatus(text) {
+export function parseNameStatus(text: string): Change[] {
   const fields = text.split('\0');
-  /** @type {Change[]} */
-  const changes = [];
+  const changes: Change[] = [];
   for (let i = 0; i + 1 < fields.length; i += 2) {
     if (!fields[i]) break;
     changes.push({ file: fields[i + 1], removed: fields[i].startsWith('D') });
@@ -297,23 +286,18 @@ export function parseNameStatus(text) {
  * The files the API's pulls/<n>/files lists, one JSON object a line, as
  * `gh api --paginate --jq '.[] | {filename, status}'` prints them; anything
  * else in a line is passed over.
- *
- * @param {string} text
- * @returns {Change[]}
  */
-export function parseApiFiles(text) {
-  /** @type {Change[]} */
-  const changes = [];
+export function parseApiFiles(text: string): Change[] {
+  const changes: Change[] = [];
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
-    /** @type {unknown} */
-    let value;
+    let value: unknown;
     try {
       value = JSON.parse(line);
     } catch {
       continue;
     }
-    const { filename, status } = /** @type {Record<string, unknown>} */ (value ?? {});
+    const { filename, status } = (value ?? {}) as Record<string, unknown>;
     if (typeof filename === 'string' && typeof status === 'string') {
       changes.push({ file: filename, removed: status === 'removed' });
     }
@@ -326,12 +310,12 @@ export function parseApiFiles(text) {
  * `folder` (the `gif.scenarios` setting), scenarios by isScenarioFile, and
  * named plainly enough to pass on as an argument and a marker (any other is
  * passed over); each once, sorted. A removed one isn't recorded.
- *
- * @param {readonly Change[]} changes
- * @param {string | undefined} folder
- * @param {'web' | 'ci-videos'} source
  */
-export function changedScenarios(changes, folder, source) {
+export function changedScenarios(
+  changes: readonly Change[],
+  folder: string | undefined,
+  source: 'web' | 'ci-videos',
+) {
   if (!folder) return [];
   const dir = path.posix.normalize(folder).replace(/\/+$/, '');
   const files = changes
@@ -348,41 +332,38 @@ export function changedScenarios(changes, folder, source) {
  * The name a changed scenario file's GIFs go by, as far as can be told
  * without loading it: its file's name (a web scenario may name itself
  * otherwise, which only its recording tells).
- *
- * @param {string} file
  */
-export const fileScenarioName = (file) => scenarioName(file, undefined);
+export const fileScenarioName = (file: string) => scenarioName(file, undefined);
 
-/**
- * @typedef {object} WorkflowRun What check reads of the workflow_run event's run.
- * @property {number} id
- * @property {string} event
- * @property {string | null} conclusion
- * @property {string} head_sha
- * @property {string} [head_branch]
- * @property {string} html_url
- * @property {{ full_name?: string; owner?: { login?: string } } | null} [head_repository]
- * @property {{ number: number }[]} [pull_requests]
- */
+/** What check reads of the workflow_run event's run. */
+export type WorkflowRun = {
+  id: number;
+  event: string;
+  conclusion: string | null;
+  head_sha: string;
+  head_branch?: string;
+  html_url: string;
+  head_repository?: { full_name?: string; owner?: { login?: string } } | null;
+  pull_requests?: { number: number }[];
+};
 
-/**
- * @typedef {object} Pull What check reads of the PR.
- * @property {number} number
- * @property {string} state
- * @property {string | null} [body]
- * @property {{ sha: string; repo: { full_name: string } | null }} head
- */
+/** What check reads of the PR. */
+export type Pull = {
+  number: number;
+  state: string;
+  body?: string | null;
+  head: { sha: string; repo: { full_name: string } | null };
+};
 
 /**
  * Whether a finished run is one to look further at: a pull_request run that
  * ended, success or failure (a failure may still have recorded some). A
  * cancelled run was overtaken by a newer push, whose own run follows.
  *
- * @param {WorkflowRun} run
- * @param {string} repo this repository, owner/name
- * @returns {{ ignore: string } | { fork: boolean }}
+ * @param run
+ * @param repo this repository, owner/name
  */
-export function screenRun(run, repo) {
+export function screenRun(run: WorkflowRun, repo: string): { ignore: string } | { fork: boolean } {
   if (run.event !== 'pull_request') return { ignore: `a ${run.event} run, not a PR's` };
   if (run.conclusion !== 'success' && run.conclusion !== 'failure') {
     return { ignore: `the run ended ${run.conclusion}` };
@@ -390,14 +371,19 @@ export function screenRun(run, repo) {
   return { fork: run.head_repository?.full_name !== repo };
 }
 
-/**
- * @typedef {object} Verdict What check decided.
- * @property {boolean} go attach (or only prune) with the token
- * @property {boolean} record the PR changes a scenario, so GIFs are made and attached
- * @property {string[]} names those scenarios' names
- * @property {{ state: 'pending' | 'success'; description: string } | null} status the commit status to set now
- * @property {string} why for the log
- */
+/** What check decided. */
+export type Verdict = {
+  /** attach (or only prune) with the token */
+  go: boolean;
+  /** the PR changes a scenario, so GIFs are made and attached */
+  record: boolean;
+  /** those scenarios' names */
+  names: string[];
+  /** the commit status to set now */
+  status: { state: 'pending' | 'success'; description: string } | null;
+  /** for the log */
+  why: string;
+};
 
 /**
  * What to do about a pull_request run that screenRun let through, once its
@@ -410,12 +396,27 @@ export function screenRun(run, repo) {
  * whatever main's or the PR's settings say; for sift, whether the PR
  * changes a scenario, as nothing recorded them for this yet.
  *
- * @param {{ run: WorkflowRun; pull: Pull; repo: string; fork: boolean; changed: readonly string[]; source: 'web' | 'ci-videos'; recorded?: boolean }} facts
+ * @param facts
  *   changed: the scenario files the PR changes (changedScenarios), which
  *   name them; recorded: for a web app, whether the run's record job ran
- * @returns {Verdict}
  */
-export function checkRun({ run, pull, repo, fork, changed, source, recorded }) {
+export function checkRun({
+  run,
+  pull,
+  repo,
+  fork,
+  changed,
+  source,
+  recorded,
+}: {
+  run: WorkflowRun;
+  pull: Pull;
+  repo: string;
+  fork: boolean;
+  changed: readonly string[];
+  source: 'web' | 'ci-videos';
+  recorded?: boolean;
+}): Verdict {
   const names = [...new Set(changed.map(fileScenarioName))].sort();
   const any = source === 'web' ? recorded === true : names.length > 0;
   const none = { go: false, record: false, names, status: null };
@@ -471,11 +472,20 @@ export function checkRun({ run, pull, repo, fork, changed, source, recorded }) {
  * each recorded scenario's block put in, saying the commit and a "before"
  * main couldn't play; each failed one's automatic block marked "Not updated";
  * and, when `keep` is known, each automatic block not in it dropped.
- *
- * @param {{ scenarios: readonly Published[]; failed: readonly string[]; keep: string[] | null; head: string; runUrl: string }} what
- * @returns {(body: string) => string}
  */
-export function automaticChange({ scenarios, failed, keep, head, runUrl }) {
+export function automaticChange({
+  scenarios,
+  failed,
+  keep,
+  head,
+  runUrl,
+}: {
+  scenarios: readonly Published[];
+  failed: readonly string[];
+  keep: string[] | null;
+  head: string;
+  runUrl: string;
+}): (body: string) => string {
   return (body) => {
     let next = body;
     for (const s of scenarios) {
@@ -496,10 +506,8 @@ export function automaticChange({ scenarios, failed, keep, head, runUrl }) {
 
 /**
  * Whether the file starts as a GIF does.
- *
- * @param {string} file
  */
-function isGif(file) {
+function isGif(file: string) {
   const head = Buffer.alloc(6);
   const fd = openSync(file, 'r');
   try {
@@ -514,15 +522,10 @@ function isGif(file) {
  * The GIFs in `cwd`/`dir`, one entry a scenario's folder, each GIF as a
  * path relative to `cwd`; folders sorted, any with no GIF of the scenario's
  * names passed over.
- *
- * @param {string} cwd
- * @param {string} [dir]
- * @returns {Published[]}
  */
-export function collectGifs(cwd, dir = OUT) {
+export function collectGifs(cwd: string, dir: string = OUT): Published[] {
   const from = path.join(cwd, dir);
-  /** @type {Published[]} */
-  const found = [];
+  const found: Published[] = [];
   for (const name of readdirSync(from).sort()) {
     if (!statSync(path.join(from, name)).isDirectory()) continue;
     // The name goes into the description's markers (where `--` would end
@@ -531,8 +534,7 @@ export function collectGifs(cwd, dir = OUT) {
       throw new Error(`pr-gif: "${name}" isn't a scenario name that can go in a description`);
     }
     const names = gifNames(name);
-    /** @param {string} file */
-    const at = (file) => {
+    const at = (file: string) => {
       const local = path.join(from, name, file);
       try {
         if (!statSync(local).isFile()) return null;
@@ -562,11 +564,8 @@ export function collectGifs(cwd, dir = OUT) {
 /**
  * The attachment links in the scenarios' blocks of the description, the
  * blocks withBlock wrote; throws unless there is one for each GIF attached.
- *
- * @param {string} body
- * @param {readonly Published[]} scenarios
  */
-export function attachmentLinks(body, scenarios) {
+export function attachmentLinks(body: string, scenarios: readonly Published[]) {
   const links = scenarios.flatMap(({ name }) => {
     const found = findBlock(body, name);
     return found ? attachmentLinksIn(body.slice(found.from, found.to)) : [];
@@ -583,22 +582,24 @@ export function attachmentLinks(body, scenarios) {
 /**
  * Waits until every link answers 200, signed out, for up to `limitMs` in
  * all; throws naming the ones that never did (lib/attach.mjs).
- *
- * @param {readonly string[]} links
- * @param {{ fetch?: typeof globalThis.fetch; wait?: (ms: number) => Promise<unknown>; now?: () => number; limitMs?: number; everyMs?: number }} [options]
  */
-export function waitForLinks(links, options = {}) {
+export function waitForLinks(
+  links: readonly string[],
+  options: {
+    fetch?: typeof globalThis.fetch;
+    wait?: (ms: number) => Promise<unknown>;
+    now?: () => number;
+    limitMs?: number;
+    everyMs?: number;
+  } = {},
+) {
   return waitFor(links, { prefix: 'pr-gif', label: 'attached GIF(s)', ...options });
 }
 
 /**
  * Runs a command, returning what it printed; a failure throws.
- *
- * @param {string} command
- * @param {readonly string[]} args
- * @param {string} [cwd]
  */
-function output(command, args, cwd) {
+function output(command: string, args: readonly string[], cwd?: string) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (result.status !== 0) {
     throw new Error(
@@ -610,11 +611,11 @@ function output(command, args, cwd) {
 
 /**
  * Writes step outputs, each value on one line.
- *
- * @param {Record<string, string | undefined>} env
- * @param {Record<string, string | number | boolean>} values
  */
-function setOutputs(env, values) {
+function setOutputs(
+  env: Record<string, string | undefined>,
+  values: Record<string, string | number | boolean>,
+) {
   if (!env.GITHUB_OUTPUT) return;
   const lines = Object.entries(values).map(([key, value]) => {
     const text = String(value);
@@ -627,11 +628,9 @@ function setOutputs(env, values) {
 
 /**
  * The scenario folders in `dir` that hold a GIF, whatever their names.
- *
- * @param {string} dir
  */
-function folders(dir) {
-  if (!existsSync(dir)) return new Set();
+function folders(dir: string): Set<string> {
+  if (!existsSync(dir)) return new Set<string>();
   return new Set(
     readdirSync(dir).filter((name) => {
       try {
@@ -643,17 +642,20 @@ function folders(dir) {
   );
 }
 
-/**
- * @typedef {object} Context What main is handed, for tests.
- * @property {Record<string, string | undefined>} [env]
- * @property {string} [cwd]
- * @property {(args: string[]) => number} [run] runs cli.mjs with these arguments, returning its exit code
- * @property {(args: string[]) => string} [api] runs `gh api` with these arguments, returning what it printed
- * @property {(args: string[]) => string} [git] runs git in the app's checkout, returning what it printed
- * @property {(line: string) => void} [log]
- * @property {typeof globalThis.fetch} [fetch]
- * @property {(ms: number) => Promise<unknown>} [wait]
- */
+/** What main is handed, for tests. */
+export type Context = {
+  env?: Record<string, string | undefined>;
+  cwd?: string;
+  /** runs cli.mjs with these arguments, returning its exit code */
+  run?: (args: string[]) => number;
+  /** runs `gh api` with these arguments, returning what it printed */
+  api?: (args: string[]) => string;
+  /** runs git in the app's checkout, returning what it printed */
+  git?: (args: string[]) => string;
+  log?: (line: string) => void;
+  fetch?: typeof globalThis.fetch;
+  wait?: (ms: number) => Promise<unknown>;
+};
 
 /**
  * The changed step: on pull_request, the scenario files the PR's whole diff
@@ -663,12 +665,16 @@ function folders(dir) {
  * record. An app whose CI records videos is never recorded here on
  * pull_request: pr-gif-attach.yml takes its CI run.
  *
- * @param {Record<string, string | undefined>} env EVENT_NAME, PR, SCENARIOS,
+ * @param env EVENT_NAME, PR, SCENARIOS,
  *   SIDE_BY_SIDE, AFTER_ONLY; on pull_request BASE_SHA and HEAD_SHA
- * @param {(args: string[]) => string} git
- * @param {(line: string) => void} log
+ * @param git
+ * @param log
  */
-function changedStep(env, git, log) {
+function changedStep(
+  env: Record<string, string | undefined>,
+  git: (args: string[]) => string,
+  log: (line: string) => void,
+) {
   if (env.EVENT_NAME !== 'pull_request') {
     const inputs = parseInputs(env);
     setOutputs(env, {
@@ -688,7 +694,7 @@ function changedStep(env, git, log) {
     throw new Error("pr-gif: BASE_SHA and HEAD_SHA are the PR event's commit SHAs");
   }
   const settings = loadSettings(appRoot());
-  let files = /** @type {string[]} */ ([]);
+  let files = [] as string[];
   if (settings.source === 'web' && settings.scenarios) {
     const from = git(['merge-base', base, head]).trim();
     files = changedScenarios(
@@ -723,20 +729,19 @@ function changedStep(env, git, log) {
  * `run-url` (the run a failed recording is linked to) and `report`, and
  * sets the PR GIFs status a fork's PR or a recording gets now. It never
  * reads the PR's code: only main's checkout, for the settings.
- *
- * @param {Record<string, string | undefined>} env
- * @param {(args: string[]) => string} api
- * @param {(line: string) => void} log
  */
-function checkStep(env, api, log) {
+function checkStep(
+  env: Record<string, string | undefined>,
+  api: (args: string[]) => string,
+  log: (line: string) => void,
+) {
   const repo = env.GITHUB_REPOSITORY ?? '';
-  const event = /** @type {{ workflow_run?: WorkflowRun }} */ (
-    JSON.parse(readFileSync(env.GITHUB_EVENT_PATH ?? '', 'utf8'))
-  );
+  const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH ?? '', 'utf8')) as {
+    workflow_run?: WorkflowRun;
+  };
   const run = event.workflow_run;
   if (!run) throw new Error('pr-gif: check runs on a workflow_run event');
-  /** @param {string} why */
-  const stop = (why) => {
+  const stop = (why: string) => {
     log(`pr-gif: nothing to do: ${why}`);
     setOutputs(env, { go: false, record: false, report: false, pr: '', head: run.head_sha });
     return 0;
@@ -744,14 +749,14 @@ function checkStep(env, api, log) {
   const screened = screenRun(run, repo);
   if ('ignore' in screened) return stop(screened.ignore);
   const { fork } = screened;
-  /** @type {Pull | undefined} */
-  let pull;
+  let pull: Pull | undefined;
   if (fork) {
     // GitHub leaves a fork's run without its PR: find it by its branch.
     const owner = run.head_repository?.owner?.login ?? '';
     const label = encodeURIComponent(`${owner}:${run.head_branch ?? ''}`);
-    /** @type {Pull[]} */
-    const open = JSON.parse(api([`repos/${repo}/pulls?state=open&head=${label}&per_page=100`]));
+    const open: Pull[] = JSON.parse(
+      api([`repos/${repo}/pulls?state=open&head=${label}&per_page=100`]),
+    );
     pull = open.find((p) => p.head.sha === run.head_sha);
   } else {
     const number = run.pull_requests?.[0]?.number;
@@ -773,8 +778,10 @@ function checkStep(env, api, log) {
   // A web app's run says whether it recorded: its record job ran.
   const recorded =
     settings.source === 'web' &&
-    /** @type {{ jobs: { name: string; conclusion: string | null }[] }} */ (
-      JSON.parse(api([`repos/${repo}/actions/runs/${run.id}/jobs?per_page=100`]))
+    (
+      JSON.parse(api([`repos/${repo}/actions/runs/${run.id}/jobs?per_page=100`])) as {
+        jobs: { name: string; conclusion: string | null }[];
+      }
     ).jobs.some((job) => RECORD_JOB.test(job.name) && job.conclusion !== 'skipped');
   const verdict = checkRun({ run, pull, repo, fork, changed, source: settings.source, recorded });
   log(`pr-gif: ${verdict.why}`);
@@ -813,12 +820,12 @@ function checkStep(env, api, log) {
  * The record step: records each scenario (recordRuns), then writes the
  * manifest. A web scenario's name is its folder's, the one cli.ts made
  * (a scenario may name itself), or else its file's.
- *
- * @param {Record<string, string | undefined>} env
- * @param {Context} context
- * @param {(line: string) => void} log
  */
-function recordStep(env, context, log) {
+function recordStep(
+  env: Record<string, string | undefined>,
+  context: Context,
+  log: (line: string) => void,
+) {
   const root = appRoot();
   const { source } = loadSettings(root);
   const inputs = parseInputs(env);
@@ -826,18 +833,15 @@ function recordStep(env, context, log) {
   const cli = fileURLToPath(new URL('./cli.mjs', import.meta.url));
   const run =
     context.run ??
-    ((/** @type {string[]} */ args) =>
+    ((args: string[]) =>
       spawnSync(process.execPath, [cli, ...args], {
         stdio: 'inherit',
         env: { ...env, APP_ROOT: root },
       }).status ?? 1);
   const out = path.join(root, OUT);
-  /** @type {string[]} */
-  const recorded = [];
-  /** @type {string[]} */
-  const failed = [];
-  /** @type {string[]} */
-  const failedRuns = [];
+  const recorded: string[] = [];
+  const failed: string[] = [];
+  const failedRuns: string[] = [];
   for (const args of runs) {
     const before = folders(out);
     const ok = run(args) === 0;
@@ -896,13 +900,13 @@ function recordStep(env, context, log) {
  * blocks the PR no longer changes, and stops before any edit once the PR's
  * head has moved on. It fails when a scenario failed, so the PR GIFs status
  * says so.
- *
- * @param {Record<string, string | undefined>} env
- * @param {Context} context
- * @param {string} cwd
- * @param {(line: string) => void} log
  */
-async function attachStep(env, context, cwd, log) {
+async function attachStep(
+  env: Record<string, string | undefined>,
+  context: Context,
+  cwd: string,
+  log: (line: string) => void,
+) {
   const {
     pr,
     automatic,
@@ -925,12 +929,9 @@ async function attachStep(env, context, cwd, log) {
   if (manifest && String(manifest.pr) !== pr) {
     throw new Error(`pr-gif: the artifact is #${manifest.pr}'s, not #${pr}'s`);
   }
-  /** @type {Published[]} */
-  let scenarios;
-  /** @type {string[]} */
-  let failed = [];
-  /** @type {(body: string) => string} */
-  let change;
+  let scenarios: Published[];
+  let failed: string[] = [];
+  let change: (body: string) => string;
   if (!automatic) {
     scenarios = collectGifs(cwd);
     if (scenarios.length === 0) throw new Error(`pr-gif: no GIFs in ${OUT}/ to attach`);
@@ -962,8 +963,7 @@ async function attachStep(env, context, cwd, log) {
     change = automaticChange({ scenarios, failed, keep, head, runUrl: env.RUN_URL ?? '' });
     if (record && !manifest) log(`pr-gif: the recording left no ${MANIFEST}: nothing to attach`);
   }
-  /** @type {string} */
-  let body;
+  let body: string;
   try {
     body = attachToPr({ repo, pr, cwd, scenarios, log, headSha: head, change });
   } catch (error) {
@@ -1001,11 +1001,8 @@ async function attachStep(env, context, cwd, log) {
 
 /**
  * Runs one step; returns its exit code.
- *
- * @param {readonly string[]} argv
- * @param {Context} [context]
  */
-export async function main(argv, context = {}) {
+export async function main(argv: readonly string[], context: Context = {}) {
   const { env = process.env, cwd = process.cwd(), log = console.log } = context;
   const [step] = argv;
   if (step === 'source') {
@@ -1030,7 +1027,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     (code) => {
       process.exitCode = code;
     },
-    (/** @type {unknown} */ error) => {
+    (error: unknown) => {
       console.error(error instanceof Error ? error.message : error);
       if (error instanceof Error && error.cause instanceof Error)
         console.error(error.cause.message);

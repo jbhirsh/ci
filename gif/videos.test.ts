@@ -4,37 +4,29 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 
 // gh, git, unzip, ffprobe, ffmpeg and curl are stand-ins answering from
 // `world`; what's checked is what videos.ts asks of them, and makes.
 const world = vi.hoisted(() => ({
-  /** @type {string[][]} */
-  asked: [],
-  /** @type {Record<string, unknown>} */
-  api: {},
-  /** @type {string | null} */
-  dispatchError: null,
-  /** @type {Record<string, string[]>} sides' video names, by artifact id */
-  videos: {},
-  /** @type {Buffer[]} the decoded frames each video streams */
-  frames: [],
+  asked: [] as string[][],
+  api: {} as Record<string, unknown>,
+  dispatchError: null as string | null,
+  videos: {} as Record<string, string[]>,
+  frames: [] as Buffer[],
   decodeCode: 0,
   drawtext: true,
   curl: '200',
-  /** @type {Set<string>} ffmpeg outputs that fail */
-  failing: new Set(),
-  /** @type {Record<string, number>} endpoints that answer 404 this many more times */
-  notFound: {},
+  failing: new Set() as Set<string>,
+  notFound: {} as Record<string, number>,
 }));
 
-/**
- * @param {string} cmd
- * @param {string[]} args
- * @returns {{ status: number; stdout: string | Buffer; stderr: string }}
- */
-function answer(cmd, args) {
+function answer(
+  cmd: string,
+  args: string[],
+): { status: number; stdout: string | Buffer; stderr: string } {
   world.asked.push([cmd, ...args]);
-  const ok = (/** @type {string | Buffer} */ stdout, stderr = '') => ({
+  const ok = (stdout: string | Buffer, stderr = '') => ({
     status: 0,
     stdout,
     stderr,
@@ -105,8 +97,8 @@ function answer(cmd, args) {
 }
 
 vi.mock('node:child_process', () => ({
-  spawnSync: vi.fn((/** @type {string} */ cmd, /** @type {string[]} */ args) => answer(cmd, args)),
-  spawn: vi.fn((/** @type {string} */ cmd, /** @type {string[]} */ args) => {
+  spawnSync: vi.fn((cmd: string, args: string[]) => answer(cmd, args)),
+  spawn: vi.fn((cmd: string, args: string[]) => {
     world.asked.push([cmd, ...args]);
     const child = Object.assign(new EventEmitter(), { stdout: Readable.from(world.frames) });
     child.stdout.on('end', () => setImmediate(() => child.emit('close', world.decodeCode)));
@@ -115,7 +107,7 @@ vi.mock('node:child_process', () => ({
 }));
 vi.mock('./publish.ts', async (actual) => ({
   ...(await actual()),
-  publishFiles: vi.fn((/** @type {unknown} */ _git, /** @type {[string, string][]} */ files) => {
+  publishFiles: vi.fn((_git: unknown, files: [string, string][]) => {
     world.asked.push(['publish', ...files.map(([file]) => file)]);
     return 'cafe';
   }),
@@ -131,10 +123,8 @@ const settings = parseSettings({ source: 'ci-videos', cellWidth: 260 });
 const blank = () => Buffer.alloc(20 * 20 * 3, 255);
 const ringed = () => Buffer.from(Array.from({ length: 20 * 20 }, () => [0xe1, 0x1d, 0x48]).flat());
 
-/** @type {import('vitest').MockInstance} */
-let stdout;
-/** @type {import('vitest').MockInstance} */
-let stderr;
+let stdout: MockInstance;
+let stderr: MockInstance;
 beforeEach(() => {
   Object.assign(timing, { pollMs: 1, waitLimitMs: 1000, startLimitMs: 1000 });
   world.asked = [];
@@ -176,8 +166,7 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 const logged = () => stderr.mock.calls.map(([line]) => String(line)).join('');
-/** @param {string} cmd */
-const asked = (cmd) => world.asked.filter(([c]) => c === cmd);
+const asked = (cmd: string) => world.asked.filter(([c]) => c === cmd);
 
 describe('parseVideoArgs', () => {
   const defaults = { width: 360, fps: 15 };
@@ -422,8 +411,7 @@ describe('main', () => {
 
 describe('waitForRun, on a run GitHub doesn’t serve yet', () => {
   const runs = 'repos/jbhirsh/sift/actions/runs/12';
-  const reads = (/** @type {string} */ endpoint) =>
-    world.asked.filter((a) => a.includes(endpoint)).length;
+  const reads = (endpoint: string) => world.asked.filter((a) => a.includes(endpoint)).length;
 
   it('asks again while a run it just started answers 404', async () => {
     world.notFound[runs] = 2;

@@ -43,7 +43,7 @@ describe('parseInputs, for any inputs', () => {
           }
           expect(inputs.sideBySide && inputs.afterOnly).toBe(false);
           // Each run's first argument is the scenario (or the PR): no option.
-          for (const source of /** @type {const} */ (['web', 'ci-videos'])) {
+          for (const source of ['web', 'ci-videos'] as const) {
             try {
               for (const args of recordRuns(source, inputs)) expect(args[0]).not.toMatch(/^-/);
             } catch (error) {
@@ -81,7 +81,7 @@ describe('changedScenarios, for any files a PR changes', () => {
       fc.property(
         changes,
         fc.constantFrom('scripts/gif-scenarios', 'e2e/gifs/', undefined),
-        fc.constantFrom(/** @type {const} */ ('web'), /** @type {const} */ ('ci-videos')),
+        fc.constantFrom('web' as const, 'ci-videos' as const),
         (list, folder, source) => {
           const found = changedScenarios(list, folder, source);
           expect([...found].sort()).toEqual(found);

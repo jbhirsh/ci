@@ -2,21 +2,18 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
 
 // ffmpeg itself isn't run here: what's asked of it is checked instead.
 const exec = vi.hoisted(
-  () =>
-    /** @type {import('vitest').Mock<(cmd: string, args: string[], options?: object) => string>} */ (
-      vi.fn(() => '')
-    ),
+  () => vi.fn(() => '') as Mock<(cmd: string, args: string[], options?: object) => string>,
 );
 vi.mock('node:child_process', () => ({ execFileSync: exec }));
 
 const { PALETTE, checkFfmpeg, ffmpegArgs, framesToGif, sideBySide, sideBySideFilter } =
   await import('./ffmpeg.ts');
 
-/** @param {string} crop */
-function recording(crop) {
+function recording(crop: string) {
   const dir = mkdtempSync(path.join(tmpdir(), 'gif-ffmpeg-'));
   writeFileSync(path.join(dir, 'crop.txt'), crop);
   writeFileSync(path.join(dir, 'frames.ffconcat'), 'ffconcat version 1.0\n');

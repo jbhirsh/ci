@@ -43,44 +43,46 @@
 import path from 'node:path';
 import { appConfig } from '../lib/app.mjs';
 
-/**
- * @typedef {object} BuildSettings
- * @property {string | undefined} mode
- * @property {Record<string, string>} env
- * @property {string[]} unsetEnv
- */
+export type BuildSettings = {
+  mode: string | undefined;
+  env: Record<string, string>;
+  unsetEnv: string[];
+};
 
-/**
- * @typedef {object} VideoSettings
- * @property {string} workflow the workflow file that records the videos
- * @property {string} artifact the artifact holding them, one .mp4 per scenario
- * @property {Record<string, string>} inputs the inputs that make a run by hand on main record only the scenarios
- * @property {string} scenariosInput the input naming the commit whose scenarios that run records
- * @property {string} ringColor the drawn touch ring's colour, #rrggbb
- * @property {number} width each GIF's width
- * @property {number} fps
- */
+export type VideoSettings = {
+  /** the workflow file that records the videos */
+  workflow: string;
+  /** the artifact holding them, one .mp4 per scenario */
+  artifact: string;
+  /** the inputs that make a run by hand on main record only the scenarios */
+  inputs: Record<string, string>;
+  /** the input naming the commit whose scenarios that run records */
+  scenariosInput: string;
+  /** the drawn touch ring's colour, #rrggbb */
+  ringColor: string;
+  /** each GIF's width */
+  width: number;
+  fps: number;
+};
 
-/**
- * @typedef {object} GifSettings
- * @property {'web' | 'ci-videos'} source
- * @property {string | undefined} setup
- * @property {string | undefined} scenarios
- * @property {{ width: number; height: number }} viewport
- * @property {number} scale
- * @property {string} host
- * @property {BuildSettings} build
- * @property {number} fps
- * @property {string} branch
- * @property {number} cellWidth
- * @property {VideoSettings} videos
- */
+export type GifSettings = {
+  source: 'web' | 'ci-videos';
+  setup: string | undefined;
+  scenarios: string | undefined;
+  viewport: { width: number; height: number };
+  scale: number;
+  host: string;
+  build: BuildSettings;
+  fps: number;
+  branch: string;
+  cellWidth: number;
+  videos: VideoSettings;
+};
 
 /** A phone's window: the site is designed phone first. */
 export const PHONE = { width: 402, height: 874 };
 
-/** @type {VideoSettings} */
-export const VIDEO_DEFAULTS = {
+export const VIDEO_DEFAULTS: VideoSettings = {
   workflow: 'ci.yml',
   artifact: 'ios-gif-videos',
   inputs: { gifs_only: 'true' },
@@ -104,30 +106,17 @@ const KEYS = [
   'videos',
 ];
 
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
- */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/**
- * @param {string} name
- * @param {unknown} value
- * @param {number} fallback
- */
-function positive(name, value, fallback) {
+function positive(name: string, value: unknown, fallback: number) {
   if (value === undefined) return fallback;
   if (typeof value !== 'number' || !(value > 0))
     throw new Error(`gif.${name} must be a number above 0`);
   return value;
 }
 
-/**
- * @param {string} name
- * @param {unknown} value
- * @param {RegExp} [shape]
- */
-function text(name, value, shape = /^\S+$/) {
+function text(name: string, value: unknown, shape: RegExp = /^\S+$/) {
   if (value === undefined) return undefined;
   if (typeof value !== 'string' || !shape.test(value)) {
     throw new Error(`gif.${name} must be a string matching ${shape}`);
@@ -135,26 +124,18 @@ function text(name, value, shape = /^\S+$/) {
   return value;
 }
 
-/**
- * @param {string} name
- * @param {unknown} value
- * @returns {Record<string, string>}
- */
-function strings(name, value) {
+function strings(name: string, value: unknown): Record<string, string> {
   if (value === undefined) return {};
   if (!isObject(value) || Object.values(value).some((v) => typeof v !== 'string')) {
     throw new Error(`gif.${name} must map names to strings`);
   }
-  return /** @type {Record<string, string>} */ (value);
+  return value as Record<string, string>;
 }
 
 /**
  * A path inside the app, from its root: never absolute, never up out of it.
- *
- * @param {string} name
- * @param {unknown} value
  */
-function inside(name, value) {
+function inside(name: string, value: unknown) {
   const given = text(name, value);
   if (given === undefined) return undefined;
   if (path.isAbsolute(given) || path.normalize(given).split(/[\\/]/)[0] === '..') {
@@ -167,11 +148,8 @@ function inside(name, value) {
  * The settings from a `gif` key's value, with every default filled in.
  * Throws, naming the setting, on one it can't use, and on a key it doesn't
  * know (a typo would otherwise be a default silently).
- *
- * @param {Record<string, unknown>} raw
- * @returns {GifSettings}
  */
-export function parseSettings(raw) {
+export function parseSettings(raw: Record<string, unknown>): GifSettings {
   const unknown = Object.keys(raw).filter((key) => !KEYS.includes(key));
   if (unknown.length > 0) throw new Error(`gif: unknown setting ${unknown.join(', ')}`);
   const source = raw.source ?? 'web';
@@ -205,7 +183,7 @@ export function parseSettings(raw) {
     build: {
       mode: text('build.mode', build.mode, /^[\w.-]+$/),
       env: strings('build.env', build.env),
-      unsetEnv: /** @type {string[]} */ (unsetEnv),
+      unsetEnv: unsetEnv as string[],
     },
     fps: positive('fps', raw.fps, 15),
     branch: text('branch', raw.branch, /^[\w./-]+$/) ?? 'screenshots',
@@ -231,9 +209,7 @@ export function parseSettings(raw) {
 
 /**
  * The settings of the app at `root`.
- *
- * @param {string} root
  */
-export function loadSettings(root) {
+export function loadSettings(root: string) {
   return parseSettings(appConfig('gif', root));
 }

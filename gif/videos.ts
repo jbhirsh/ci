@@ -76,11 +76,9 @@ import {
   touchSpans,
   videoSideBySideFilter,
 } from './video.ts';
-
-/** @typedef {import('./settings.ts').GifSettings} GifSettings */
-/** @typedef {import('./video.ts').Window} Window */
-/** @typedef {import('./video.ts').GifOptions} GifOptions */
-/** @typedef {import('./publish.ts').Published} Published */
+import type { GifSettings, VideoSettings } from './settings.ts';
+import type { Published } from './publish.ts';
+import type { GifOptions, Window } from './video.ts';
 
 /** How often and how long it waits on a run; tests shorten them. */
 export const timing = {
@@ -96,34 +94,36 @@ const FONT =
     '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
   ].find((file) => existsSync(file)) ?? null;
 
-/** @param {string} line */
-const log = (line) => process.stderr.write(`${line}\n`);
+const log = (line: string) => process.stderr.write(`${line}\n`);
 
-/**
- * @typedef {object} VideoOptions What videos.ts was asked to do.
- * @property {number} pr
- * @property {string | undefined} repo
- * @property {boolean} sideBySide
- * @property {number} width
- * @property {number} fps
- * @property {boolean} noBefore skip the "before" run: a new screen has nothing on main to compare
- * @property {string} [out] leave the GIFs in this folder, one subfolder a scenario, rather than publish them
- * @property {number} [afterRun] the run whose videos are "after", rather than the head's newest
- * @property {string} [head] the commit whose scenarios are played, rather than the PR's head
- * @property {string[]} [only] just these scenarios, rather than every one the run recorded
- */
+/** What videos.ts was asked to do. */
+export type VideoOptions = {
+  pr: number;
+  repo: string | undefined;
+  sideBySide: boolean;
+  width: number;
+  fps: number;
+  /** skip the "before" run: a new screen has nothing on main to compare */
+  noBefore: boolean;
+  /** leave the GIFs in this folder, one subfolder a scenario, rather than publish them */
+  out?: string;
+  /** the run whose videos are "after", rather than the head's newest */
+  afterRun?: number;
+  /** the commit whose scenarios are played, rather than the PR's head */
+  head?: string;
+  /** just these scenarios, rather than every one the run recorded */
+  only?: string[];
+};
 
 /**
  * Reads the command line, with the width and frame rate from the settings
  * unless given.
- *
- * @param {readonly string[]} argv
- * @param {{ width: number; fps: number }} defaults
- * @returns {VideoOptions}
  */
-export function parseVideoArgs(argv, defaults) {
-  /** @type {VideoOptions} */
-  const options = {
+export function parseVideoArgs(
+  argv: readonly string[],
+  defaults: { width: number; fps: number },
+): VideoOptions {
+  const options: VideoOptions = {
     pr: NaN,
     repo: undefined,
     sideBySide: false,
@@ -131,11 +131,7 @@ export function parseVideoArgs(argv, defaults) {
     fps: defaults.fps,
     noBefore: false,
   };
-  /**
-   * @param {string} flag
-   * @param {string | undefined} value
-   */
-  const number = (flag, value) => {
+  const number = (flag: string, value: string | undefined) => {
     const n = Number(value);
     if (!value || !Number.isInteger(n) || n <= 0)
       throw new Error(`${flag} needs a whole number above 0`);
@@ -176,12 +172,12 @@ export function parseVideoArgs(argv, defaults) {
 
 /**
  * Runs a command in the app's checkout; a failure throws unless `allowFail`.
- *
- * @param {string} cmd
- * @param {readonly string[]} args
- * @param {{ allowFail?: boolean; cwd?: string }} [options]
  */
-export function run(cmd, args, { allowFail = false, cwd } = {}) {
+export function run(
+  cmd: string,
+  args: readonly string[],
+  { allowFail = false, cwd }: { allowFail?: boolean; cwd?: string } = {},
+) {
   const result = spawnSync(cmd, args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   const out = { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
   if (out.status !== 0 && !allowFail) {
@@ -194,19 +190,16 @@ export function run(cmd, args, { allowFail = false, cwd } = {}) {
 
 /**
  * gh api's answer, parsed, as the shape the caller reads.
- *
- * @template T
- * @param {readonly string[]} args
- * @returns {T}
  */
-const ghJson = (args) => /** @type {T} */ (JSON.parse(run('gh', ['api', ...args]).stdout));
+const ghJson = <T>(args: readonly string[]): T =>
+  JSON.parse(run('gh', ['api', ...args]).stdout) as T;
 
-/**
- * @typedef {object} Run A workflow run, as much of it as this reads.
- * @property {number} id
- * @property {string} [status]
- * @property {string | null} [conclusion]
- */
+/** A workflow run, as much of it as this reads. */
+export type Run = {
+  id: number;
+  status?: string;
+  conclusion?: string | null;
+};
 
 /**
  * Waits for a run to finish. A cancelled one is an error; a red one (a
@@ -219,13 +212,12 @@ const ghJson = (args) => /** @type {T} */ (JSON.parse(run('gh', ['api', ...args]
  * the start limit counted from this call. Once it has been read, past the
  * start limit, without `justStarted`, or on any other error, it fails as
  * before.
- *
- * @param {string} repo
- * @param {number} runId
- * @param {{ justStarted?: boolean }} [options]
- * @returns {Promise<Run>}
  */
-export async function waitForRun(repo, runId, { justStarted = false } = {}) {
+export async function waitForRun(
+  repo: string,
+  runId: number,
+  { justStarted = false }: { justStarted?: boolean } = {},
+): Promise<Run> {
   const startedAt = Date.now();
   let seen = false;
   for (;;) {
@@ -246,8 +238,7 @@ export async function waitForRun(repo, runId, { justStarted = false } = {}) {
       continue;
     }
     seen = true;
-    /** @type {Run} */
-    const r = JSON.parse(reply.stdout);
+    const r: Run = JSON.parse(reply.stdout);
     if (r.status === 'completed') {
       if (r.conclusion === 'cancelled') {
         throw new Error(`Run ${runId} was cancelled before it finished: run this again`);
@@ -266,14 +257,11 @@ export async function waitForRun(repo, runId, { justStarted = false } = {}) {
 
 /**
  * The run's artifact of that name, if it has one.
- *
- * @param {string} repo
- * @param {number} runId
- * @param {string} name
  */
-function artifactOf(repo, runId, name) {
-  /** @type {{ artifacts: { id: number; name: string }[] }} */
-  const { artifacts } = ghJson([`repos/${repo}/actions/runs/${runId}/artifacts`]);
+function artifactOf(repo: string, runId: number, name: string) {
+  const { artifacts }: { artifacts: { id: number; name: string }[] } = ghJson([
+    `repos/${repo}/actions/runs/${runId}/artifacts`,
+  ]);
   return artifacts.find((a) => a.name === name);
 }
 
@@ -281,14 +269,13 @@ function artifactOf(repo, runId, name) {
  * Downloads a run's videos into `into`: { scenario: file }. A scenario that
  * stopped before its last step (set aside in failed/) is warned of and left
  * out.
- *
- * @param {string} repo
- * @param {number} runId
- * @param {string} artifactName
- * @param {string} into
- * @returns {Record<string, string>}
  */
-export function downloadVideos(repo, runId, artifactName, into) {
+export function downloadVideos(
+  repo: string,
+  runId: number,
+  artifactName: string,
+  into: string,
+): Record<string, string> {
   const artifact = artifactOf(repo, runId, artifactName);
   if (!artifact) throw new Error(`Run ${runId} has no ${artifactName} artifact`);
   const zip = path.join(into, 'videos.zip');
@@ -315,16 +302,10 @@ export function downloadVideos(repo, runId, artifactName, into) {
 /**
  * The PR head's run: the newest pull_request run of the workflow on that
  * commit, once one has started.
- *
- * @param {string} repo
- * @param {string} workflow
- * @param {string} sha
- * @returns {Promise<Run>}
  */
-export async function afterRun(repo, workflow, sha) {
+export async function afterRun(repo: string, workflow: string, sha: string): Promise<Run> {
   for (const startedAt = Date.now(); ;) {
-    /** @type {{ workflow_runs: Run[] }} */
-    const { workflow_runs: runs } = ghJson([
+    const { workflow_runs: runs }: { workflow_runs: Run[] } = ghJson([
       `repos/${repo}/actions/workflows/${workflow}/runs?head_sha=${sha}&event=pull_request&per_page=5`,
     ]);
     if (runs.length > 0) return runs[0];
@@ -335,16 +316,11 @@ export async function afterRun(repo, workflow, sha) {
   }
 }
 
-/**
- * @param {string} repo
- * @param {string} workflow
- * @returns {Run[]}
- */
-const dispatchRuns = (repo, workflow) =>
-  /** @type {{ workflow_runs: Run[] }} */ (
+const dispatchRuns = (repo: string, workflow: string): Run[] =>
+  (
     ghJson([
       `repos/${repo}/actions/workflows/${workflow}/runs?event=workflow_dispatch&branch=main&per_page=30`,
-    ])
+    ]) as { workflow_runs: Run[] }
   ).workflow_runs;
 
 /**
@@ -359,13 +335,8 @@ const dispatchRuns = (repo, workflow) =>
  * the videos artifact; one that finished without it is passed over, and
  * while none has, it waits on them all, up to one limit for the whole
  * search. A mockup run can never be "before".
- *
- * @param {string} repo
- * @param {import('./settings.ts').VideoSettings} videos
- * @param {string} sha
- * @returns {Promise<Run>}
  */
-export async function beforeRun(repo, videos, sha) {
+export async function beforeRun(repo: string, videos: VideoSettings, sha: string): Promise<Run> {
   // Runs by hand before this one, so a run found later is ours (not
   // another dispatch's, and with no trust in the local clock).
   const newestBefore = Math.max(0, ...dispatchRuns(repo, videos.workflow).map((r) => r.id));
@@ -387,12 +358,10 @@ export async function beforeRun(repo, videos, sha) {
     reply = run('gh', ['api', ...dispatch]);
   else if (reply.status !== 0)
     throw new Error(`Starting the run on main failed: ${reply.stderr.slice(0, 500)}`);
-  /** @type {{ workflow_run_id?: unknown }} */
-  const answer = reply.stdout.trim() ? JSON.parse(reply.stdout) : {};
+  const answer: { workflow_run_id?: unknown } = reply.stdout.trim() ? JSON.parse(reply.stdout) : {};
   const named = answer.workflow_run_id;
   if (typeof named === 'number') return { id: named };
-  /** @type {Set<number>} */
-  const passedOver = new Set();
+  const passedOver: Set<number> = new Set();
   let seen = false;
   for (const startedAt = Date.now(); ;) {
     const fresh = dispatchRuns(repo, videos.workflow)
@@ -401,8 +370,7 @@ export async function beforeRun(repo, videos, sha) {
     seen ||= fresh.length > 0;
     let unfinished = 0;
     for (const listed of fresh) {
-      /** @type {Run} */
-      const r = listed.status ? listed : ghJson([`repos/${repo}/actions/runs/${listed.id}`]);
+      const r: Run = listed.status ? listed : ghJson([`repos/${repo}/actions/runs/${listed.id}`]);
       if (r.status !== 'completed') {
         unfinished += 1;
         continue;
@@ -425,11 +393,8 @@ export async function beforeRun(repo, videos, sha) {
 
 /**
  * A video's width and height.
- *
- * @param {string} video
- * @returns {[number, number]}
  */
-function size(video) {
+function size(video: string): [number, number] {
   const [w, h] = run('ffprobe', [
     '-v',
     'error',
@@ -447,8 +412,7 @@ function size(video) {
   return [w, h];
 }
 
-/** @param {string} video */
-const duration = (video) =>
+const duration = (video: string) =>
   Number(
     run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', video])
       .stdout,
@@ -456,11 +420,8 @@ const duration = (video) =>
 
 /**
  * Each frame's ring-pixel count, streamed from ffmpeg at a third of the size.
- *
- * @param {string} video
- * @param {readonly [number, number, number]} ring
  */
-export async function ringCounts(video, ring) {
+export async function ringCounts(video: string, ring: readonly [number, number, number]) {
   const [w, h] = size(video);
   const width = 2 * Math.round(w / 6);
   const height = 2 * Math.round(h / 6);
@@ -479,8 +440,7 @@ export async function ringCounts(video, ring) {
     .stdout.split(/\s+/)
     .filter(Boolean)
     .map((t) => Number(t.replace(/,$/, '')));
-  /** @type {number[]} */
-  const counts = [];
+  const counts: number[] = [];
   const decoder = spawn('ffmpeg', [
     '-v',
     'error',
@@ -499,7 +459,7 @@ export async function ringCounts(video, ring) {
   const closed = new Promise((done) => decoder.on('close', done));
   let pending = Buffer.alloc(0);
   for await (const chunk of decoder.stdout) {
-    pending = Buffer.concat([pending, /** @type {Buffer} */ (chunk)]);
+    pending = Buffer.concat([pending, chunk as Buffer]);
     while (pending.length >= frameBytes) {
       counts.push(ringPixels(pending.subarray(0, frameBytes), ring));
       pending = pending.subarray(frameBytes);
@@ -513,11 +473,8 @@ export async function ringCounts(video, ring) {
 /**
  * The video with the waits between its touches cut (video.ts), or the
  * video itself when no touch shows in it.
- *
- * @param {string} video
- * @param {readonly [number, number, number]} ring
  */
-export async function cutWaits(video, ring) {
+export async function cutWaits(video: string, ring: readonly [number, number, number]) {
   const length = duration(video);
   const { times, counts } = await ringCounts(video, ring);
   const stretches = keptStretches(touchSpans(times, counts), length);
@@ -558,11 +515,8 @@ export async function cutWaits(video, ring) {
 
 /**
  * Where a video changes, and the window worth keeping.
- *
- * @param {string} video
- * @returns {{ times: number[]; window: Window | null }}
  */
-function analyse(video) {
+function analyse(video: string): { times: number[]; window: Window | null } {
   const probe = run(
     'ffmpeg',
     ['-hide_banner', '-i', video, '-vf', 'mpdecimate,showinfo', '-f', 'null', '-'],
@@ -574,21 +528,15 @@ function analyse(video) {
   return { times, window: activeWindow(times, duration(video)) };
 }
 
-/**
- * @typedef {object} Analysis
- * @property {number[]} times
- * @property {Window} window
- */
+export type Analysis = {
+  times: number[];
+  window: Window;
+};
 
 /**
  * One video to one GIF at `out`.
- *
- * @param {string} video
- * @param {string} out
- * @param {GifOptions} options
- * @returns {Analysis}
  */
-export function makeGif(video, out, options) {
+export function makeGif(video: string, out: string, options: GifOptions): Analysis {
   const { times, window } = analyse(video);
   if (!window) throw new Error('nothing ever changed on screen');
   const finalDelay = finalDelayCs(lastChangeIn(times, window), window.end - window.start);
@@ -618,22 +566,20 @@ export function makeGif(video, out, options) {
 
 /**
  * A pair of videos side by side in one GIF at `out`.
- *
- * @param {{ video: string; analysis: Analysis }} before
- * @param {{ video: string; analysis: Analysis }} after
- * @param {string} out
- * @param {GifOptions} options
  */
-export function makeSideBySide(before, after, out, options) {
-  /** @param {Analysis} a */
-  const length = (a) => a.window.end - a.window.start;
+export function makeSideBySide(
+  before: { video: string; analysis: Analysis },
+  after: { video: string; analysis: Analysis },
+  out: string,
+  options: GifOptions,
+) {
+  const length = (a: Analysis) => a.window.end - a.window.start;
   const longest = Math.max(length(before.analysis), length(after.analysis));
   const lastChange = Math.max(
     lastChangeIn(before.analysis.times, before.analysis.window),
     lastChangeIn(after.analysis.times, after.analysis.window),
   );
-  /** @param {string} video */
-  const aspect = (video) => {
+  const aspect = (video: string) => {
     const [w, h] = size(video);
     return h / w;
   };
@@ -664,11 +610,10 @@ export function makeSideBySide(before, after, out, options) {
   ]);
 }
 
-/**
- * @param {readonly string[]} argv
- * @param {{ root: string; settings: GifSettings }} app
- */
-export async function main(argv, { root, settings }) {
+export async function main(
+  argv: readonly string[],
+  { root, settings }: { root: string; settings: GifSettings },
+) {
   const { videos } = settings;
   const options = parseVideoArgs(argv, videos);
   const ring = parseColor(videos.ringColor);
@@ -691,8 +636,7 @@ export async function main(argv, { root, settings }) {
   }
   const { pr } = options;
   const head =
-    options.head ??
-    /** @type {{ head: { sha: string } }} */ (ghJson([`repos/${repo}/pulls/${pr}`])).head.sha;
+    options.head ?? (ghJson([`repos/${repo}/pulls/${pr}`]) as { head: { sha: string } }).head.sha;
   const work = mkdtempSync(path.join(tmpdir(), `pr-gifs-${pr}-`));
   try {
     log(`PR #${pr} at ${head.slice(0, 7)}: waiting for its ${videos.workflow} run (after)…`);
@@ -700,10 +644,8 @@ export async function main(argv, { root, settings }) {
     const { only } = options;
     /**
      * The after run's videos and the scenarios to make, once it's done.
-     *
-     * @param {Run} done
      */
-    const takeAfter = (done) => {
+    const takeAfter = (done: Run) => {
       const recorded = downloadVideos(
         repo,
         done.id,
@@ -752,19 +694,12 @@ export async function main(argv, { root, settings }) {
       }
     }
 
-    /** @type {[string, string][]} */
-    const files = [];
-    /** @type {import('./publish.ts').Published[]} */
-    const scenarios = [];
+    const files: [string, string][] = [];
+    const scenarios: Published[] = [];
     /**
      * One video that can't be made into a GIF is a warning; the rest go on.
-     *
-     * @template T
-     * @param {string} what
-     * @param {() => T} make
-     * @returns {T | null}
      */
-    const attempt = (what, make) => {
+    const attempt = <T>(what: string, make: () => T): T | null => {
       try {
         return make();
       } catch (err) {
@@ -775,8 +710,7 @@ export async function main(argv, { root, settings }) {
     const dir = String(pr);
     for (const name of names) {
       const named = gifNames(name);
-      /** @param {'before' | 'after'} side */
-      const gif = (side) => {
+      const gif = (side: 'before' | 'after') => {
         const video = (side === 'after' ? afterVideos : beforeVideos)[name];
         const out = path.join(work, named[side]);
         const analysis = attempt(`${name} (${side})`, () => makeGif(video, out, options));
@@ -819,8 +753,8 @@ export async function main(argv, { root, settings }) {
     }
     if (options.out) {
       for (const [file, local] of files) {
-        const name = /** @type {Published} */ (
-          scenarios.find((s) => [s.before, s.after, s.sideBySide].includes(file))
+        const name = (
+          scenarios.find((s) => [s.before, s.after, s.sideBySide].includes(file)) as Published
         ).name;
         mkdirSync(path.join(options.out, name), { recursive: true });
         copyFileSync(local, path.join(options.out, name, path.posix.basename(file)));

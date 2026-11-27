@@ -28,6 +28,7 @@ import {
   withBlock,
   withoutBlock,
 } from './publish.ts';
+import type { Gh, Git, Published } from './publish.ts';
 
 describe('repoFromRemote', () => {
   it.each([
@@ -161,8 +162,7 @@ function repos() {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')),
   );
-  /** @param {string[]} args */
-  const raw = (...args) => execFileSync('git', args, { encoding: 'utf8', env }).trim();
+  const raw = (...args: string[]) => execFileSync('git', args, { encoding: 'utf8', env }).trim();
   raw('init', '-q', '--bare', origin);
   raw('init', '-q', app);
   for (const [k, v] of [
@@ -254,8 +254,7 @@ describe('publishFiles', () => {
     const { app, gif } = repos();
     const real = gitIn(app);
     let refusals = 0;
-    /** @type {import('./publish.ts').Git} */
-    const racing = (args, options) => {
+    const racing: Git = (args, options) => {
       if (args[0] === 'push' && refusals < 1) {
         refusals += 1;
         // Someone else's push lands first.
@@ -282,8 +281,7 @@ describe('publishFiles', () => {
       'vercel.json',
       'x/other.gif',
     ]);
-    /** @type {import('./publish.ts').Git} */
-    const refusing = (args, options) =>
+    const refusing: Git = (args, options) =>
       args[0] === 'push' ? { status: 1, stdout: '', stderr: 'denied' } : real(args, options);
     expect(() =>
       publishFiles(refusing, [['7/b.gif', gif]], {
@@ -302,8 +300,7 @@ describe("withBlock, with an author's empty pair and a block of the tool's own",
   const S = '<!-- pr-gif:a -->';
   const E = '<!-- /pr-gif:a -->';
   const empty = `${S}\n${E}`;
-  const auto = (/** @type {string} */ text = 'old') =>
-    `${S}\nRecorded automatically at \`abc1234\`.\n${text}\n${E}`;
+  const auto = (text = 'old') => `${S}\nRecorded automatically at \`abc1234\`.\n${text}\n${E}`;
   const filled = `${S}\nNEW\n${E}`;
 
   it('moves the GIF into the pair, whichever side the block of its own is on', () => {
@@ -377,8 +374,7 @@ describe("withBlock, with an author's empty pair and a block of the tool's own",
 });
 
 describe('publishing to attachments', () => {
-  /** @type {import('./publish.ts').Published} */
-  const pair = {
+  const pair: Published = {
     name: 'sheet',
     before: 'pr-gif/sheet/sheet-before.gif',
     after: 'pr-gif/sheet/sheet-after.gif',
@@ -428,15 +424,10 @@ describe('publishing to attachments', () => {
   /**
    * A fake gh over one PR's description, which `--attach` rewrites as gh's
    * manual says: each local reference to an attached file becomes its URL.
-   *
-   * @param {string} body
-   * @param {{ keepLocal?: boolean; head?: string }} [opts]
    */
-  function fakeGh(body, opts = {}) {
-    /** @type {string[][]} */
-    const calls = [];
-    /** @type {import('./publish.ts').Gh} */
-    const gh = (args) => {
+  function fakeGh(body: string, opts: { keepLocal?: boolean; head?: string } = {}) {
+    const calls: string[][] = [];
+    const gh: Gh = (args) => {
       calls.push(args);
       if (args[1] === 'view') {
         const stdout = `${JSON.stringify({ body, headRefOid: opts.head ?? 'a'.repeat(40) })}\n`;
@@ -456,8 +447,7 @@ describe('publishing to attachments', () => {
   it('attaches the GIFs in one edit and writes the table into the description', () => {
     const cwd = mkdtempSync(path.join(tmpdir(), 'pr-gif-attach-'));
     const fake = fakeGh('What changes.');
-    /** @type {string[]} */
-    const logs = [];
+    const logs: string[] = [];
     const after = attachToPr({
       repo: 'o/r',
       pr: '12',
@@ -552,8 +542,7 @@ describe('publishing to attachments', () => {
   it('says how far it got when an edit fails', () => {
     const cwd = mkdtempSync(path.join(tmpdir(), 'pr-gif-attach-'));
     const fake = fakeGh('');
-    /** @type {import('./publish.ts').Gh} */
-    const gh = (args, options) => {
+    const gh: Gh = (args, options) => {
       if (args[1] === 'edit') throw new Error('gh pr failed: too large');
       return fake.gh(args, options);
     };
@@ -600,8 +589,7 @@ describe('publishing to attachments', () => {
       after: `s${i}-after.gif`,
       sideBySide: null,
     }));
-    /** @type {import('./publish.ts').Gh} */
-    const gh = (args, options) => {
+    const gh: Gh = (args, options) => {
       const out = fake.gh(args, options);
       if (args[1] === 'edit') opts.head = 'b'.repeat(40);
       return out;
@@ -623,10 +611,9 @@ describe('publishing to attachments', () => {
     const cwd = mkdtempSync(path.join(tmpdir(), 'pr-gif-attach-'));
     const old = withBlock('Intro', 'gone', 'Recorded automatically at `abc1234`.');
     const fake = fakeGh(old);
-    /** @type {string[]} */
-    const logs = [];
-    const log = (/** @type {string} */ l) => logs.push(l);
-    const change = (/** @type {string} */ b) => withoutBlock(b, 'gone');
+    const logs: string[] = [];
+    const log = (l: string) => logs.push(l);
+    const change = (b: string) => withoutBlock(b, 'gone');
     expect(attachToPr({ repo: 'o/r', pr: '4', cwd, scenarios: [], gh: fake.gh, change, log })).toBe(
       'Intro',
     );

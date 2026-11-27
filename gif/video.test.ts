@@ -96,9 +96,8 @@ describe('finalDelayCs and lastChangeIn', () => {
 
 describe('cutting the waits between touches', () => {
   it("counts the ring's pixels, near enough for compression, and never Remove's red", () => {
-    /** @param {number[][]} rgb */
-    const pixels = (...rgb) => Uint8Array.from(rgb.flat());
-    const ring = /** @type {[number, number, number]} */ ([...RING]);
+    const pixels = (...rgb: number[][]) => Uint8Array.from(rgb.flat());
+    const ring = [...RING] as [number, number, number];
     const blurred = [ring[0] + 10, ring[1] + 12, ring[2] - 8];
     const removeRed = [0xff, 0x3b, 0x30];
     expect(ringPixels(pixels(ring, blurred, removeRed, [255, 255, 255], [0, 0, 0]), RING)).toBe(2);

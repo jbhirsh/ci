@@ -17,27 +17,19 @@ const {
 // overlay.ts's script as it runs in the page: once, in this file's jsdom
 // window. jsdom has no layout, so boxes are stubbed where the label is placed.
 
-/**
- * @typedef {typeof globalThis & {
- *   __prGifMoves: { x: number; y: number; t: number }[];
- *   __prGifTicks: { t: number; moving: boolean }[];
- *   __prGifClip?: unknown;
- * }} Win
- */
-const win = /** @type {Win} */ (/** @type {unknown} */ (window));
-/** @param {string} name */
-const part = (name) => {
+type Win = typeof globalThis & {
+  __prGifMoves: { x: number; y: number; t: number }[];
+  __prGifTicks: { t: number; moving: boolean }[];
+  __prGifClip?: unknown;
+};
+const win = window as unknown as Win;
+const part = (name: string) => {
   const el = document.querySelector(`[data-pr-gif="${name}"]`);
   if (!(el instanceof HTMLElement)) throw new Error(`no ${name}`);
   return el;
 };
 const frames = () => vi.advanceTimersByTime(40);
-/**
- * @param {string} type
- * @param {number} [x]
- * @param {number} [y]
- */
-const pointer = (type, x = 0, y = 0) =>
+const pointer = (type: string, x = 0, y = 0) =>
   window.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: y }));
 
 beforeAll(() => {
@@ -107,14 +99,14 @@ describe('the pointer', () => {
   });
 
   it('points a wheel turn the way the page scrolls, the larger way on a tie to the vertical, then fades it', () => {
-    for (const [deltaX, deltaY, arrow] of /** @type {const} */ ([
+    for (const [deltaX, deltaY, arrow] of [
       [0, 100, '↓'],
       [0, -100, '↑'],
       [100, 0, '→'],
       [-100, 0, '←'],
       [50, 50, '↓'],
       [80, 10, '→'],
-    ])) {
+    ] as const) {
       window.dispatchEvent(new WheelEvent('wheel', { deltaX, deltaY }));
       expect(part('wheel').textContent).toBe(arrow);
       expect(part('wheel').style.opacity).toBe('1');
@@ -125,11 +117,7 @@ describe('the pointer', () => {
 });
 
 describe('the ticks', () => {
-  /**
-   * @param {number} left
-   * @param {number} top
-   */
-  const box = (left, top) => ({
+  const box = (left: number, top: number) => ({
     left,
     top,
     right: left + 10,
@@ -161,18 +149,11 @@ describe('the ticks', () => {
 
   it('count an animation running in the recorded area as moving, not a paused one or one out of shot', () => {
     win.__prGifClip = { x: 0, y: 0, width: 400, height: 300 };
-    /**
-     * @param {unknown} el
-     * @param {string} playState
-     */
-    const at = (el, playState) => ({ playState, effect: { target: el } });
+    const at = (el: unknown, playState: string) => ({ playState, effect: { target: el } });
     const inShot = { getBoundingClientRect: () => box(100, 100) };
     const outOfShot = { getBoundingClientRect: () => box(100, 900) };
-    const doc = /** @type {{ getAnimations?: () => unknown[] }} */ (
-      /** @type {unknown} */ (document)
-    );
-    /** @type {[unknown[], boolean][]} */
-    const cases = [
+    const doc = document as unknown as { getAnimations?: () => unknown[] };
+    const cases: [unknown[], boolean][] = [
       [[at(inShot, 'running')], true],
       [[at(inShot, 'paused')], false],
       [[at(outOfShot, 'running')], false],
@@ -194,29 +175,23 @@ describe('the ticks', () => {
 describe('a key press', () => {
   /**
    * A focusable button whose box is `box`.
-   *
-   * @param {{ left: number; top: number; width: number; height: number }} box
    */
-  function focusOn(box) {
+  function focusOn(box: { left: number; top: number; width: number; height: number }) {
     const button = document.createElement('button');
     document.body.prepend(button);
     button.getBoundingClientRect = () =>
-      /** @type {ReturnType<typeof document.body.getBoundingClientRect>} */ ({
+      ({
         ...box,
         right: box.left + box.width,
         bottom: box.top + box.height,
         x: box.left,
         y: box.top,
         toJSON: () => box,
-      });
+      }) as ReturnType<typeof document.body.getBoundingClientRect>;
     button.focus();
     return button;
   }
-  /**
-   * @param {string} key
-   * @param {ConstructorParameters<typeof KeyboardEvent>[1]} [init]
-   */
-  const press = (key, init = {}) =>
+  const press = (key: string, init: ConstructorParameters<typeof KeyboardEvent>[1] = {}) =>
     window.dispatchEvent(new KeyboardEvent('keydown', { key, ...init }));
   const label = () => part('key');
 

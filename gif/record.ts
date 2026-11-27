@@ -34,42 +34,46 @@ import {
   thinner,
   timeline,
 } from './timeline.ts';
+import type { Clip, Holds, Move, Rest, Shot, Tick } from './timeline.ts';
 
-/** @typedef {import('./timeline.ts').Clip} Clip */
-/** @typedef {import('./timeline.ts').Holds} Holds */
-/** @typedef {import('./timeline.ts').Move} Move */
-/** @typedef {import('./timeline.ts').Rest} Rest */
-/** @typedef {import('./timeline.ts').Shot} Shot */
-/** @typedef {import('./timeline.ts').Tick} Tick */
+/** A frame of Playwright's page.screencast. */
+export type ScreencastFrame = {
+  /** the JPEG */
+  data: Buffer;
+  /** when it was painted, in ms since the epoch */
+  timestamp: number;
+};
+
+/** What recordFrames needs of Playwright's page.screencast. */
+export type Screencast = {
+  start: (options: {
+    onFrame: (frame: ScreencastFrame) => void;
+    size: { width: number; height: number };
+    quality: number;
+  }) => Promise<unknown>;
+  stop: () => Promise<void>;
+};
+
+/** What recordFrames needs of a Playwright page: a page passes as is. */
+export type Recordable = {
+  /** undefined in a Playwright before it had one */
+  screencast: Screencast | undefined;
+  viewportSize: () => { width: number; height: number } | null;
+  evaluate: (script: string) => Promise<unknown>;
+  on: (event: 'domcontentloaded', listener: () => unknown) => unknown;
+  off: (event: 'domcontentloaded', listener: () => unknown) => unknown;
+};
 
 /**
- * @typedef {object} ScreencastFrame A frame of Playwright's page.screencast.
- * @property {Buffer} data the JPEG
- * @property {number} timestamp when it was painted, in ms since the epoch
+ * What a recording took: the frames the browser sent, the GIF frames they made, how long it ran,
+ * and where the pointer rested out of shot.
  */
-
-/**
- * @typedef {object} Screencast What recordFrames needs of Playwright's page.screencast.
- * @property {(options: { onFrame: (frame: ScreencastFrame) => void; size: { width: number; height: number }; quality: number }) => Promise<unknown>} start
- * @property {() => Promise<void>} stop
- */
-
-/**
- * @typedef {object} Recordable What recordFrames needs of a Playwright page: a page passes as is.
- * @property {Screencast | undefined} screencast undefined in a Playwright before it had one
- * @property {() => { width: number; height: number } | null} viewportSize
- * @property {(script: string) => Promise<unknown>} evaluate
- * @property {(event: 'domcontentloaded', listener: () => unknown) => unknown} on
- * @property {(event: 'domcontentloaded', listener: () => unknown) => unknown} off
- */
-
-/**
- * @typedef {object} Recording What a recording took: the frames the browser sent, the GIF frames they made, how long it ran, and where the pointer rested out of shot.
- * @property {number} sent
- * @property {number} stills
- * @property {number} seconds
- * @property {Rest[]} rests
- */
+export type Recording = {
+  sent: number;
+  stills: number;
+  seconds: number;
+  rests: Rest[];
+};
 
 /** How long recordFrames waits for the screencast's first frame. */
 export const FIRST_FRAME_MS = 5000;
@@ -84,10 +88,10 @@ export const QUALITY = 90;
 /**
  * Draws the pointer and key presses on every page `context` opens after
  * this call: call it before the first page loads.
- *
- * @param {{ addInitScript(script: { content: string }): Promise<unknown> }} context
  */
-export async function showPointer(context) {
+export async function showPointer(context: {
+  addInitScript(script: { content: string }): Promise<unknown>;
+}) {
   await context.addInitScript({ content: OVERLAY_SCRIPT });
 }
 
@@ -98,11 +102,15 @@ export async function showPointer(context) {
  * or not laid out doesn't count. Ones further down load as they're scrolled
  * to. Warns, rather than failing, when they hadn't by then.
  *
- * @param {{ waitForFunction(script: string, arg: undefined, options: { timeout: number }): Promise<unknown>; isClosed(): boolean }} page
- * @param {number} [timeout]
- * @returns {Promise<boolean>} whether they had
+ * @returns whether they had
  */
-export async function waitForPictures(page, timeout = 20_000) {
+export async function waitForPictures(
+  page: {
+    waitForFunction(script: string, arg: undefined, options: { timeout: number }): Promise<unknown>;
+    isClosed(): boolean;
+  },
+  timeout = 20_000,
+): Promise<boolean> {
   try {
     await page.waitForFunction(PICTURES_LOADED, undefined, { timeout });
     return true;
@@ -127,10 +135,10 @@ export const PICTURES_LOADED = `[...document.images].every((img) => {
  * browser ever stamps them otherwise (over 10 s off), frames are placed by
  * the offset to when the first one arrived instead.
  *
- * @param {number} stampMs the first frame's stamp, in ms
- * @param {number} now when it arrived, ms since the epoch
+ * @param stampMs the first frame's stamp, in ms
+ * @param now when it arrived, ms since the epoch
  */
-export function clockOffset(stampMs, now) {
+export function clockOffset(stampMs: number, now: number) {
   return Math.abs(now - stampMs) > 10_000 ? now - stampMs : 0;
 }
 
@@ -147,14 +155,13 @@ export function clockOffset(stampMs, now) {
  * pixels (a device scale factor of 2 paints twice as many). It warns when the
  * pointer rested outside the clip, where the GIF can't show it. `dir` is
  * emptied first, so an earlier run's frames can't mix in.
- *
- * @param {Recordable} page
- * @param {Clip} clip
- * @param {string} dir
- * @param {{ fps?: number; holds?: Holds }} [options]
- * @returns {Promise<() => Promise<Recording>>}
  */
-export async function recordFrames(page, clip, dir, { fps = 15, holds = HOLDS } = {}) {
+export async function recordFrames(
+  page: Recordable,
+  clip: Clip,
+  dir: string,
+  { fps = 15, holds = HOLDS }: { fps?: number; holds?: Holds } = {},
+): Promise<() => Promise<Recording>> {
   const { screencast } = page;
   if (!screencast) {
     throw new Error(
@@ -164,38 +171,29 @@ export async function recordFrames(page, clip, dir, { fps = 15, holds = HOLDS } 
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   const start = Date.now();
-  /** @type {Shot[]} */
-  const shots = [];
-  /** @type {ReturnType<typeof thinner<{ at: number; image: Buffer }>>} */
-  const thin = thinner(1000 / fps);
+  const shots: Shot[] = [];
+  const thin: ReturnType<typeof thinner<{ at: number; image: Buffer }>> = thinner(1000 / fps);
   let sent = 0;
-  /** @type {number | null} */
-  let offset = null;
-  /** @type {() => void} */
-  let first = () => {};
-  /** @type {Promise<void>} */
-  const firstFrame = new Promise((done) => (first = done));
-  /** @param {{ at: number; image: Buffer } | null} frame */
-  const keep = (frame) => {
+  let offset: number | null = null;
+  let first: () => void = () => {};
+  const firstFrame: Promise<void> = new Promise((done) => (first = done));
+  const keep = (frame: { at: number; image: Buffer } | null) => {
     if (!frame) return;
     const file = frameName(shots.length);
     writeFileSync(path.join(dir, file), frame.image);
     shots.push({ file, at: frame.at, hash: createHash('sha1').update(frame.image).digest('hex') });
   };
   // cli.ts opens every page with a viewport.
-  const viewport = /** @type {{ width: number; height: number }} */ (page.viewportSize());
+  const viewport = page.viewportSize() as { width: number; height: number };
   const density = Number(await page.evaluate('devicePixelRatio'));
   // Playwright rounds the size down to even pixels, so it's asked for what
   // it would round to.
-  /** @param {number} n */
-  const even = (n) => Math.floor(n * density) & ~1;
+  const even = (n: number) => Math.floor(n * density) & ~1;
   const size = { width: even(viewport.width), height: even(viewport.height) };
   // What was asked for, until the first frame says what came: crop.txt has
   // to cut the frames as they are.
-  /** @type {{ width: number; height: number }} */
-  let frame = size;
-  /** @param {ScreencastFrame} frame */
-  const onFrame = ({ data, timestamp }) => {
+  let frame: { width: number; height: number } = size;
+  const onFrame = ({ data, timestamp }: ScreencastFrame) => {
     const now = Date.now();
     if (sent === 0) frame = jpegSize(data) ?? size;
     sent++;
@@ -228,15 +226,13 @@ export async function recordFrames(page, clip, dir, { fps = 15, holds = HOLDS } 
     const end = Date.now();
     keep(thin.flush());
     await page.evaluate('delete window.__prGifClip').catch(() => {});
-    const ticks = /** @type {Tick[]} */ (
-      (await page.evaluate('window.__prGifTicks || []').catch(() => [])) ?? []
-    );
+    const ticks = ((await page.evaluate('window.__prGifTicks || []').catch(() => [])) ??
+      []) as Tick[];
     const stills = timeline(shots, end, holds, { ticks, frame: 1000 / fps });
     writeFileSync(path.join(dir, 'frames.ffconcat'), concatList(stills));
     writeFileSync(path.join(dir, 'crop.txt'), cropFilter(clip, frame, viewport));
-    const moves = /** @type {Move[]} */ (
-      (await page.evaluate('window.__prGifMoves || []').catch(() => [])) ?? []
-    );
+    const moves = ((await page.evaluate('window.__prGifMoves || []').catch(() => [])) ??
+      []) as Move[];
     const rests = restsOutside(moves, clip, start, end);
     for (const r of rests) {
       console.warn(

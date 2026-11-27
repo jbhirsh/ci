@@ -44,6 +44,7 @@ import path from 'node:path';
 import { attachToDescription } from '../lib/attach.mjs';
 import { blocksFor } from '../lib/blocks.mjs';
 import { commandIn, ghIn } from '../lib/gh.mjs';
+import type { Command } from '../lib/gh.mjs';
 
 /** Over this, a PR description may not show a GIF. */
 export const GIF_WARN_BYTES = 5 * 1024 * 1024;
@@ -53,10 +54,8 @@ export const GIF_WARN_BYTES = 5 * 1024 * 1024;
  * without a token or `.git`), `git@github.com:`, `ssh://`, an SSH host alias
  * such as `github.com-work`, or a local git proxy's URL that ends in them
  * (http://127.0.0.1:41799/git/owner/name, as a sandbox's remote is).
- *
- * @param {string} url
  */
-export function repoFromRemote(url) {
+export function repoFromRemote(url: string) {
   const trimmed = url.trim();
   const github = /github\.com[^/:]*[/:](?:\d+\/)?([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/.exec(trimmed);
   if (github) return github[1];
@@ -70,21 +69,15 @@ export function repoFromRemote(url) {
 
 /**
  * The raw link to a file on the pictures branch, fixed at one commit.
- *
- * @param {string} repo
- * @param {string} sha
- * @param {string} file
  */
-export function rawUrl(repo, sha, file) {
+export function rawUrl(repo: string, sha: string, file: string) {
   return `https://raw.githubusercontent.com/${repo}/${sha}/${file}`;
 }
 
 /**
  * A scenario's GIFs' names in its PR's folder.
- *
- * @param {string} name
  */
-export function gifNames(name) {
+export function gifNames(name: string) {
   return {
     before: `${name}-before.gif`,
     after: `${name}-after.gif`,
@@ -92,33 +85,33 @@ export function gifNames(name) {
   };
 }
 
-/**
- * @typedef {object} Published One scenario's GIFs, as paths on the pictures branch, or null for one not made.
- * @property {string} name
- * @property {string | null} before
- * @property {string | null} after
- * @property {string | null} sideBySide
- */
+/** One scenario's GIFs, as paths on the pictures branch, or null for one not made. */
+export type Published = {
+  name: string;
+  before: string | null;
+  after: string | null;
+  sideBySide: string | null;
+};
 
 /**
  * The PR description's table: a Before | After row per scenario (an
  * after-only one shows "(none)" before), and the side-by-side GIFs in a
  * table of their own, twice as wide, each linked by the commit's SHA.
  *
- * @param {string} repo
- * @param {string} sha
- * @param {readonly Published[]} scenarios
- * @param {{ width?: number; base?: string }} [options] width: each GIF's in the table; base: what "before" was built from
+ * @param repo
+ * @param sha
+ * @param scenarios
+ * @param options width: each GIF's in the table; base: what "before" was built from
  */
-export function markdownTable(repo, sha, scenarios, { width = 400, base = 'main' } = {}) {
-  /**
-   * @param {string | null} file
-   * @param {number} w
-   */
-  const img = (file, w) =>
+export function markdownTable(
+  repo: string,
+  sha: string,
+  scenarios: readonly Published[],
+  { width = 400, base = 'main' }: { width?: number; base?: string } = {},
+) {
+  const img = (file: string | null, w: number) =>
     file ? `<img src="${rawUrl(repo, sha, file)}" width="${w}">` : '(none)';
-  /** @type {string[]} */
-  const rows = [];
+  const rows: string[] = [];
   const joined = scenarios.filter((s) => s.sideBySide);
   if (joined.length > 0) {
     rows.push('| Scenario | Before / After |', '|---|---|');
@@ -136,11 +129,8 @@ export function markdownTable(repo, sha, scenarios, { width = 400, base = 'main'
 
 /**
  * A GIF's size for the log, and a warning when it's too big for a PR to show.
- *
- * @param {string} file
- * @param {number} bytes
  */
-export function sizeNote(file, bytes) {
+export function sizeNote(file: string, bytes: number) {
   const size =
     bytes >= 1024 * 1024
       ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -153,18 +143,14 @@ export function sizeNote(file, bytes) {
 /** What a picture branch new to an app holds first: no deploys from it. */
 export const BRANCH_VERCEL_JSON = '{\n  "git": { "deploymentEnabled": false }\n}\n';
 
-/**
- * @typedef {import('../lib/gh.mjs').Command} Git Runs git in the app's checkout.
- */
+/** Runs git in the app's checkout. */
+export type Git = Command;
 
 /**
  * Git in `root`, returning what it printed; a failure throws unless
  * `allowFail`.
- *
- * @param {string} root
- * @returns {Git}
  */
-export function gitIn(root) {
+export function gitIn(root: string): Git {
   return commandIn('git', root);
 }
 
@@ -174,20 +160,24 @@ export function gitIn(root) {
  * checkout and its own index are never touched. A branch origin doesn't
  * have yet starts here, with a vercel.json that turns its deploys off.
  *
- * @param {Git} git
- * @param {readonly (readonly [string, string])[]} files
- * @param {string} message
- * @param {string} branch
- * @param {string} scratch a directory for the scratch index
- * @returns {{ commit: string; parent: string | null }}
+ * @param git
+ * @param files
+ * @param message
+ * @param branch
+ * @param scratch a directory for the scratch index
  */
-export function commitOnTip(git, files, message, branch, scratch) {
+export function commitOnTip(
+  git: Git,
+  files: readonly (readonly [string, string])[],
+  message: string,
+  branch: string,
+  scratch: string,
+): { commit: string; parent: string | null } {
   const fetched = git(['fetch', '-q', 'origin', `refs/heads/${branch}`], { allowFail: true });
   const parent = fetched.status === 0 ? git(['rev-parse', 'FETCH_HEAD']).stdout.trim() : null;
   const env = { ...process.env, GIT_INDEX_FILE: path.join(scratch, 'index') };
   rmSync(env.GIT_INDEX_FILE, { force: true });
-  /** @param {string} file */
-  const add = (file) => git(['hash-object', '-w', file], { env }).stdout.trim();
+  const add = (file: string) => git(['hash-object', '-w', file], { env }).stdout.trim();
   if (parent) git(['read-tree', parent], { env });
   else {
     const vercel = path.join(scratch, 'vercel.json');
@@ -210,12 +200,17 @@ export function commitOnTip(git, files, message, branch, scratch) {
  * push moved the branch on meanwhile; returns the commit's SHA. Unpushed, the
  * commit is still in the repository, and the error (or log) says how to push
  * it.
- *
- * @param {Git} git
- * @param {readonly (readonly [string, string])[]} files
- * @param {{ message: string; branch: string; push: boolean; log?: (line: string) => void }} options
  */
-export function publishFiles(git, files, { message, branch, push, log = console.log }) {
+export function publishFiles(
+  git: Git,
+  files: readonly (readonly [string, string])[],
+  {
+    message,
+    branch,
+    push,
+    log = console.log,
+  }: { message: string; branch: string; push: boolean; log?: (line: string) => void },
+) {
   const scratch = mkdtempSync(path.join(tmpdir(), 'pr-gif-index-'));
   try {
     for (let attempt = 1; ; attempt += 1) {
@@ -257,10 +252,10 @@ const blocks = blocksFor('pr-gif', { named: 'a scenario named', where: 'a PR des
 /**
  * The markers around a scenario's block in the PR's description.
  *
- * @param {string} key the scenario's name: no space, `<`, `>` or `--`, any
+ * @param key the scenario's name: no space, `<`, `>` or `--`, any
  *   of which could end the HTML comment the marker is
  */
-export function blockMarkers(key) {
+export function blockMarkers(key: string) {
   return blocks.markers(key);
 }
 
@@ -268,15 +263,10 @@ export function blockMarkers(key) {
  * Every complete pair of a scenario's markers, in order: a start and the
  * first end after it, as `findBlock` takes them, so a start left without its
  * end is no pair, and a pair never reaches into a later one.
- *
- * @param {string} body
- * @param {string} key
- * @returns {{ from: number, to: number, inner: string }[]}
  */
-function pairsOf(body, key) {
+function pairsOf(body: string, key: string): { from: number; to: number; inner: string }[] {
   const { start, end } = blockMarkers(key);
-  /** @type {{ from: number, to: number, inner: string }[]} */
-  const found = [];
+  const found: { from: number; to: number; inner: string }[] = [];
   let limit = body.length;
   for (let from = body.lastIndexOf(start); from !== -1;) {
     const at = body.indexOf(end, from);
@@ -306,11 +296,11 @@ const EMPTY = /^[ \t\r\n]*$/;
  * pair is last once the others are gone, so `findBlock` returns what was
  * written.
  *
- * @param {string} body
- * @param {string} key
- * @param {string} block the table, without its markers
+ * @param body
+ * @param key
+ * @param block the table, without its markers
  */
-export function withBlock(body, key, block) {
+export function withBlock(body: string, key: string, block: string) {
   const { start, end } = blockMarkers(key);
   const pairs = pairsOf(body, key);
   const target = pairs.findLast((p) => EMPTY.test(p.inner));
@@ -341,32 +331,23 @@ export function withBlock(body, key, block) {
  * Where the scenario's block is in the description, markers included, or
  * null: the last start that an end follows, so a marker left without its
  * pair (an edit gone wrong) stays as it is, with what follows it.
- *
- * @param {string} body
- * @param {string} key
- * @returns {{ from: number; to: number } | null}
  */
-export function findBlock(body, key) {
+export function findBlock(body: string, key: string): { from: number; to: number } | null {
   return blocks.find(body, key);
 }
 
 /**
  * The description without the scenario's block, nor the blank line that
  * kept it apart from what came before; unchanged when it has none.
- *
- * @param {string} body
- * @param {string} key
  */
-export function withoutBlock(body, key) {
+export function withoutBlock(body: string, key: string) {
   return blocks.remove(body, key);
 }
 
 /**
  * The names of every scenario block in the description, in order.
- *
- * @param {string} body
  */
-export function blockKeys(body) {
+export function blockKeys(body: string) {
   return blocks.keys(body);
 }
 
@@ -377,11 +358,8 @@ const STALE = /^\*\*Not updated for [^\n]*?\.\*\* /;
  * Whether the scenario's block was attached automatically
  * (pr-gif-attach.yml), so it may be dropped or marked: one attached by
  * hand never is.
- *
- * @param {string} body
- * @param {string} key
  */
-export function isAutomatic(body, key) {
+export function isAutomatic(body: string, key: string) {
   const found = findBlock(body, key);
   if (!found) return false;
   const { start } = blockMarkers(key);
@@ -391,10 +369,8 @@ export function isAutomatic(body, key) {
 /**
  * Whether what follows a block's start marker is an automatic block's first
  * line: "Recorded automatically at …", after any stale note.
- *
- * @param {string} text
  */
-function automaticInner(text) {
+function automaticInner(text: string) {
   const line = text
     .replace(/^\r?\n/, '')
     .split(/\r?\n/)[0]
@@ -407,11 +383,11 @@ function automaticInner(text) {
  * in place of any earlier note, or with its note taken off when `note` is
  * null; unchanged when it has no such block.
  *
- * @param {string} body
- * @param {string} key
- * @param {string | null} note one line, as staleText writes it
+ * @param body
+ * @param key
+ * @param note one line, as staleText writes it
  */
-export function staleNote(body, key, note) {
+export function staleNote(body: string, key: string, note: string | null) {
   const found = findBlock(body, key);
   if (!found) return body;
   const { start } = blockMarkers(key);
@@ -424,22 +400,25 @@ export function staleNote(body, key, note) {
 /**
  * The note for a block whose scenario's later recording failed.
  *
- * @param {string} sha the commit that recording was for
- * @param {string} runUrl the run that failed
+ * @param sha the commit that recording was for
+ * @param runUrl the run that failed
  */
-export function staleText(sha, runUrl) {
+export function staleText(sha: string, runUrl: string) {
   return `**Not updated for \`${sha.slice(0, 7)}\`: recording failed ([run](${runUrl})).**`;
 }
 
 /**
  * The line a block starts with: the commit its GIFs were recorded at.
  *
- * @param {string} sha
- * @param {{ automatic?: boolean; noBefore?: boolean }} [options]
+ * @param sha
+ * @param options
  *   automatic: pr-gif-attach.yml's; noBefore: an automatic recording whose
  *   "before" couldn't be played (cli.ts's --before-may-fail)
  */
-export function recordedLine(sha, { automatic = false, noBefore = false } = {}) {
+export function recordedLine(
+  sha: string,
+  { automatic = false, noBefore = false }: { automatic?: boolean; noBefore?: boolean } = {},
+) {
   return (
     `Recorded ${automatic ? 'automatically ' : ''}at \`${sha.slice(0, 7)}\`.` +
     (noBefore ? " No before: main couldn't play this scenario." : '')
@@ -449,14 +428,10 @@ export function recordedLine(sha, { automatic = false, noBefore = false } = {}) 
 /**
  * The GIFs a scenario's table shows, so the ones attached: the side-by-side
  * GIF alone when there is one.
- *
- * @param {readonly Published[]} scenarios
- * @returns {string[]}
  */
-export function shownFiles(scenarios) {
+export function shownFiles(scenarios: readonly Published[]): string[] {
   return scenarios.flatMap(
-    (s) =>
-      /** @type {string[]} */ (s.sideBySide ? [s.sideBySide] : [s.before, s.after].filter(Boolean)),
+    (s) => (s.sideBySide ? [s.sideBySide] : [s.before, s.after].filter(Boolean)) as string[],
   );
 }
 
@@ -464,16 +439,13 @@ export function shownFiles(scenarios) {
  * One scenario's table for the description, each GIF referenced by its
  * local path (from the directory gh runs in) for gh to upload and replace.
  *
- * @param {Published} scenario its GIFs' local paths
- * @param {{ base?: string }} [options] base: what "before" was built from
+ * @param scenario its GIFs' local paths
+ * @param options base: what "before" was built from
  */
-export function attachmentTable(scenario, { base = 'main' } = {}) {
+export function attachmentTable(scenario: Published, { base = 'main' }: { base?: string } = {}) {
   const { name } = scenario;
-  /**
-   * @param {string | null} file
-   * @param {string} what
-   */
-  const img = (file, what) => (file ? `![GIF: ${name} ${what}](./${file})` : '(none)');
+  const img = (file: string | null, what: string) =>
+    file ? `![GIF: ${name} ${what}](./${file})` : '(none)';
   if (scenario.sideBySide) {
     return [
       '| Scenario | Before / After |',
@@ -488,9 +460,8 @@ export function attachmentTable(scenario, { base = 'main' } = {}) {
   ].join('\n');
 }
 
-/**
- * @typedef {Git} Gh Runs gh in the directory the GIFs' paths are relative to.
- */
+/** Runs gh in the directory the GIFs' paths are relative to. */
+export type Gh = Git;
 
 /** The PR's head moved past the commit the GIFs were recorded for. */
 export class HeadMovedError extends Error {}
@@ -507,7 +478,7 @@ export class HeadMovedError extends Error {}
  * first edit also reads the PR's head, and a head other than it stops the
  * run (HeadMovedError) before anything is edited.
  *
- * @param {{ repo: string; pr: string; cwd: string; scenarios: readonly Published[]; base?: string; gh?: Gh; log?: (line: string) => void; headSha?: string; change?: (body: string) => string }} options
+ * @param options
  *   pr: its number; scenarios: each GIF as a path relative to `cwd`. gh must
  *   be one that can attach (lib/gh.mjs's checkGh, which the attach action
  *   runs first).
@@ -523,12 +494,23 @@ export function attachToPr({
   headSha,
   change = (body) =>
     scenarios.reduce((b, s) => withBlock(b, s.name, attachmentTable(s, { base })), body),
+}: {
+  repo: string;
+  pr: string;
+  cwd: string;
+  scenarios: readonly Published[];
+  base?: string;
+  gh?: Gh;
+  log?: (line: string) => void;
+  headSha?: string;
+  change?: (body: string) => string;
 }) {
   const files = shownFiles(scenarios);
   const view = () =>
-    /** @type {{ body: string; headRefOid: string }} */ (
-      JSON.parse(gh(['pr', 'view', pr, '--repo', repo, '--json', 'body,headRefOid']).stdout)
-    );
+    JSON.parse(gh(['pr', 'view', pr, '--repo', repo, '--json', 'body,headRefOid']).stdout) as {
+      body: string;
+      headRefOid: string;
+    };
   const read = () => {
     const { body, headRefOid } = view();
     if (headSha && headRefOid !== headSha) {

@@ -7,40 +7,33 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
-/**
- * @typedef {object} Step
- * @property {string} [uses]
- * @property {Record<string, unknown>} [with]
- * @property {string} [if]
- */
+type Step = {
+  uses?: string;
+  with?: Record<string, unknown>;
+  if?: string;
+};
 
-/**
- * @typedef {object} Job
- * @property {string} [if]
- * @property {string | string[]} [needs]
- * @property {Record<string, string> | Record<string, never>} [permissions]
- * @property {{ group: string; 'cancel-in-progress': unknown }} [concurrency]
- * @property {Step[]} steps
- */
+type Job = {
+  if?: string;
+  needs?: string | string[];
+  permissions?: Record<string, string> | Record<string, never>;
+  concurrency?: { group: string; 'cancel-in-progress': unknown };
+  steps: Step[];
+};
 
-/** @param {string} name */
-function workflow(name) {
+function workflow(name: string) {
   const text = readFileSync(new URL(`../.github/workflows/${name}`, import.meta.url), 'utf8');
   return {
     text,
-    jobs: /** @type {Record<string, Job>} */ (
-      /** @type {{ jobs: Record<string, Job> }} */ (parse(text)).jobs
-    ),
+    jobs: (parse(text) as { jobs: Record<string, Job> }).jobs as Record<string, Job>,
   };
 }
 
 const record = workflow('pr-gif.yml');
 const attach = workflow('pr-gif-attach.yml');
 
-/** @param {Job} job */
-const checkouts = (job) => job.steps.filter((s) => s.uses?.startsWith('actions/checkout@'));
-/** @param {Job} job */
-const holdsToken = (job) => JSON.stringify(job).includes('secrets.bot-token');
+const checkouts = (job: Job) => job.steps.filter((s) => s.uses?.startsWith('actions/checkout@'));
+const holdsToken = (job: Job) => JSON.stringify(job).includes('secrets.bot-token');
 
 describe('pr-gif.yml', () => {
   it('never gives the token to a job that checks out the PR', () => {
@@ -109,8 +102,7 @@ describe('pr-gif-attach.yml', () => {
   });
 
   it('takes turns with the run by hand to edit a PR', () => {
-    const group = (/** @type {Job} */ job) =>
-      job.concurrency?.group.replace(/needs\.\w+\.outputs\.pr/, 'PR');
+    const group = (job: Job) => job.concurrency?.group.replace(/needs\.\w+\.outputs\.pr/, 'PR');
     expect(group(attach.jobs.attach)).toBe('pr-gif-attach-${{ github.repository }}-${{ PR }}');
     expect(group(record.jobs.attach)).toBe(group(attach.jobs.attach));
     expect(attach.jobs.attach.concurrency?.['cancel-in-progress']).toBe(false);
