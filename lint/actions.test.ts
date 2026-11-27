@@ -505,6 +505,37 @@ describe('main', () => {
       rmSync(copy, { recursive: true, force: true });
     }
   });
+  it("holds this repo's own GIF callers to their rules", () => {
+    const copy = mkdtempSync(path.join(tmpdir(), 'ci-'));
+    try {
+      cpSync(root, copy, {
+        recursive: true,
+        filter: (from) => !/[/\\](node_modules|\.git|\.claude|coverage)$/.test(from),
+      });
+      const caller = readFileSync(path.join(root, 'gif', 'callers', 'pr-gif.yml'), 'utf8');
+      const file = path.join(copy, '.github', 'workflows', 'gifs.yml');
+      writeFileSync(file, caller);
+      expect(main(copy, null)).toEqual([]);
+      writeFileSync(
+        file,
+        caller.replace(/bot-token: .*/, 'bot-token: ${{ secrets.BOT_PR_TOKEN }}'),
+      );
+      expect(main(copy, null).join('\n')).toMatch(
+        /^\.github\/workflows\/gifs\.yml: job gif: .*bot-token/,
+      );
+      writeFileSync(
+        file,
+        caller
+          .replace('jbhirsh/ci/.github/workflows/pr-gif.yml@main', './.github/workflows/pr-gif.yml')
+          .replace(/secrets:\n(?:.*\n)*.*bot-token: .*/, 'secrets: inherit'),
+      );
+      expect(main(copy, null)).toContain(
+        '.github/workflows/gifs.yml: job gif: call `jbhirsh/ci/.github/workflows/pr-gif.yml@main`, as the apps do, not `./.github/workflows/pr-gif.yml`, which no rule here checks',
+      );
+    } finally {
+      rmSync(copy, { recursive: true, force: true });
+    }
+  });
   it("lints an app's calls into this repo", () => {
     const app = mkdtempSync(path.join(tmpdir(), 'app-'));
     mkdirSync(path.join(app, '.github', 'workflows'), { recursive: true });
