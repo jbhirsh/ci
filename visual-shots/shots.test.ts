@@ -14,7 +14,7 @@ import {
   parseManifest,
   patchProblem,
   shotsUnder,
-} from './shots.mjs';
+} from './shots.ts';
 
 const SHA = 'a'.repeat(40);
 const s = /** @type {import('../visual-review/settings.ts').Settings} */ (

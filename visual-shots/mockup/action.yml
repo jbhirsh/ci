@@ -4,7 +4,7 @@ description: >-
   built, for a run by hand on main (ci#64): the patch comes base64 in the
   dispatch's mockup_patch input, and only paths the app's
   `visual-review.mockupPaths` allows may change, never a lockfile, with no
-  rename, link or mode change (visual-shots/shots.mjs). The job must hold
+  rename, link or mode change (visual-shots/shots.ts). The job must hold
   no secret and write no cache while the patch is applied: the patch is
   code on no branch. Pass the inputs straight from the dispatch, never
   spliced into a script.
@@ -52,4 +52,4 @@ runs:
         MOCKUP_ISSUE: ${{ inputs.issue }}
         # Only a dispatch on the default branch is read by visual-review.
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-      run: node "$GITHUB_ACTION_PATH/../shots.mjs" mockup
+      run: node "$GITHUB_ACTION_PATH/../shots.ts" mockup

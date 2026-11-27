@@ -37,7 +37,7 @@ runs:
       env:
         MOCKUP_ISSUE: ${{ inputs.mockup-issue }}
         OUT: ${{ runner.temp }}/visual-shots
-      run: node "$GITHUB_ACTION_PATH/shots.mjs" collect "$OUT"
+      run: node "$GITHUB_ACTION_PATH/shots.ts" collect "$OUT"
 
     - uses: actions/upload-artifact@v7
       with:

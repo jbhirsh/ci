@@ -30,7 +30,7 @@ import { appConfig, appRoot } from '../lib/app.mjs';
 import { ghApi } from '../lib/comment.mjs';
 import { newest, pages, statusFrom } from '../lib/github.mjs';
 import { pullOfRun } from '../lib/run-pr.mjs';
-import { MANIFEST, parseManifest } from '../visual-shots/shots.mjs';
+import { MANIFEST, parseManifest } from '../visual-shots/shots.ts';
 import { outsideOwnBlocks } from './record.ts';
 import { settings } from './settings.ts';
 import { CONTEXT } from './status.ts';
