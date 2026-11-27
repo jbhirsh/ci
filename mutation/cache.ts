@@ -14,7 +14,7 @@
 // mutant's own code and the tests covering it. With `cache.restoreMain`, a
 // PR with no results of its own starts from main's baseline.
 //
-// Usage: node cache.mjs pr <number> | main
+// Usage: node cache.ts pr <number> | main
 // Writes the outputs `key` (this run's) and `restore-keys` (newline-separated).
 
 import { createHash } from 'node:crypto';
@@ -23,7 +23,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appRoot } from '../lib/app.mjs';
-import { readSettings } from './settings.mjs';
+import { readSettings } from './settings.ts';
 
 /**
  * A hash of the files the globs match under `root` (names and contents, in
@@ -73,7 +73,7 @@ export function main(args, root = appRoot(), env = process.env) {
   const [kind, number] = args;
   const pr = Number(number);
   if (!(kind === 'main' || (kind === 'pr' && Number.isInteger(pr) && pr > 0))) {
-    console.error('Usage: cache.mjs pr <number> | main');
+    console.error('Usage: cache.ts pr <number> | main');
     return 2;
   }
   const { cache } = readSettings(root);

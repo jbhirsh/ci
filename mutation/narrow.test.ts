@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { main, narrow, narrowFile, staysPut } from './narrow.mjs';
+import { main, narrow, narrowFile, staysPut } from './narrow.ts';
 
 /**
  * A mutant on lines `start` to `end`, as Stryker's report places it.

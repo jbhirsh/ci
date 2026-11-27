@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cacheKeys, filesHash, main } from './cache.mjs';
+import { cacheKeys, filesHash, main } from './cache.ts';
 
 /** @param {Record<string, string>} files */
 function dir(files) {
@@ -80,6 +80,6 @@ describe('main', () => {
     for (const args of [[], ['pr'], ['pr', '0'], ['pr', 'x'], ['push']]) {
       expect(main(args, app({}), {})).toBe(2);
     }
-    expect(error).toHaveBeenCalledWith('Usage: cache.mjs pr <number> | main');
+    expect(error).toHaveBeenCalledWith('Usage: cache.ts pr <number> | main');
   });
 });

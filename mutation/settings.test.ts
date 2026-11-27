@@ -11,7 +11,7 @@ import {
   readSettings,
   readStrykerConfig,
   wiringGlobs,
-} from './settings.mjs';
+} from './settings.ts';
 
 /**
  * An app with `.github/ci.json` holding `ci` and the Stryker config `stryker`.

@@ -17,13 +17,13 @@ import {
   scopeFor,
   subjects,
   wiringChanged,
-} from './scope.mjs';
-import { parseSettings, wiringGlobs } from './settings.mjs';
-import { cleanRepos, isolateGit, repo, writeFiles } from './test-repo.mjs';
+} from './scope.ts';
+import { parseSettings, wiringGlobs } from './settings.ts';
+import { cleanRepos, isolateGit, repo, writeFiles } from './test-repo.ts';
 
 const CI_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** @typedef {import('./scope.mjs').ScopeIo} ScopeIo */
+/** @typedef {import('./scope.ts').ScopeIo} ScopeIo */
 
 // The apps' mutate globs as their Stryker configs had them when this moved.
 const BOARDGAMES_MUTATE = [
@@ -673,6 +673,6 @@ describe('against a base in git', () => {
   it('needs the base ref', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(await main([], '/nowhere')).toBe(2);
-    expect(error).toHaveBeenCalledWith('Usage: scope.mjs <base ref>');
+    expect(error).toHaveBeenCalledWith('Usage: scope.ts <base ref>');
   });
 });

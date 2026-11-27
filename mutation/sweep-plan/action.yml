@@ -2,7 +2,7 @@ name: Mutation sweep plan
 description: >-
   The monthly mutation sweep, part 1 (the mutation-sweep workflow's plan
   job): splits the files the Stryker config's `mutate` globs select into
-  `sweep.shards` shards of near-equal weight (sweep.mjs). Main's last
+  `sweep.shards` shards of near-equal weight (sweep.ts). Main's last
   results are restored only to weigh each file; no shard starts from them,
   as a sweep re-tests everything. Needs no install: the plan reads only git,
   the config and the results.
@@ -28,12 +28,12 @@ runs:
     - name: Read the mutation settings
       id: settings
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/../settings.mjs"
+      run: node "$GITHUB_ACTION_PATH/../settings.ts"
 
     - name: Cache keys
       id: keys
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/../cache.mjs" main
+      run: node "$GITHUB_ACTION_PATH/../cache.ts" main
 
     - name: Restore main's last results (for weights only)
       uses: actions/cache/restore@v6
@@ -45,4 +45,4 @@ runs:
     - name: Split the mutate scope
       id: plan
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/../sweep.mjs" plan reports/stryker-incremental.json
+      run: node "$GITHUB_ACTION_PATH/../sweep.ts" plan reports/stryker-incremental.json

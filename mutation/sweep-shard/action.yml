@@ -3,7 +3,7 @@ description: >-
   The monthly mutation sweep, part 2 (one of the mutation-sweep workflow's
   shard jobs): mutates one shard's files from no results, with the Stryker
   config less its break threshold, since one part's score says nothing
-  about the whole (sweep.mjs config). With nothing restored, --incremental
+  about the whole (sweep.ts config). With nothing restored, --incremental
   tests every mutant and writes them all, which is what the merge reads.
   Only a finished run's results are uploaded: Stryker can save a partial
   file when interrupted, and the merge must count a shard cut short as
@@ -28,7 +28,7 @@ runs:
     - name: Read the mutation settings
       id: settings
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/../settings.mjs"
+      run: node "$GITHUB_ACTION_PATH/../settings.ts"
 
     - name: Install
       shell: bash
@@ -38,7 +38,7 @@ runs:
 
     - name: Write the shard's config
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/../sweep.mjs" config reports/stryker-shard.config.json
+      run: node "$GITHUB_ACTION_PATH/../sweep.ts" config reports/stryker-shard.config.json
 
     - name: Run Stryker (shard)
       id: stryker

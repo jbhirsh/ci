@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { narrow, staysPut } from './narrow.mjs';
+import { narrow, staysPut } from './narrow.ts';
 
 // The incremental file is stored data a cache hands back, and the file now
 // is whatever the PR holds. Few distinct lines, so repeats are common.

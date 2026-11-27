@@ -12,7 +12,7 @@ import {
   parseScope,
   readText,
   relativeName,
-} from './report.mjs';
+} from './report.ts';
 
 const CWD = '/home/runner/work/sift/sift';
 

@@ -9,7 +9,7 @@
 // and absolute in another, so every comparison goes through relativeName.
 //
 // A scope is the run's --mutate entries: a file whole (`src/a.ts`), or a
-// block of its lines (`src/a.ts:10-20`, what scope.mjs prints for a file a PR
+// block of its lines (`src/a.ts:10-20`, what scope.ts prints for a file a PR
 // edited). A mutant belongs to a block when it starts and ends inside it,
 // Stryker's own rule for a line range; a file named whole anywhere is whole.
 //

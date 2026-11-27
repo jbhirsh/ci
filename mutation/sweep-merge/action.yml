@@ -3,7 +3,7 @@ description: >-
   The monthly mutation sweep, part 3 (the mutation-sweep workflow's merge
   job): merges the shards' results, judges the whole (Stryker's break
   threshold on the merged score, and `perFileThreshold` on every file), and
-  saves it as main's baseline when every shard reported (sweep.mjs merge).
+  saves it as main's baseline when every shard reported (sweep.ts merge).
   A complete sweep that fails its gate is still main's latest results and
   still saved, since PR runs should start from them; a partial one shows
   its score and fails, leaving the baseline as it was. A manual run on
@@ -35,13 +35,13 @@ runs:
       shell: bash
       env:
         SHARDS: ${{ inputs.count }}
-      run: node "$GITHUB_ACTION_PATH/../sweep.mjs" merge shards "$SHARDS" reports/stryker-incremental.json
+      run: node "$GITHUB_ACTION_PATH/../sweep.ts" merge shards "$SHARDS" reports/stryker-incremental.json
 
     - name: Cache keys
       id: keys
       if: always() && steps.merge.outputs.complete == 'true'
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/../cache.mjs" main
+      run: node "$GITHUB_ACTION_PATH/../cache.ts" main
 
     - name: Save main's baseline
       if: always() && steps.merge.outputs.complete == 'true' && github.ref == 'refs/heads/main'

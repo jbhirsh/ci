@@ -1,8 +1,8 @@
 import { rmSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { main, selftest } from './selftest.mjs';
-import { cleanRepos, isolateGit, repo } from './test-repo.mjs';
+import { main, selftest } from './selftest.ts';
+import { cleanRepos, isolateGit, repo } from './test-repo.ts';
 
 /** @type {() => void} */
 let restore;
@@ -102,7 +102,7 @@ describe('main', () => {
   it('needs the app checkout', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(await main([])).toBe(2);
-    expect(error).toHaveBeenCalledWith('Usage: selftest.mjs <app checkout>');
+    expect(error).toHaveBeenCalledWith('Usage: selftest.ts <app checkout>');
   });
 
   it('exits 0 for a passing app and 1 for a failing one', async () => {

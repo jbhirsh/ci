@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { failures, fileScores, judge, main } from './gate.mjs';
-import { parseScope } from './report.mjs';
+import { failures, fileScores, judge, main } from './gate.ts';
+import { parseScope } from './report.ts';
 
 const CWD = '/home/runner/work/sift/sift';
 
