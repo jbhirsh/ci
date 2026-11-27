@@ -13,13 +13,14 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
 import { main, settings, spawn as realSpawn } from './run.ts';
+import type { Spawn } from './run.ts';
 
 /**
- * @param {string} root
- * @param {import('./run.ts').Spawn} [spawn] how to run the tools
- * @returns {string[]} what to print; throws on a problem (both checks', when both have one)
+ * @param root
+ * @param spawn how to run the tools
+ * @returns what to print; throws on a problem (both checks', when both have one)
  */
-export function selftest(root, spawn = realSpawn) {
+export function selftest(root: string, spawn: Spawn = realSpawn): string[] {
   const { graph } = settings(appConfig('audit', root));
   const missing = graph.filter((folder) => !existsSync(path.join(root, folder)));
   if (missing.length > 0) {
@@ -43,7 +44,7 @@ export function selftest(root, spawn = realSpawn) {
       });
       lines.push(`audit: ${done}`);
     } catch (error) {
-      failures.push(`${check}: ${/** @type {Error} */ (error).message}`);
+      failures.push(`${check}: ${(error as Error).message}`);
     }
   }
   if (failures.length > 0) throw new Error(failures.join('\n'));
@@ -52,12 +53,8 @@ export function selftest(root, spawn = realSpawn) {
 
 /**
  * Runs the self-test on the app at `argv[0]` and returns the exit code.
- *
- * @param {string[]} argv
- * @param {(line: string) => void} [log]
- * @returns {number}
  */
-export function cli(argv, log = console.log) {
+export function cli(argv: string[], log: (line: string) => void = console.log): number {
   try {
     for (const line of selftest(path.resolve(argv[0] ?? '.'))) log(line);
     return 0;

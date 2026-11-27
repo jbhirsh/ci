@@ -45,30 +45,28 @@ import { appConfig, appRoot } from '../lib/app.mjs';
 import { sync } from './issue.ts';
 import { jscpdFindings, knipFindings, lycheeFindings } from './report.ts';
 import { KNIP_CONFIG_LOCATIONS, suppressions, suppressionsMessage } from './suppressions.ts';
+import type { Findings } from './report.ts';
+import type { Suppression } from './suppressions.ts';
+import type { Gh } from './issue.ts';
 
 /** Each check's tracking issue. */
-export const TITLES = /** @type {const} */ ({
+export const TITLES = {
   knip: 'Dead code (weekly audit)',
   jscpd: 'Duplicated code (weekly audit)',
   lychee: 'Broken links (weekly audit)',
-});
+} as const;
 
 /**
  * The app's knip config file, for the findings' advice.
- *
- * @param {string} root
  */
-export function knipConfig(root) {
+export function knipConfig(root: string) {
   return KNIP_CONFIG_LOCATIONS.find((name) => existsSync(path.join(root, name))) ?? 'knip’s config';
 }
 
 /**
  * The app's `audit` settings, checked, with the defaults filled in.
- *
- * @param {Record<string, unknown>} config
- * @returns {{ graph: string[] }}
  */
-export function settings(config) {
+export function settings(config: Record<string, unknown>): { graph: string[] } {
   const { graph = ['src'] } = config;
   if (
     !Array.isArray(graph) ||
@@ -80,12 +78,14 @@ export function settings(config) {
   return { graph };
 }
 
-/**
- * @typedef {(command: string, args: string[], cwd: string, input?: string) => { status: number | null, stdout: string, stderr: string }} Spawn
- */
+export type Spawn = (
+  command: string,
+  args: string[],
+  cwd: string,
+  input?: string,
+) => { status: number | null; stdout: string; stderr: string };
 
-/** @type {Spawn} */
-export const spawn = (command, args, cwd, input) => {
+export const spawn: Spawn = (command, args, cwd, input) => {
   const result = spawnSync(command, args, {
     cwd,
     input,
@@ -99,12 +99,8 @@ export const spawn = (command, args, cwd, input) => {
 /**
  * Runs knip and returns its JSON report. Exit 1 means findings; anything
  * above, that knip broke.
- *
- * @param {string} root
- * @param {Spawn} run
- * @returns {unknown}
  */
-export function runKnip(root, run) {
+export function runKnip(root: string, run: Spawn): unknown {
   const result = run('npx', ['--no-install', 'knip', '--reporter', 'json', '--no-progress'], root);
   if (result.status !== 0 && result.status !== 1) {
     throw new Error(`knip failed (exit ${result.status}): ${result.stderr.trim()}`);
@@ -116,15 +112,10 @@ export function runKnip(root, run) {
  * Runs the app's `jscpd` script (its .jscpd.json), its JSON report written
  * where this reads it, and returns the report. Some apps' configs exit
  * non-zero on clones, so it's the missing report that says jscpd broke.
- *
- * @param {string} root
- * @param {Spawn} run
- * @returns {unknown}
  */
-export function runJscpd(root, run) {
-  /** @type {unknown} */
-  const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
-  const scripts = /** @type {{ scripts?: Record<string, unknown> }} */ (pkg).scripts;
+export function runJscpd(root: string, run: Spawn): unknown {
+  const pkg: unknown = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const scripts = (pkg as { scripts?: Record<string, unknown> }).scripts;
   if (scripts?.jscpd !== 'jscpd') {
     throw new Error(
       'package.json needs the script `"jscpd": "jscpd"`: the audit runs jscpd through it (its settings stay in .jscpd.json)',
@@ -149,19 +140,14 @@ export function runJscpd(root, run) {
 
 /**
  * Draws the architecture graph into `out`.
- *
- * @param {string} root
- * @param {string[]} folders
- * @param {string} out
- * @param {Spawn} run
  */
-export function drawGraph(root, folders, out, run) {
-  const ok = (/** @type {ReturnType<Spawn>} */ result, /** @type {string} */ what) => {
+export function drawGraph(root: string, folders: string[], out: string, run: Spawn) {
+  const ok = (result: ReturnType<Spawn>, what: string) => {
     if (result.status !== 0)
       throw new Error(`${what} failed (exit ${result.status}): ${result.stderr.trim()}`);
     return result.stdout;
   };
-  const cruise = (/** @type {string} */ type) =>
+  const cruise = (type: string) =>
     ok(
       run('npx', ['--no-install', 'depcruise', ...folders, '--output-type', type], root),
       `depcruise ${type}`,
@@ -177,19 +163,18 @@ export function drawGraph(root, folders, out, run) {
   return ['architecture.svg', 'modules.svg', 'report.html'];
 }
 
-/**
- * @typedef {object} Deps
- * @property {string} root the app's checkout
- * @property {Record<string, string | undefined>} env
- * @property {Spawn} spawn
- * @property {import('./issue.ts').Gh} gh
- * @property {(markdown: string) => void} summary
- * @property {(name: string, value: string) => void} setOutput
- * @property {Date} now
- */
+export type Deps = {
+  /** the app's checkout */
+  root: string;
+  env: Record<string, string | undefined>;
+  spawn: Spawn;
+  gh: Gh;
+  summary: (markdown: string) => void;
+  setOutput: (name: string, value: string) => void;
+  now: Date;
+};
 
-/** @returns {Deps} */
-function defaultDeps() {
+function defaultDeps(): Deps {
   return {
     root: appRoot(),
     env: process.env,
@@ -203,11 +188,8 @@ function defaultDeps() {
 
 /**
  * Runs one check and returns what it did with the issue.
- *
- * @param {string[]} argv
- * @param {Deps} [deps]
  */
-export function main(argv, deps = defaultDeps()) {
+export function main(argv: string[], deps: Deps = defaultDeps()) {
   const dryRun = argv.includes('--dry-run');
   const [check, ...rest] = argv.filter((arg) => arg !== '--dry-run');
   if (check === 'graph') {
@@ -217,20 +199,20 @@ export function main(argv, deps = defaultDeps()) {
     const files = drawGraph(deps.root, graph, path.resolve(out), deps.spawn);
     return `Architecture graph of ${graph.join(', ')}: ${files.join(', ')}.`;
   }
-  /** @type {import('./report.ts').Findings} */
-  let findings;
-  /** @type {string | undefined} */
-  let refused;
+  let findings: Findings;
+  let refused: string | undefined;
   if (check === 'knip') {
     // A config the scan can't read (a knip.ts) fails the run too, and heads
     // the issue as one suppression would, but only once the issue shows
     // this week's findings.
-    /** @type {{ config: string, list: import('./suppressions.ts').Suppression[] }} */
-    let hidden = { config: knipConfig(deps.root), list: [] };
+    let hidden: { config: string; list: Suppression[] } = {
+      config: knipConfig(deps.root),
+      list: [],
+    };
     try {
       hidden = suppressions(deps.root);
     } catch (error) {
-      refused = /** @type {Error} */ (error).message;
+      refused = (error as Error).message;
     }
     findings = knipFindings(runKnip(deps.root, deps.spawn), hidden.config);
     if (hidden.list.length > 0) refused = suppressionsMessage(hidden);
@@ -248,8 +230,7 @@ export function main(argv, deps = defaultDeps()) {
     const [report, exitCode] = rest;
     if (!report || exitCode === undefined) throw new Error('lychee <report.json> <exit code>');
     if (exitCode !== '0' && exitCode !== '2') throw new Error(`lychee failed (exit ${exitCode})`);
-    /** @type {unknown} */
-    const parsed = JSON.parse(readFileSync(report, 'utf8'));
+    const parsed: unknown = JSON.parse(readFileSync(report, 'utf8'));
     // lychee lists broken links under error_map (fail_map once). A report
     // with neither changed shape: fail, rather than read it as a clean sweep.
     // (Exit 2 alone isn't the sign: an unknown status, LinkedIn's 999, exits

@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { jscpdFindings, knipFindings, lycheeFindings } from './report.ts';
 
-/**
- * @param {string} file
- * @param {Record<string, unknown>} fields
- */
-const knipIssue = (file, fields) => ({
+const knipIssue = (file: string, fields: Record<string, unknown>) => ({
   file,
   owners: [],
   dependencies: [],
@@ -138,12 +134,7 @@ describe('knipFindings', () => {
   });
 });
 
-/**
- * @param {string} name
- * @param {number} start
- * @param {number} end
- */
-const loc = (name, start, end) => ({ name, start, end });
+const loc = (name: string, start: number, end: number) => ({ name, start, end });
 
 describe('jscpdFindings', () => {
   it('is empty when jscpd found no clones', () => {

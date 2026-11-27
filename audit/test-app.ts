@@ -18,8 +18,7 @@ import { writeFiles } from '../mutation/test-repo.mjs';
 /** This repo's TypeScript 6, its JavaScript API, as an app installs it. */
 const TYPESCRIPT = path.dirname(createRequire(import.meta.url).resolve('typescript/package.json'));
 
-/** @type {string[]} */
-const made = [];
+const made: string[] = [];
 
 /** Removes every app `app` made. */
 export function cleanApps() {
@@ -29,10 +28,8 @@ export function cleanApps() {
 /**
  * A git checkout holding these files, staged, with `typescript` installed
  * (TypeScript 6's API, as the apps alias it).
- *
- * @param {Record<string, string>} files
  */
-export function app(files) {
+export function app(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), 'audit-app-'));
   made.push(root);
   writeFiles(root, files);

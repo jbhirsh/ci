@@ -1,16 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { LABEL, MAX_BODY, findIssue, issueAction, issueBody, sync } from './issue.ts';
+import type { Gh } from './issue.ts';
 
 /**
  * A fake gh: answers `issue list` with `issues`, records every call and
  * what it was given on stdin.
- *
- * @param {unknown[]} issues
  */
-function fakeGh(issues = []) {
-  const calls = /** @type {{ args: string[], input?: string }[]} */ ([]);
-  /** @type {import('./issue.ts').Gh} */
-  const gh = (args, input) => {
+function fakeGh(issues: unknown[] = []) {
+  const calls = [] as { args: string[]; input?: string }[];
+  const gh: Gh = (args, input) => {
     calls.push({ args, input });
     return args[0] === 'issue' && args[1] === 'list' ? JSON.stringify(issues) : '';
   };

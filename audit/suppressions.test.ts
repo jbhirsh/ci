@@ -16,8 +16,7 @@ import {
 } from './suppressions.ts';
 import { APP_CONFIGS, app, cleanApps } from './test-app.ts';
 
-/** @type {() => void} */
-let restoreGit;
+let restoreGit: () => void;
 beforeEach(() => {
   restoreGit = isolateGit();
 });
@@ -27,7 +26,7 @@ afterEach(() => {
 });
 
 /** The option paths knipSuppressions reports for a config. */
-const paths = (/** @type {unknown} */ config, /** @type {string[]} */ tracked = []) =>
+const paths = (config: unknown, tracked: string[] = []) =>
   knipSuppressions(config, tracked).map((s) => s.path.join('.'));
 
 describe('knipSuppressions', () => {
@@ -357,14 +356,14 @@ describe('suppressionsMessage', () => {
 
 describe('cli', () => {
   it('passes a clean app, saying so', () => {
-    const lines = /** @type {string[]} */ ([]);
+    const lines = [] as string[];
     expect(cli([], app({ 'knip.json': '{}' }), (l) => lines.push(l))).toBe(0);
     expect(lines).toEqual(['No knip suppressions in knip.json or the code.']);
   });
 
   it('fails one with a suppression, annotating when asked', () => {
     const root = app({ 'knip.json': '{\n"ignore": ["x"]\n}' });
-    const lines = /** @type {string[]} */ ([]);
+    const lines = [] as string[];
     expect(cli(['--annotate'], root, (l) => lines.push(l))).toBe(1);
     expect(lines[0]).toMatch(/^::error file=knip.json,line=2::ignore hides knip findings: /);
     expect(lines[1]).toMatch(/^knip.json hides what the weekly audit should find\./);

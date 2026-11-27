@@ -47,6 +47,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appRoot, requireFromApp } from '../lib/app.mjs';
 import { parseJsonc } from './jsonc.ts';
+import type { CommentRange, Node } from 'typescript';
 
 /** The config files knip reads, in the order it looks (knip's KNIP_CONFIG_LOCATIONS). */
 export const KNIP_CONFIG_LOCATIONS = [
@@ -93,10 +94,8 @@ const DELETE_EXPORT =
 
 /**
  * How to fix each refused option.
- *
- * @param {string} key
  */
-function fixFor(key) {
+function fixFor(key: string) {
   switch (key) {
     case 'ignoreDependencies':
       return "delete it. A package knip calls unused is either used where knip can't see it (load it a way knip reads: an import, or a package script) or really unused (uninstall it). One it calls unlisted goes in package.json.";
@@ -130,32 +129,31 @@ function fixFor(key) {
   }
 }
 
-/**
- * @typedef {object} Suppression
- * @property {string} file the config or source file
- * @property {number[]} lines where (1-based; empty when unknown)
- * @property {string} option the option's path, or the tag
- * @property {string[]} values what it names, when that says more
- * @property {string} fix
- */
+export type Suppression = {
+  /** the config or source file */
+  file: string;
+  /** where (1-based; empty when unknown) */
+  lines: number[];
+  /** the option's path, or the tag */
+  option: string;
+  /** what it names, when that says more */
+  values: string[];
+  fix: string;
+};
 
-/** @param {unknown} value */
-const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+const isRecord = (value: unknown) =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** @param {unknown} value */
-const strings = (value) =>
+const strings = (value: unknown) =>
   (Array.isArray(value) ? value : [value]).filter((v) => typeof v === 'string');
 
 /**
  * A value as a short list for the message.
- *
- * @param {unknown} value
- * @returns {string[]}
  */
-function shown(value) {
+function shown(value: unknown): string[] {
   if (Array.isArray(value))
     return value.map((v) => (typeof v === 'string' ? v : JSON.stringify(v)));
-  if (isRecord(value)) return Object.keys(/** @type {object} */ (value));
+  if (isRecord(value)) return Object.keys(value as object);
   return [JSON.stringify(value)];
 }
 
@@ -165,35 +163,36 @@ function shown(value) {
  * files, to tell a plugin config that names a real file from one that names
  * nothing.
  *
- * @param {unknown} config the parsed config, untrusted in shape
- * @param {string[]} [tracked]
- * @returns {{ path: string[], values: string[], fix: string }[]}
+ * @param config the parsed config, untrusted in shape
+ * @param tracked
  */
-export function knipSuppressions(config, tracked = []) {
-  /** @type {{ path: string[], values: string[], fix: string }[]} */
-  const found = [];
+export function knipSuppressions(
+  config: unknown,
+  tracked: string[] = [],
+): { path: string[]; values: string[]; fix: string }[] {
+  const found: { path: string[]; values: string[]; fix: string }[] = [];
   /**
-   * @param {unknown} scope
-   * @param {string[]} at
-   * @param {string} dir the workspace's folder, for plugin configs
+   * @param scope
+   * @param at
+   * @param dir the workspace's folder, for plugin configs
    */
-  const scan = (scope, at, dir) => {
+  const scan = (scope: unknown, at: string[], dir: string) => {
     if (!isRecord(scope)) return;
-    const fields = /** @type {Record<string, unknown>} */ (scope);
+    const fields = scope as Record<string, unknown>;
     for (const [key, value] of Object.entries(fields)) {
       const where = [...at, key];
       if (key.startsWith('ignore') || key === 'include' || key === 'exclude' || key === 'tags') {
         found.push({ path: where, values: shown(value), fix: fixFor(key) });
       } else if (key === 'rules') {
         const loose = isRecord(value)
-          ? Object.entries(/** @type {Record<string, unknown>} */ (value))
+          ? Object.entries(value as Record<string, unknown>)
               .filter(([, v]) => v !== 'error')
               .map(([type, v]) => `${type}: ${JSON.stringify(v)}`)
           : shown(value);
         if (loose.length > 0) found.push({ path: where, values: loose, fix: fixFor('rules') });
       } else if (key === 'cycles') {
-        if (isRecord(value) && 'allow' in /** @type {object} */ (value)) {
-          const allow = /** @type {Record<string, unknown>} */ (value).allow;
+        if (isRecord(value) && 'allow' in (value as object)) {
+          const allow = (value as Record<string, unknown>).allow;
           found.push({
             path: [...where, 'allow'],
             values: shown(allow),
@@ -206,7 +205,7 @@ export function knipSuppressions(config, tracked = []) {
           found.push({ path: where, values: negated, fix: fixFor('project') });
       } else if (key === 'workspaces') {
         if (isRecord(value)) {
-          for (const [name, workspace] of Object.entries(/** @type {object} */ (value))) {
+          for (const [name, workspace] of Object.entries(value as object)) {
             scan(workspace, [...where, name], path.posix.join(dir, name));
           }
         }
@@ -227,16 +226,11 @@ export function knipSuppressions(config, tracked = []) {
  * What a plugin's setting hides, or null when it hides nothing: false, a `!`
  * glob in its `project`, or a `config` (the setting itself, when it's globs)
  * that names no tracked file.
- *
- * @param {unknown} value
- * @param {string} dir
- * @param {string[]} tracked
- * @returns {string[] | null}
  */
-function pluginSuppression(value, dir, tracked) {
+function pluginSuppression(value: unknown, dir: string, tracked: string[]): string[] | null {
   if (value === false) return ['false'];
   if (isRecord(value)) {
-    const negated = strings(/** @type {Record<string, unknown>} */ (value).project).filter((glob) =>
+    const negated = strings((value as Record<string, unknown>).project).filter((glob) =>
       glob.startsWith('!'),
     );
     if (negated.length > 0) return negated.map((glob) => `project: ${glob}`);
@@ -245,7 +239,7 @@ function pluginSuppression(value, dir, tracked) {
     typeof value === 'string' || Array.isArray(value)
       ? value
       : isRecord(value)
-        ? /** @type {Record<string, unknown>} */ (value).config
+        ? (value as Record<string, unknown>).config
         : undefined;
   if (config === undefined) return null;
   const globs = strings(config).map((glob) => path.posix.normalize(path.posix.join(dir, glob)));
@@ -253,7 +247,7 @@ function pluginSuppression(value, dir, tracked) {
   return real ? null : [`config: ${JSON.stringify(config)}, which names no tracked file`];
 }
 
-/** @typedef {typeof import('typescript')} TypeScript */
+export type TypeScript = typeof import('typescript');
 
 /**
  * Each tag knip skips an export for, in the comments of one source file,
@@ -261,12 +255,15 @@ function pluginSuppression(value, dir, tracked) {
  * in a regex, JSX text or a template's `${}` never puts a comment out of
  * step, as it would for a hand-rolled scan.
  *
- * @param {string} text
- * @param {TypeScript} ts
- * @param {string} [fileName] for its extension: JSX and plain JS parse as such
- * @returns {{ tag: string, line: number }[]}
+ * @param text
+ * @param ts
+ * @param fileName for its extension: JSX and plain JS parse as such
  */
-export function suppressionTags(text, ts, fileName = 'file.ts') {
+export function suppressionTags(
+  text: string,
+  ts: TypeScript,
+  fileName = 'file.ts',
+): { tag: string; line: number }[] {
   const kind = fileName.endsWith('.tsx')
     ? ts.ScriptKind.TSX
     : fileName.endsWith('.jsx')
@@ -275,14 +272,12 @@ export function suppressionTags(text, ts, fileName = 'file.ts') {
         ? ts.ScriptKind.JS
         : ts.ScriptKind.TS;
   const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, false, kind);
-  /** @type {Map<number, import('typescript').CommentRange>} */
-  const comments = new Map();
-  /** @type {[number, number][]} JSX text, which the comment scan would misread */
-  const jsxText = [];
-  const add = (/** @type {import('typescript').CommentRange[] | undefined} */ ranges) => {
+  const comments: Map<number, CommentRange> = new Map();
+  const jsxText: [number, number][] = [];
+  const add = (ranges: CommentRange[] | undefined) => {
     for (const range of ranges ?? []) comments.set(range.pos, range);
   };
-  const visit = (/** @type {import('typescript').Node} */ node) => {
+  const visit = (node: Node) => {
     if (node.kind === ts.SyntaxKind.JsxText) jsxText.push([node.pos, node.end]);
     add(ts.getLeadingCommentRanges(text, node.pos));
     add(ts.getTrailingCommentRanges(text, node.end));
@@ -290,8 +285,7 @@ export function suppressionTags(text, ts, fileName = 'file.ts') {
   };
   visit(source);
 
-  /** @type {{ tag: string, line: number }[]} */
-  const found = [];
+  const found: { tag: string; line: number }[] = [];
   const ranges = [...comments.values()]
     .filter(({ pos }) => !jsxText.some(([start, end]) => pos >= start && pos < end))
     .sort((a, b) => a.pos - b.pos);
@@ -317,15 +311,10 @@ export function suppressionTags(text, ts, fileName = 'file.ts') {
  * The line of each object key in a JSON(C) text, by its path of keys (joined
  * with NUL), comments and strings read as such: the first place each path
  * appears.
- *
- * @param {string} text
- * @returns {Map<string, number>}
  */
-export function keyLines(text) {
-  /** @type {Map<string, number>} */
-  const lines = new Map();
-  /** @type {{ array: boolean, key: string, index: number }[]} */
-  const stack = [];
+export function keyLines(text: string): Map<string, number> {
+  const lines: Map<string, number> = new Map();
+  const stack: { array: boolean; key: string; index: number }[] = [];
   let line = 1;
   let i = 0;
   const skipTrivia = () => {
@@ -355,8 +344,7 @@ export function keyLines(text) {
       const top = stack.at(-1);
       skipTrivia();
       if (top && !top.array && text[i] === ':') {
-        /** @type {unknown} */
-        const key = JSON.parse(raw);
+        const key: unknown = JSON.parse(raw);
         top.key = String(key);
         const keys = stack.map((frame) => (frame.array ? String(frame.index) : frame.key));
         const id = keys.join('\0');
@@ -378,23 +366,22 @@ export function keyLines(text) {
 /**
  * The app's knip config: the first of knip's locations that exists, else
  * package.json's `knip` key, else none.
- *
- * @param {string} root
- * @returns {{ file: string, keys: string[], text: string, config: unknown } | null}
  */
-export function readKnipConfig(root) {
+export function readKnipConfig(
+  root: string,
+): { file: string; keys: string[]; text: string; config: unknown } | null {
   const file = KNIP_CONFIG_LOCATIONS.find((name) => existsSync(path.join(root, name)));
   if (file && /\.(ts|js)$/.test(file)) {
     throw new Error(
       `${file} can't be read without running it, so the audit can't check what it hides: move the config to knip.jsonc.`,
     );
   }
-  const read = (/** @type {string} */ name) => readFileSync(path.join(root, name), 'utf8');
-  const parse = (/** @type {string} */ name, /** @type {string} */ text) => {
+  const read = (name: string) => readFileSync(path.join(root, name), 'utf8');
+  const parse = (name: string, text: string) => {
     try {
       return parseJsonc(text);
     } catch (error) {
-      throw new Error(`${name} doesn't parse: ${/** @type {Error} */ (error).message}`, {
+      throw new Error(`${name} doesn't parse: ${(error as Error).message}`, {
         cause: error,
       });
     }
@@ -406,25 +393,22 @@ export function readKnipConfig(root) {
   if (!existsSync(path.join(root, 'package.json'))) return null;
   const text = read('package.json');
   const pkg = parse('package.json', text);
-  if (!isRecord(pkg) || !('knip' in /** @type {object} */ (pkg))) return null;
+  if (!isRecord(pkg) || !('knip' in (pkg as object))) return null;
   return {
     file: 'package.json',
     keys: ['knip'],
     text,
-    config: /** @type {Record<string, unknown>} */ (pkg).knip,
+    config: (pkg as Record<string, unknown>).knip,
   };
 }
 
 /**
  * The app's own TypeScript, which every app here installs (its JavaScript
  * API: the `typescript` package, TypeScript 6's where the app aliases it).
- *
- * @param {string} root
- * @returns {TypeScript}
  */
-function appTypeScript(root) {
+function appTypeScript(root: string): TypeScript {
   try {
-    return /** @type {TypeScript} */ (requireFromApp('typescript', root));
+    return requireFromApp('typescript', root) as TypeScript;
   } catch (error) {
     throw new Error(
       "the app's typescript isn't installed: the scan reads comments with it, so it runs after the app's npm ci",
@@ -435,20 +419,22 @@ function appTypeScript(root) {
 
 /**
  * Every suppression in the app at `root`: its knip config's, then its code's.
- *
- * @param {string} root
- * @param {{ listFiles?: (root: string) => string[], typescript?: () => TypeScript }} [using]
- *   the repository's tracked files, and the TypeScript that reads its code
- * @returns {{ config: string, list: Suppression[] }}
  */
 export function suppressions(
-  root,
-  { listFiles = gitFiles, typescript = () => appTypeScript(root) } = {},
-) {
+  root: string,
+  {
+    listFiles = gitFiles,
+    typescript = () => appTypeScript(root),
+  }: {
+    /** the repository's tracked files */
+    listFiles?: (root: string) => string[];
+    /** the TypeScript that reads its code */
+    typescript?: () => TypeScript;
+  } = {},
+): { config: string; list: Suppression[] } {
   const tracked = listFiles(root);
   const knip = readKnipConfig(root);
-  /** @type {Suppression[]} */
-  const list = [];
+  const list: Suppression[] = [];
   if (knip) {
     const lines = keyLines(knip.text);
     for (const s of knipSuppressions(knip.config, tracked)) {
@@ -465,10 +451,9 @@ export function suppressions(
   const sources = tracked.filter((name) => SOURCE.test(name) && existsSync(path.join(root, name)));
   const ts = sources.length > 0 ? typescript() : undefined;
   for (const file of sources) {
-    /** @type {Map<string, number[]>} */
-    const byTag = new Map();
+    const byTag: Map<string, number[]> = new Map();
     const text = readFileSync(path.join(root, file), 'utf8');
-    for (const { tag, line } of suppressionTags(text, /** @type {TypeScript} */ (ts), file)) {
+    for (const { tag, line } of suppressionTags(text, ts as TypeScript, file)) {
       byTag.set(tag, [...(byTag.get(tag) ?? []), line]);
     }
     for (const [tag, lines] of byTag) {
@@ -486,10 +471,8 @@ export function suppressions(
 
 /**
  * The repository's tracked files.
- *
- * @param {string} root
  */
-function gitFiles(root) {
+function gitFiles(root: string) {
   return execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
     .split('\0')
     .filter(Boolean);
@@ -498,10 +481,8 @@ function gitFiles(root) {
 /**
  * Text as a Markdown code span, so a glob's `**` isn't emphasis and a tag's
  * `@public` mentions no GitHub account in the issue.
- *
- * @param {string} text
  */
-const code = (text) => {
+const code = (text: string) => {
   // A run of backticks inside needs a longer fence, and spaces inside it.
   const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
   const fence = '`'.repeat(longest + 1);
@@ -511,10 +492,8 @@ const code = (text) => {
 /**
  * What the suppressions are and how to fix each: the PR step's failure, the
  * weekly run's error and the top of its Dead code issue.
- *
- * @param {{ config: string, list: Suppression[] }} found
  */
-export function suppressionsMessage({ config, list }) {
+export function suppressionsMessage({ config, list }: { config: string; list: Suppression[] }) {
   const inConfig = list.some((s) => s.file === config);
   const inCode = list.some((s) => s.file !== config);
   const subject = [inConfig && config, inCode && 'the code'].filter(Boolean).join(' and ');
@@ -531,16 +510,13 @@ export function suppressionsMessage({ config, list }) {
 
 /**
  * GitHub's `::error` lines, one per place, for the PR's diff.
- *
- * @param {Suppression[]} list
  */
-export function annotations(list) {
+export function annotations(list: Suppression[]) {
   // GitHub's workflow-command escaping: the message's, and a property's,
   // which also escapes the `,` and `:` that would end it.
-  const escape = (/** @type {string} */ text) =>
+  const escape = (text: string) =>
     text.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
-  const property = (/** @type {string} */ text) =>
-    escape(text).replace(/:/g, '%3A').replace(/,/g, '%2C');
+  const property = (text: string) => escape(text).replace(/:/g, '%3A').replace(/,/g, '%2C');
   return list.flatMap((s) =>
     (s.lines.length > 0 ? s.lines : [1]).map(
       (line) =>
@@ -551,12 +527,12 @@ export function annotations(list) {
 
 /**
  * Runs the scan on the app and returns the exit code.
- *
- * @param {string[]} argv
- * @param {string} [root]
- * @param {(line: string) => void} [log]
  */
-export function cli(argv, root = appRoot(), log = console.log) {
+export function cli(
+  argv: string[],
+  root: string = appRoot(),
+  log: (line: string) => void = console.log,
+) {
   const found = suppressions(root);
   if (found.list.length === 0) {
     log(`No knip suppressions in ${found.config} or the code.`);

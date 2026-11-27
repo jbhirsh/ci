@@ -36,7 +36,7 @@ describe('parseJsonc', () => {
   });
 
   it.each(Object.entries(APP_CONFIGS))('reads %s', (_, text) => {
-    const config = /** @type {Record<string, unknown>} */ (parseJsonc(text));
+    const config = parseJsonc(text) as Record<string, unknown>;
     expect(config.$schema).toBe('https://unpkg.com/knip@6/schema.json');
   });
 

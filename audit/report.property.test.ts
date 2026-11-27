@@ -7,8 +7,8 @@ const json = fc.jsonValue({ maxDepth: 5 });
 
 describe('the reports, for any JSON', () => {
   it.each([
-    ['knip', (/** @type {unknown} */ r) => knipFindings(r, 'knip.json')],
-    ['jscpd', (/** @type {unknown} */ r) => jscpdFindings(r, '/repo')],
+    ['knip', (r: unknown) => knipFindings(r, 'knip.json')],
+    ['jscpd', (r: unknown) => jscpdFindings(r, '/repo')],
     ['lychee', lycheeFindings],
   ])('%s never throws, and has Markdown exactly when it found something', (_, findings) => {
     fc.assert(
