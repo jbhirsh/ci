@@ -1,4 +1,4 @@
-// Vitest setup file (vitest.config.mjs's setupFiles), not part of any tool:
+// Vitest setup file (vitest.config.ts's setupFiles), not part of any tool:
 // gives each test file a temporary directory of its own and removes it once
 // the file's tests end.
 //

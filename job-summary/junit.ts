@@ -91,8 +91,8 @@ function firstLine(text: string) {
 
 /**
  * A test's name: its suite's (Vitest's and Playwright's file) and its own,
- * so tests named alike in two files stay apart (every tool's selftest.test.mjs
- * here has a "selftest" block); just one of them when the other is missing or
+ * so tests named alike in two files stay apart (most tools' selftest.test.ts
+ * here have a "selftest" block); just one of them when the other is missing or
  * the same (Maestro's flows).
  */
 function testName(attrs: Record<string, string>) {

@@ -28,7 +28,7 @@
 //     (`$GITHUB_ACTION_PATH/…`, `${{ github.action_path }}/…`, or an env
 //     variable a step sets to one, as review's `CI_DIR`), `..` resolved;
 //   - in this repo's workflows, the script each `run:` hands to `node`, and
-//     each glob naming scripts (`ci/*/selftest.mjs`, to at least one file),
+//     each glob naming scripts (`ci/*/selftest.ts`, to at least one file),
 //     from the step's working directory, and each `uses: ./…`, wherever a
 //     checkout of this repo puts it (`path:`). A plain checkout is this
 //     repo's except in a reusable workflow, where it is the caller's; a path
@@ -181,7 +181,7 @@ const NO_SCRIPT = new Set(['-e', '--eval', '-p', '--print', '-v', '--version', '
  * The scripts a shell `run:` line names, as written: each word `node` runs
  * (after its options) that looks like a path (it has a `/` or a script's
  * extension), each module it loads with `-r`, `--import` or `--loader`,
- * and each glob of scripts (`ci/*\/selftest.mjs`, not `*.js`). Comments,
+ * and each glob of scripts (`ci/*\/selftest.ts`, not `*.js`). Comments,
  * heredoc bodies and quoted text holding a space are left out; a word keeps
  * any `$` it holds, for the caller to skip, and `${{ github.workspace }}`
  * is read as `$GITHUB_WORKSPACE`.

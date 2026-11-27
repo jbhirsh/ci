@@ -27,7 +27,7 @@
 //
 // A job's notes and CPU samples come from the files its steps name (NOTES,
 // LOAD: sift's own scripts write them) or else from what job-summary/note
-// and job-summary/sample-load left in RUNNER_TEMP (telemetry.mjs).
+// and job-summary/sample-load left in RUNNER_TEMP (telemetry.ts).
 //
 //   node summary.ts   (env: JOB; JUNIT (patterns, one per line), NOUN,
 //                       NOTES (a JSON file), LOAD (a CSV file), SETTLE,
@@ -47,7 +47,7 @@ import { buildModel, noteworthy, parts } from './model.ts';
 import { render, section } from './render.ts';
 import { pagesBase, report, reportUrl } from './report.ts';
 import { changedFiles, locate, realGit, trackedFiles } from './source.ts';
-import { telemetryFiles } from './telemetry.mjs';
+import { telemetryFiles } from './telemetry.ts';
 import { byTest, jobSeconds, stepRows } from './trends.ts';
 import type { Gh, Job, PastRun, Run } from './history.ts';
 import type { TestCase } from './junit.ts';

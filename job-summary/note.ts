@@ -1,42 +1,40 @@
 // Adds a job's notes for its summary (job-summary/note's action.yml): the
 // `Label: value` lines in NOTES, merged into RUNNER_TEMP/job-summary/notes.json
-// (telemetry.mjs), which job-summary shows in its report's Environment when
+// (telemetry.ts), which job-summary shows in its report's Environment when
 // its own `notes` input is empty. The job's first note also says what the
 // machine is: the runner image, its cores, memory and Node. A label noted
 // again takes its new value.
 //
 // It never fails the job: a note it can't write is a warning.
 //
-// Plain JavaScript, typed in JSDoc, where the rest of this repo is
-// TypeScript (ci#155): the action runs on the runner's own Node, which may
-// be older than 22.18 and strip no types, so this file and what it imports
-// (telemetry.mjs, Node's built-ins only) stay .mjs.
+// The action runs on the runner's own Node, which may be older than 22.18
+// and strip no types: its step checks first and warns instead (action.yml).
+// It imports only Node's built-ins and telemetry.ts, as nothing is installed.
 //
-//   node note.mjs   (env: NOTES, RUNNER_TEMP)
+//   node note.ts   (env: NOTES, RUNNER_TEMP)
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { machineNotes, mergeNotes, parseNoteLines, telemetryFiles } from './telemetry.mjs';
+import { machineNotes, mergeNotes, parseNoteLines, telemetryFiles } from './telemetry.ts';
+import type { Machine } from './telemetry.ts';
 
-/**
- * The machine's cores, memory and Node, from this process.
- *
- * @returns {{ cores: number, memory: number, node: string }}
- */
-export function thisMachine() {
+/** The machine's cores, memory and Node, from this process. */
+export function thisMachine(): Machine {
   return { cores: os.availableParallelism(), memory: os.totalmem(), node: process.version };
 }
 
 /**
- * @param {Record<string, string | undefined>} [env]
- * @param {() => { cores: number, memory: number, node: string }} [machine]
- * @returns {string[]} what it said, for a test
+ * Notes NOTES' lines, and the machine on a job's first call.
+ *
+ * @returns what it said, for a test
  */
-export function main(env = process.env, machine = thisMachine) {
-  /** @type {string[]} */
-  const said = [];
-  const say = (/** @type {string} */ line) => {
+export function main(
+  env: Record<string, string | undefined> = process.env,
+  machine: () => Machine = thisMachine,
+): string[] {
+  const said: string[] = [];
+  const say = (line: string) => {
     said.push(line);
     console.log(line);
   };
