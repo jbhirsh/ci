@@ -8,7 +8,7 @@ import {
   stepTrends,
   testTrends,
   usual,
-} from './trends.mjs';
+} from './trends.ts';
 
 const T0 = Date.parse('2026-10-29T10:00:00Z');
 /** @param {number} s seconds after T0 */
@@ -34,9 +34,9 @@ const step = (name, conclusion, start, end) => ({
  *
  * @param {string} conclusion
  * @param {Record<string, number>} times each step's seconds
- * @param {import('./history.mjs').PastRun['tests']} [tests]
+ * @param {import('./history.ts').PastRun['tests']} [tests]
  * @param {string} [sha]
- * @returns {import('./history.mjs').PastRun}
+ * @returns {import('./history.ts').PastRun}
  */
 const pastRun = (conclusion, times, tests = null, sha = '') => ({
   run: {
@@ -125,9 +125,9 @@ describe('slower', () => {
 describe('byTest', () => {
   /**
    * @param {string} name
-   * @param {import('./junit.mjs').TestCase['result']} result
+   * @param {import('./junit.ts').TestCase['result']} result
    * @param {number} seconds
-   * @returns {import('./junit.mjs').TestCase}
+   * @returns {import('./junit.ts').TestCase}
    */
   const tc = (name, result, seconds) => ({
     name,
@@ -191,15 +191,15 @@ describe('stepTrends', () => {
 
 describe('testTrends', () => {
   /**
-   * @param {import('./junit.mjs').TestCase['result']} result
+   * @param {import('./junit.ts').TestCase['result']} result
    * @param {number} [seconds]
    */
   const t = (result, seconds = 10) => [{ name: 'T', seconds, result }];
   /**
    * The trend of test T, given its earlier results (oldest first) and this run's.
    *
-   * @param {(import('./history.mjs').PastRun['tests'])[]} earlier
-   * @param {import('./junit.mjs').TestCase['result']} result
+   * @param {(import('./history.ts').PastRun['tests'])[]} earlier
+   * @param {import('./junit.ts').TestCase['result']} result
    * @param {number} [seconds]
    * @param {string[]} [shas] the earlier runs' commits, then this run's
    * @param {(Set<string> | null)[]} [changed] files each commit changed

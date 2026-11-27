@@ -1,4 +1,4 @@
-// This job's recent history, read for job-summary (summary.mjs) from the
+// This job's recent history, read for job-summary (summary.ts) from the
 // Actions API: the run it's in, and the job's last completed runs on this
 // branch and the repository's default branch, each with its steps' times
 // and, from the small artifact each run of the tool leaves
@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 /** @typedef {(args: string[]) => string} Gh */
-/** @typedef {import('./junit.mjs').TestCase} TestCase */
+/** @typedef {import('./junit.ts').TestCase} TestCase */
 
 /**
  * A job's step, as the Actions API gives it.

@@ -3,7 +3,7 @@ description: >-
   Puts a workflow run's job reports (job-summary's report.html, in each
   job's job-summary-<job> artifact) on the repository's GitHub Pages branch,
   job-reports, at runs/<run>/<job>/, keeping the last 30 days and an index
-  (../publish.mjs says how). Run by the shared job-reports.yml workflow,
+  (../publish.ts says how). Run by the shared job-reports.yml workflow,
   as the run's last job or after it finishes: the job needs contents write
   and actions read.
   The repository's Pages must serve the job-reports branch.
@@ -33,4 +33,4 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
         RUN_ID: ${{ inputs.run-id }}
         KEEP_DAYS: ${{ inputs.keep-days }}
-      run: node "$GITHUB_ACTION_PATH/../publish.mjs"
+      run: node "$GITHUB_ACTION_PATH/../publish.ts"

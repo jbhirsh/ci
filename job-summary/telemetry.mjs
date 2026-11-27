@@ -4,7 +4,7 @@
 // (note.mjs) and job-summary/sample-load the CPU samples (sample-load.mjs),
 // each into RUNNER_TEMP/job-summary, which the runner empties at every job's
 // start and end; job-summary reads them from there when its `notes` and
-// `load` inputs are empty (summary.mjs). This file holds where they go and
+// `load` inputs are empty (summary.ts). This file holds where they go and
 // the pure parts: reading `Label: value` lines, the machine's own notes, and
 // a CPU sample's maths.
 
@@ -13,7 +13,7 @@ import path from 'node:path';
 /** How often the sampler writes a row, in milliseconds. */
 export const SAMPLE_MS = 10_000;
 
-/** The CSV's header, the columns summary.mjs parseLoad reads. */
+/** The CSV's header, the columns summary.ts parseLoad reads. */
 export const LOAD_HEADER = 'time,load,busy';
 
 /**
@@ -169,7 +169,7 @@ export function busyPercent(before, after) {
 
 /**
  * One CSV row: `time,load,busy`, Unix seconds, the load average to two
- * places and % busy to one, as summary.mjs parseLoad reads them.
+ * places and % busy to one, as summary.ts parseLoad reads them.
  *
  * @param {number} ms the sample's time, milliseconds
  * @param {number} load

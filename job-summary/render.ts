@@ -1,18 +1,18 @@
-// The job summary's Markdown, for job-summary (summary.mjs): the verdict,
+// The job summary's Markdown, for job-summary (summary.ts): the verdict,
 // what needs attention and a link to the run's full report (report.html,
 // on the repository's GitHub Pages), where the steps, tests and history
 // are. GitHub's run page can't show more than Markdown well (no hover, no
 // scripts, nested dropdowns that don't indent), so the summary stays short
-// and the report does the rest. Written from the model (model.mjs). The
+// and the report does the rest. Written from the model (model.ts). The
 // same pieces make the job's section of the pull request's comment
-// (section, which comment.mjs puts with the other jobs').
+// (section, which comment.ts puts with the other jobs').
 //
 // Text from outside (step and test names, failure messages) is escaped as
 // it's written: shown as written, with nothing that would end a line or
 // open Markdown or HTML of its own.
 
-/** @typedef {import('./model.mjs').Model} Model */
-/** @typedef {import('./model.mjs').ModelTest} ModelTest */
+/** @typedef {import('./model.ts').Model} Model */
+/** @typedef {import('./model.ts').ModelTest} ModelTest */
 
 /** Each list in Needs attention names at most this many. */
 export const ATTENTION = 5;
@@ -134,7 +134,7 @@ export function verdict(model) {
  * What needs attention, one Markdown list item per kind: the failed tests
  * (or else the failed steps), those passed on a re-run, the flaky ones and
  * what got slower. Shared by the summary and the pull request's comment
- * (comment.mjs), so both say the same.
+ * (comment.ts), so both say the same.
  *
  * @param {Model} model
  * @returns {string[]}
@@ -216,7 +216,7 @@ export function render(model, reportLink) {
 }
 
 /**
- * The job's part of the pull request's comment (comment.mjs puts each
+ * The job's part of the pull request's comment (comment.ts puts each
  * job's together): the verdict and the report on one line, then what needs
  * attention, as in the summary but without its headings.
  *

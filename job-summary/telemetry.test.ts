@@ -11,7 +11,7 @@ import {
   parseProcStat,
   telemetryFiles,
 } from './telemetry.mjs';
-import { parseLoad, parseNotes } from './summary.mjs';
+import { parseLoad, parseNotes } from './summary.ts';
 
 describe('telemetryFiles', () => {
   it("puts the notes and samples in RUNNER_TEMP's job-summary folder, and nowhere without it", () => {
@@ -83,7 +83,7 @@ describe('mergeNotes', () => {
     }
   });
 
-  it('writes what summary.mjs reads back', () => {
+  it('writes what summary.ts reads back', () => {
     expect(parseNotes(mergeNotes(null, [['Simulator', 'iPhone 17 Pro']]))).toEqual([
       ['Simulator', 'iPhone 17 Pro'],
     ]);

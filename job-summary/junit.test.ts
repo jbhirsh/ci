@@ -6,7 +6,7 @@ import {
   parseJunit,
   settleReruns,
   unescapeXml,
-} from './junit.mjs';
+} from './junit.ts';
 
 describe('unescapeXml and escapeXml', () => {
   it('replaces named and numeric entities, and leaves unknown ones', () => {
@@ -267,9 +267,9 @@ Received: 0
 describe('settleReruns', () => {
   /**
    * @param {string} name
-   * @param {import('./junit.mjs').TestCase['result']} result
+   * @param {import('./junit.ts').TestCase['result']} result
    * @param {string} file
-   * @returns {import('./junit.mjs').TestCase}
+   * @returns {import('./junit.ts').TestCase}
    */
   const tc = (name, result, file) => ({
     name,

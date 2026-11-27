@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BRANCH, TRIES, addRun, indexPage, prune, publish, runsIn } from './publish.mjs';
+import { BRANCH, TRIES, addRun, indexPage, prune, publish, runsIn } from './publish.ts';
 
 const NOW = Date.parse('2026-10-29T12:00:00Z');
 /** @type {string[]} */
@@ -130,7 +130,7 @@ describe('publish', () => {
     const calls = [];
     /** @type {Record<string, string>[]} */
     const envs = [];
-    /** @type {import('./publish.mjs').Run} */
+    /** @type {import('./publish.ts').Run} */
     const run = (args, cwd, extra = {}) => {
       calls.push(args);
       envs.push(extra);

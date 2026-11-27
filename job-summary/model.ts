@@ -1,22 +1,22 @@
 // Everything job-summary shows about a run, worked out once: the report
-// page (report.html) reads it as JSON, and the run's summary (render.mjs)
-// is written from it. summary.mjs gathers the inputs; this is pure.
+// page (report.html) reads it as JSON, and the run's summary (render.ts)
+// is written from it. summary.ts gathers the inputs; this is pure.
 //
 // Times are seconds. Earlier runs are listed oldest first, and every list
 // of per-run values (a step's times, a test's results) lines up with them,
 // this run's value apart. A test's file, line and snippet come from
-// source.mjs, its usual time and flakiness from trends.mjs.
+// source.ts, its usual time and flakiness from trends.ts.
 
-import { KEEP_DAYS } from './report.mjs';
-import { jobSeconds, stepTrends, testTrends, usual } from './trends.mjs';
+import { KEEP_DAYS } from './report.ts';
+import { jobSeconds, stepTrends, testTrends, usual } from './trends.ts';
 
-/** @typedef {import('./junit.mjs').TestCase} TestCase */
-/** @typedef {import('./history.mjs').PastRun} PastRun */
-/** @typedef {import('./history.mjs').Run} Run */
-/** @typedef {import('./history.mjs').Job} Job */
-/** @typedef {import('./trends.mjs').StepRow} StepRow */
-/** @typedef {import('./trends.mjs').Outcome} Outcome */
-/** @typedef {import('./source.mjs').Located} Located */
+/** @typedef {import('./junit.ts').TestCase} TestCase */
+/** @typedef {import('./history.ts').PastRun} PastRun */
+/** @typedef {import('./history.ts').Run} Run */
+/** @typedef {import('./history.ts').Job} Job */
+/** @typedef {import('./trends.ts').StepRow} StepRow */
+/** @typedef {import('./trends.ts').Outcome} Outcome */
+/** @typedef {import('./source.ts').Located} Located */
 
 /**
  * One CPU sample: seconds into the job, the load average, % busy.

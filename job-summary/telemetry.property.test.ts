@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { parseLoad, parseNotes } from './summary.mjs';
+import { parseLoad, parseNotes } from './summary.ts';
 import {
   busyPercent,
   loadRow,
@@ -11,7 +11,7 @@ import {
 } from './telemetry.mjs';
 
 describe('parseNoteLines and mergeNotes, for any notes input', () => {
-  it('never throws, accounts for every line with text, and writes notes summary.mjs reads back', () => {
+  it('never throws, accounts for every line with text, and writes notes summary.ts reads back', () => {
     fc.assert(
       fc.property(fc.string({ unit: 'binary', maxLength: 300 }), (text) => {
         const { notes, skipped } = parseNoteLines(text);

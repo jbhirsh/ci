@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { MAX_CHARS, clean, composeComment, mergeSections, parseSections } from './comment.mjs';
+import { MAX_CHARS, clean, composeComment, mergeSections, parseSections } from './comment.ts';
 
 const by = { workflow: 'CI', number: 1, url: 'https://gh/run/1' };
 const head = 'a'.repeat(40);
@@ -29,7 +29,7 @@ const wellFormed = (text) => Buffer.from(text, 'utf8').toString('utf8');
 /**
  * Sections as they go in: each workflow and job once, with some text.
  *
- * @param {import('./comment.mjs').Section[]} list
+ * @param {import('./comment.ts').Section[]} list
  */
 const distinct = (list) => {
   const seen = new Set();

@@ -18,7 +18,7 @@ import {
   parseSections,
   pullRequestsOf,
   statusOf,
-} from './comment.mjs';
+} from './comment.ts';
 
 const REPO = 'jbhirsh/BoardGames';
 const HEAD = '69e83c5aa1b2c3d4e5f60718293a4b5c6d7e8f90';
@@ -31,7 +31,7 @@ const OLD = '1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d';
  * @param {string} job
  * @param {string} [text]
  * @param {string} [sha]
- * @returns {import('./comment.mjs').Section}
+ * @returns {import('./comment.ts').Section}
  */
 const sec = (workflow, job, text = `**${job}:** ✅ no step failed`, sha = HEAD) => ({
   workflow,
@@ -76,7 +76,7 @@ function fakeGitHub(opts = {}) {
   const comments = (opts.comments ?? []).map((c) => ({ ...c, user: { login: AUTHOR } }));
   /** @type {string[]} */
   const calls = [];
-  /** @type {import('./comment.mjs').Api} */
+  /** @type {import('./comment.ts').Api} */
   const api = (method, route, body) => {
     calls.push(`${method} ${route}`);
     for (const [prefix, error] of Object.entries(opts.fail ?? {})) {
@@ -118,7 +118,7 @@ function fakeGitHub(opts = {}) {
     }
     throw httpError(404);
   };
-  /** @type {import('./comment.mjs').Download} */
+  /** @type {import('./comment.ts').Download} */
   const download = (_runId, dir) => {
     const sections = opts.sections ?? {};
     if (!Object.keys(sections).length) throw new Error('no artifacts');
@@ -278,7 +278,7 @@ describe('findComment and jobOrder', () => {
       body: `> ${MARKER} quoted`,
       user: bot,
     }));
-    /** @type {import('./comment.mjs').Api} */
+    /** @type {import('./comment.ts').Api} */
     const api = (_m, route) =>
       route.endsWith('page=1')
         ? page

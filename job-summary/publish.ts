@@ -15,7 +15,7 @@
 // keeps only one waiting run per group and cancels the rest, which would
 // drop a run's reports.)
 //
-//   node publish.mjs   (env: RUN_ID, GITHUB_REPOSITORY, GH_TOKEN, KEEP_DAYS;
+//   node publish.ts   (env: RUN_ID, GITHUB_REPOSITORY, GH_TOKEN, KEEP_DAYS;
 //                       REMOTE, a git remote in place of GitHub's, for tests)
 
 import { execFileSync } from 'node:child_process';
@@ -32,7 +32,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { KEEP_DAYS } from './report.mjs';
+import { KEEP_DAYS } from './report.ts';
 
 /** @typedef {(args: string[], cwd?: string, env?: Record<string, string>) => string} Run */
 

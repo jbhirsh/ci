@@ -1,6 +1,6 @@
 // Keeps one comment on a workflow run's pull request with every job's
 // summary in it: each job's verdict, its report and what needs attention
-// (render.mjs section, which summary.mjs leaves in the job's artifact as
+// (render.ts section, which summary.ts leaves in the job's artifact as
 // section.md). job-reports.yml's comment job runs it, through
 // comment/action.yml, at the end of each run that feeds job-reports, green
 // or red: as the run's last job, or after it finishes. Only that job writes the comment, never the jobs themselves, so
@@ -22,7 +22,7 @@
 // can't comment (a caller that doesn't grant pull-requests: write, a
 // Dependabot or fork token) and any other API error are logged and skipped.
 //
-//   node comment.mjs   (env: RUN_ID, GITHUB_REPOSITORY, GH_TOKEN)
+//   node comment.ts   (env: RUN_ID, GITHUB_REPOSITORY, GH_TOKEN)
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
@@ -30,9 +30,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { MAX_CHARS, findComment as findMarked, ghApi, statusOf } from '../lib/comment.mjs';
-import { artifactName } from './history.mjs';
-import { cell } from './render.mjs';
-import { pagesBase } from './report.mjs';
+import { artifactName } from './history.ts';
+import { cell } from './render.ts';
+import { pagesBase } from './report.ts';
 
 /** @typedef {import('../lib/comment.mjs').Api} Api */
 /**
@@ -49,7 +49,7 @@ import { pagesBase } from './report.mjs';
  * @property {string} workflow the workflow's name
  * @property {string} job its job-summary artifact's slug
  * @property {string} sha the commit its run was for
- * @property {string} text its Markdown (render.mjs section)
+ * @property {string} text its Markdown (render.ts section)
  */
 
 /**

@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { MESSAGE_LENGTH, parseJunit, unescapeXml } from './junit.mjs';
+import { MESSAGE_LENGTH, parseJunit, unescapeXml } from './junit.ts';
 
 /**
  * An attribute value as XML would carry it.
