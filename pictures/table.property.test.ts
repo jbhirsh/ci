@@ -37,10 +37,8 @@ const url = 'https://github.com/user-attachments/assets/x';
 /**
  * The line's cells, split at each `|` no backslash escapes, without the
  * empty ends outside the first and last pipes.
- *
- * @param {string} line
  */
-const cells = (line) => line.split(/(?<!\\)\|/).slice(1, -1);
+const cells = (line: string) => line.split(/(?<!\\)\|/).slice(1, -1);
 
 describe('a table cell, for any caption', () => {
   it('escapes it: the cell is one <img> tag, with no | to end the cell', () => {

@@ -1,3 +1,5 @@
+import type { Picture } from './inputs.ts';
+
 // The two blocks pictures/cli.ts writes. In the host PR's description, one
 // `![path](./path)` line a picture: the form gh's `--attach` rewrites in
 // place with each upload's URL (ci#33's trial T1, BoardGames#309), read back
@@ -13,15 +15,11 @@
 // backslash goes before each mark that formats inline Markdown, so none
 // formats it or ends the bold around it.
 
-/** @typedef {import('./inputs.ts').Picture} Picture */
-
 /**
  * A caption as text in an HTML attribute: on one line, with no character
  * that ends the attribute, the tag or the table cell.
- *
- * @param {string} caption
  */
-export function escapeCaption(caption) {
+export function escapeCaption(caption: string) {
   return caption
     .replace(/[\r\n]+/g, ' ')
     .replaceAll('&', '&amp;')
@@ -35,21 +33,19 @@ export function escapeCaption(caption) {
  * A caption as a table cell's text: escaped as for an attribute, and each
  * mark that formats inline Markdown (a cell holds no blocks) backslashed,
  * so it shows as written.
- *
- * @param {string} caption
  */
-export function cellText(caption) {
+export function cellText(caption: string) {
   return escapeCaption(caption.replace(/[\\`*_[\]()!~]/g, '\\$&'));
 }
 
 /**
  * The host PR's block: a line saying what it's for, then each picture by its
  * local path, for gh to upload and link.
- *
- * @param {readonly Picture[]} files
- * @param {{ target: string; runId: string }} from
  */
-export function hostBlock(files, { target, runId }) {
+export function hostBlock(
+  files: readonly Picture[],
+  { target, runId }: { target: string; runId: string },
+) {
   return [
     `Pictures for #${target}, from run ${runId}.`,
     '',
@@ -59,12 +55,8 @@ export function hostBlock(files, { target, runId }) {
 
 /**
  * One picture's cell.
- *
- * @param {string} url
- * @param {string} caption
- * @param {number} width
  */
-export function imageCell(url, caption, width) {
+export function imageCell(url: string, caption: string, width: number) {
   return `<img src="${url}" width="${width}" alt="${escapeCaption(caption)}">`;
 }
 
@@ -72,16 +64,15 @@ export function imageCell(url, caption, width) {
  * The target's table: `columns` pictures a row, each row's captions above
  * it (the first as the table's header, the rest in bold), the last row's
  * empty cells left blank.
- *
- * @param {readonly { url: string; caption: string }[]} pictures
- * @param {{ columns: number; width: number }} options
  */
-export function pictureTable(pictures, { columns, width }) {
+export function pictureTable(
+  pictures: readonly { url: string; caption: string }[],
+  { columns, width }: { columns: number; width: number },
+) {
   const n = Math.min(columns, pictures.length);
-  /** @param {string[]} cells */
-  const row = (cells) => `| ${[...cells, ...Array(n - cells.length).fill('')].join(' | ')} |`;
-  /** @type {string[]} */
-  const lines = [];
+  const row = (cells: string[]) =>
+    `| ${[...cells, ...Array(n - cells.length).fill('')].join(' | ')} |`;
+  const lines: string[] = [];
   for (let i = 0; i < pictures.length; i += n) {
     const chunk = pictures.slice(i, i + n);
     const captions = chunk.map((p) => cellText(p.caption));

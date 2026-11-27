@@ -115,8 +115,7 @@ describe('parseBlock', () => {
 
 describe('node pictures/inputs.ts', () => {
   const script = path.join(import.meta.dirname, 'inputs.ts');
-  /** @param {Record<string, string>} values */
-  const run = (values) =>
+  const run = (values: Record<string, string>) =>
     spawnSync(process.execPath, [script], {
       env: { PATH: process.env.PATH, ...values },
       encoding: 'utf8',

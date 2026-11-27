@@ -33,18 +33,14 @@ const text = fc.oneof(
 /**
  * Runs `parse`, returning what it gives or null for its own refusal; any
  * other error (a TypeError, say) fails the property.
- *
- * @template T
- * @param {() => T} parse
- * @returns {T | null}
  */
-function ownRefusal(parse) {
+function ownRefusal<T>(parse: () => T): T | null {
   try {
     return parse();
   } catch (error) {
     expect(error).toBeInstanceOf(Error);
-    expect(/** @type {Error} */ (error).constructor).toBe(Error);
-    expect(/** @type {Error} */ (error).message).toMatch(/^pictures: /);
+    expect((error as Error).constructor).toBe(Error);
+    expect((error as Error).message).toMatch(/^pictures: /);
     return null;
   }
 }

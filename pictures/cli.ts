@@ -44,26 +44,27 @@ import { ghIn } from '../lib/gh.mjs';
 import { checkFiles } from './files.ts';
 import { parseInputs } from './inputs.ts';
 import { hostBlock, pictureTable } from './table.ts';
+import type { Command } from '../lib/gh.mjs';
 
 /** The blocks this tool keeps: `<!-- pictures:<block> -->`. */
 const blocks = blocksFor('pictures');
 
-/**
- * @typedef {object} Context What main is handed, for tests.
- * @property {Record<string, string | undefined>} [env]
- * @property {string} [cwd] the artifact's folder
- * @property {import('../lib/gh.mjs').Command} [gh] runs gh in `cwd`
- * @property {typeof globalThis.fetch} [fetch]
- * @property {(ms: number) => Promise<unknown>} [wait]
- * @property {(line: string) => void} [log]
- */
+/** What main is handed, for tests. */
+export type Context = {
+  env?: Record<string, string | undefined>;
+  /** the artifact's folder */
+  cwd?: string;
+  /** runs gh in `cwd` */
+  gh?: Command;
+  fetch?: typeof globalThis.fetch;
+  wait?: (ms: number) => Promise<unknown>;
+  log?: (line: string) => void;
+};
 
 /**
  * Attaches the pictures; returns the target's URL.
- *
- * @param {Context} [context]
  */
-export async function main(context = {}) {
+export async function main(context: Context = {}) {
   const {
     env = process.env,
     cwd = process.cwd(),
@@ -81,23 +82,21 @@ export async function main(context = {}) {
   }
   checkFiles(cwd, files);
 
-  /** @param {string} n */
-  const issue = (n) =>
-    /** @type {{ html_url: string; pull_request?: unknown }} */ (
-      JSON.parse(gh(['api', `repos/${repo}/issues/${n}`]).stdout)
-    );
+  const issue = (n: string) =>
+    JSON.parse(gh(['api', `repos/${repo}/issues/${n}`]).stdout) as {
+      html_url: string;
+      pull_request?: unknown;
+    };
   const host = issue(hostPr);
   if (!host.pull_request) throw new Error(`pictures: HOST_PR #${hostPr} is an issue, not a PR`);
   const goal = target === hostPr ? host : issue(target);
   const kind = goal.pull_request ? 'pr' : 'issue';
 
-  /**
-   * @param {'pr' | 'issue'} what
-   * @param {string} n
-   */
-  const view = (what, n) =>
-    /** @type {{ body: string | null }} */ (
-      JSON.parse(gh([what, 'view', n, '--repo', repo, '--json', 'body']).stdout)
+  const view = (what: 'pr' | 'issue', n: string) =>
+    (
+      JSON.parse(gh([what, 'view', n, '--repo', repo, '--json', 'body']).stdout) as {
+        body: string | null;
+      }
     ).body ?? '';
 
   const was = view('pr', hostPr);
@@ -146,7 +145,7 @@ export async function main(context = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  main().catch((/** @type {unknown} */ error) => {
+  main().catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : error);
     if (error instanceof Error && error.cause instanceof Error) console.error(error.cause.message);
     process.exitCode = 1;
