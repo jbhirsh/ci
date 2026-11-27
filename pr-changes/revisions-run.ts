@@ -65,61 +65,79 @@ import {
   rangeNote,
   withPair,
 } from './revisions.ts';
+import type { Api } from '../lib/comment.mjs';
+import type { Table, TimelineEvent } from './revisions.ts';
 
 /** How many times the row is worked out again because the description moved under it. */
 const ATTEMPTS = 3;
 
-/**
- * @typedef {object} Pull
- * @property {string} state `open` or `closed`
- * @property {string} author
- * @property {string} headRef
- * @property {string} headSha
- * @property {string} headRepo `owner/name` of the head's repository
- */
+export type Pull = {
+  /** `open` or `closed` */
+  state: string;
+  author: string;
+  headRef: string;
+  headSha: string;
+  /** `owner/name` of the head's repository */
+  headRepo: string;
+};
 
-/**
- * @typedef {object} Commit
- * @property {string} sha
- * @property {string} subject
- * @property {boolean} skipped a merge or a bot's commit
- */
+export type Commit = {
+  sha: string;
+  subject: string;
+  /** a merge or a bot's commit */
+  skipped: boolean;
+};
 
-/**
- * @typedef {object} Compare
- * @property {string} status `ahead`, `behind`, `diverged` or `identical`
- * @property {number} behindBy
- * @property {string | null} base the merge base
- * @property {string[]} shas the commits from the old head to the new, oldest first
- */
+export type Compare = {
+  /** `ahead`, `behind`, `diverged` or `identical` */
+  status: string;
+  behindBy: number;
+  /** the merge base */
+  base: string | null;
+  /** the commits from the old head to the new, oldest first */
+  shas: string[];
+};
 
-/**
- * @typedef {object} Io
- * @property {() => Pull} pull
- * @property {() => string} body
- * @property {() => Commit[]} commits every commit of the PR, oldest first
- * @property {(prev: string, head: string) => Compare | null} compare null when GitHub can't compare (the old head is gone)
- * @property {() => import('./revisions.ts').TimelineEvent[]} timeline the PR's timeline events, oldest first
- * @property {(body: string) => void} write with the person's token
- * @property {boolean} canWrite whether a person's token is at hand
- * @property {(line: string) => void} log
- */
+export type Io = {
+  pull: () => Pull;
+  body: () => string;
+  /** every commit of the PR, oldest first */
+  commits: () => Commit[];
+  /** null when GitHub can't compare (the old head is gone) */
+  compare: (prev: string, head: string) => Compare | null;
+  /** the PR's timeline events, oldest first */
+  timeline: () => TimelineEvent[];
+  /** with the person's token */
+  write: (body: string) => void;
+  /** whether a person's token is at hand */
+  canWrite: boolean;
+  log: (line: string) => void;
+};
 
 /**
  * The io for one PR.
- *
- * @param {{ api: import('../lib/comment.mjs').Api, repo: string, number: number,
- *   token: string, log: (line: string) => void }} options
- * @returns {Io}
  */
-export function gitHubIo({ api, repo, number, token, log }) {
+export function gitHubIo({
+  api,
+  repo,
+  number,
+  token,
+  log,
+}: {
+  api: Api;
+  repo: string;
+  number: number;
+  token: string;
+  log: (line: string) => void;
+}): Io {
   const issue = `repos/${repo}/issues/${number}`;
   return {
     pull: () => {
-      const p =
-        /** @type {{ state: string, user: { login: string } | null, head: { ref: string, sha: string, repo: { full_name: string } | null } }} */ (
-          api('GET', `repos/${repo}/pulls/${number}`)
-        );
+      const p = api('GET', `repos/${repo}/pulls/${number}`) as {
+        state: string;
+        user: { login: string } | null;
+        head: { ref: string; sha: string; repo: { full_name: string } | null };
+      };
       return {
         state: p.state,
         author: p.user?.login ?? '',
@@ -128,10 +146,16 @@ export function gitHubIo({ api, repo, number, token, log }) {
         headRepo: p.head.repo?.full_name ?? '',
       };
     },
-    body: () => String(/** @type {{ body?: string | null }} */ (api('GET', issue)).body ?? ''),
+    body: () => String((api('GET', issue) as { body?: string | null }).body ?? ''),
     commits: () =>
-      /** @type {{ sha: string, commit: { message: string }, parents: unknown[], author: { login: string } | null, committer: { login: string } | null }[]} */ (
-        pages(api, `repos/${repo}/pulls/${number}/commits`)
+      (
+        pages(api, `repos/${repo}/pulls/${number}/commits`) as {
+          sha: string;
+          commit: { message: string };
+          parents: unknown[];
+          author: { login: string } | null;
+          committer: { login: string } | null;
+        }[]
       ).map((c) => ({
         sha: c.sha,
         subject: c.commit.message.split('\n')[0],
@@ -139,24 +163,23 @@ export function gitHubIo({ api, repo, number, token, log }) {
           c.parents.length > 1 || Boolean((c.author ?? c.committer)?.login.endsWith('[bot]')),
       })),
     timeline: () =>
-      /** @type {import('./revisions.ts').TimelineEvent[]} */ (
-        pages(api, `repos/${repo}/issues/${number}/timeline`, undefined, () =>
-          log(
-            `::warning::pr-changes: the PR's timeline is longer than ${PAGES * 100} events: only the first are read, so the table may miss the latest heads`,
-          ),
-        )
-      ),
+      pages(api, `repos/${repo}/issues/${number}/timeline`, undefined, () =>
+        log(
+          `::warning::pr-changes: the PR's timeline is longer than ${PAGES * 100} events: only the first are read, so the table may miss the latest heads`,
+        ),
+      ) as TimelineEvent[],
     compare: (prev, head) => {
       try {
         const route = `repos/${repo}/compare/${prev}...${head}`;
         // One request answers the status and the first 100 commits; more pages only for more commits.
-        /** @type {Compare | null} */
-        let out = null;
+        let out: Compare | null = null;
         for (let page = 1; page <= PAGES; page++) {
-          const c =
-            /** @type {{ status: string, behind_by: number, merge_base_commit?: { sha: string }, commits?: { sha: string }[] }} */ (
-              api('GET', `${route}?per_page=100&page=${page}`)
-            );
+          const c = api('GET', `${route}?per_page=100&page=${page}`) as {
+            status: string;
+            behind_by: number;
+            merge_base_commit?: { sha: string };
+            commits?: { sha: string }[];
+          };
           const list = c.commits ?? [];
           if (out === null) {
             out = {
@@ -189,11 +212,8 @@ export function gitHubIo({ api, repo, number, token, log }) {
 /**
  * Whether a `## Revisions` heading already stands just before position `at`,
  * apart from blank lines and comments.
- *
- * @param {string} body
- * @param {number} at
  */
-export function headingBefore(body, at) {
+export function headingBefore(body: string, at: number) {
   const lines = body.slice(0, at).split('\n');
   // Back from the pair, past blank lines and whole comments (the template puts
   // one between the heading and the pair): the first line left is the heading or not.
@@ -209,8 +229,7 @@ export function headingBefore(body, at) {
   return false;
 }
 
-/** @param {unknown} error */
-const message = (error) => (error instanceof Error ? error.message : String(error));
+const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /**
  * The table for a PR's first write, from GitHub's timeline of its heads
@@ -220,15 +239,18 @@ const message = (error) => (error instanceof Error ? error.message : String(erro
  * null when the timeline names no earlier head (or can't be read), and the
  * caller starts from `before`.
  *
- * @param {Io} io
- * @param {string} body
- * @param {import('./revisions.ts').Table} table the block as it is: empty of rows, with what the author typed in it
- * @param {{ head: string, before: string }} where
- * @returns {import('./revisions.ts').Table | null}
+ * @param io
+ * @param body
+ * @param table the block as it is: empty of rows, with what the author typed in it
+ * @param where
  */
-function history(io, body, table, { head, before }) {
-  /** @type {import('./revisions.ts').TimelineEvent[]} */
-  let events;
+function history(
+  io: Io,
+  body: string,
+  table: Table,
+  { head, before }: { head: string; before: string },
+): Table | null {
+  let events: TimelineEvent[];
   try {
     events = io.timeline();
   } catch (error) {
@@ -240,8 +262,7 @@ function history(io, body, table, { head, before }) {
   const { chain, fromTimeline } = headHistory(events, { head, before });
   if (chain.length < 2) return null;
   const { kept, omitted } = capChain(chain, HISTORY_HEADS);
-  /** @type {Commit[]} */
-  let commits = [];
+  let commits: Commit[] = [];
   try {
     commits = io.commits();
   } catch (error) {
@@ -268,11 +289,8 @@ function history(io, body, table, { head, before }) {
   );
   /**
    * A revision after the first: the head before it (its compare link), and its note.
-   *
-   * @param {number} rev
-   * @returns {{ prev: string | null, note: string }}
    */
-  const range = (rev) => {
+  const range = (rev: number): { prev: string | null; note: string } => {
     const prev = chain[rev - 2];
     const found = ranges.get(rev);
     if (found === undefined) return { prev, note: UNREAD };
@@ -306,13 +324,12 @@ function history(io, body, table, { head, before }) {
 
 /**
  * The block's content for the PR's head, or null when nothing is to be written.
- *
- * @param {Io} io
- * @param {string} body
- * @param {{ repo: string, head: string, before: string | null }} where
- * @returns {{ text: string, at: { from: number, to: number } } | null}
  */
-function plan(io, body, { repo, head, before }) {
+function plan(
+  io: Io,
+  body: string,
+  { repo, head, before }: { repo: string; head: string; before: string | null },
+): { text: string; at: { from: number; to: number } } | null {
   const { start, end } = blocks.markers('revisions');
   // The pair as the description check counts it (revisionsPair): a marker in a
   // fence or a sentence is none, so the tool and the check never disagree.
@@ -361,11 +378,11 @@ function plan(io, body, { repo, head, before }) {
  * The description with the block's content set to `text`, in the
  * description's own line endings.
  *
- * @param {string} body
- * @param {{ from: number, to: number }} at the pair, from its start marker to the end of its end marker
- * @param {string} text
+ * @param body
+ * @param at the pair, from its start marker to the end of its end marker
+ * @param text
  */
-function putPair(body, at, text) {
+function putPair(body: string, at: { from: number; to: number }, text: string) {
   const { start, end } = blocks.markers('revisions');
   const nl = body.includes('\r\n') ? '\r\n' : '\n';
   const marked = `${start}${nl}${text.replace(/\r?\n/g, nl)}${nl}${end}`;
@@ -375,11 +392,12 @@ function putPair(body, at, text) {
 /**
  * Adds the row for the PR's head to its Revisions block when it is missing.
  *
- * @param {Io} io
- * @param {{ repo: string, before: string | null }} where
- * @returns {boolean} whether the description was written
+ * @returns whether the description was written
  */
-export function revisions(io, { repo, before }) {
+export function revisions(
+  io: Io,
+  { repo, before }: { repo: string; before: string | null },
+): boolean {
   const pull = io.pull();
   if (
     pull.state !== 'open' ||
@@ -432,8 +450,7 @@ export function revisions(io, { repo, before }) {
   }
 }
 
-/** @param {Record<string, string | undefined>} env */
-export function main(env) {
+export function main(env: Record<string, string | undefined>) {
   const { repo, number } = prTarget(env);
   // The token is for the one write: no other call, and no child process, inherits it.
   const token = env.UPLOAD_TOKEN ?? '';

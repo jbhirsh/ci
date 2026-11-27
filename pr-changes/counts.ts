@@ -28,10 +28,10 @@ export const GREEN = '#3d874d';
 export const RED = '#b6605d';
 
 /** The two sizes: pixels, how far the image lifts its digits, and the screens it is for. */
-export const SIZES = /** @type {const} */ ([
+export const SIZES = [
   { size: 12, lift: 1 },
   { size: 14, lift: 0 },
-]);
+] as const;
 
 /** The screen width, in pixels, from which the larger image is shown. */
 export const WIDE = 768;
@@ -40,26 +40,17 @@ export const WIDE = 768;
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 export const LINK = new RegExp(`^https://github\\.com/user-attachments/assets/${UUID}$`);
 
-/** @param {string} text */
-export const isLink = (text) => LINK.test(text);
+export const isLink = (text: string) => LINK.test(text);
 
 /**
  * The plain text of a pair.
- *
- * @param {number} added
- * @param {number} removed
  */
-export const pairText = (added, removed) => `+${added} −${removed}`;
+export const pairText = (added: number, removed: number) => `+${added} −${removed}`;
 
 /**
  * A character run as paths, in font units, from `x`.
- *
- * @param {string} text
- * @param {number} x
- * @param {string} fill
- * @returns {{ markup: string, end: number }}
  */
-function run(text, x, fill) {
+function run(text: string, x: number, fill: string): { markup: string; end: number } {
   let markup = '';
   for (const ch of text) {
     const glyph = GLYPHS[ch];
@@ -71,13 +62,12 @@ function run(text, x, fill) {
 
 /**
  * One size of a pair, as an SVG.
- *
- * @param {number} added
- * @param {number} removed
- * @param {{ size: number, lift: number }} look
- * @returns {string}
  */
-export function svg(added, removed, { size, lift }) {
+export function svg(
+  added: number,
+  removed: number,
+  { size, lift }: { size: number; lift: number },
+): string {
   const plus = run(`+${added}`, 0, GREEN);
   const minus = run(`−${removed}`, plus.end + SPACE, RED);
   const k = size / UNITS;
@@ -92,20 +82,20 @@ export function svg(added, removed, { size, lift }) {
 
 /**
  * An image's content hash, which names it and keys the index.
- *
- * @param {string | Uint8Array} bytes
  */
-export const hashOf = (bytes) => createHash('sha256').update(bytes).digest('hex');
+export const hashOf = (bytes: string | Uint8Array) =>
+  createHash('sha256').update(bytes).digest('hex');
 
 /**
  * Both images of a pair.
  *
- * @param {number} added
- * @param {number} removed
- * @returns {{ size: number, svg: string, sha: string, file: string }[]} the
- *   file name is the hash and the size only, never from the PR
+ * @returns each size's image, whose file name is the hash and the size only,
+ *   never from the PR
  */
-export function images(added, removed) {
+export function images(
+  added: number,
+  removed: number,
+): { size: number; svg: string; sha: string; file: string }[] {
   return SIZES.map((look) => {
     const text = svg(added, removed, look);
     const sha = hashOf(text);
@@ -116,12 +106,12 @@ export function images(added, removed) {
 /**
  * The markup of a pair from its two links: the smaller image everywhere, the
  * larger from WIDE up.
- *
- * @param {number} added
- * @param {number} removed
- * @param {{ small: string, large: string }} links
  */
-export const picture = (added, removed, { small, large }) =>
+export const picture = (
+  added: number,
+  removed: number,
+  { small, large }: { small: string; large: string },
+) =>
   `<picture><source media="(min-width: ${WIDE}px)" srcset="${large}"><img src="${small}" alt="${pairText(added, removed)}"></picture>`;
 
 /** The index's entries: a content hash, `=`, the link's id. */
@@ -134,13 +124,9 @@ const STAGED = /!\[([0-9a-f]{64})\]\((https:\/\/github\.com\/[^)\s]*)\)/g;
  * What a description's index and staging block claim: image hash → link.
  * Only these two blocks are read, and a link only in its attachment form;
  * the claim is checked by fetching before it is used.
- *
- * @param {string} body
- * @returns {Map<string, string>}
  */
-export function readIndex(body) {
-  /** @type {Map<string, string>} */
-  const found = new Map();
+export function readIndex(body: string): Map<string, string> {
+  const found: Map<string, string> = new Map();
   const index = ownBlock(body, 'index');
   if (index) {
     for (const [, sha, id] of body.slice(index.from, index.to).matchAll(ENTRY)) {
@@ -158,10 +144,10 @@ export function readIndex(body) {
 /**
  * The index block's text for some entries: one hidden comment.
  *
- * @param {ReadonlyMap<string, string>} links image hash → link
- * @returns {string} empty for none
+ * @param links image hash → link
+ * @returns empty for none
  */
-export function indexText(links) {
+export function indexText(links: ReadonlyMap<string, string>): string {
   // In hash order, so the same links give the same text however they were found.
   const entries = [...links]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

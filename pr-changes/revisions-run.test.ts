@@ -3,6 +3,8 @@ import { MAX_CHARS } from '../lib/comment.mjs';
 import { bodyProblems } from '../pr-template/body.ts';
 import { gitHubIo, headingBefore, main, revisions } from './revisions-run.ts';
 import { parseTable } from './revisions.ts';
+import type { Io, Pull } from './revisions-run.ts';
+import type { Api } from '../lib/comment.mjs';
 
 const REPO = 'o/r';
 const A = 'a'.repeat(40);
@@ -11,34 +13,38 @@ const C = 'c'.repeat(40);
 const PAIR = '<!-- pr-changes:revisions -->\n<!-- /pr-changes:revisions -->';
 const BODY = `## Goal\n\nMake it work. More.\n\n## Changes\n\n### 1. c\n\nwhy\n\n## Checklist\n\nNothing to do.\n\n${PAIR}\n`;
 /** The check's Revisions problems for a description at `head`. */
-const revisionsProblems = (/** @type {string} */ text, /** @type {string} */ head) =>
+const revisionsProblems = (text: string, head: string) =>
   bodyProblems(text, head).filter((p) => /Revisions/.test(p));
 /** The description with the current revision's placeholder row filled, as its author would (ci#140). */
-const filled = (/** @type {string} */ text) => text.replace('|  |  |', '| A change | Its reason |');
+const filled = (text: string) => text.replace('|  |  |', '| A change | Its reason |');
 /** The check's one problem with a fresh write: the current revision's row, for `head`, is to fill. */
-const toFill = (/** @type {string} */ head) => [
+const toFill = (head: string) => [
   expect.stringMatching(new RegExp(`^fill Revisions' current revision, \`${head.slice(0, 7)}\`: `)),
 ];
 
 /**
  * A fake io: a description that writes replace, and a PR at a head.
- *
- * @param {Partial<Omit<import('./revisions-run.ts').Io, 'body' | 'pull'>> & { body?: string, pull?: Partial<import('./revisions-run.ts').Pull>, heads?: string[] }} [over]
  */
-function fake({ body: first, pull, heads: queued, ...over } = {}) {
+function fake({
+  body: first,
+  pull,
+  heads: queued,
+  ...over
+}: Partial<Omit<Io, 'body' | 'pull'>> & {
+  body?: string;
+  pull?: Partial<Pull>;
+  heads?: string[];
+} = {}) {
   let body = first ?? BODY;
   const heads = [...(queued ?? [])];
-  /** @type {string[]} */
-  const logs = [];
-  /** @type {string[]} */
-  const writes = [];
-  /** @type {import('./revisions-run.ts').Io} */
-  const io = {
+  const logs: string[] = [];
+  const writes: string[] = [];
+  const io: Io = {
     pull: () => ({
       state: 'open',
       author: 'person',
       headRef: 'feature',
-      headSha: heads.length > 0 ? /** @type {string} */ (heads.shift()) : B,
+      headSha: heads.length > 0 ? (heads.shift() as string) : B,
       headRepo: REPO,
       ...pull,
     }),
@@ -61,7 +67,7 @@ function fake({ body: first, pull, heads: queued, ...over } = {}) {
   return { io, logs, writes, body: () => body };
 }
 
-const run = (/** @type {ReturnType<typeof fake>} */ f, /** @type {string | null} */ before = A) =>
+const run = (f: ReturnType<typeof fake>, before: string | null = A) =>
   revisions(f.io, { repo: REPO, before });
 
 describe('revisions', () => {
@@ -123,11 +129,11 @@ describe('revisions', () => {
     });
 
     it('is left alone with no BEFORE (an edit), at one head, or when a marker is torn', () => {
-      for (const [body, before] of /** @type {[string, string | null][]} */ ([
+      for (const [body, before] of [
         [bare, null],
         [bare, B],
         [`${bare}\n<!-- pr-changes:revisions -->\n`, A],
-      ])) {
+      ] as [string, string | null][]) {
         const f = fake({ body });
         expect(run(f, before)).toBe(false);
         expect(f.writes).toEqual([]);
@@ -143,14 +149,14 @@ describe('revisions', () => {
   });
 
   describe('the first write, from the PR’s timeline', () => {
-    const sha = (/** @type {number} */ n) => n.toString(16).padStart(2, '0').repeat(20);
-    const short = (/** @type {number} */ n) => sha(n).slice(0, 7);
-    const forced = (/** @type {string} */ id) => ({
+    const sha = (n: number) => n.toString(16).padStart(2, '0').repeat(20);
+    const short = (n: number) => sha(n).slice(0, 7);
+    const forced = (id: string) => ({
       event: 'head_ref_force_pushed',
       commit_id: id,
     });
     // A row has no number written: it is counted from the oldest, which is what this reads.
-    const revs = (/** @type {string} */ out) =>
+    const revs = (out: string) =>
       parseTable(
         /<!-- pr-changes:revisions -->([\s\S]*)<!-- \/pr-changes:revisions -->/.exec(out)?.[1] ??
           '',
@@ -561,22 +567,18 @@ describe('revisions', () => {
 });
 
 describe('gitHubIo', () => {
-  /** @param {Record<string, unknown>} answers */
-  const api = (answers, calls = /** @type {unknown[][]} */ ([])) =>
-    /** @type {import('../lib/comment.mjs').Api} */ (
-      (method, route, body, options) => {
-        calls.push([method, route, body, options]);
-        const key = Object.keys(answers).find((k) => route.startsWith(k));
-        if (key === undefined) throw new Error(`unexpected ${route}`);
-        const answer = answers[key];
-        if (answer instanceof Error) throw answer;
-        return answer;
-      }
-    );
+  const api = (answers: Record<string, unknown>, calls = [] as unknown[][]) =>
+    ((method, route, body, options) => {
+      calls.push([method, route, body, options]);
+      const key = Object.keys(answers).find((k) => route.startsWith(k));
+      if (key === undefined) throw new Error(`unexpected ${route}`);
+      const answer = answers[key];
+      if (answer instanceof Error) throw answer;
+      return answer;
+    }) as Api;
 
   it('reads the PR, the description and the commits; the token reaches the write alone', () => {
-    /** @type {unknown[][]} */
-    const calls = [];
+    const calls: unknown[][] = [];
     const io = gitHubIo({
       api: api(
         {
@@ -633,7 +635,7 @@ describe('gitHubIo', () => {
     io.write('new');
     expect(io.canWrite).toBe(true);
     const withToken = calls.filter(
-      (c) => /** @type {{ token?: string } | undefined} */ (c[3])?.token !== undefined,
+      (c) => (c[3] as { token?: string } | undefined)?.token !== undefined,
     );
     expect(withToken).toEqual([
       ['PATCH', `repos/${REPO}/issues/5`, { body: 'new' }, { token: 'secret' }],
@@ -703,8 +705,7 @@ describe('gitHubIo', () => {
   });
 
   it('compares with one request, which answers the status and the commits', () => {
-    /** @type {unknown[][]} */
-    const calls = [];
+    const calls: unknown[][] = [];
     const io = gitHubIo({
       api: api(
         {
@@ -727,8 +728,7 @@ describe('gitHubIo', () => {
   });
 
   it('says when a long timeline is cut short', () => {
-    /** @type {string[]} */
-    const logs = [];
+    const logs: string[] = [];
     const full = Array.from({ length: 100 }, () => ({ event: 'labeled' }));
     const io = gitHubIo({
       api: api({ [`repos/${REPO}/issues/5/timeline`]: full }),
@@ -772,8 +772,12 @@ describe('main', () => {
   });
 
   it('takes the person’s token out of the environment before anything is called', () => {
-    /** @type {Record<string, string | undefined>} */
-    const env = { GITHUB_REPOSITORY: REPO, NUMBER: '5', UPLOAD_TOKEN: 'secret', BEFORE: A };
+    const env: Record<string, string | undefined> = {
+      GITHUB_REPOSITORY: REPO,
+      NUMBER: '5',
+      UPLOAD_TOKEN: 'secret',
+      BEFORE: A,
+    };
     // No gh here: the first call fails, after the token has gone.
     try {
       main(env);

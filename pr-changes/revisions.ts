@@ -163,18 +163,25 @@ const OMITTED = /^_(\d{1,6}) earlier revisions? left out to stay under GitHub's 
 const CAPPED =
   /^_(\d{1,6}) earlier heads? (?:is|are) not listed: the (?:table|list) keeps the first head and the latest ones\._$/;
 
-/**
- * One revision of the PR.
- *
- * @typedef {object} Row
- * @property {number} rev its place from the oldest, 1 up (read from an old table's Rev cell, else counted)
- * @property {boolean} current
- * @property {string} sha the revision's head, 40 hex
- * @property {string | null} prev the head before it, 40 hex, which its compare link spans (null for the first, and when the old head is gone)
- * @property {string} note the tool's note, HTML on one line (`Opened`, `rewritten from …`), or ''
- * @property {string[]} rows the author's rows of the table, each a line starting `|`, as written
- * @property {string[]} typed any other line the author typed in the block
- */
+/** One revision of the PR. */
+export type Row = {
+  /** its place from the oldest, 1 up (read from an old table's Rev cell, else counted) */
+  rev: number;
+  current: boolean;
+  /** the revision's head, 40 hex */
+  sha: string;
+  /**
+   * the head before it, 40 hex, which its compare link spans (null for the first, and when the old
+   * head is gone)
+   */
+  prev: string | null;
+  /** the tool's note, HTML on one line (`Opened`, `rewritten from …`), or '' */
+  note: string;
+  /** the author's rows of the table, each a line starting `|`, as written */
+  rows: string[];
+  /** any other line the author typed in the block */
+  typed: string[];
+};
 
 /** The most heads the first write of a table lists (the first, and the latest of the rest). */
 export const HISTORY_HEADS = 20;
@@ -188,7 +195,8 @@ export const NO_LONGER = '(none of its commits is on the PR now)';
 export const FIRST_KNOWN =
   "the first head GitHub's record of the PR names (earlier heads were replaced)";
 
-/** @typedef {Record<string, unknown>} TimelineEvent  one event of a PR's timeline: only `event` and `commit_id` are read */
+/** one event of a PR's timeline: only `event` and `commit_id` are read */
+export type TimelineEvent = Record<string, unknown>;
 
 /**
  * The heads a PR has had, oldest first, as far as its timeline says (the
@@ -197,12 +205,11 @@ export const FIRST_KNOWN =
  * current head. Empty when the timeline names no force-push (the caller then
  * starts from `before`), and when fewer than two distinct heads come out.
  * Consecutive repeats are one head.
- *
- * @param {readonly TimelineEvent[]} events
- * @param {{ head: string, before: string | null }} now
- * @returns {string[]}
  */
-export function headChain(events, { head, before }) {
+export function headChain(
+  events: readonly TimelineEvent[],
+  { head, before }: { head: string; before: string | null },
+): string[] {
   return headHistory(events, { head, before }).chain;
 }
 
@@ -211,15 +218,13 @@ export function headChain(events, { head, before }) {
  * earlier heads were replaced before it) rather than `before`, the head the PR
  * had before this push, which is its opening head when no force-push came
  * earlier.
- *
- * @param {readonly TimelineEvent[]} events
- * @param {{ head: string, before: string | null }} now
- * @returns {{ chain: string[], fromTimeline: boolean }}
  */
-export function headHistory(events, { head, before }) {
+export function headHistory(
+  events: readonly TimelineEvent[],
+  { head, before }: { head: string; before: string | null },
+): { chain: string[]; fromTimeline: boolean } {
   const sha = /^[0-9a-f]{40}$/;
-  /** @type {string[]} */
-  const ids = [];
+  const ids: string[] = [];
   for (const e of events) {
     if (e?.event !== 'head_ref_force_pushed' || typeof e.commit_id !== 'string') continue;
     const id = e.commit_id.toLowerCase();
@@ -237,12 +242,11 @@ export function headHistory(events, { head, before }) {
  * Which heads of a chain are written, each with its true revision number (its
  * place in the whole chain, from 1): all of them up to `max`, else the first
  * and the latest `max - 1`.
- *
- * @param {readonly string[]} chain
- * @param {number} [max]
- * @returns {{ kept: { sha: string, rev: number }[], omitted: number }}
  */
-export function capChain(chain, max = HISTORY_HEADS) {
+export function capChain(
+  chain: readonly string[],
+  max: number = HISTORY_HEADS,
+): { kept: { sha: string; rev: number }[]; omitted: number } {
   const all = chain.map((sha, i) => ({ sha, rev: i + 1 }));
   if (all.length <= max) return { kept: all, omitted: 0 };
   return { kept: [all[0], ...all.slice(all.length - (max - 1))], omitted: all.length - max };
@@ -260,11 +264,8 @@ const FOOTER = /\r?\n---[ \t]*(?:\r?\n)+_[^\r\n]*_[ \t]*(?:\r?\n)*$/;
  * the tool warns about. The pair goes where the template puts it: above the
  * index block of the changes tool when there is one, else at the end, ahead of
  * a footer rule, in the description's own line endings.
- *
- * @param {string} body
- * @returns {string}
  */
-export function withPair(body) {
+export function withPair(body: string): string {
   const found = revisionsPair(body);
   if (found.starts.length > 0 || found.ends.length > 0) return body;
   const { start, end } = blocks.markers('revisions');
@@ -288,23 +289,23 @@ export function withPair(body) {
   return revisionsPair(out).at ? out : `${pair}${nl}${nl}${body}`;
 }
 
-/**
- * The content of the Revisions block, read.
- *
- * @typedef {object} Table
- * @property {Row[]} rows the revisions, as read
- * @property {string[]} rest lines that are no revision, kept below the blocks
- * @property {number} omitted how many earlier revisions a past run left out
- * @property {number} [capped] how many earlier heads the first write didn't list (HISTORY_HEADS)
- */
+/** The content of the Revisions block, read. */
+export type Table = {
+  /** the revisions, as read */
+  rows: Row[];
+  /** lines that are no revision, kept below the blocks */
+  rest: string[];
+  /** how many earlier revisions a past run left out */
+  omitted: number;
+  /** how many earlier heads the first write didn't list (HISTORY_HEADS) */
+  capped?: number;
+};
 
 /**
  * The text of a cell or line with what could open or close an HTML comment, or start a bogus one
  * (`<!x`, `<?x`, `</ x`), made inert.
- *
- * @param {string} text
  */
-export const inert = (text) =>
+export const inert = (text: string) =>
   text
     // `<!`, `<?` and `</` with no letter after it start a bogus comment, which ends at the first `>`
     // and so can swallow the `</details>` after it, as `<!--` does.
@@ -320,10 +321,8 @@ const STRUCTURAL =
  * `^`, and not for GitHub, so they are spaces here), with a comment and a tag of the block's own
  * made harmless, so that it can't end the block. What is escaped reads back as the same text, and
  * is not escaped again.
- *
- * @param {string} text
  */
-const lineText = (text) =>
+const lineText = (text: string) =>
   inert(text.replace(/\s*[\r\n\u2028\u2029]\s*/g, ' ').trim()).replace(STRUCTURAL, '&lt;');
 
 /**
@@ -331,10 +330,8 @@ const lineText = (text) =>
  * table's current row (straight after a head link that opens it, or in a first cell before a cell
  * that holds one) defused with a zero-width space. Only that one: a line already defused is left
  * as it is.
- *
- * @param {string} line
  */
-const defusedRow = (line) =>
+const defusedRow = (line: string) =>
   line
     .replace(
       /^(\|?[ \t]*(?:\*\*)?(?:👉 )?\[`[0-9a-f]{7}`\]\([^)]*\)(?:\*\*)?\s*)\(current\)/,
@@ -353,9 +350,9 @@ const defusedRow = (line) =>
  * first joined into the last, with their pipes escaped, or an empty last cell. A row of two cells is
  * left exactly as it is.
  *
- * @param {string} row a line starting `|`
+ * @param row a line starting `|`
  */
-const twoCells = (row) => {
+const twoCells = (row: string) => {
   const inner = row.replace(/^\|/, '').replace(/(?<!\\)\|\s*$/, '');
   const parts = inner.split(/(?<!\\)\|/);
   if (parts.length === 2 || inner.trim() === '') return row;
@@ -368,13 +365,13 @@ const twoCells = (row) => {
 };
 
 /** A `|` in a table cell the author didn't escape: it would end the cell. */
-const cellEscape = (/** @type {string} */ text) => text.replace(/(?<!\\)\|/g, '\\|');
+const cellEscape = (text: string) => text.replace(/(?<!\\)\|/g, '\\|');
 
 /**
- * @param {string} line a line starting `|`
- * @returns {string[]} its cells, trimmed
+ * @param line a line starting `|`
+ * @returns its cells, trimmed
  */
-function cells(line) {
+function cells(line: string): string[] {
   const inner = line.replace(/^\|/, '').replace(/(?<!\\)\|\s*$/, '');
   return inner.split(/(?<!\\)\|/).map((c) => c.trim());
 }
@@ -383,12 +380,8 @@ function cells(line) {
  * A What cell of a Markdown table as the tool wrote it for the current row (each `<br>`-separated
  * line bold) back to the plain lines it holds, one bold layer taken off each line. What the tool
  * wrote is escaped, so a line it wrote never starts and ends with an unescaped `**` of its own.
- *
- * @param {string} what
- * @param {boolean} bold
- * @returns {string[]}
  */
-function markdownLines(what, bold) {
+function markdownLines(what: string, bold: boolean): string[] {
   return what
     .split('<br>')
     .map((l) => (bold && /^\*\*[\s\S]+\*\*$/.test(l) && l.length > 4 ? l.slice(2, -2) : l))
@@ -406,18 +399,18 @@ const COMPARE_LINE =
  * compare link's old head is kept), the other lines of What become the first row's What, one after
  * another with `<br>` (`—` when there is none), and the old Why its Why cell.
  *
- * @param {readonly string[]} what the lines of What, each already one line
- * @param {string} why
- * @param {string} sha the revision's head
- * @returns {{ prev: string | null, note: string, rows: string[] }}
+ * @param what the lines of What, each already one line
+ * @param why
+ * @param sha the revision's head
  */
-function fromOld(what, why, sha) {
-  /** @type {string | null} */
-  let prev = null;
-  /** @type {string[]} */
-  const notes = [];
-  /** @type {string[]} */
-  const keep = [];
+function fromOld(
+  what: readonly string[],
+  why: string,
+  sha: string,
+): { prev: string | null; note: string; rows: string[] } {
+  let prev: string | null = null;
+  const notes: string[] = [];
+  const keep: string[] = [];
   for (const line of what) {
     const compare = COMPARE_LINE.exec(line);
     if (compare) prev = compare[2] === sha ? compare[1] : prev;
@@ -443,15 +436,22 @@ const MORE = /^[ \t]*<tr>\s*<td\b[^>]*>([\s\S]*?)<\/td>\s*<\/tr>[ \t]*$/;
 /** A line of an old Markdown table's frame (its header and its rule), which the tool no longer writes. */
 const OLD_FRAME_LINE = /^\|\s*(?:Rev|What changed)\s*\|/;
 
-/**
- * @typedef {object} Summary What a revision's summary line holds.
- * @property {string} sha the head link's sha
- * @property {boolean} current whether `(current)` follows the head link
- * @property {string} [from] the compare link's old head, when there is one
- * @property {string} [to] the compare link's new head
- * @property {string} [note] what follows the ` · ` after the head link, `(current)` and the compare
- *   link, trimmed (`''` when nothing does); none without a ` · ` there
- */
+/** What a revision's summary line holds. */
+export type Summary = {
+  /** the head link's sha */
+  sha: string;
+  /** whether `(current)` follows the head link */
+  current: boolean;
+  /** the compare link's old head, when there is one */
+  from?: string;
+  /** the compare link's new head */
+  to?: string;
+  /**
+   * what follows the ` · ` after the head link, `(current)` and the compare link, trimmed (`''`
+   * when nothing does); none without a ` · ` there
+   */
+  note?: string;
+};
 
 /**
  * A reader of a revision's summary line, a head link of `where` (the repo, escaped for a pattern):
@@ -463,11 +463,8 @@ const OLD_FRAME_LINE = /^\|\s*(?:Rev|What changed)\s*\|/;
  * 64 KB description would have held `PR changes` to its time limit on every push. It reads what
  * that pattern read, its backtracking included (the property test keeps the pattern to check):
  * a compare link with no ` · ` after it and text left over is read as a note that holds the link.
- *
- * @param {string} where
- * @returns {(label: string) => Summary | null}
  */
-export function summaryReader(where) {
+export function summaryReader(where: string): (label: string) => Summary | null {
   const html = htmlLink(where);
   const leads = [htmlLeadBold(html), htmlLeadPlain(html)].map(
     (lead) => new RegExp(String.raw`^<summary>\s*${lead}`),
@@ -480,11 +477,7 @@ export function summaryReader(where) {
   const dot = /\s*·/y;
   const END = '</summary>';
   /** What `pattern` (sticky) matches in `text` at `from`, or null. */
-  const read = (
-    /** @type {RegExp} */ pattern,
-    /** @type {string} */ text,
-    /** @type {number} */ from,
-  ) => {
+  const read = (pattern: RegExp, text: string, from: number) => {
     pattern.lastIndex = from;
     return pattern.exec(text);
   };
@@ -492,7 +485,7 @@ export function summaryReader(where) {
    * What is left from `from`: a note after ` · ` (`''` when only spaces follow it), no note
    * (`undefined`) when only spaces are left, or else null.
    */
-  const tail = (/** @type {string} */ middle, /** @type {number} */ from) => {
+  const tail = (middle: string, from: number) => {
     const sep = read(dot, middle, from);
     if (sep) return { note: middle.slice(from + sep[0].length).trim() };
     return middle.slice(from).trim() === '' ? { note: undefined } : null;
@@ -524,11 +517,10 @@ export function summaryReader(where) {
  * Reads the block's content (what is between its markers): the `<details>` blocks the tool writes,
  * and the shapes earlier PRs hold.
  *
- * @param {string} inner
- * @param {string} repo `owner/name`: a head link must point here
- * @returns {Table}
+ * @param inner
+ * @param repo `owner/name`: a head link must point here
  */
-export function parseTable(inner, repo) {
+export function parseTable(inner: string, repo: string): Table {
   // The repo goes into a pattern: every character a pattern reads is escaped, the backslash with them.
   const where = repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const link = `\\[\`([0-9a-f]{7})\`\\]\\(https://github\\.com/${where}/commit/([0-9a-f]{40})\\)`;
@@ -540,34 +532,30 @@ export function parseTable(inner, repo) {
   const plain = new RegExp(`^${leadPlain(link)}${tail}`);
   const html = htmlLink(where);
   // The old HTML table's first row of a revision: its head cell and its why.
-  const first = (/** @type {string} */ lead) =>
+  const first = (lead: string) =>
     new RegExp(
       String.raw`^[ \t]*<tr>\s*<td\b[^>]*>\s*${lead}(\s*\(current\))?\s*</td>\s*<td\b[^>]*>([\s\S]*?)</td>\s*</tr>[ \t]*$`,
     );
   const htmlBold = first(htmlLeadBold(html));
   const htmlPlain = first(htmlLeadPlain(html));
   const readSummary = summaryReader(where);
-  /** @type {Row[]} */
-  const rows = [];
-  /** @type {string[]} */
-  const rest = [];
+  const rows: Row[] = [];
+  const rest: string[] = [];
   // What the old HTML table's rows hold, until the lines of a revision are all read.
-  /** @type {Map<Row, { what: string[], why: string }>} */
-  const old = new Map();
+  const old: Map<Row, { what: string[]; why: string }> = new Map();
   let omitted = 0;
   let capped = 0;
   // The revision the last row of the old HTML table opened, while the rows after it are its lines.
-  /** @type {Row | null} */
-  let open = null;
+  let open: Row | null = null;
   const lines = inner.split(/\r?\n/);
   // What the tool writes again, and so never keeps: the heading, an old Markdown table's header and
   // rule, and a table's empty row.
-  const isFrame = (/** @type {string} */ line) =>
+  const isFrame = (line: string) =>
     line === HEADING ||
     OLD_FRAME_LINE.test(line) ||
     TABLE_RULE_LINE.test(line) ||
     TABLE_EMPTY_LINE.test(line);
-  const keepLine = (/** @type {string} */ line) =>
+  const keepLine = (line: string) =>
     rest.push(
       inert(line.trim().replace(/[\u2028\u2029]/g, ' '))
         .replace(STRUCTURAL, '&lt;')
@@ -616,8 +604,7 @@ export function parseTable(inner, repo) {
       const label = at === -1 ? '' : block[at].trim().replace(/<\/details>\s*$/i, '');
       const s = readSummary(label);
       if (s) {
-        /** @type {Row} */
-        const row = {
+        const row: Row = {
           rev: 0,
           current: s.current,
           sha: s.sha,
@@ -666,8 +653,7 @@ export function parseTable(inner, repo) {
       const h = text.endsWith('</tr>') ? (htmlBold.exec(text) ?? htmlPlain.exec(text)) : null;
       const more = h || !open || !text.endsWith('</tr>') ? null : MORE.exec(text);
       if (h) {
-        /** @type {Row} */
-        const row = {
+        const row: Row = {
           rev: 0,
           current: h[3] !== undefined,
           sha: h[1],
@@ -700,8 +686,7 @@ export function parseTable(inner, repo) {
     // (a pipe in the Why is the author's text, not another column).
     const asBold = c.length >= 2 ? bold.exec(c[0]) : null;
     const lead = asBold ?? (c.length >= 2 ? plain.exec(c[0]) : null);
-    /** @type {Row | null} */
-    let row = null;
+    let row: Row | null = null;
     if (lead && lead[2].startsWith(lead[1])) {
       row = {
         rev: 0,
@@ -754,26 +739,19 @@ export function parseTable(inner, repo) {
 
 /**
  * The head a table says the PR was last at: its `(current)` row, else the highest Rev.
- *
- * @param {readonly Row[]} rows
- * @returns {string | null}
  */
-export function previousHead(rows) {
+export function previousHead(rows: readonly Row[]): string | null {
   const current = rows.find((r) => r.current);
   if (current) return current.sha;
   return (
-    rows.reduce((/** @type {Row | null} */ best, r) => (!best || r.rev > best.rev ? r : best), null)
-      ?.sha ?? null
+    rows.reduce((best: Row | null, r) => (!best || r.rev > best.rev ? r : best), null)?.sha ?? null
   );
 }
 
 /**
  * A revision's summary: the head link, a compare link when a head comes before it, the note.
- *
- * @param {Row} row
- * @param {string} repo
  */
-function summaryLine(row, repo) {
+function summaryLine(row: Row, repo: string) {
   const link = `<a href="https://github.com/${repo}/commit/${row.sha}"><code>${row.sha.slice(0, 7)}</code></a>`;
   const lead = row.current ? `<b>👉 ${link}</b> (current)` : link;
   const compare = row.prev
@@ -787,12 +765,8 @@ function summaryLine(row, repo) {
  * A revision's block: open for the newest (`current`), the summary, a blank line, the table (its
  * header and rule are the tool's; the rows are the author's, as written, one empty one when there is
  * none), a blank line, what else the author typed, `</details>`.
- *
- * @param {Row} row
- * @param {string} repo
- * @returns {string[]}
  */
-function revisionBlock(row, repo) {
+function revisionBlock(row: Row, repo: string): string[] {
   const rows = row.rows.map((r) => twoCells(defusedRow(lineText(r)))).filter((r) => r !== '');
   const typed = row.typed.map((l) => defusedRow(lineText(l))).filter((l) => l !== '');
   return [
@@ -811,12 +785,12 @@ function revisionBlock(row, repo) {
 /**
  * The block's content: the heading (unless one stands before the block), a `<details>` for each
  * revision newest first, a note of left-out revisions, and the lines kept.
- *
- * @param {Table} table
- * @param {string} repo
- * @param {{ heading: boolean }} options
  */
-export function renderTable({ rows, rest, omitted, capped = 0 }, repo, { heading }) {
+export function renderTable(
+  { rows, rest, omitted, capped = 0 }: Table,
+  repo: string,
+  { heading }: { heading: boolean },
+) {
   // One revision is current, the newest one that says so: the check reads the first, and one block is open.
   const newestCurrent = [...rows].sort((a, b) => b.rev - a.rev).find((r) => r.current);
   const sorted = [...rows]
@@ -845,15 +819,21 @@ export function renderTable({ rows, rest, omitted, capped = 0 }, repo, { heading
  * What a revision's summary says of the range between two heads: its compare link's old head, and
  * the note. A plain push (`ahead`) has no note, a rewrite says from which head and how many commits
  * it dropped, and a head that can't be read (`gone`) says so, with no compare link.
- *
- * @param {object} range
- * @param {string} range.prev the old head
- * @param {'ahead' | 'rewritten' | 'gone'} range.how `ahead`: the PR grew;
- *   `rewritten`: a force-push or rebase; `gone`: the old head can't be read
- * @param {number} [range.dropped] commits the old head had that the branch no longer has
- * @returns {{ prev: string | null, note: string }}
  */
-export function rangeNote({ prev, how, dropped = 0 }) {
+export function rangeNote({
+  prev,
+  how,
+  dropped = 0,
+}: {
+  /** the old head */
+  prev: string;
+  /**
+   * `ahead`: the PR grew; `rewritten`: a force-push or rebase; `gone`: the old head can't be read
+   */
+  how: 'ahead' | 'rewritten' | 'gone';
+  /** commits the old head had that the branch no longer has */
+  dropped?: number;
+}): { prev: string | null; note: string } {
   const old = prev.slice(0, 7);
   if (how === 'ahead') return { prev, note: '' };
   if (how === 'gone') {
@@ -870,10 +850,9 @@ export function rangeNote({ prev, how, dropped = 0 }) {
  * `## Goal` (or `## Problem`) heading of the lines a reader sees, cut at its
  * first full stop and at WHY_CHARS, escaped. Empty when there is none.
  *
- * @param {readonly string[]} lines the description as `renderedLines` gives it
- * @returns {string}
+ * @param lines the description as `renderedLines` gives it
  */
-export function goalSentence(lines) {
+export function goalSentence(lines: readonly string[]): string {
   const at = lines.findIndex((l) => /^#{2}\s+(Goal|Problem)\s*$/i.test(l.trim()));
   if (at === -1) return '';
   const text = lines.slice(at + 1).find((l) => l.trim() !== '' && !/^#{1,6}\s/.test(l.trim()));
@@ -887,16 +866,25 @@ export function goalSentence(lines) {
  * The table with a revision for `head` added, and every other revision no longer current. A table
  * with no revision yet gets revision 1 for the head the PR opened at (`opened`), with the goal's
  * first sentence as the Why of its one row.
- *
- * @param {Table} table
- * @param {object} next
- * @param {string} next.head the new head, 40 hex
- * @param {string | null} next.prev the head before it, which its compare link spans
- * @param {string} next.note its note
- * @param {{ sha: string, why: string } | null} next.opened the head the PR opened at, when the table has no revision
- * @returns {Table}
  */
-export function addRevision(table, { head, prev, note, opened }) {
+export function addRevision(
+  table: Table,
+  {
+    head,
+    prev,
+    note,
+    opened,
+  }: {
+    /** the new head, 40 hex */
+    head: string;
+    /** the head before it, which its compare link spans */
+    prev: string | null;
+    /** its note */
+    note: string;
+    /** the head the PR opened at, when the table has no revision */
+    opened: { sha: string; why: string } | null;
+  },
+): Table {
   const rows = table.rows.map((r) => ({ ...r, current: false }));
   if (rows.length === 0 && opened) {
     rows.push({
@@ -917,19 +905,13 @@ export function addRevision(table, { head, prev, note, opened }) {
 /**
  * The block's content held to REVISIONS_BUDGET by leaving out the oldest revisions whole, as the
  * header says; the rows of a revision that is kept are never touched.
- *
- * @param {Table} table
- * @param {string} repo
- * @param {{ heading: boolean }} options
- * @returns {string}
  */
-export function budgeted(table, repo, options) {
-  /** @param {Table} t */
-  const text = (t) => renderTable(t, repo, options);
+export function budgeted(table: Table, repo: string, options: { heading: boolean }): string {
+  const text = (t: Table) => renderTable(t, repo, options);
   let list = table;
   if (text(list).length <= REVISIONS_BUDGET) return text(list);
   const newest = Math.max(...list.rows.map((r) => r.rev));
-  const middle = (/** @type {Row} */ r) => r.rev !== 1 && r.rev !== newest;
+  const middle = (r: Row) => r.rev !== 1 && r.rev !== newest;
   while (text(list).length > REVISIONS_BUDGET) {
     const droppable = list.rows.filter(middle);
     if (droppable.length === 0) break;

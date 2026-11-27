@@ -23,16 +23,13 @@
 // (https://openfontlicense.org). The paths are a derivative of it, used under
 // that licence, and not sold by themselves.
 
-/**
- * One character: its advance width and its outline, in font units.
- *
- * @typedef {object} Glyph
- * @property {number} advance
- * @property {string} d
- */
+/** One character: its advance width and its outline, in font units. */
+export type Glyph = {
+  advance: number;
+  d: string;
+};
 
-/** @type {{ readonly [char: string]: Glyph }} */
-export const GLYPHS = {
+export const GLYPHS: { readonly [char: string]: Glyph } = {
   0: {
     advance: 614,
     d: 'M307 9Q188 9 121-84Q53-178 53-360Q53-485 85-567Q117-649 174-689Q231-729 307-729Q426-729 494-635Q561-542 561-360Q561-234 529-152Q497-71 440-31Q383 9 307 9M307-60Q396-60 437-136Q478-213 478-360Q478-507 437-583Q396-659 307-659Q219-659 178-583Q137-507 137-360Q137-213 178-136Q219-60 307-60',
