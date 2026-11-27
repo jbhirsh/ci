@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -342,6 +343,109 @@ describe('git and addBaseTree', () => {
       expect(warn).toHaveBeenCalledTimes(1);
     } finally {
       warn.mockRestore();
+    }
+  });
+});
+
+describe('build, with gif.page', () => {
+  // A builder that writes what it was handed into the folder it was given.
+  const BUILDER = `import { writeFileSync } from 'node:fs';
+const [outDir, ...rest] = process.argv.slice(2);
+if (process.env.GIF_TEST_FAIL) process.exit(4);
+writeFileSync(outDir + '/index.html', JSON.stringify({ outDir, rest, cwd: process.cwd(), env: process.env.GIF_TEST_ENV ?? null, gone: process.env.GIF_TEST_GONE ?? null }));
+`;
+  const settings = { mode: undefined, env: { GIF_TEST_ENV: 'set' }, unsetEnv: ['GIF_TEST_GONE'] };
+
+  it("runs the side's own builder with Node, into a new outDir, never Vite", () => {
+    const root = temp();
+    const base = temp();
+    for (const dir of [root, base]) {
+      mkdirSync(path.join(dir, 'tools'));
+      writeFileSync(path.join(dir, 'tools', 'page.mjs'), BUILDER);
+    }
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    process.env.GIF_TEST_GONE = 'here';
+    try {
+      const outDir = path.join(temp(), 'work', 'dist-after');
+      build({ root, cwd: root, outDir, mode: 'test', settings, page: 'tools/page.mjs' });
+      expect(JSON.parse(readFileSync(path.join(outDir, 'index.html'), 'utf8'))).toEqual({
+        outDir,
+        rest: [],
+        cwd: realpathSync(root),
+        env: 'set',
+        gone: null,
+      });
+      expect(log).toHaveBeenCalledWith('pr-gif: building this working tree with tools/page.mjs');
+      expect(existsSync(path.join(root, 'node_modules'))).toBe(false);
+
+      const before = path.join(temp(), 'dist-before');
+      build({ root, cwd: base, outDir: before, mode: undefined, settings, page: 'tools/page.mjs' });
+      expect(JSON.parse(readFileSync(path.join(before, 'index.html'), 'utf8')).cwd).toBe(
+        realpathSync(base),
+      );
+      expect(log).toHaveBeenLastCalledWith('pr-gif: building the base with tools/page.mjs');
+    } finally {
+      log.mockRestore();
+      delete process.env.GIF_TEST_GONE;
+    }
+  });
+
+  it('fails on a base without the builder, and on a builder that fails', () => {
+    const root = temp();
+    writeFileSync(path.join(root, 'page.mjs'), BUILDER);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const outDir = path.join(temp(), 'dist-before');
+      expect(() =>
+        build({ root, cwd: temp(), outDir, mode: undefined, settings, page: 'page.mjs' }),
+      ).toThrow('no page.mjs in the base');
+      expect(existsSync(outDir)).toBe(false);
+      mkdirSync(path.join(root, 'folder.mjs'));
+      expect(() =>
+        build({ root, cwd: root, outDir, mode: undefined, settings, page: 'folder.mjs' }),
+      ).toThrow('no folder.mjs in this working tree');
+      process.env.GIF_TEST_FAIL = '1';
+      expect(() =>
+        build({ root, cwd: root, outDir, mode: undefined, settings, page: 'page.mjs' }),
+      ).toThrow(/Command failed/);
+    } finally {
+      log.mockRestore();
+      delete process.env.GIF_TEST_FAIL;
+    }
+  });
+
+  it("hands Node the builder's absolute path, so a name like an option is still a module", () => {
+    const root = temp();
+    writeFileSync(path.join(root, '--help'), BUILDER);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const outDir = path.join(temp(), 'dist');
+      build({ root, cwd: root, outDir, mode: undefined, settings, page: '--help' });
+      expect(existsSync(path.join(outDir, 'index.html'))).toBe(true);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("stops a builder that hangs at the limit, saying it didn't finish", () => {
+    const root = temp();
+    // Never finishes: a limit of 1 ms ends it, before Node has even started.
+    writeFileSync(path.join(root, 'page.mjs'), 'setInterval(() => {}, 1 << 30);');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      expect(() =>
+        build({
+          root,
+          cwd: root,
+          outDir: path.join(temp(), 'dist'),
+          mode: undefined,
+          settings,
+          page: 'page.mjs',
+          timeoutMs: 1,
+        }),
+      ).toThrow("page.mjs didn't finish building within 0.001 s");
+    } finally {
+      log.mockRestore();
     }
   });
 });

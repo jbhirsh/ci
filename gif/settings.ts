@@ -10,6 +10,15 @@
 //              "ci-videos": the app's CI records its scenarios as videos,
 //              turned into GIFs here (videos.ts, which reads `videos`
 //              below).
+//   page       for a web source, a module that builds the page itself, from
+//              the repo's root (none by default, and the app is built with
+//              its Vite): `node <page> <outDir>` runs it, with no shell, in
+//              each side's root (main's worktree, then the checkout), and it
+//              writes a static page into outDir, the tool's own work folder
+//              (the path never starts with `-`, which Node would read as an
+//              option). It's served by routing, not a server (route.ts), at
+//              http://gif.test. For a repo with no app to build, such as
+//              jbhirsh/ci recording its job-summary report (ci#176).
 //   setup      the app's setup module, from its root (none by default): what
 //              every recording of the app needs around a scenario, such as
 //              stubbing its API or reading production's data (see cli.ts's
@@ -67,6 +76,7 @@ export type VideoSettings = {
 
 export type GifSettings = {
   source: 'web' | 'ci-videos';
+  page: string | undefined;
   setup: string | undefined;
   scenarios: string | undefined;
   viewport: { width: number; height: number };
@@ -94,6 +104,7 @@ export const VIDEO_DEFAULTS: VideoSettings = {
 
 const KEYS = [
   'source',
+  'page',
   'setup',
   'scenarios',
   'viewport',
@@ -156,6 +167,9 @@ export function parseSettings(raw: Record<string, unknown>): GifSettings {
   if (source !== 'web' && source !== 'ci-videos') {
     throw new Error('gif.source must be "web" or "ci-videos"');
   }
+  if (source === 'ci-videos' && raw.page !== undefined) {
+    throw new Error('gif.page is for a web source: "ci-videos" builds nothing here');
+  }
   let viewport = PHONE;
   if (raw.viewport !== undefined) {
     if (!isObject(raw.viewport)) throw new Error('gif.viewport must be { width, height }');
@@ -175,6 +189,8 @@ export function parseSettings(raw: Record<string, unknown>): GifSettings {
   if (!isObject(videos)) throw new Error('gif.videos must be an object');
   return {
     source,
+    // Never a leading `-`, which Node would read as an option.
+    page: inside('page', text('page', raw.page, /^[^\s-]\S*$/)),
     setup: inside('setup', raw.setup),
     scenarios: inside('scenarios', raw.scenarios),
     viewport,

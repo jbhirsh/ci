@@ -8,6 +8,8 @@
 //     the defaults, and nothing more is asked of it);
 //   - for an app whose CI records videos (sift), only that its scenarios
 //     folder, if it names one, is there and holds a Maestro flow;
+//   - a page builder (`gif.page`), if it names one, is there: not run, since
+//     running it is a build;
 //   - a web app's setup module, if it names one, loads through the app's
 //     own Vite and exports the shape cli.ts calls (scenario.ts);
 //   - each module in its scenarios folder, if it names one, loads and
@@ -22,7 +24,7 @@
 // cloud session too, where only Chromium comes installed).
 // Prints what it checked; exits non-zero, naming each problem, on any.
 
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -83,6 +85,11 @@ export async function selftest(
     return problems;
   }
 
+  if (settings.page) {
+    if (statSync(path.join(root, settings.page), { throwIfNoEntry: false })?.isFile())
+      log(`gif: page builder ${settings.page} is there`);
+    else problems.push(`gif.page: no file ${settings.page}`);
+  }
   if (settings.setup) {
     try {
       const module = await loadModule(settings.setup, root);

@@ -72,6 +72,12 @@ vi.mock('./publish.ts', async (actual) => ({
     },
   ),
 }));
+vi.mock('./route.ts', async (actual) => ({
+  ...(await actual()),
+  routePage: vi.fn((_context: unknown, dir: string) =>
+    Promise.resolve(calls.push(`route ${path.basename(dir)}`)),
+  ),
+}));
 vi.mock('./videos.ts', () => ({
   main: vi.fn((argv: string[]) => Promise.resolve(calls.push(`videos ${argv.join(' ')}`))),
 }));
@@ -325,6 +331,61 @@ describe('main, for a web app', () => {
       cause: new Error('no browser'),
     });
     expect(calls.at(-1)).toMatch(/^git worktree remove --force /);
+  });
+});
+
+describe('main, for a page the repo builds itself (gif.page)', () => {
+  it('builds each side with the page module, and routes its folder in place of a server', async () => {
+    const { launch } = fakeBrowser();
+    fakes.playwright = { webkit: { launch } };
+    const root = app({ page: 'tools/page.mjs' });
+    const build = await import('./build.ts');
+    vi.mocked(build.build).mockClear();
+    await main(['flow.mjs']);
+    const built = vi.mocked(build.build).mock.calls.map(([args]) => args);
+    expect(built.map(({ page, outDir }) => [page, path.basename(outDir)])).toEqual([
+      ['tools/page.mjs', 'dist-before'],
+      ['tools/page.mjs', 'dist-after'],
+    ]);
+    expect(built[1].cwd).toBe(root);
+    expect(calls).not.toContain('serve');
+    const routed = (side: string) =>
+      calls.slice(calls.indexOf(`route dist-${side}`), calls.indexOf(`route dist-${side}`) + 3);
+    expect(routed('before')).toEqual(['route dist-before', 'pointer', 'scenario setup before']);
+    expect(routed('after')).toEqual(['route dist-after', 'pointer', 'scenario setup after']);
+    expect(calls.filter((c) => c.startsWith('goto'))).toEqual([
+      'goto http://gif.test/start',
+      'goto http://gif.test/start',
+    ]);
+    expect(calls).toContain('play after http://gif.test');
+    expect(calls).toContain('gif frames-before flow-before.gif 402');
+    expect(calls).toContain('gif frames-after flow-after.gif 402');
+  });
+
+  it('records "after" alone when main has no builder and --before-may-fail says so, and only then', async () => {
+    const { launch } = fakeBrowser();
+    fakes.playwright = { webkit: { launch } };
+    app({ page: 'tools/page.mjs' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const build = await import('./build.ts');
+    vi.mocked(build.build).mockImplementationOnce(() => {
+      throw new Error('no tools/page.mjs in the base');
+    });
+    await main(['flow.mjs', '--before-may-fail']);
+    expect(calls.filter((c) => c.startsWith('route') || c.startsWith('gif '))).toEqual([
+      'route dist-after',
+      'gif frames-after flow-after.gif 402',
+    ]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('"before" failed (no tools/page.mjs in the base)'),
+    );
+
+    calls.length = 0;
+    vi.mocked(build.build).mockImplementationOnce(() => {
+      throw new Error('no tools/page.mjs in the base');
+    });
+    await expect(main(['flow.mjs'])).rejects.toThrow('no tools/page.mjs in the base');
+    expect(calls.some((c) => c.startsWith('gif '))).toBe(false);
   });
 });
 
