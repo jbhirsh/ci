@@ -78,7 +78,15 @@ runs:
         LOAD: ${{ inputs.load }}
         SETTLE: ${{ inputs.settle }}
         REPORT_BASE: ${{ inputs.report-base }}
-      run: node "$GITHUB_ACTION_PATH/summary.ts"
+      # summary.ts runs as Node 24 strips its types. Should setup-node have
+      # failed above, the runner's own Node may strip none: that says so in
+      # a warning rather than a stack trace.
+      run: |
+        if node -e 'process.exit(process.features.typescript ? 0 : 1)'; then
+          node "$GITHUB_ACTION_PATH/summary.ts"
+        else
+          echo "::warning::job-summary: Node $(node --version) on the PATH can't run TypeScript (did setup-node fail?), so no summary was written"
+        fi
 
     # The report page, and this run's tests for later runs to compare with
     # (history.ts), in one artifact. A re-run of the job replaces its first
