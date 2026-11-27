@@ -444,6 +444,83 @@ const MORE = /^[ \t]*<tr>\s*<td\b[^>]*>([\s\S]*?)<\/td>\s*<\/tr>[ \t]*$/;
 const OLD_FRAME_LINE = /^\|\s*(?:Rev|What changed)\s*\|/;
 
 /**
+ * @typedef {object} Summary What a revision's summary line holds.
+ * @property {string} sha the head link's sha
+ * @property {boolean} current whether `(current)` follows the head link
+ * @property {string} [from] the compare link's old head, when there is one
+ * @property {string} [to] the compare link's new head
+ * @property {string} [note] what follows the ` · ` after the head link, `(current)` and the compare
+ *   link, trimmed (`''` when nothing does); none without a ` · ` there
+ */
+
+/**
+ * A reader of a revision's summary line, a head link of `where` (the repo, escaped for a pattern):
+ * `<summary>`, the head link (bold first, then plain), `(current)`, a compare link, a note after
+ * ` · `, then `</summary>` ending the line, with any spaces between them.
+ *
+ * A scan, a part at a time, and not one pattern: `(?:\s*·\s*([\s\S]*?))?\s*</summary>$` was cubic
+ * on a summary of spaces after `· ` with text after `</summary>`, about 2 s at 2 KB (ci#157), and a
+ * 64 KB description would have held `PR changes` to its time limit on every push. It reads what
+ * that pattern read, its backtracking included (the property test keeps the pattern to check):
+ * a compare link with no ` · ` after it and text left over is read as a note that holds the link.
+ *
+ * @param {string} where
+ * @returns {(label: string) => Summary | null}
+ */
+export function summaryReader(where) {
+  const html = htmlLink(where);
+  const leads = [htmlLeadBold(html), htmlLeadPlain(html)].map(
+    (lead) => new RegExp(String.raw`^<summary>\s*${lead}`),
+  );
+  const current = /\s*\(current\)/y;
+  const compare = new RegExp(
+    String.raw`\s*·\s*<a href="https://github\.com/${where}/compare/([0-9a-f]{40})\.\.\.([0-9a-f]{40})">compare <code>[0-9a-f]{7}…[0-9a-f]{7}</code></a>`,
+    'y',
+  );
+  const dot = /\s*·/y;
+  const END = '</summary>';
+  /** What `pattern` (sticky) matches in `text` at `from`, or null. */
+  const read = (
+    /** @type {RegExp} */ pattern,
+    /** @type {string} */ text,
+    /** @type {number} */ from,
+  ) => {
+    pattern.lastIndex = from;
+    return pattern.exec(text);
+  };
+  /**
+   * What is left from `from`: a note after ` · ` (`''` when only spaces follow it), no note
+   * (`undefined`) when only spaces are left, or else null.
+   */
+  const tail = (/** @type {string} */ middle, /** @type {number} */ from) => {
+    const sep = read(dot, middle, from);
+    if (sep) return { note: middle.slice(from + sep[0].length).trim() };
+    return middle.slice(from).trim() === '' ? { note: undefined } : null;
+  };
+  return (label) => {
+    if (!label.endsWith(END)) return null;
+    const lead = leads[0].exec(label) ?? leads[1].exec(label);
+    if (!lead) return null;
+    // Between the head link and the closing `</summary>`, which can't overlap: the link ends `a>` or `b>`.
+    const middle = label.slice(lead[0].length, -END.length);
+    // With `(current)` read, nothing can be read without it: no part after the head starts with it.
+    const mark = read(current, middle, 0);
+    const from = mark ? mark[0].length : 0;
+    const link = read(compare, middle, from);
+    // A compare link with something other than a note after it is the note's text instead.
+    const after = link && tail(middle, from + link[0].length);
+    const rest = after ?? tail(middle, from);
+    if (!rest) return null;
+    return {
+      sha: lead[1],
+      current: mark !== null,
+      ...(link && after ? { from: link[1], to: link[2] } : {}),
+      ...(rest.note === undefined ? {} : { note: rest.note }),
+    };
+  };
+}
+
+/**
  * Reads the block's content (what is between its markers): the `<details>` blocks the tool writes,
  * and the shapes earlier PRs hold.
  *
@@ -469,14 +546,7 @@ export function parseTable(inner, repo) {
     );
   const htmlBold = first(htmlLeadBold(html));
   const htmlPlain = first(htmlLeadPlain(html));
-  // A revision's summary: the head link, `(current)`, a compare link ending at it, a note.
-  const compare = `<a href="https://github\\.com/${where}/compare/([0-9a-f]{40})\\.\\.\\.([0-9a-f]{40})">compare <code>[0-9a-f]{7}…[0-9a-f]{7}</code></a>`;
-  const summary = (/** @type {string} */ lead) =>
-    new RegExp(
-      String.raw`^<summary>\s*${lead}(\s*\(current\))?(?:\s*·\s*${compare})?(?:\s*·\s*([\s\S]*?))?\s*</summary>$`,
-    );
-  const summaryBold = summary(htmlLeadBold(html));
-  const summaryPlain = summary(htmlLeadPlain(html));
+  const readSummary = summaryReader(where);
   /** @type {Row[]} */
   const rows = [];
   /** @type {string[]} */
@@ -544,15 +614,15 @@ export function parseTable(inner, repo) {
       block[0] = details[1];
       const at = block.findIndex((l) => l.trim() !== '');
       const label = at === -1 ? '' : block[at].trim().replace(/<\/details>\s*$/i, '');
-      const s = summaryBold.exec(label) ?? summaryPlain.exec(label);
+      const s = readSummary(label);
       if (s) {
         /** @type {Row} */
         const row = {
           rev: 0,
-          current: s[3] !== undefined,
-          sha: s[1],
-          prev: s[4] !== undefined && s[5] === s[1] ? s[4] : null,
-          note: s[6] === undefined ? '' : lineText(s[6]),
+          current: s.current,
+          sha: s.sha,
+          prev: s.from !== undefined && s.to === s.sha ? s.from : null,
+          note: s.note === undefined ? '' : lineText(s.note),
           rows: [],
           typed: [],
         };

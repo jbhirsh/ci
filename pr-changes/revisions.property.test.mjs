@@ -1,6 +1,12 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { bodyProblems, revisionsPair } from '../pr-template/body.mjs';
+import {
+  bodyProblems,
+  htmlLeadBold,
+  htmlLeadPlain,
+  htmlLink,
+  revisionsPair,
+} from '../pr-template/body.mjs';
 import {
   REVISIONS_BUDGET,
   addRevision,
@@ -12,6 +18,7 @@ import {
   parseTable,
   rangeNote,
   renderTable,
+  summaryReader,
   withPair,
 } from './revisions.mjs';
 
@@ -659,5 +666,98 @@ describe('headHistory (property)', () => {
         },
       ),
     );
+  });
+});
+
+describe('summaryReader (property)', () => {
+  // The one pattern the reader replaced (ci#157), kept as the reference: cubic on spaces after
+  // `· ` with text after `</summary>`, so the lines here stay short enough for it to finish.
+  const where = REPO.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const compare = `<a href="https://github\\.com/${where}/compare/([0-9a-f]{40})\\.\\.\\.([0-9a-f]{40})">compare <code>[0-9a-f]{7}…[0-9a-f]{7}</code></a>`;
+  const [oldBold, oldPlain] = [htmlLeadBold, htmlLeadPlain].map(
+    (lead) =>
+      new RegExp(
+        String.raw`^<summary>\s*${lead(htmlLink(where))}(\s*\(current\))?(?:\s*·\s*${compare})?(?:\s*·\s*([\s\S]*?))?\s*</summary>$`,
+      ),
+  );
+  /** What the old pattern read of `label`, in the reader's shape. */
+  const reference = (/** @type {string} */ label) => {
+    const s = oldBold.exec(label) ?? oldPlain.exec(label);
+    if (!s) return null;
+    return {
+      sha: s[1],
+      current: s[3] !== undefined,
+      ...(s[4] === undefined ? {} : { from: s[4], to: s[5] }),
+      ...(s[6] === undefined ? {} : { note: s[6] }),
+    };
+  };
+  const [A, B, C] = ['a', 'b', 'c'].map((c) => c.repeat(40));
+  const ahrefOf = (/** @type {string} */ s, /** @type {string} */ repo = REPO) =>
+    `<a href="https://github.com/${repo}/commit/${s}"><code>${s.slice(0, 7)}</code></a>`;
+  const compareOf = (/** @type {string} */ from, /** @type {string} */ to, repo = REPO) =>
+    `<a href="https://github.com/${repo}/compare/${from}...${to}">compare <code>${from.slice(0, 7)}…${to.slice(0, 7)}</code></a>`;
+  const shaOf = fc.constantFrom(A, B, C);
+  // Spaces of every kind the pattern's `\s` reads, and two it doesn't.
+  const space = fc
+    .array(fc.constantFrom(' ', '\t', '\r', ' ', LS, PS, '　', '﻿', ZW, '\u0085'), { maxLength: 4 })
+    .map((s) => s.join(''));
+  const lead = fc.oneof(
+    shaOf.map((s) => `<b>👉 ${ahrefOf(s)}</b>`),
+    shaOf.map((s) => `<b>${ahrefOf(s)}</b>`),
+    shaOf.map((s) => ahrefOf(s)),
+    // Near misses: another repo, a link text that isn't the sha's, upper-case hex, a short sha.
+    shaOf.map((s) => ahrefOf(s, 'o/x')),
+    shaOf.map((s) => ahrefOf(s).replace(`<code>${s.slice(0, 7)}`, '<code>1234567')),
+    shaOf.map((s) => ahrefOf(s.toUpperCase())),
+    shaOf.map((s) => ahrefOf(s.slice(0, 39))),
+    shaOf.map((s) => `<b>👉${ahrefOf(s)}</b>`),
+  );
+  const part = fc.oneof(
+    space,
+    fc.constantFrom('·', ' · ', '·  ', '(current)', ' (current)', '</summary>', '<b>', '</a>', 'x'),
+    fc.tuple(shaOf, shaOf).map(([f, t]) => compareOf(f, t)),
+    fc.tuple(shaOf, shaOf).map(([f, t]) => ` · ${compareOf(f, t)}`),
+    fc.tuple(shaOf, shaOf).map(([f, t]) => compareOf(f, t, 'o/x')),
+    fc.string({ maxLength: 6 }),
+    fc.string({ unit: 'binary', maxLength: 4 }),
+  );
+  const label = fc
+    .tuple(
+      fc.constantFrom('<summary>', '<summary> ', '<summary>\t', '<summary', ' <summary>'),
+      lead,
+      fc.array(part, { maxLength: 8 }),
+      fc.constantFrom('</summary>', ' </summary>', '</summary> ', '</summary>x', '', '</Summary>'),
+    )
+    .map(([open, head, parts, close]) => `${open}${head}${parts.join('')}${close}`);
+
+  it('reads every summary line as the old pattern did: the sha, (current), the range and the note, or no match', () => {
+    const read = summaryReader(where);
+    fc.assert(
+      fc.property(label, (line) => {
+        expect(read(line)).toEqual(reference(line));
+      }),
+      RUN,
+    );
+  });
+
+  it('reads the forms the tool writes, and those the old pattern read surprisingly, the same way', () => {
+    const read = summaryReader(where);
+    for (const line of [
+      `<summary><b>👉 ${ahrefOf(B)}</b> (current) · ${compareOf(A, B)} · rewritten from <code>aaaaaaa</code></summary>`,
+      `<summary>${ahrefOf(A)} · Opened</summary>`,
+      // A compare link with text after it and no ` · `: the whole is a note.
+      `<summary>${ahrefOf(B)} · ${compareOf(A, B)} more</summary>`,
+      // ` · ` before nothing: an empty note, not none.
+      `<summary>${ahrefOf(B)} · </summary>`,
+      `<summary>${ahrefOf(B)} (current) (current)</summary>`,
+      `<summary>${ahrefOf(B)} · a </summary> b</summary>`,
+    ]) {
+      expect(read(line)).toEqual(reference(line));
+    }
+    expect(read(`<summary>${ahrefOf(B)} · </summary>`)).toEqual({
+      sha: B,
+      current: false,
+      note: '',
+    });
   });
 });
