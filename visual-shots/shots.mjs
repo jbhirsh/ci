@@ -26,7 +26,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig, appRoot } from '../lib/app.mjs';
-import { mockupMayChange, settings } from '../visual-review/settings.mjs';
+import { mockupMayChange, settings } from '../visual-review/settings.ts';
 
 /** The manifest's file name, beside the shots. */
 export const MANIFEST = 'visual-shots.json';
@@ -110,7 +110,7 @@ export function decodePatch(text) {
 /**
  * Why a patch mustn't be applied, or null when it may.
  *
- * @param {{ files: string[], summary: string, s: import('../visual-review/settings.mjs').Settings }} options
+ * @param {{ files: string[], summary: string, s: import('../visual-review/settings.ts').Settings }} options
  *   `files`: the paths `git apply --numstat -z` lists; `summary`: `git apply
  *   --summary`'s output
  */

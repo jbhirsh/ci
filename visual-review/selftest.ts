@@ -1,8 +1,8 @@
 // Self-test of visual review against an app's checkout:
-// `node visual-review/selftest.mjs <app dir>`. With no `visual-review` key
+// `node visual-review/selftest.ts <app dir>`. With no `visual-review` key
 // the app doesn't use it yet, and that's said, not failed. With one, it
 // checks that
-//   - the settings parse (settings.mjs);
+//   - the settings parse (settings.ts);
 //   - the screenshot workflow they name exists, and calls visual-shots;
 //   - a visual-review.yml calls the reusable workflow, on workflow_run of
 //     the screenshot workflow's name, and isn't listed among its own
@@ -17,7 +17,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
-import { settings } from './settings.mjs';
+import { settings } from './settings.ts';
 
 /**
  * A workflow's `name:`, or null.

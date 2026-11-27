@@ -1,7 +1,7 @@
 // What the `Visual changes` commit status says (ci#64): the rule that lets a
 // PR whose screens changed merge when a person will see them, and stops one
 // that merges itself. Pure: the facts come in, a state and a description go
-// out. review.mjs gathers the facts and posts the status.
+// out. review.ts gathers the facts and posts the status.
 //
 // A changed screen blocks only a PR that merges itself:
 //   - auto-merge off: a person merges, so a person sees the table: success;

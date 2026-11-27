@@ -4,7 +4,7 @@
 // It runs from main's code with the Actions token, checks nothing out, and
 // reads the shots only as bytes from the runs' artifacts. Everything a PR's
 // code wrote is checked where it's read: the manifest (visual-shots), the
-// shots' paths and sizes (compare.mjs), and the base commit, which must be
+// shots' paths and sizes (compare.ts), and the base commit, which must be
 // on main and no older than the PR's merge base.
 //
 // For a PR, in order:
@@ -12,13 +12,13 @@
 //      screenshot job failed, or took nothing (a docs-only PR);
 //   2. main's shots of the base: its newest push run of the screenshot
 //      workflow there. Still running: the status waits (main's run
-//      finishing starts a review of every PR waiting on it, find.mjs).
+//      finishing starts a review of every PR waiting on it, find.ts).
 //      Finished without shots: the status says so;
-//   3. the comparison, its rows and its fingerprint (status.mjs);
+//   3. the comparison, its rows and its fingerprint (status.ts);
 //   4. the status, on the run's head commit;
-//   5. the hand-off to the attach job (attach.mjs, ci#144), an artifact: when
+//   5. the hand-off to the attach job (attach.ts, ci#144), an artifact: when
 //      the result differs from the one the description's record names
-//      (record.mjs), the pictures and the table with each picture's local
+//      (record.ts), the pictures and the table with each picture's local
 //      path, for attach to upload in one BOT_PR_TOKEN edit of the
 //      description; when it's the same, the table re-rendered from the
 //      record's links, for attach to place with the Actions token alone, so
@@ -41,11 +41,11 @@ import path from 'node:path';
 import { newest, pages, statusFrom } from '../lib/github.mjs';
 import { parseUpload } from '../describe/describe.ts';
 import { parseManifest, MANIFEST } from '../visual-shots/shots.mjs';
-import { compareShots } from './compare.mjs';
-import { BOT, assetLink, parseRecord } from './record.mjs';
-import { CONTEXT, fingerprint, readMark, shownAt, status } from './status.mjs';
-import { isMinor, keyOf, lines, pick, renderTable, summary } from './table.mjs';
-import { crop, enlarge, outlined, sideBySide } from './zoom.mjs';
+import { compareShots } from './compare.ts';
+import { BOT, assetLink, parseRecord } from './record.ts';
+import { CONTEXT, fingerprint, readMark, shownAt, status } from './status.ts';
+import { isMinor, keyOf, lines, pick, renderTable, summary } from './table.ts';
+import { crop, enlarge, outlined, sideBySide } from './zoom.ts';
 import { MAX_CHARS } from '../lib/comment.mjs';
 
 export { BOT };
@@ -80,7 +80,7 @@ export { BOT };
  */
 
 /**
- * What the review hands the attach job (attach.mjs), as `attach.json` beside
+ * What the review hands the attach job (attach.ts), as `attach.json` beside
  * the pictures.
  *
  * @typedef {object} Handoff
@@ -89,7 +89,7 @@ export { BOT };
  * @property {number} number
  * @property {string} head the run's head, which a PR's must still be
  * @property {number} run the screenshot run
- * @property {Omit<import('./record.mjs').Record, 'assets'>} record
+ * @property {Omit<import('./record.ts').Record, 'assets'>} record
  * @property {string} section the finished section; with pictures, each
  *   referenced by its local path (`src="./01.png"`)
  * @property {string[]} pictures the files to upload, in pick's order
@@ -99,7 +99,7 @@ export { BOT };
 
 /**
  * The shape of an upload's section. It goes up whenever the section's form
- * changes (table.mjs, describe/describe.ts), so a PR whose last upload is
+ * changes (table.ts, describe/describe.ts), so a PR whose last upload is
  * the old form gets one new upload in the new form, though its pictures
  * didn't change: the fingerprint alone would leave it as it was. 4: the
  * pictures in the description, no upload comment (ci#144).
@@ -146,7 +146,7 @@ export function checkBase(io, base, head) {
  * Main's shots of the base: downloaded into `dir`, or why not.
  *
  * @param {Io} io
- * @param {import('./settings.mjs').Settings} s
+ * @param {import('./settings.ts').Settings} s
  * @param {string} base
  * @param {string} dir
  * @returns {'ready' | 'waiting' | 'missing'}
@@ -200,7 +200,7 @@ function pullFacts(io, number) {
   const author = pr.author?.login ?? '';
   const am = pr.autoMergeRequest;
   return {
-    /** @type {import('./status.mjs').Pull} */
+    /** @type {import('./status.ts').Pull} */
     pull: {
       author,
       bot: pr.author?.__typename === 'Bot' || pr.headRefName.startsWith('bot/'),
@@ -322,11 +322,11 @@ const SECTION_BUDGET = MAX_CHARS - 20_000;
 /**
  * How many screens `all` has that `shown` doesn't.
  *
- * @param {readonly import('./table.mjs').Line[]} all
- * @param {readonly import('./table.mjs').Line[]} shown
+ * @param {readonly import('./table.ts').Line[]} all
+ * @param {readonly import('./table.ts').Line[]} shown
  */
 const dropped = (all, shown) => {
-  const count = (/** @type {readonly import('./table.mjs').Line[]} */ rows) =>
+  const count = (/** @type {readonly import('./table.ts').Line[]} */ rows) =>
     new Set(rows.map((r) => r.state ?? r.label)).size;
   return count(all) - count(shown);
 };
@@ -336,7 +336,7 @@ const dropped = (all, shown) => {
  * that makes a change minor and which changes are. A `minor` setting changed
  * in an app's config re-uploads the open PRs once.
  *
- * @param {readonly import('./table.mjs').Line[]} rows
+ * @param {readonly import('./table.ts').Line[]} rows
  * @param {number} minor
  */
 const layoutOf = (rows, minor) =>
@@ -379,7 +379,7 @@ export function growth(section, count) {
  * The pictures' bytes, in pick's order.
  *
  * @param {Io} io
- * @param {{ pictures: import('./table.mjs').Picture[], changes: import('./compare.mjs').Change[],
+ * @param {{ pictures: import('./table.ts').Picture[], changes: import('./compare.ts').Change[],
  *   before: string, after: string }} input
  */
 function pictureBytes(io, { pictures, changes, before, after }) {
@@ -401,10 +401,10 @@ function pictureBytes(io, { pictures, changes, before, after }) {
   const png = (img) => io.pixels.write(img);
   /**
    * The bytes of one picture: a shot as it is, pixelmatch's diff, or a
-   * picture made from them (zoom.mjs).
+   * picture made from them (zoom.ts).
    *
-   * @param {import('./table.mjs').Picture} p
-   * @param {import('./compare.mjs').Change} change
+   * @param {import('./table.ts').Picture} p
+   * @param {import('./compare.ts').Change} change
    */
   const bytes = (p, change) => {
     const look = change.look;
@@ -412,7 +412,7 @@ function pictureBytes(io, { pictures, changes, before, after }) {
     if (p.side === 'before' || p.side === 'after') {
       return readFileSync(path.join(p.side === 'before' ? before : after, p.file));
     }
-    const l = /** @type {import('./zoom.mjs').Look} */ (look);
+    const l = /** @type {import('./zoom.ts').Look} */ (look);
     if (p.side === 'where') return png(outlined(image(after, p.file), l.places));
     // One picture of the three patches, side by side: the changed place in
     // main's shot, the PR's, and pixelmatch's diff, each enlarged alike.
@@ -428,7 +428,7 @@ function pictureBytes(io, { pictures, changes, before, after }) {
   };
   return pictures.map((p, i) => ({
     name: pictureFile(i),
-    bytes: bytes(p, /** @type {import('./compare.mjs').Change} */ (byFile.get(p.file))),
+    bytes: bytes(p, /** @type {import('./compare.ts').Change} */ (byFile.get(p.file))),
   }));
 }
 
@@ -439,7 +439,7 @@ function pictureBytes(io, { pictures, changes, before, after }) {
  * its last (smallest) screens and says how many.
  *
  * @param {Io} io
- * @param {{ rows: import('./table.mjs').Line[], links: Map<string, string>, base: string,
+ * @param {{ rows: import('./table.ts').Line[], links: Map<string, string>, base: string,
  *   minor: number, slack: (section: string) => number }} input
  *   slack: how much longer the section will grow once written (its local
  *   paths swapped for links)
@@ -473,7 +473,7 @@ function render(io, { rows, links, base, minor, slack }) {
  * was nothing to do.
  *
  * @param {Target} target
- * @param {{ s: import('./settings.mjs').Settings, io: Io }} context
+ * @param {{ s: import('./settings.ts').Settings, io: Io }} context
  * @returns {number | null}
  */
 export function review(target, { s, io }) {
@@ -523,7 +523,7 @@ export function review(target, { s, io }) {
   }
 
   const theirs = mkdtempSync(path.join(tmpdir(), 'main-'));
-  /** @returns {{ result: import('./status.mjs').Result, compared: { rows: import('./table.mjs').Line[], changes: import('./compare.mjs').Change[] } | null }} */
+  /** @returns {{ result: import('./status.ts').Result, compared: { rows: import('./table.ts').Line[], changes: import('./compare.ts').Change[] } | null }} */
   const assess = () => {
     if (!manifest) {
       // No shots is a pass only from a run that succeeded; an expired

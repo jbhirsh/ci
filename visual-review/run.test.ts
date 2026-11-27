@@ -2,14 +2,14 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { gitHubIo, main, parseTarget } from './run.mjs';
+import { gitHubIo, main, parseTarget } from './run.ts';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
 describe('parseTarget', () => {
-  it('reads what find.mjs writes, and nothing else', () => {
+  it('reads what find.ts writes, and nothing else', () => {
     expect(parseTarget('{"kind":"pr","number":5,"run":11}')).toEqual({
       kind: 'pr',
       number: 5,
@@ -198,7 +198,7 @@ describe('gitHubIo', () => {
     const g = io(() => '');
     expect(g.main).toBe('trunk');
     expect(g.uploader).toBe('jbhirsh');
-    const handoff = /** @type {import('./review.mjs').Handoff} */ (
+    const handoff = /** @type {import('./review.ts').Handoff} */ (
       /** @type {unknown} */ ({ version: 1, pictures: ['01.png'] })
     );
     g.handoff(handoff, [{ name: '01.png', bytes: Buffer.from('png') }]);

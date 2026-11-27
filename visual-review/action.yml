@@ -3,7 +3,7 @@ description: >-
   One review of the visual-review workflow (ci#64): a PR's or a mockup's
   screenshot run against main's shots of its base, the `Visual changes`
   status set, and the table handed to the attach job as the artifact
-  `visual-review-attach-<kind>-<number>-<run>` (review.mjs's header says in what order;
+  `visual-review-attach-<kind>-<number>-<run>` (review.ts's header says in what order;
   visual-review/attach puts it in the description, ci#144). Run from a
   checkout of the app's default branch, for its settings, never the PR's:
   it reads the shots only as bytes from the runs' artifacts. It writes
@@ -50,7 +50,7 @@ runs:
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         OWNER: ${{ github.repository_owner }}
         HANDOFF_DIR: ${{ runner.temp }}/visual-review-attach
-      run: node "$GITHUB_ACTION_PATH/run.mjs"
+      run: node "$GITHUB_ACTION_PATH/run.ts"
 
     # One artifact a target, named for its kind, number and screenshot run
     # (two PRs with the same head share a run), which the attach leg for the

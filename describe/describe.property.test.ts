@@ -68,7 +68,7 @@ describe('withSections, for a section in parts and any description of slots', ()
         fc.array(fc.string({ maxLength: 6 }), { maxLength: 6 }),
         fc.array(fc.tuple(fc.nat(8), fc.boolean(), fc.boolean()), { maxLength: 14 }),
         (states, picks) => {
-          // A state with no slot to hold it, as table.mjs sends it, goes to the rest part.
+          // A state with no slot to hold it, as table.ts sends it, goes to the rest part.
           const usable = [...new Set(states.filter(isScreenState))];
           const unusable = states.filter((s) => !isScreenState(s));
           const lines = [partMarker('head'), 'HEAD0X'];

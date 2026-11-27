@@ -7,7 +7,7 @@
 //
 // A change is big when at least `minor` of the screen's pixels differ (0.1%),
 // or the shot is new, gone or resized; otherwise it's minor, and shows where
-// it is and a zoom of it (zoom.mjs) instead of a screen that looks the same.
+// it is and a zoom of it (zoom.ts) instead of a screen that looks the same.
 // Big rows are `Screen | Before | After | Diff`, the share under the name;
 // minor rows are `Screen | Where | Zoom` (the zoom picture holds before, after and diff).
 //
@@ -25,7 +25,7 @@
 // a row of its own, named by its path.
 //
 // The pictures are GitHub attachments, uploaded into the description by
-// the attach job (attach.mjs, ci#144), which swaps each picture's local path
+// the attach job (attach.ts, ci#144), which swaps each picture's local path
 // in the table for its link; at most UPLOAD_LIMIT go up per result: gh attaches at most 50 files a
 // command. pick() decides which: one picture a row first (a big row's after,
 // a minor row's zoom), then the rest of each row, then the diffs. A picture
@@ -34,7 +34,7 @@
 import path from 'node:path';
 import { isScreenState, partMarker } from '../describe/describe.ts';
 import { pairBaselines } from '../lib/baselines.mjs';
-import { WHERE_WIDTH, zoomWidth } from './zoom.mjs';
+import { WHERE_WIDTH, zoomWidth } from './zoom.ts';
 
 /**
  * Text as HTML, safe in a table cell: a `|` would end the cell, and GitHub
@@ -70,19 +70,19 @@ export const DEFAULT_WIDTH = 300;
  * screen's state and its column's name; a shot no column takes has neither.
  *
  * @typedef {{ label: string, width: number, state?: string, size?: string,
- *   change: import('./compare.mjs').Change }} Line
+ *   change: import('./compare.ts').Change }} Line
  */
 
 /**
  * How far a change goes, for putting the largest first: a new, gone or
  * resized shot is the whole screen.
  *
- * @param {import('./compare.mjs').Change} c
+ * @param {import('./compare.ts').Change} c
  */
 const weight = (c) => (c.kind !== 'changed' || c.resized ? 2 : (c.ratio ?? 0));
 
 /**
- * Whether a row is a minor one: its change has a look (compare.mjs).
+ * Whether a row is a minor one: its change has a look (compare.ts).
  *
  * @param {Line} row
  */
@@ -91,7 +91,7 @@ export const isMinor = (row) => row.change.look !== undefined;
 /**
  * The changes as rows, in the table's order.
  *
- * @param {readonly import('./compare.mjs').Change[]} changes
+ * @param {readonly import('./compare.ts').Change[]} changes
  * @param {readonly import('../lib/baselines.mjs').Column[]} columns
  * @returns {Line[]}
  */
@@ -112,7 +112,7 @@ export function lines(changes, columns) {
     for (const column of columns) {
       const cell = row.cells[column.label];
       if (!cell) continue;
-      const change = /** @type {import('./compare.mjs').Change} */ (
+      const change = /** @type {import('./compare.ts').Change} */ (
         byFile.get(/** @type {string} */ (cell.after ?? cell.before))
       );
       out.push({
@@ -129,7 +129,7 @@ export function lines(changes, columns) {
     out.push({
       label: file,
       width: DEFAULT_WIDTH,
-      change: /** @type {import('./compare.mjs').Change} */ (byFile.get(file)),
+      change: /** @type {import('./compare.ts').Change} */ (byFile.get(file)),
     });
   }
   return out.sort(
@@ -223,7 +223,7 @@ const HEADERS = {
  *   minor: number, omitted?: number }} input
  *   `links`: each uploaded picture's attachment URL, by keyOf; `minor`: the
  *   share that makes a change minor, for the fold's label; `omitted`: how
- *   many more screens changed that `rows` leaves out to fit (review.mjs)
+ *   many more screens changed that `rows` leaves out to fit (review.ts)
  */
 export function renderTable({ rows, links, base, repo, minor, omitted = 0 }) {
   /**
@@ -259,7 +259,7 @@ export function renderTable({ rows, links, base, repo, minor, omitted = 0 }) {
   };
   /** @param {Line} row */
   const minorRow = (row) => {
-    const look = /** @type {import('./zoom.mjs').Look} */ (row.change.look);
+    const look = /** @type {import('./zoom.ts').Look} */ (row.change.look);
     const where = picture(row, 'where', Math.min(WHERE_WIDTH, look.width));
     const zoom = look.large
       ? picture(row, 'diff', row.width)

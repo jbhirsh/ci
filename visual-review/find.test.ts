@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { downloadShots, latestRun, mockupIssue, ownEdit, targets } from './find.mjs';
+import { downloadShots, latestRun, mockupIssue, ownEdit, targets } from './find.ts';
 
 const REPO = 'jbhirsh/app';
 const HEAD = 'a'.repeat(40);
@@ -337,7 +337,7 @@ describe('main', () => {
     const { mkdirSync, mkdtempSync, writeFileSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const path = await import('node:path');
-    const { main } = await import('./find.mjs');
+    const { main } = await import('./find.ts');
     const root = mkdtempSync(path.join(tmpdir(), 'app-'));
     mkdirSync(path.join(root, '.github'));
     writeFileSync(

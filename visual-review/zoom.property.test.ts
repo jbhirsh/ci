@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { lookAt, outlined, padded, places } from './zoom.mjs';
+import { lookAt, outlined, padded, places } from './zoom.ts';
 
 const size = fc.integer({ min: 1, max: 120 });
 /** A mask of a random size with random pixels set. */

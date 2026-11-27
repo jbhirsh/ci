@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { PIXELS } from '../lib/pixels.mjs';
 import { testPng } from '../lib/test-pixels.mjs';
 import { blocks, SECTION, uploadMarker } from '../describe/describe.ts';
-import { recordLine } from './record.mjs';
+import { recordLine } from './record.ts';
 import {
   BOT,
   checkBase,
@@ -13,14 +13,14 @@ import {
   HEADS_LOOKED_AT,
   review,
   UPLOAD_FORMAT,
-} from './review.mjs';
-import { settings } from './settings.mjs';
+} from './review.ts';
+import { settings } from './settings.ts';
 
 const REPO = 'jbhirsh/app';
 const HEAD = 'a'.repeat(40);
 const BASE = 'b'.repeat(40);
 const MB = 'c'.repeat(40);
-const s = /** @type {import('./settings.mjs').Settings} */ (
+const s = /** @type {import('./settings.ts').Settings} */ (
   settings({ workflow: 'visual.yml', job: 'visual', folders: ['shots'] })
 );
 
@@ -37,7 +37,7 @@ const s = /** @type {import('./settings.mjs').Settings} */ (
 function fake(o = {}) {
   /** @type {{ method: string, route: string, body?: unknown }[]} */
   const calls = [];
-  /** @type {{ handoff: import('./review.mjs').Handoff, files: { name: string, bytes: Buffer }[] }[]} */
+  /** @type {{ handoff: import('./review.ts').Handoff, files: { name: string, bytes: Buffer }[] }[]} */
   const handoffs = [];
   /** @type {number[]} */
   const enabled = [];
@@ -71,7 +71,7 @@ function fake(o = {}) {
     [`POST repos/${REPO}/statuses/${HEAD}`]: {},
     ...o.routes,
   };
-  /** @type {import('./review.mjs').Io} */
+  /** @type {import('./review.ts').Io} */
   const io = {
     repo: REPO,
     owner: 'jbhirsh',
@@ -134,7 +134,7 @@ const actions = (/** @type {string} */ state, /** @type {string} */ description)
 /**
  * A description whose visual-review block holds a record.
  *
- * @param {Partial<import('./record.mjs').Record>} record
+ * @param {Partial<import('./record.ts').Record>} record
  */
 const recorded = (record) =>
   blocks.write(

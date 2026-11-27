@@ -1,7 +1,7 @@
 name: Visual review, find
 description: >-
   The first job of the visual-review workflow (ci#64): which reviews the
-  event calls for (find.mjs's header), as JSON for the review and attach
+  event calls for (find.ts's header), as JSON for the review and attach
   jobs' matrices, each with its PR's or mockup issue's number (a mockup's
   from its shots' manifest, downloaded here). Run from a checkout of the
   app's default branch, for its `visual-review` settings; it runs nothing
@@ -34,4 +34,4 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-      run: node "$GITHUB_ACTION_PATH/../find.mjs"
+      run: node "$GITHUB_ACTION_PATH/../find.ts"

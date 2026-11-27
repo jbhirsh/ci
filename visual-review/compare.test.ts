@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PIXELS as pixels } from '../lib/pixels.mjs';
 import { testPng } from '../lib/test-pixels.mjs';
-import { compareShots, isShotPath, MAX_SHOT_BYTES, shotsIn } from './compare.mjs';
+import { compareShots, isShotPath, MAX_SHOT_BYTES, shotsIn } from './compare.ts';
 
 /**
  * A folder tree holding these files.

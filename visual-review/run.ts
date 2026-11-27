@@ -1,10 +1,10 @@
-// review.mjs against GitHub, for the review job: the Actions token (GH_TOKEN)
+// review.ts against GitHub, for the review job: the Actions token (GH_TOKEN)
 // for the API, GraphQL and artifact downloads. BOT_PR_TOKEN (UPLOAD_TOKEN)
 // only reads which account it is, whose upload comments from before ci#144
 // count: this job writes nothing with it. The hand-off for the attach job
-// (attach.mjs) goes into HANDOFF_DIR, which action.yml uploads.
+// (attach.ts) goes into HANDOFF_DIR, which action.yml uploads.
 //
-//   node run.mjs   (env: GH_TOKEN, UPLOAD_TOKEN, TARGET (one
+//   node run.ts   (env: GH_TOKEN, UPLOAD_TOKEN, TARGET (one
 //                   matrix entry, JSON), GITHUB_REPOSITORY, DEFAULT_BRANCH,
 //                   OWNER, HANDOFF_DIR; from the app's checkout of main, for
 //                   its settings)
@@ -18,17 +18,17 @@ import { appConfig, appRoot } from '../lib/app.mjs';
 import { ghApi } from '../lib/comment.mjs';
 import { PIXELS } from '../lib/pixels.mjs';
 import { enable } from '../dependabot-merge/enable.mjs';
-import { downloadShots } from './find.mjs';
-import { review } from './review.mjs';
-import { settings } from './settings.mjs';
-import { CONTEXT, MAX_DESCRIPTION } from './status.mjs';
+import { downloadShots } from './find.ts';
+import { review } from './review.ts';
+import { settings } from './settings.ts';
+import { CONTEXT, MAX_DESCRIPTION } from './status.ts';
 
 /**
- * A matrix entry, checked: it comes from find.mjs, but through the
+ * A matrix entry, checked: it comes from find.ts, but through the
  * workflow's text.
  *
  * @param {string} text
- * @returns {import('./review.mjs').Target}
+ * @returns {import('./review.ts').Target}
  */
 export function parseTarget(text) {
   const t = /** @type {Record<string, unknown>} */ (JSON.parse(text));
@@ -62,7 +62,7 @@ function realGh(token, args) {
  *   gh: Gh, api: import('../lib/comment.mjs').Api, handoffDir: string,
  *   handedOff: () => void }} options
  *   handedOff: told when a hand-off is written
- * @returns {import('./review.mjs').Io}
+ * @returns {import('./review.ts').Io}
  */
 export function gitHubIo({ env, repo, token, gh, api, handoffDir, handedOff }) {
   return {

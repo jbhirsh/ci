@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { blocks, partMarker } from '../describe/describe.ts';
-import { attach, main, readHandoff, withoutAppended } from './attach.mjs';
-import { parseRecord, recordLine } from './record.mjs';
+import { attach, main, readHandoff, withoutAppended } from './attach.ts';
+import { parseRecord, recordLine } from './record.ts';
 
 const REPO = 'jbhirsh/app';
 const HEAD = 'a'.repeat(40);
@@ -12,16 +12,16 @@ const OTHER = 'b'.repeat(40);
 const LINK = (/** @type {number} */ i) =>
   `https://github.com/user-attachments/assets/0000000${i}-aaaa-bbbb-cccc-dddddddddddd`;
 
-/** @type {import('./review.mjs').Handoff['record']} */
+/** @type {import('./review.ts').Handoff['record']} */
 const RECORD = { sha: HEAD, fingerprint: '1234abcd', format: 4, layout: 'abcd1234', run: 7 };
 
 /**
  * A hand-off with two pictures, in a folder of its own.
  *
- * @param {Partial<import('./review.mjs').Handoff>} [over]
+ * @param {Partial<import('./review.ts').Handoff>} [over]
  */
 function handoff(over = {}) {
-  /** @type {import('./review.mjs').Handoff} */
+  /** @type {import('./review.ts').Handoff} */
   const h = {
     version: 1,
     kind: 'pr',
@@ -73,7 +73,7 @@ function github(o = {}) {
       });
       return next;
     });
-  /** @type {import('./attach.mjs').Io} */
+  /** @type {import('./attach.ts').Io} */
   const io = {
     repo: REPO,
     dir: '',

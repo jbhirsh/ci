@@ -10,11 +10,11 @@
 //
 //   - sha, the head the result was found on; run, the screenshot run;
 //   - fingerprint, format and layout decide whether a new result needs a new
-//     upload (review.mjs): all three the same, the review re-renders the
+//     upload (review.ts): all three the same, the review re-renders the
 //     table from `assets` instead, so a slot added later fills with no
 //     upload;
 //   - assets, the attachment ids, in the order the review picks its
-//     pictures (table.mjs's pick).
+//     pictures (table.ts's pick).
 // It is read from the description, which the PR's author can edit, so it
 // only ever decides whether to upload again and which links to re-render
 // with: editing it can make the PR's own table stale, never change what
@@ -22,7 +22,7 @@
 //
 // An edit of the description that changes only visual review's block (its
 // first upload adds it, at the end) and the contents of its slots (their
-// markers kept) is the upload's own, and starts no review (find.mjs): judged
+// markers kept) is the upload's own, and starts no review (find.ts): judged
 // by the text, never by who edited, as BOT_PR_TOKEN is the owner's account.
 // A slot added or removed is an author's edit, and is reviewed.
 

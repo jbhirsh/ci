@@ -3,7 +3,7 @@
 // which writes it between `<!-- describe:<bot> -->` markers, and each part of
 // it under the slot an author placed for it, with the Actions token: GitHub
 // starts no workflow for that token's edits. visual-review's attach job runs it
-// right after the one edit that uploads the pictures (visual-review/attach.mjs),
+// right after the one edit that uploads the pictures (visual-review/attach.ts),
 // in the concurrency group PR GIFs' attach job shares, so edits take turns.
 //
 // Until ci#144, each bot posted its pictures in an upload comment with
@@ -47,7 +47,7 @@
 // name's, so one outside letters, digits, `.`, `_` and `-`, or holding `--`,
 // never gets a slot or a part (its rows stay in the bot's block). Part lines never reach the description. Slots added
 // by editing the description are filled on the next run: visual review
-// re-renders its section from the links its record keeps (record.mjs), so no
+// re-renders its section from the links its record keeps (record.ts), so no
 // new upload is needed.
 
 import { blocksFor } from '../lib/blocks.mjs';
@@ -302,7 +302,7 @@ export type Io = {
  * @param bot
  * @param section
  * @param tidy applied to the description as read,
- *   before the section goes in (attach.mjs drops what gh appended)
+ *   before the section goes in (attach.ts drops what gh appended)
  */
 export function place(
   io: Io,

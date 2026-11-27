@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { parseUpload, SECTION, uploadMarker, withSections } from '../describe/describe.ts';
-import { isMinor, keyOf, lines, pick, renderTable, share, summary } from './table.mjs';
+import { isMinor, keyOf, lines, pick, renderTable, share, summary } from './table.ts';
 
 const columns = [
   { label: 'Mobile', file: ['{state}-mobile-linux.png'] },
   { label: 'Desktop', file: ['{state}-desktop-linux.png'], width: 400 },
 ];
 const DIFF = Buffer.from('d');
-/** @type {import('./compare.mjs').Change[]} */
+/** @type {import('./compare.ts').Change[]} */
 const changes = [
   { file: 'm/trips-desktop-linux.png', kind: 'changed', ratio: 0.1, diff: DIFF, after: 'a1' },
   { file: 'm/trips-mobile-linux.png', kind: 'changed', ratio: 0.2, diff: DIFF, after: 'a2' },
   { file: 'm/new-mobile-linux.png', kind: 'added', after: 'a3' },
   { file: 'odd.png', kind: 'removed', after: '' },
 ];
-/** @type {import('./zoom.mjs').Look} */
+/** @type {import('./zoom.ts').Look} */
 const LOOK = {
   places: [{ x: 10, y: 10, w: 20, h: 12 }],
   zoom: { x: 2, y: 2, w: 36, h: 30 },
@@ -23,7 +23,7 @@ const LOOK = {
   width: 402,
   height: 800,
 };
-/** @type {import('./compare.mjs').Change} */
+/** @type {import('./compare.ts').Change} */
 const small = {
   file: 'm/menu-mobile-linux.png',
   kind: 'changed',
@@ -36,7 +36,7 @@ const REPO = 'jbhirsh/app';
 const BASE = '0123456789abcdef0123456789abcdef01234567';
 const keysOf = (/** @type {string} */ md) =>
   [...md.matchAll(/^<!-- describe-part:(\S+) -->$/gm)].map((m) => m[1]);
-const urls = (/** @type {import('./table.mjs').Line[]} */ rows) =>
+const urls = (/** @type {import('./table.ts').Line[]} */ rows) =>
   new Map(pick(rows).map((p) => [keyOf(p), `https://u/${keyOf(p)}`]));
 
 describe('lines', () => {
@@ -85,7 +85,7 @@ describe('summary', () => {
 });
 
 describe('the summary', () => {
-  const rend = (/** @type {import('./compare.mjs').Change[]} */ list, omitted = 0) => {
+  const rend = (/** @type {import('./compare.ts').Change[]} */ list, omitted = 0) => {
     const rows = lines(list, columns);
     return renderTable({ rows, links: new Map(), base: BASE, repo: REPO, minor: 0.001, omitted });
   };
@@ -133,7 +133,7 @@ describe('pick', () => {
 });
 
 describe('renderTable', () => {
-  /** @param {import('./compare.mjs').Change[]} list */
+  /** @param {import('./compare.ts').Change[]} list */
   const render = (list) => {
     const rows = lines(list, columns);
     return renderTable({ rows, links: urls(rows), base: BASE, repo: REPO, minor: 0.001 });
@@ -183,7 +183,7 @@ describe('renderTable', () => {
       {
         label: 'a|b @x',
         width: 300,
-        change: /** @type {import('./compare.mjs').Change} */ ({
+        change: /** @type {import('./compare.ts').Change} */ ({
           file: 'x.png',
           kind: 'added',
           after: '',
@@ -232,7 +232,7 @@ describe('renderTable', () => {
       width: 300,
       state,
       size: 'mobile',
-      change: /** @type {import('./compare.mjs').Change} */ ({
+      change: /** @type {import('./compare.ts').Change} */ ({
         file: 'x.png',
         kind: 'added',
         after: '',

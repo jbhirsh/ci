@@ -4,7 +4,7 @@ description: >-
   review handed off (the artifact `visual-review-attach-<kind>-<number>-<run>`) into the
   PR's or the mockup issue's description, with no comment: one BOT_PR_TOKEN
   edit that uploads the pictures, then one Actions-token edit that writes
-  the finished table into its block and slots (attach.mjs's header says in
+  the finished table into its block and slots (attach.ts's header says in
   what order, and what it checks first). It checks nothing out and runs
   nothing of the PR's: the hand-off is data. Run it in PR GIFs' attach
   group, `pr-gif-attach-<repo>-<number>` with cancel-in-progress false, so
@@ -39,7 +39,7 @@ runs:
         node-version: 24
         package-manager-cache: false
 
-    # A review that found nothing to write handed nothing off: attach.mjs
+    # A review that found nothing to write handed nothing off: attach.ts
     # then says so and edits nothing, after checking the run holds no such
     # artifact, so a download that failed still fails the job.
     - uses: actions/download-artifact@v8
@@ -53,7 +53,7 @@ runs:
       shell: bash
       env:
         HANDOFF_DIR: ${{ runner.temp }}/visual-review-attach
-      run: echo "count=$(node "$GITHUB_ACTION_PATH/../attach.mjs" pictures)" >> "$GITHUB_OUTPUT"
+      run: echo "count=$(node "$GITHUB_ACTION_PATH/../attach.ts" pictures)" >> "$GITHUB_OUTPUT"
 
     # `--attach` came in gh 2.99 for a PR and by 2.104 for an issue
     # (lib/gh.mjs). The runner's image installs gh from GitHub's own apt
@@ -81,4 +81,4 @@ runs:
         ARTIFACT: visual-review-attach-${{ inputs.kind }}-${{ inputs.number }}-${{ inputs.run }}
         KIND: ${{ inputs.kind }}
         NUMBER: ${{ inputs.number }}
-      run: node "$GITHUB_ACTION_PATH/../attach.mjs"
+      run: node "$GITHUB_ACTION_PATH/../attach.ts"

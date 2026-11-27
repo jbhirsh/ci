@@ -2,8 +2,8 @@
 // that differs in under `minor` of its pixels, the table shows the screen
 // with the changed places outlined (`where`) and the largest one zoomed in
 // before, after and as a diff, rather than a whole screen that looks the
-// same. Pure: pixel lists in, boxes and pixel lists out. compare.mjs plans a
-// shot's look from its mask, review.mjs draws it.
+// same. Pure: pixel lists in, boxes and pixel lists out. compare.ts plans a
+// shot's look from its mask, review.ts draws it.
 //
 // The rules, so a reader can predict a picture:
 //   - changed pixels within GAP of each other (about: a grid of GAP-pixel
