@@ -14,7 +14,7 @@ import {
   readReport,
   realPath,
   trackedFiles,
-} from './check.mjs';
+} from './check.ts';
 
 describe('isSource', () => {
   it('counts code, wherever it is', () => {
@@ -234,7 +234,7 @@ describe('main', () => {
     const { code, out } = run(root, true);
     expect(code).toBe(1);
     expect(out[0]).toMatch(/^::error::src\/b\.ts isn't measured/);
-    expect(out.at(-1)).toBe('unmeasured: 1 to fix (unmeasured/check.mjs says what counts).');
+    expect(out.at(-1)).toBe('unmeasured: 1 to fix (unmeasured/check.ts says what counts).');
   });
 
   it('matches a report of real paths against a root given through a link', () => {
