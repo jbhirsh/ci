@@ -52,7 +52,7 @@ import { pathToFileURL } from 'node:url';
 import { appRoot } from '../lib/app.mjs';
 import { isReason, notes } from '../lib/reason.ts';
 
-/** @typedef {{ file: string, line: number, message: string }} Finding */
+export type Finding = { file: string; line: number; message: string };
 
 /** Folders never read for workflows or actions. */
 const SKIP = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', 'ios', 'android']);
@@ -60,11 +60,8 @@ const SKIP = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', 'ios'
 /**
  * The version range in a dependency's spec, after any `npm:name@` alias;
  * null for a spec that names no registry version (a file, link, git or URL).
- *
- * @param {string} spec
- * @returns {string | null}
  */
-export function rangeOf(spec) {
+export function rangeOf(spec: string): string | null {
   const alias = /^npm:(?:@[^/@]+\/)?[^/@]+@(.*)$/.exec(spec);
   const range = (alias ? alias[1] : spec).trim();
   if (/^[\w+]+:/.test(range) || range.includes('/')) return null;
@@ -74,10 +71,8 @@ export function rangeOf(spec) {
 /**
  * Whether one version (`1.2.3`, `=v1.2`, `1.x`) names a minor, so that
  * matching it holds the package below its major.
- *
- * @param {string} version
  */
-function namesMinor(version) {
+function namesMinor(version: string) {
   const [, minor] = version.replace(/^[=v\s]+/, '').split('.');
   return minor !== undefined && /^\d/.test(minor);
 }
@@ -85,10 +80,8 @@ function namesMinor(version) {
 /**
  * Whether a range holds a package below its next major. A caret, a bare
  * major (`1`, `1.x`), `*`, a dist-tag or a lower bound alone doesn't.
- *
- * @param {string} range
  */
-export function isPinnedRange(range) {
+export function isPinnedRange(range: string) {
   return range.split('||').some((part) => {
     let p = part.trim();
     if (/<=|\s-\s/.test(p)) return true;
@@ -108,36 +101,26 @@ export function isPinnedRange(range) {
 /**
  * The caret range to offer in place of a pinned one, when the pin names a
  * single version.
- *
- * @param {string} range
  */
-export function caretFor(range) {
+export function caretFor(range: string) {
   const version = /^[~=v\s>]*(\d+(?:\.\d+){0,2})(?:\.x)?$/.exec(range.trim());
   return version ? `^${version[1]}` : null;
 }
 
-/** @param {string} text */
-const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Whether one of the notes names `name` and says why.
- *
- * @param {string[]} entries
- * @param {string} name
  */
-export function explains(entries, name) {
+export function explains(entries: string[], name: string) {
   const named = new RegExp(`(?:^|[\\s,('"\`])${escape(name)}(?![\\w/-]|\\.\\w)`);
   return entries.some((entry) => named.test(entry) && isReason(entry.replace(named, ' ')));
 }
 
 /**
  * The 1-based line of the first `"key"` after `from` in the text, or 1.
- *
- * @param {string} text
- * @param {string} key
- * @param {number} [from]
  */
-function lineOfKey(text, key, from = 0) {
+function lineOfKey(text: string, key: string, from = 0) {
   const at = text.indexOf(`${JSON.stringify(key)}`, from);
   return at === -1 ? 1 : text.slice(0, at).split('\n').length;
 }
@@ -145,12 +128,8 @@ function lineOfKey(text, key, from = 0) {
 /**
  * The packages whose versions Expo's SDK chooses, or an empty set when the
  * app doesn't use Expo.
- *
- * @param {string} root
- * @param {Record<string, unknown>} pkg
- * @returns {Set<string>}
  */
-export function expoManaged(root, pkg) {
+export function expoManaged(root: string, pkg: Record<string, unknown>): Set<string> {
   const deps = { ...record(pkg.dependencies), ...record(pkg.devDependencies) };
   if (!('expo' in deps)) return new Set();
   const file = path.join(root, 'node_modules', 'expo', 'bundledNativeModules.json');
@@ -166,28 +145,22 @@ export function expoManaged(root, pkg) {
   return managed;
 }
 
-/**
- * @param {unknown} value
- * @returns {Record<string, unknown>}
- */
-function record(value) {
+function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? /** @type {Record<string, unknown>} */ (value)
+    ? (value as Record<string, unknown>)
     : {};
 }
 
 /**
  * The pins in package.json that have no reason beside them.
  *
- * @param {string} text the file
- * @param {Set<string>} [exempt] packages whose versions something else chooses
- * @returns {Finding[]}
+ * @param text the file
+ * @param exempt packages whose versions something else chooses
  */
-export function packageFindings(text, exempt = new Set()) {
+export function packageFindings(text: string, exempt: Set<string> = new Set()): Finding[] {
   const pkg = record(JSON.parse(text));
   const pins = notes(pkg['//pins']);
-  /** @type {Finding[]} */
-  const findings = [];
+  const findings: Finding[] = [];
   for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
     const from = text.indexOf(JSON.stringify(field));
     for (const [name, spec] of Object.entries(record(pkg[field]))) {
@@ -218,20 +191,17 @@ export function packageFindings(text, exempt = new Set()) {
   return findings;
 }
 
-/** @typedef {{ text: string, op: boolean }} Word a shell word, or (`op`) what ends a command */
+/** a shell word, or (`op`) what ends a command */
+export type Word = { text: string; op: boolean };
 
 /**
  * The words of a script as the shell splits them, quotes taken off:
  * `'…'` literal, `"…"` with `\` escaping `"`, `\`, `$` and a backquote, and a
  * bare `\` escaping the next character. `&&`, `||`, `|`, `;`, `&` and a
  * newline come back as operators. Nothing is expanded.
- *
- * @param {string} script
- * @returns {Word[]}
  */
-function shellWords(script) {
-  /** @type {Word[]} */
-  const words = [];
+function shellWords(script: string): Word[] {
+  const words: Word[] = [];
   let text = '';
   let inWord = false;
   const end = () => {
@@ -281,15 +251,10 @@ const TYPE_COVERAGE = /(?:^|\/)type-coverage(?:@[^/]*)?$/;
 /**
  * The globs a script tells type-coverage to ignore: each `--ignore-files
  * <glob>` (or `--ignore-files=<glob>`) in a command that runs it.
- *
- * @param {string} script
- * @returns {string[]}
  */
-export function ignoreFilesArgs(script) {
-  /** @type {string[]} */
-  const globs = [];
-  /** @type {string[][]} */
-  const commands = [[]];
+export function ignoreFilesArgs(script: string): string[] {
+  const globs: string[] = [];
+  const commands: string[][] = [[]];
   for (const word of shellWords(script)) {
     if (word.op) commands.push([]);
     else commands.at(-1)?.push(word.text);
@@ -316,13 +281,11 @@ export function ignoreFilesArgs(script) {
  * The type-coverage ignores in package.json with no reason in
  * `"//typeCoverage"`, and the reasons there for globs nothing ignores.
  *
- * @param {string} text the file
- * @returns {Finding[]}
+ * @param text the file
  */
-export function typeCoverageFindings(text) {
+export function typeCoverageFindings(text: string): Finding[] {
   const pkg = record(JSON.parse(text));
-  /** @type {Map<string, { line: number, where: string }>} */
-  const ignored = new Map();
+  const ignored: Map<string, { line: number; where: string }> = new Map();
   const config = text.indexOf('"typeCoverage"');
   for (const glob of notes(record(pkg.typeCoverage).ignoreFiles)) {
     if (!ignored.has(glob)) {
@@ -342,8 +305,7 @@ export function typeCoverageFindings(text) {
     }
   }
   const entries = notes(pkg['//typeCoverage']);
-  /** @type {Finding[]} */
-  const findings = [];
+  const findings: Finding[] = [];
   for (const [glob, { line, where }] of ignored) {
     const reasons = entries.filter((entry) => entry.startsWith(`${glob}: `));
     if (reasons.some((entry) => isReason(entry.slice(glob.length + 1)))) continue;
@@ -366,18 +328,13 @@ export function typeCoverageFindings(text) {
   return findings;
 }
 
-/** @param {string} line */
-const indentOf = (line) => line.length - line.trimStart().length;
-/** @param {string} line */
-const isComment = (line) => line.trimStart().startsWith('#');
+const indentOf = (line: string) => line.length - line.trimStart().length;
+const isComment = (line: string) => line.trimStart().startsWith('#');
 
 /**
  * The comment block that ends just above line `index` (0-based), as text.
- *
- * @param {string[]} lines
- * @param {number} index
  */
-function commentAbove(lines, index) {
+function commentAbove(lines: string[], index: number) {
   const block = [];
   for (let i = index - 1; i >= 0 && isComment(lines[i] ?? ''); i -= 1) {
     block.unshift((lines[i] ?? '').trim().replace(/^#+/, ''));
@@ -387,15 +344,10 @@ function commentAbove(lines, index) {
 
 /**
  * The Dependabot `ignore` entries with no reason above them.
- *
- * @param {string} text
- * @param {string} file
- * @returns {Finding[]}
  */
-export function dependabotFindings(text, file) {
+export function dependabotFindings(text: string, file: string): Finding[] {
   const lines = text.split('\n');
-  /** @type {Finding[]} */
-  const findings = [];
+  const findings: Finding[] = [];
   lines.forEach((line, start) => {
     if (!/^\s*(?:-\s+)?ignore:\s*(#.*)?$/.test(line)) return;
     const indent = indentOf(line);
@@ -427,10 +379,8 @@ export function dependabotFindings(text, file) {
 
 /**
  * Whether a Docker image reference names a version tag or a digest.
- *
- * @param {string} image
  */
-export function isPinnedImage(image) {
+export function isPinnedImage(image: string) {
   if (/@sha256:/.test(image)) return true;
   const tag = /:([^/:]+)$/.exec(image)?.[1];
   return tag !== undefined && /^v?\d+\.\d+/.test(tag);
@@ -439,10 +389,9 @@ export function isPinnedImage(image) {
 /**
  * The pin on one line of a workflow or action, if any, as a message.
  *
- * @param {string} code the line, its comment cut off
- * @returns {string | null}
+ * @param code the line, its comment cut off
  */
-export function pinOnLine(code) {
+export function pinOnLine(code: string): string | null {
   const uses = /^\s*(?:-\s+)?uses:\s*["']?([^"'\s]+)/.exec(code)?.[1];
   if (uses?.startsWith('docker://')) {
     const image = uses.slice('docker://'.length);
@@ -474,11 +423,8 @@ export function pinOnLine(code) {
 
 /**
  * The line (0-based) where the step or list item holding line `index` starts.
- *
- * @param {string[]} lines
- * @param {number} index
  */
-function itemStart(lines, index) {
+function itemStart(lines: string[], index: number) {
   let indent = indentOf(lines[index] ?? '');
   if ((lines[index] ?? '').trimStart().startsWith('- ')) return index;
   for (let i = index - 1; i >= 0; i -= 1) {
@@ -493,11 +439,8 @@ function itemStart(lines, index) {
 /**
  * The key that line `index` (0-based) sits under: an input's name, for its
  * `default:`.
- *
- * @param {string[]} lines
- * @param {number} index
  */
-function parentKey(lines, index) {
+function parentKey(lines: string[], index: number) {
   const indent = indentOf(lines[index] ?? '');
   for (let i = index - 1; i >= 0; i -= 1) {
     const line = lines[i] ?? '';
@@ -509,15 +452,10 @@ function parentKey(lines, index) {
 
 /**
  * The pins in a workflow or action.yml that have no reason beside them.
- *
- * @param {string} text
- * @param {string} file
- * @returns {Finding[]}
  */
-export function yamlFindings(text, file) {
+export function yamlFindings(text: string, file: string): Finding[] {
   const lines = text.split('\n');
-  /** @type {Finding[]} */
-  const findings = [];
+  const findings: Finding[] = [];
   lines.forEach((line, index) => {
     if (isComment(line)) return;
     const cut = /\s#\s?(.*)$/.exec(line);
@@ -542,14 +480,9 @@ export function yamlFindings(text, file) {
 
 /**
  * The workflow and action files in the checkout, relative to its root.
- *
- * @param {string} root
- * @param {string} [dir]
- * @returns {string[]}
  */
-export function yamlFiles(root, dir = '') {
-  /** @type {string[]} */
-  const found = [];
+export function yamlFiles(root: string, dir = ''): string[] {
+  const found: string[] = [];
   for (const entry of readdirSync(path.join(root, dir), { withFileTypes: true })) {
     const rel = path.posix.join(dir, entry.name);
     if (entry.isDirectory()) {
@@ -568,15 +501,10 @@ export function yamlFiles(root, dir = '') {
 
 /**
  * Every pin in the checkout with no reason beside it.
- *
- * @param {string} root
- * @returns {Finding[]}
  */
-export function findings(root) {
-  /** @param {string} rel */
-  const read = (rel) => readFileSync(path.join(root, rel), 'utf8');
-  /** @type {Finding[]} */
-  const found = [];
+export function findings(root: string): Finding[] {
+  const read = (rel: string) => readFileSync(path.join(root, rel), 'utf8');
+  const found: Finding[] = [];
   if (existsSync(path.join(root, 'package.json'))) {
     const text = read('package.json');
     found.push(...packageFindings(text, expoManaged(root, record(JSON.parse(text)))));
@@ -603,15 +531,14 @@ export function findings(root) {
 /**
  * Prints each pin with no reason (as a GitHub annotation in Actions) and
  * returns the exit code.
- *
- * @param {string} root
- * @param {{ log?: (line: string) => void, actions?: boolean }} [options]
- * @returns {number}
  */
 export function main(
-  root,
-  { log = console.log, actions = Boolean(process.env.GITHUB_ACTIONS) } = {},
-) {
+  root: string,
+  {
+    log = console.log,
+    actions = Boolean(process.env.GITHUB_ACTIONS),
+  }: { log?: (line: string) => void; actions?: boolean } = {},
+): number {
   const found = findings(root);
   for (const { file, line, message } of found) {
     log(actions ? `::error file=${file},line=${line}::${message}` : `${file}:${line}: ${message}`);

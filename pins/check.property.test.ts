@@ -35,11 +35,8 @@ describe('the parsers, for any text', () => {
  * A glob as a script would write it, single-quoted, double-quoted (its
  * `"`, `\\`, `$` and backquote escaped) or bare (every character that isn't
  * a glob's or a path's escaped).
- *
- * @param {string} glob
- * @param {'single' | 'double' | 'bare'} quoting
  */
-function quote(glob, quoting) {
+function quote(glob: string, quoting: 'single' | 'double' | 'bare') {
   if (quoting === 'single') return `'${glob}'`;
   if (quoting === 'double') return `"${glob.replace(/["\\$`]/g, '\\$&')}"`;
   return glob.replace(/[^\w*?/.,{}[\]@+=-]/g, '\\$&');
@@ -48,17 +45,12 @@ function quote(glob, quoting) {
 // A script is whatever someone wrote in package.json.
 describe('ignoreFilesArgs, for any glob however it is quoted', () => {
   const glob = fc.string({ minLength: 1 });
-  const arg = fc.tuple(
-    glob,
-    fc.constantFrom(/** @type {const} */ ('single'), 'double', 'bare'),
-    fc.boolean(),
-  );
+  const arg = fc.tuple(glob, fc.constantFrom('single' as const, 'double', 'bare'), fc.boolean());
   // A single-quoted glob can't hold a `'`. And after a separate
   // `--ignore-files`, a word starting with `--` is an option, not its glob:
   // the shell strips the quotes, and type-coverage's minimist then reads
   // it as a flag, so ignoreFilesArgs rightly takes no glob there.
-  /** @param {[string, string, boolean]} arg */
-  const safe = ([text, quoting, equals]) =>
+  const safe = ([text, quoting, equals]: [string, string, boolean]) =>
     !(quoting === 'single' && text.includes("'")) && (equals || !text.startsWith('--'));
 
   it("reads back every glob given to type-coverage, in order, and no other command's", () => {

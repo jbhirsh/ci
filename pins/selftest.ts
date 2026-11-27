@@ -13,11 +13,8 @@ import { findings } from './check.ts';
 /**
  * Runs the check over the app and returns what to print; throws when a file
  * can't be read.
- *
- * @param {string} root
- * @returns {string[]}
  */
-export function selftest(root) {
+export function selftest(root: string): string[] {
   const found = findings(root);
   return [
     `pins: ${found.length} pinned or ignored without a reason.`,
@@ -27,12 +24,8 @@ export function selftest(root) {
 
 /**
  * Runs the self-test on the app at `argv[0]` and returns the exit code.
- *
- * @param {string[]} argv
- * @param {(line: string) => void} [log]
- * @returns {number}
  */
-export function cli(argv, log = console.log) {
+export function cli(argv: string[], log: (line: string) => void = console.log): number {
   try {
     for (const line of selftest(path.resolve(argv[0] ?? '.'))) log(line);
     return 0;
