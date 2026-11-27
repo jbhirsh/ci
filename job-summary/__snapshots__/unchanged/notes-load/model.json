@@ -1,0 +1,88 @@
+{
+  "repo": "jbhirsh/sift",
+  "workflow": "CI",
+  "job": "Accessibility audit",
+  "noun": "check",
+  "problem": "",
+  "run": {
+    "number": 42,
+    "url": "https://gh/run/42",
+    "sha": "abcdef123",
+    "branch": "feat",
+    "when": "2026-10-29T10:00:00.000Z"
+  },
+  "seconds": 300,
+  "usual": null,
+  "steps": [
+    {
+      "i": 1,
+      "name": "Audit",
+      "start": 0,
+      "seconds": 262,
+      "conclusion": "success",
+      "usual": null,
+      "slower": false,
+      "past": []
+    }
+  ],
+  "runs": [],
+  "tests": [
+    {
+      "name": "T",
+      "folder": "",
+      "file": "",
+      "block": "",
+      "title": "T",
+      "path": "",
+      "line": 1,
+      "seconds": 2,
+      "usual": null,
+      "result": "passed on re-run",
+      "slower": false,
+      "flaky": true,
+      "message": "",
+      "hist": [],
+      "times": [],
+      "edited": [],
+      "code": null
+    },
+    {
+      "name": "U",
+      "folder": "",
+      "file": "",
+      "block": "",
+      "title": "U",
+      "path": "",
+      "line": 1,
+      "seconds": 5,
+      "usual": null,
+      "result": "passed",
+      "slower": false,
+      "flaky": false,
+      "message": "",
+      "hist": [],
+      "times": [],
+      "edited": [],
+      "code": null
+    }
+  ],
+  "notes": [
+    [
+      "Simulator",
+      "iPhone 17 Pro"
+    ]
+  ],
+  "load": [
+    {
+      "t": 10,
+      "load": 300,
+      "busy": 95
+    },
+    {
+      "t": 30,
+      "load": 40,
+      "busy": 20
+    }
+  ],
+  "settle": 80
+}

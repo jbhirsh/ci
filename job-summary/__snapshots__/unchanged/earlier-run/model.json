@@ -1,0 +1,92 @@
+{
+  "repo": "jbhirsh/sift",
+  "workflow": "CI",
+  "job": "Accessibility audit",
+  "noun": "test",
+  "problem": "",
+  "run": {
+    "number": 42,
+    "url": "https://gh/run/42",
+    "sha": "abcdef123",
+    "branch": "feat",
+    "when": "2026-10-29T10:00:00.000Z"
+  },
+  "seconds": 300,
+  "usual": null,
+  "steps": [
+    {
+      "i": 1,
+      "name": "Audit",
+      "start": 0,
+      "seconds": 262,
+      "conclusion": "success",
+      "usual": null,
+      "slower": false,
+      "past": [
+        90
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "number": 41,
+      "url": "https://jbhirsh.github.io/sift/runs/41/accessibility-audit/",
+      "sha": "old1",
+      "branch": "feat",
+      "when": "2026-10-29T09:00:00.000Z",
+      "seconds": 95,
+      "conclusion": "success"
+    }
+  ],
+  "tests": [
+    {
+      "name": "T",
+      "folder": "",
+      "file": "",
+      "block": "",
+      "title": "T",
+      "path": "",
+      "line": 1,
+      "seconds": 2,
+      "usual": null,
+      "result": "passed on re-run",
+      "slower": false,
+      "flaky": true,
+      "message": "",
+      "hist": [
+        ""
+      ],
+      "times": [
+        null
+      ],
+      "edited": [],
+      "code": null
+    },
+    {
+      "name": "U",
+      "folder": "",
+      "file": "",
+      "block": "",
+      "title": "U",
+      "path": "",
+      "line": 1,
+      "seconds": 5,
+      "usual": null,
+      "result": "passed",
+      "slower": false,
+      "flaky": false,
+      "message": "",
+      "hist": [
+        "passed"
+      ],
+      "times": [
+        1
+      ],
+      "edited": [],
+      "code": null
+    }
+  ],
+  "notes": [],
+  "load": [],
+  "settle": null
+}

@@ -1,2 +1,4 @@
 package-lock.json
 coverage/
+# Snapshots hold a tool's output byte for byte, as it writes it.
+**/__snapshots__/

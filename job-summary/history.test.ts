@@ -286,3 +286,81 @@ describe('history', () => {
     expect(past.map((p) => p.run.id)).toEqual([3]);
   });
 });
+
+describe("measurements' history", () => {
+  it("reads only the branches and event it's given", () => {
+    const calls: string[][] = [];
+    const gh = fakeGh(
+      {
+        'repos/o/r/actions/workflows/7/runs?branch=main&event=deployment_status&status=completed&created=%3C2026-10-29T10%3A00%3A00Z&per_page=2':
+          { workflow_runs: [run(41, 'main', '2026-10-29T09:00:00Z')] },
+      },
+      calls,
+    );
+    const only = { event: 'deployment_status', branches: ['main'] };
+    expect(
+      pastRuns('o/r', run(42, 'feat', '2026-10-29T10:00:00Z'), 'main', 2, gh, only).map(
+        (r) => r.id,
+      ),
+    ).toEqual([41]);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("keeps a version 3 record's measurements, and reads a version 2 record as before", () => {
+    const values = [{ name: 'games', phase: 'total', start: 'warm', ms: 34.1 }];
+    expect(
+      parseRecord(
+        JSON.stringify({
+          version: 3,
+          seconds: 70,
+          tests: null,
+          measurements: { environment: 'production', values },
+        }),
+      ),
+    ).toEqual({ tests: null, seconds: 70, measurements: { environment: 'production', values } });
+    expect(parseRecord('{"version":2,"seconds":70,"tests":null}')).toEqual({
+      tests: null,
+      seconds: 70,
+    });
+    // Measurements alone are enough to read.
+    expect(parseRecord(JSON.stringify({ measurements: { values } }))).toEqual({
+      tests: null,
+      seconds: null,
+      measurements: { environment: '', values },
+    });
+  });
+
+  it('gives each earlier run its measurements, only when its record kept some', () => {
+    const gh = fakeGh({
+      'repos/o/r/actions/workflows/7/runs?branch=main&event=push&status=completed&created=%3C2026-10-29T10%3A00%3A00Z&per_page=3':
+        {
+          workflow_runs: [
+            run(3, 'main', '2026-10-29T09:00:00Z'),
+            run(1, 'main', '2026-10-29T07:00:00Z'),
+          ],
+        },
+      'repos/o/r/actions/runs/3/jobs?per_page=100': { jobs: [{ name: 'P', completed_at: 'x' }] },
+      'repos/o/r/actions/runs/1/jobs?per_page=100': { jobs: [{ name: 'P', completed_at: 'x' }] },
+    });
+    const past = history(
+      'o/r',
+      run(4, 'feat', '2026-10-29T10:00:00Z'),
+      'main',
+      'P',
+      3,
+      gh,
+      (id) =>
+        id === 3
+          ? '{"seconds":5,"measurements":{"environment":"production","values":[]}}'
+          : '{"seconds":5}',
+      Infinity,
+      Date.now,
+      { event: 'push', branches: ['main'] },
+    );
+    expect(past.map((p) => p.measurements)).toEqual([
+      { environment: 'production', values: [] },
+      undefined,
+    ]);
+    expect('measurements' in past[1]).toBe(false);
+  });
+});
