@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { lintWorkflow, targetsIn } from '../lint/actions.mjs';
-import { writeFiles } from '../review/testApp.mjs';
+import { writeFiles } from '../review/testApp.ts';
 import { APPS, CI_ROOT, loadManifest, resolve } from './manifest.mjs';
 
 /**

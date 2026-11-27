@@ -7,11 +7,11 @@
 # Everything else is here, so a
 # change to the review reaches all three apps at once.
 #
-# Claude runs on the Claude Agent SDK, on the runner (sdk.mjs), which the
+# Claude runs on the Claude Agent SDK, on the runner (sdk.ts), which the
 # Max plan's API credit pays for (jbhirsh/ci#68). The reviewer has no
 # shell: it reads through its own tools and posts through code holding the
 # job's token, as github-actions[bot], each inline comment marked for
-# autofix (sdk.mjs and guard.mjs say how it's locked down).
+# autofix (sdk.ts and guard.ts say how it's locked down).
 #
 # A pass the API refuses for credit or a spend or usage limit is tried once
 # more on the owner's Claude subscription, when the stub passes its token
@@ -19,7 +19,7 @@
 # no token, fails the check for every PR, since a green check would let a
 # self-merging PR (a Dependabot bump, a bot's branch, auto-merge) in
 # unreviewed; one PR comment says which limit and when to re-run
-# (stopped.mjs), and goes once a review runs without stopping. Two passes
+# (stopped.ts), and goes once a review runs without stopping. Two passes
 # and two retries on a big PR, with the limits hit late, can come near the
 # apps' 45-minute job timeout: accepted.
 #
@@ -30,24 +30,24 @@
 # consult a stronger model on a hard call.
 #
 # A PR every commit of which is a bot's in `review.skipBots` isn't
-# reviewed (skip.mjs): the step passes, saying so.
+# reviewed (skip.ts): the step passes, saying so.
 #
 # What it does:
-#   1. Renders the prompt (render.mjs): prompt.md, the shared review, plus
+#   1. Renders the prompt (render.ts): prompt.md, the shared review, plus
 #      the app's own guide (`review.instructions` in `.github/ci.json`,
-#      settings.mjs), both read from the PR's base branch.
+#      settings.ts), both read from the PR's base branch.
 #   2. Runs the review. It leaves an inline comment per
 #      merge blocker and one summary comment saying what it read.
-#   3. Checks the review read every changed file's diff (coverage.mjs, from
+#   3. Checks the review read every changed file's diff (coverage.ts, from
 #      the review's own tool calls), lockfiles, images, fonts and the app's
 #      `review.skip` globs aside. A file the PR deletes needs only a listing
 #      of the diff showing it deleted (`--name-status` or `--summary`, even
 #      inside an `&&` chain, or a lone `--stat`/`--numstat` showing its
-#      whole path; coverage.mjs). A
+#      whole path; coverage.ts). A
 #      file it never read goes back to a second pass (followup.md); a file
 #      still unread after that fails the check. It was added after a review
 #      passed sift #188 twice having seen its tests only in `--stat`.
-#   4. Carries files over between pushes (carry.mjs): a file an earlier
+#   4. Carries files over between pushes (carry.ts): a file an earlier
 #      review of the PR read, whose part of the diff has the same patch-id
 #      now, needn't be read again; the prompt lists it as already reviewed.
 #      The record lives in an Actions cache per PR, saved only by a run
@@ -55,7 +55,7 @@
 #      label `claude-review:full` to the PR (it applies from the next push).
 #
 # A pass that runs past its turn cap but finishes is not a failure
-# (result.mjs); coverage decides.
+# (result.ts); coverage decides.
 #
 # The prompts ask only for what no automated check of the apps decides:
 # each app's CI already runs lint, Prettier, the type-check and type
@@ -67,15 +67,15 @@
 # How the layout keeps a PR from steering its own review:
 #   - A PR can't change what its own review runs or reads: this action comes
 #     from jbhirsh/ci@main, the app's settings and guide are read from the
-#     base branch (config.mjs), and CLAUDE.md and .claude/ are the base's
-#     before Claude starts (restore.mjs).
+#     base branch (config.ts), and CLAUDE.md and .claude/ are the base's
+#     before Claude starts (restore.ts).
 #   - No new route to the secrets. A pull_request run executes the PR's
 #     copy of the stub, so a same-repo PR could add a step that prints a
 #     secret, exactly as it could with the whole review in the app's file
 #     before; only people with write access can push such a branch. Fork
 #     PRs get no secrets, and Dependabot's get only Dependabot secrets.
 #     The token goes into this action as an input and from here only to
-#     sdk.mjs's own code (the posting tools), never to the reviewer's
+#     sdk.ts's own code (the posting tools), never to the reviewer's
 #     process.
 name: Claude Review
 description: >-
@@ -97,7 +97,7 @@ inputs:
       in first. The owner's Claude subscription token (the app's
       CLAUDE_CODE_OAUTH_TOKEN secret, made by `claude setup-token`, set for
       Actions and for Dependabot): a pass the API refuses for credit or a
-      spend or usage limit runs once more on it (sdk.mjs). Without it, no
+      spend or usage limit runs once more on it (sdk.ts). Without it, no
       retry.
     required: false
     default: ""
@@ -146,25 +146,25 @@ runs:
   steps:
     - uses: actions/checkout@v7
       with:
-        # The diff against the base, and the base's settings (config.mjs).
+        # The diff against the base, and the base's settings (config.ts).
         fetch-depth: 0
 
     - uses: actions/setup-node@v7
       with:
         node-version: 24
 
-    # The advisor and the bots whose own PRs aren't reviewed (settings.mjs),
+    # The advisor and the bots whose own PRs aren't reviewed (settings.ts),
     # from the base branch.
     - name: Read the review settings
       id: settings
       shell: bash
       env:
         CONFIG_REF: origin/${{ github.event.pull_request.base.ref }}
-      run: node "$GITHUB_ACTION_PATH/settings.mjs"
+      run: node "$GITHUB_ACTION_PATH/settings.ts"
 
     # A PR every commit of which is a listed bot's (`review.skipBots`): a
     # Dependabot bump nobody has fixed. It auto-merges on CI alone; once
-    # autofix pushes to it, it's reviewed (skip.mjs).
+    # autofix pushes to it, it's reviewed (skip.ts).
     - name: Skip a bot's own PR
       id: skip
       if: steps.settings.outputs.skip_bots != ''
@@ -174,7 +174,7 @@ runs:
         PR: ${{ github.event.pull_request.number }}
         GH_TOKEN: ${{ inputs.github_token }}
         BOTS: ${{ steps.settings.outputs.skip_bots }}
-      run: node "$GITHUB_ACTION_PATH/skip.mjs"
+      run: node "$GITHUB_ACTION_PATH/skip.ts"
 
     - name: Note a bot's PR not reviewed
       if: steps.skip.outputs.skip == 'true'
@@ -184,7 +184,7 @@ runs:
         echo "$msg"
         echo "$msg" >> "$GITHUB_STEP_SUMMARY"
 
-    # The newest record of what this PR's reviews read (carry.mjs). Not
+    # The newest record of what this PR's reviews read (carry.ts). Not
     # restored for a PR labelled claude-review:full: everything is read.
     - name: Restore what earlier reviews read
       if: ${{ steps.skip.outputs.skip != 'true' && !contains(github.event.pull_request.labels.*.name, 'claude-review:full') }}
@@ -207,7 +207,7 @@ runs:
         CONFIG_REF: origin/${{ github.event.pull_request.base.ref }}
         RECORD: ${{ runner.temp }}/claude-review/record.json
         PLAN: ${{ runner.temp }}/claude-review/plan.json
-      run: node "$GITHUB_ACTION_PATH/carry.mjs" plan
+      run: node "$GITHUB_ACTION_PATH/carry.ts" plan
 
     - name: Render the review prompt
       id: render
@@ -219,18 +219,18 @@ runs:
         BASE_REF: ${{ github.event.pull_request.base.ref }}
         CONFIG_REF: origin/${{ github.event.pull_request.base.ref }}
         PLAN: ${{ runner.temp }}/claude-review/plan.json
-      run: node "$GITHUB_ACTION_PATH/render.mjs" review
+      run: node "$GITHUB_ACTION_PATH/render.ts" review
 
-    # What the reviewer loads is the base's (restore.mjs), and the
+    # What the reviewer loads is the base's (restore.ts), and the
     # checkout's git credentials go: the reviewer can't read the token
-    # files under $RUNNER_TEMP (guard.mjs), and this leaves none in .git.
+    # files under $RUNNER_TEMP (guard.ts), and this leaves none in .git.
     - name: Restore Claude's files from the base
       if: steps.skip.outputs.skip != 'true'
       shell: bash
       env:
         BASE_REF: ${{ github.event.pull_request.base.ref }}
       run: |
-        node "$GITHUB_ACTION_PATH/restore.mjs"
+        node "$GITHUB_ACTION_PATH/restore.ts"
         { git config --local --name-only --get-regexp '^(includeif\.|http\.https://github\.com/\.extraheader)' || true; } \
           | sort -u | while IFS= read -r key; do git config --local --unset-all "$key"; done
 
@@ -241,8 +241,8 @@ runs:
       shell: bash
       run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/.."
 
-    # The review (sdk.mjs says how it's locked down). continue-on-error: it
-    # fails when the pass doesn't finish, for result.mjs to judge. A pass the
+    # The review (sdk.ts says how it's locked down). continue-on-error: it
+    # fails when the pass doesn't finish, for result.ts to judge. A pass the
     # API refuses for credit or a limit is retried on the subscription; one
     # still stopped ends with a warning (`stopped`), which skips the coverage
     # check, the follow-up and the record, and "Fail a review that stopped"
@@ -271,14 +271,14 @@ runs:
         CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
       run: |
         mkdir -p "$RUNNER_TEMP/claude-review"
-        node "$GITHUB_ACTION_PATH/sdk.mjs"
+        node "$GITHUB_ACTION_PATH/sdk.ts"
 
     - name: Check the review finished
       if: steps.review.outcome == 'failure' && steps.review.outputs.stopped == ''
       shell: bash
       env:
         EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
-      run: node "$GITHUB_ACTION_PATH/result.mjs" "$EXECUTION_FILE"
+      run: node "$GITHUB_ACTION_PATH/result.ts" "$EXECUTION_FILE"
 
     - name: Check the review read every changed file
       id: coverage
@@ -289,7 +289,7 @@ runs:
         BASE_REF: ${{ github.event.pull_request.base.ref }}
         SKIP: ${{ steps.render.outputs.skip }}
         CARRIED: ${{ steps.plan.outputs.carried }}
-        # The files the PR deletes (carry.mjs), which a listing covers.
+        # The files the PR deletes (carry.ts), which a listing covers.
         REMOVED: ${{ steps.plan.outputs.removed }}
         EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
       run: |
@@ -297,7 +297,7 @@ runs:
         # The name "Fail if files are still unread" reads it by.
         cp "$EXECUTION_FILE" "$RUNNER_TEMP/review-pass-1.json"
         git -c core.quotePath=false diff --name-only -M "origin/$BASE_REF...HEAD" \
-          | node "$GITHUB_ACTION_PATH/coverage.mjs" "$RUNNER_TEMP/review-pass-1.json" \
+          | node "$GITHUB_ACTION_PATH/coverage.ts" "$RUNNER_TEMP/review-pass-1.json" \
           > "$RUNNER_TEMP/unread.txt"
         if [ -s "$RUNNER_TEMP/unread.txt" ]; then
           echo "The review didn't read:"
@@ -321,7 +321,7 @@ runs:
         BASE_REF: ${{ github.event.pull_request.base.ref }}
         CONFIG_REF: origin/${{ github.event.pull_request.base.ref }}
         UNREAD: ${{ steps.coverage.outputs.unread }}
-      run: node "$GITHUB_ACTION_PATH/render.mjs" followup
+      run: node "$GITHUB_ACTION_PATH/render.ts" followup
 
     - name: Follow up with the Agent SDK
       id: followup
@@ -345,14 +345,14 @@ runs:
         ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
         ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
         CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
-      run: node "$GITHUB_ACTION_PATH/sdk.mjs"
+      run: node "$GITHUB_ACTION_PATH/sdk.ts"
 
     - name: Check the follow-up finished
       if: steps.followup.outcome == 'failure' && steps.followup.outputs.stopped == ''
       shell: bash
       env:
         EXECUTION_FILE: ${{ steps.followup.outputs.execution_file }}
-      run: node "$GITHUB_ACTION_PATH/result.mjs" "$EXECUTION_FILE"
+      run: node "$GITHUB_ACTION_PATH/result.ts" "$EXECUTION_FILE"
 
     - name: Fail if files are still unread
       if: steps.coverage.outputs.unread != '' && steps.followup.outputs.stopped == ''
@@ -362,7 +362,7 @@ runs:
         BASE_REF: ${{ github.event.pull_request.base.ref }}
         SKIP: ${{ steps.render.outputs.skip }}
         CARRIED: ${{ steps.plan.outputs.carried }}
-        # The files the PR deletes (carry.mjs), which a listing covers.
+        # The files the PR deletes (carry.ts), which a listing covers.
         REMOVED: ${{ steps.plan.outputs.removed }}
         FOLLOWUP_FILE: ${{ steps.followup.outputs.execution_file }}
       run: |
@@ -372,7 +372,7 @@ runs:
           passes+=("$FOLLOWUP_FILE")
         fi
         unread=$(git -c core.quotePath=false diff --name-only -M "origin/$BASE_REF...HEAD" \
-          | node "$GITHUB_ACTION_PATH/coverage.mjs" "${passes[@]}")
+          | node "$GITHUB_ACTION_PATH/coverage.ts" "${passes[@]}")
         if [ -n "$unread" ]; then
           while IFS= read -r file; do
             echo "::error file=$file::Claude Review never read this file's diff, even on a second pass."
@@ -390,7 +390,7 @@ runs:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         RECORD: ${{ runner.temp }}/claude-review/record.json
         PLAN: ${{ runner.temp }}/claude-review/plan.json
-      run: node "$GITHUB_ACTION_PATH/carry.mjs" save
+      run: node "$GITHUB_ACTION_PATH/carry.ts" save
 
     - name: Save what this review read
       if: steps.review.outputs.execution_file != '' && steps.plan.outcome == 'success' && steps.review.outputs.stopped == '' && steps.followup.outputs.stopped == ''
@@ -401,7 +401,7 @@ runs:
 
     # A pass still stopped after the subscription retry, or with no token to
     # retry on: the PR isn't reviewed, so this fails the check, whoever
-    # opened the PR, and keeps one PR comment saying why (stopped.mjs). A
+    # opened the PR, and keeps one PR comment saying why (stopped.ts). A
     # first-pass stop skips the coverage check and the follow-up; a
     # follow-up stop fails here even with nothing left unread, as it may
     # have stopped before posting what it found. `!cancelled()`: the pass
@@ -421,7 +421,7 @@ runs:
         FOLLOWUP_FALLBACK: ${{ steps.followup.outputs.fallback }}
         FOLLOWUP_TURNS: ${{ steps.followup.outputs.turns }}
         FOLLOWUP_FILE: ${{ steps.followup.outputs.execution_file }}
-      run: node "$GITHUB_ACTION_PATH/stopped.mjs" report
+      run: node "$GITHUB_ACTION_PATH/stopped.ts" report
 
     # No pass stopped (a retry that cured a stop included): an earlier run's
     # stopped-review comment goes, even if a later step failed for another
@@ -434,4 +434,4 @@ runs:
         REPO: ${{ github.repository }}
         PR: ${{ github.event.pull_request.number }}
         GH_TOKEN: ${{ inputs.github_token }}
-      run: node "$GITHUB_ACTION_PATH/stopped.mjs" clear
+      run: node "$GITHUB_ACTION_PATH/stopped.ts" clear

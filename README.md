@@ -22,7 +22,7 @@ as one PR that merges itself once the app's checks pass.
   against the app's conventions (`review/`); Claude autofix fixes CI failures and review
   threads on bots' PRs (`autofix/`). Both run on the
   [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview), which the Max plan's
-  API credit pays for; the review has no shell (`review/sdk.mjs`).
+  API credit pays for; the review has no shell (`review/sdk.ts`).
 - **Tests that test the tests.** Mutation testing with [StrykerJS](https://stryker-mutator.io)
   on the lines a PR changed, and a monthly sweep of everything (`mutation/`): a test that
   passes whatever the code does fails here.

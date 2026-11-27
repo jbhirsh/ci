@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { testApp } from '../review/testApp.mjs';
+import { testApp } from '../review/testApp.ts';
 import { appFacts, commandProblem, entryProblem } from './commands.mjs';
 
 const CI = `name: CI

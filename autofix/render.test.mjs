@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { testApp, writeFiles } from '../review/testApp.mjs';
-import { placeholders } from '../review/template.mjs';
+import { testApp, writeFiles } from '../review/testApp.ts';
+import { placeholders } from '../review/template.ts';
 import { main, renderPrompt, template } from './render.mjs';
 
 const settings = {

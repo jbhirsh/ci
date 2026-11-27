@@ -1,5 +1,5 @@
 // Claude autofix's settings: the `autofix` key of the app's
-// `.github/ci.json`, read from the default branch (../review/config.mjs says
+// `.github/ci.json`, read from the default branch (../review/config.ts says
 // why). Each is the app's own; nothing here adds a check to an app.
 //
 //   "autofix": {
@@ -30,7 +30,7 @@
 //   one must be in the stub's `on.workflow_run.workflows`
 //   (check-triggers.mjs), and the CI fixer doesn't wait for an exempt one's
 //   runs (gate.mjs), since its completion wakes nothing. Default: none.
-// - engine: ignored, as `review.engine` is (../review/settings.mjs): the
+// - engine: ignored, as `review.engine` is (../review/settings.ts): the
 //   fixer runs on the Claude Agent SDK (sdk.mjs), the only engine. "sdk" is
 //   accepted and anything else fails; a later change drops the key once no
 //   repo sets it.
@@ -49,7 +49,7 @@ import {
   loadConfig,
   onlyKnownKeys,
   stringList,
-} from '../review/config.mjs';
+} from '../review/config.ts';
 
 export const DEFAULT_CHECKS = [
   'the `run:` steps of `.github/workflows/ci.yml` that can run here (copy their commands)',

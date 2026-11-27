@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { writeFiles } from '../review/testApp.mjs';
+import { writeFiles } from '../review/testApp.ts';
 import { CI_ROOT } from './manifest.mjs';
 import { BRANCH, blobSha } from './plan.mjs';
 import {

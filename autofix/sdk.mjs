@@ -10,13 +10,13 @@
 // `bot_token`), which action.yml sets as git's credential and gh's token;
 // that token lasts longer than the Claude app's, and the bump's npm scripts
 // run in this job, a risk the owner accepted. WebSearch and WebFetch are
-// added under the review's guard (../review/guard.mjs): a few searches, a
+// added under the review's guard (../review/guard.ts): a few searches, a
 // page only from a link it was shown (a package's changelog, say).
 //
 // Model "sonnet"; with `autofix.advisor`, Sonnet may consult that model.
 // Sign-in is the review's: federation with a fresh OIDC token, or an API
 // key. A pass refused for credit or a spend or usage limit (a
-// subscription's `usage_limit_reached` among them, ../review/sdk.mjs's
+// subscription's `usage_limit_reached` among them, ../review/sdk.ts's
 // stoppedBy) warns and passes, posting no failure. The execution file is the SDK's messages, the shape crash.mjs
 // already reads.
 //
@@ -30,8 +30,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput, summary } from '../lib/actions.mjs';
 import { appRoot } from '../lib/app.mjs';
-import { createGuard } from '../review/guard.mjs';
-import { lastResult, oidcToken, report, stoppedBy } from '../review/sdk.mjs';
+import { createGuard } from '../review/guard.ts';
+import { lastResult, oidcToken, report, stoppedBy } from '../review/sdk.ts';
 
 /** The tools the fixer has: claude-code-action's, plus the web. */
 export const TOOLS = [
@@ -186,13 +186,13 @@ export function queryOptions({ cwd, advisor, env, guard }) {
  * Runs one pass. Returns its outputs and whether it finished.
  *
  * @param {Record<string, string | undefined>} env
- * @param {{ sdk?: typeof import('@anthropic-ai/claude-agent-sdk'), fetchImpl?: import('../review/github.mjs').Fetch, root?: string }} [deps]
+ * @param {{ sdk?: typeof import('@anthropic-ai/claude-agent-sdk'), fetchImpl?: import('../review/github.ts').Fetch, root?: string }} [deps]
  * @returns {Promise<{ executionFile: string, stopped: 'credit' | 'limit' | null, finished: boolean, report: string }>}
  */
 export async function main(env, deps = {}) {
   const fetchImpl =
     deps.fetchImpl ??
-    /** @type {import('../review/github.mjs').Fetch} */ (/** @type {unknown} */ (fetch));
+    /** @type {import('../review/github.ts').Fetch} */ (/** @type {unknown} */ (fetch));
   const sdk = deps.sdk ?? (await import('@anthropic-ai/claude-agent-sdk'));
   const root = deps.root ?? appRoot();
   const need = (/** @type {string} */ name) => {

@@ -64,8 +64,8 @@ applies to every repo's next session:
 
 ## Claude Review
 
-Claude Review runs on the Claude Agent SDK (`review/sdk.mjs`). An app's settings are in
-`.github/ci.json` (`review/settings.mjs` says what each does), for example:
+Claude Review runs on the Claude Agent SDK (`review/sdk.ts`). An app's settings are in
+`.github/ci.json` (`review/settings.ts` says what each does), for example:
 
 ```json
 { "review": { "advisor": "opus", "skipBots": ["dependabot[bot]"] } }

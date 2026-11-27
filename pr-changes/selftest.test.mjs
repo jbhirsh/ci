@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { writeFiles } from '../review/testApp.mjs';
+import { writeFiles } from '../review/testApp.ts';
 import { cli, selftest } from './selftest.mjs';
 
 const master = readFileSync(
