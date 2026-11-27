@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { subjects } from './scope.mjs';
+import { subjects } from './scope.ts';
 
 describe('subjects', () => {
   it('names only files that exist, each a test-free source with a subject extension', () => {

@@ -7,13 +7,13 @@
 //
 // On a PR, MUTATE_SCOPE holds the run's --mutate entries, and only the files
 // and lines they name are scored: a file's score is then its changed lines'
-// alone (report.mjs's rule for a range), and results the incremental file
+// alone (report.ts's rule for a range), and results the incremental file
 // carries for anything else don't count. A file with nothing scorable there
 // (only types or comments changed, or only compile-error mutants) has no
 // score, which isn't a failure. Without a scope (the sweep) every file is
 // scored whole.
 //
-// Usage: node gate.mjs [report]
+// Usage: node gate.ts [report]
 // The report defaults to reports/mutation/mutation.json, the `json`
 // reporter's output; the sweep's merge passes its merged results instead.
 // Prints each file's score, adds them to the job summary, and exits 1 when
@@ -23,12 +23,12 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { summary } from '../lib/actions.mjs';
 import { appRoot } from '../lib/app.mjs';
-import { counts, inRanges, parseReport, parseScope, readText, relativeName } from './report.mjs';
-import { readSettings } from './settings.mjs';
+import { counts, inRanges, parseReport, parseScope, readText, relativeName } from './report.ts';
+import { readSettings } from './settings.ts';
 
 /**
- * @typedef {import('./report.mjs').Report} Report
- * @typedef {import('./report.mjs').Scope} Scope
+ * @typedef {import('./report.ts').Report} Report
+ * @typedef {import('./report.ts').Scope} Scope
  * @typedef {{ file: string, score: number | null }} FileScore
  */
 

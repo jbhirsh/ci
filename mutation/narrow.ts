@@ -8,7 +8,7 @@
 // own last results and a file it no longer changes keeps failing it, or an
 // earlier push's well-tested code lifts new code over the threshold. So a
 // file the scope doesn't name is dropped, and one it names by lines keeps
-// only the mutants lying wholly within them (report.mjs). Test files are
+// only the mutants lying wholly within them (report.ts). Test files are
 // kept: Stryker needs them to tell which tests changed.
 //
 // A kept mutant's lines are the earlier run's, and the ranges this one's, so
@@ -27,15 +27,15 @@
 // is re-tested if it's in range, which costs time but never a wrong score; a
 // file named whole keeps every mutant, as Stryker re-places them itself.
 //
-// Usage: node narrow.mjs <incremental file> <comma-separated scope>
+// Usage: node narrow.ts <incremental file> <comma-separated scope>
 
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appRoot } from '../lib/app.mjs';
-import { inRanges, parseReport, parseScope, readText, relativeName } from './report.mjs';
+import { inRanges, parseReport, parseScope, readText, relativeName } from './report.ts';
 
-/** @typedef {import('./report.mjs').Report} Report */
+/** @typedef {import('./report.ts').Report} Report */
 
 /**
  * Which end lines (1-based) stay where they were when Stryker diffs the
@@ -140,7 +140,7 @@ export function narrowFile(file, scope, cwd, log = console.log) {
 export function main(args, cwd = appRoot()) {
   const [file, scope] = args;
   if (!file || scope === undefined) {
-    console.error('Usage: narrow.mjs <incremental file> <comma-separated files or file:lines>');
+    console.error('Usage: narrow.ts <incremental file> <comma-separated files or file:lines>');
     return 2;
   }
   narrowFile(file, scope.split(','), cwd);

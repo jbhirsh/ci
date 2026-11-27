@@ -8,17 +8,17 @@ description: >-
 
   On a pull request it mutates only the lines the PR adds or changes in the
   files the Stryker config's `mutate` globs select (a new file, or one whose
-  test changed, whole; a reformat left out: scope.mjs), and skips Stryker
+  test changed, whole; a reformat left out: scope.ts), and skips Stryker
   when there is nothing to mutate, unless the PR touches Stryker's setup,
   which runs the smoke scope. The job still reports, as only Stryker's steps
   are skipped. The scope is worked out once before the install, which can
   only over-count, so a PR with nothing to mutate costs no install; then
   again after it, with the app's Prettier. The run is incremental: it starts
-  from the PR's last results, or main's baseline (cache.mjs), narrowed to
-  this run's scope first (narrow.mjs), so a later push re-tests only what
+  from the PR's last results, or main's baseline (cache.ts), narrowed to
+  this run's scope first (narrow.ts), so a later push re-tests only what
   it changed and the score is the changed code's alone. Stryker's
   `thresholds.break` gates the run, and with `perFileThreshold` set so does
-  each file (gate.mjs).
+  each file (gate.ts).
 
 
   On a push to main it refreshes main's baseline: the whole scope again,
@@ -29,7 +29,7 @@ description: >-
   does nothing here: the monthly sweep is the mutation-sweep workflow.
 
 
-  Settings come from the app's `.github/ci.json` (`mutation`, settings.mjs).
+  Settings come from the app's `.github/ci.json` (`mutation`, settings.ts).
   The checkout is part of this action (full history, to diff against the
   base), so the job needs no other step.
 runs:
@@ -48,7 +48,7 @@ runs:
     - name: Read the mutation settings
       id: settings
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/settings.mjs"
+      run: node "$GITHUB_ACTION_PATH/settings.ts"
 
     - name: Not a pull request or a push
       if: github.event_name != 'pull_request' && github.event_name != 'push'
@@ -63,7 +63,7 @@ runs:
       shell: bash
       env:
         BASE_REF: ${{ github.base_ref }}
-      run: node "$GITHUB_ACTION_PATH/scope.mjs" "origin/${BASE_REF}"
+      run: node "$GITHUB_ACTION_PATH/scope.ts" "origin/${BASE_REF}"
 
     - uses: actions/setup-node@v7
       if: github.event_name == 'push' || steps.pre.outputs.run == 'true'
@@ -86,7 +86,7 @@ runs:
       shell: bash
       env:
         BASE_REF: ${{ github.base_ref }}
-      run: node "$GITHUB_ACTION_PATH/scope.mjs" "origin/${BASE_REF}"
+      run: node "$GITHUB_ACTION_PATH/scope.ts" "origin/${BASE_REF}"
 
     - name: Cache keys
       id: keys
@@ -96,9 +96,9 @@ runs:
         PR: ${{ github.event.pull_request.number }}
       run: |
         if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-          node "$GITHUB_ACTION_PATH/cache.mjs" pr "$PR"
+          node "$GITHUB_ACTION_PATH/cache.ts" pr "$PR"
         else
-          node "$GITHUB_ACTION_PATH/cache.mjs" main
+          node "$GITHUB_ACTION_PATH/cache.ts" main
         fi
 
     - name: Restore incremental results
@@ -115,7 +115,7 @@ runs:
       shell: bash
       env:
         MUTATE_SCOPE: ${{ steps.scope.outputs.mutate }}
-      run: node "$GITHUB_ACTION_PATH/narrow.mjs" reports/stryker-incremental.json "$MUTATE_SCOPE"
+      run: node "$GITHUB_ACTION_PATH/narrow.ts" reports/stryker-incremental.json "$MUTATE_SCOPE"
 
     - name: Run Stryker (changed lines)
       id: stryker
@@ -175,7 +175,7 @@ runs:
       shell: bash
       env:
         MUTATE_SCOPE: ${{ steps.scope.outputs.mutate }}
-      run: node "$GITHUB_ACTION_PATH/gate.mjs"
+      run: node "$GITHUB_ACTION_PATH/gate.ts"
 
     # always(): a run under its threshold has still written the report that
     # says why. warn: a run cut off by the job's limit writes none, and an

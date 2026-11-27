@@ -19,7 +19,7 @@
 //                      take (default none, so such a PR skips Stryker too).
 //   testSubjects       Whether a changed test file stands for the source it
 //                      covers (`x.test.ts` or `__tests__/x.test.ts` beside
-//                      `x.ts`, `x.tsx` or `x.mjs`; scope.mjs), mutated
+//                      `x.ts`, `x.tsx` or `x.mjs`; scope.ts), mutated
 //                      whole, so a PR that only weakens a test is still
 //                      tested against that code (default true).
 //   formatCheck        Whether a file whose change is formatting alone, by
@@ -46,13 +46,13 @@
 //                      (default 8).
 //   sweep.timeoutMinutes  Each shard job's limit (default 180).
 //
-// `node settings.mjs` writes them as step outputs for the composite actions.
+// `node settings.ts` writes them as step outputs for the composite actions.
 
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
-import { isRecord, readText } from './report.mjs';
+import { isRecord, readText } from './report.ts';
 
 /**
  * @typedef {{

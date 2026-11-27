@@ -40,7 +40,7 @@
 // every PR cost an install and a dry run on PRs that change only pictures or
 // docs, and held up bots' PRs.
 //
-// Usage: node scope.mjs <base ref>   (run in the app's checkout, or APP_ROOT)
+// Usage: node scope.ts <base ref>   (run in the app's checkout, or APP_ROOT)
 // Prints the entries, and writes the step outputs `run` (true/false),
 // `mutate` (the entries comma-joined) and `reason` (changed, smoke or none).
 
@@ -51,9 +51,9 @@ import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appRoot, importFromApp } from '../lib/app.mjs';
 import { matches } from '../lib/match.mjs';
-import { readSettings, readStrykerConfig, wiringGlobs } from './settings.mjs';
+import { readSettings, readStrykerConfig, wiringGlobs } from './settings.ts';
 
-/** @typedef {import('./report.mjs').LineRange} LineRange */
+/** @typedef {import('./report.ts').LineRange} LineRange */
 
 /**
  * Whether the ordered `mutate` globs select `file` (a repo-relative path).
@@ -200,7 +200,7 @@ export async function scopeEntries(changed, { mutate, testSubjects, formatCheck 
  * setup, else none.
  *
  * @param {{ changed: string[], touched: string[], mutate: string[],
- *   settings: import('./settings.mjs').Settings, io: ScopeIo }} args
+ *   settings: import('./settings.ts').Settings, io: ScopeIo }} args
  * @returns {Promise<PrScope>}
  */
 export async function prScope({ changed, touched, mutate, settings, io }) {
@@ -364,7 +364,7 @@ const MESSAGES = {
 export async function main(args, root = appRoot()) {
   const [baseRef] = args;
   if (!baseRef) {
-    console.error('Usage: scope.mjs <base ref>');
+    console.error('Usage: scope.ts <base ref>');
     return 2;
   }
   const { entries, reason } = await scopeFor(root, baseRef);

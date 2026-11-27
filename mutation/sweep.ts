@@ -10,7 +10,7 @@
 // whole and writes it as main's baseline.
 //
 // Splitting: the files are those the Stryker config's `mutate` globs select
-// among the tracked ones (scope.mjs's matching, so the sweep and PR runs
+// among the tracked ones (scope.ts's matching, so the sweep and PR runs
 // can't drift). Each goes whole to one shard (a line range can't split a
 // file safely: a mutant spanning two ranges belongs to neither), biggest
 // first, each to the lightest shard so far, ties to the lower shard and equal
@@ -33,7 +33,7 @@
 // names but doesn't list is dropped from them.
 //
 // Judging: the merged score fails under Stryker's `thresholds.break`, and
-// with `perFileThreshold` set, so does any file under it (gate.mjs, every
+// with `perFileThreshold` set, so does any file under it (gate.ts, every
 // file whole). Where Stryker would pass a run that tested nothing (its score
 // is NaN), this fails it: a sweep with nothing to score is broken. The
 // merged results are written only when every shard reported, since they
@@ -42,15 +42,15 @@
 // sweep's score is still shown, for information, and fails the run.
 //
 // Usage (in the app's checkout, or APP_ROOT):
-//   node sweep.mjs plan [results]
+//   node sweep.ts plan [results]
 //     Splits into `sweep.shards` shards, weighed by [results] (main's last
 //     reports/stryker-incremental.json) when it can be read. Prints the
 //     split; writes the outputs `matrix` (one entry per shard, its files
 //     comma-joined as `mutate`) and `count`, and the table to the summary.
-//   node sweep.mjs config <out>
+//   node sweep.ts config <out>
 //     Writes the Stryker config to <out> with no break threshold: a shard's
 //     score is one part's, and only the merge judges.
-//   node sweep.mjs merge <dir> <count> <out>
+//   node sweep.ts merge <dir> <count> <out>
 //     Merges the shards' results (one directory per shard in <dir>, each
 //     with its stryker-incremental.json) into <out>, written only when all
 //     <count> reported. Writes the output `complete` (true/false) and the
@@ -61,16 +61,16 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput, summary } from '../lib/actions.mjs';
 import { appRoot } from '../lib/app.mjs';
-import { judge } from './gate.mjs';
-import { allMutants, counts, parseReport, readText, relativeName } from './report.mjs';
-import { gitIn, inMutateScope } from './scope.mjs';
-import { breakThreshold, readSettings, readStrykerConfig } from './settings.mjs';
+import { judge } from './gate.ts';
+import { allMutants, counts, parseReport, readText, relativeName } from './report.ts';
+import { gitIn, inMutateScope } from './scope.ts';
+import { breakThreshold, readSettings, readStrykerConfig } from './settings.ts';
 
 /**
- * @typedef {import('./report.mjs').Report} Report
- * @typedef {import('./report.mjs').Mutant} Mutant
- * @typedef {import('./report.mjs').Test} Test
- * @typedef {import('./report.mjs').Counts} Counts
+ * @typedef {import('./report.ts').Report} Report
+ * @typedef {import('./report.ts').Mutant} Mutant
+ * @typedef {import('./report.ts').Test} Test
+ * @typedef {import('./report.ts').Counts} Counts
  * @typedef {{ files: string[], weight: number }} Shard
  */
 
@@ -348,7 +348,7 @@ const positive = (text) => {
   return Number.isInteger(n) && n > 0 ? n : null;
 };
 
-const USAGE = 'Usage: sweep.mjs plan [results] | config <out> | merge <dir> <count> <out>';
+const USAGE = 'Usage: sweep.ts plan [results] | config <out> | merge <dir> <count> <out>';
 
 /**
  * The command line. Returns the exit code.

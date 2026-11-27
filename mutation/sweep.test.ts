@@ -15,13 +15,13 @@ import {
   splitShards,
   testKey,
   verdict,
-} from './sweep.mjs';
-import { allMutants, counts } from './report.mjs';
-import { cleanRepos, isolateGit, repo, writeFiles } from './test-repo.mjs';
+} from './sweep.ts';
+import { allMutants, counts } from './report.ts';
+import { cleanRepos, isolateGit, repo, writeFiles } from './test-repo.ts';
 
 const CWD = '/home/runner/work/sift/sift';
 
-/** @typedef {import('./report.mjs').Report} Report */
+/** @typedef {import('./report.ts').Report} Report */
 
 describe('mutantWeight', () => {
   it('counts one run plus each covering test', () => {

@@ -4,7 +4,7 @@
 //
 // Git runs with no GIT_* variable from outside, as a hook's GIT_DIR would
 // point it at this repository, and without the user's config
-// (mutation/test-repo.mjs says more). Unlike that module's `repo`, an app
+// (mutation/test-repo.ts says more). Unlike that module's `repo`, an app
 // here links only TypeScript 6's API as its `typescript`, as the apps alias
 // it: this repo's own `typescript` is TypeScript 7, which has none.
 
@@ -13,7 +13,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { writeFiles } from '../mutation/test-repo.mjs';
+import { writeFiles } from '../mutation/test-repo.ts';
 
 /** This repo's TypeScript 6, its JavaScript API, as an app installs it. */
 const TYPESCRIPT = path.dirname(createRequire(import.meta.url).resolve('typescript/package.json'));

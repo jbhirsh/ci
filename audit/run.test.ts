@@ -1,7 +1,7 @@
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { isolateGit } from '../mutation/test-repo.mjs';
+import { isolateGit } from '../mutation/test-repo.ts';
 import { TITLES, drawGraph, knipConfig, main, runJscpd, runKnip, settings } from './run.ts';
 import { cli, selftest } from './selftest.ts';
 import { app, cleanApps } from './test-app.ts';

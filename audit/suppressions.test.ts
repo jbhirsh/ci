@@ -2,7 +2,7 @@ import { rmSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { isolateGit } from '../mutation/test-repo.mjs';
+import { isolateGit } from '../mutation/test-repo.ts';
 import { parseJsonc } from './jsonc.ts';
 import {
   annotations,

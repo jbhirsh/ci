@@ -11,15 +11,15 @@
 // A wiring glob that matches no tracked file is only a warning: the defaults
 // name files not every app has.
 //
-// Usage: node selftest.mjs <app checkout>   Exits 1 on any failure.
+// Usage: node selftest.ts <app checkout>   Exits 1 on any failure.
 
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { matches } from '../lib/match.mjs';
-import { readText } from './report.mjs';
-import { gitIn, inMutateScope, scopeFor } from './scope.mjs';
-import { readSettings, readStrykerConfig, wiringGlobs } from './settings.mjs';
-import { plan, shardConfig } from './sweep.mjs';
+import { readText } from './report.ts';
+import { gitIn, inMutateScope, scopeFor } from './scope.ts';
+import { readSettings, readStrykerConfig, wiringGlobs } from './settings.ts';
+import { plan, shardConfig } from './sweep.ts';
 
 /**
  * Runs the checks against the app at `root`, reporting through `log`.
@@ -43,9 +43,9 @@ export async function selftest(root, log = console.log) {
       log(`FAIL  ${name}: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
-  /** @type {import('./settings.mjs').Settings | undefined} */
+  /** @type {import('./settings.ts').Settings | undefined} */
   let settings;
-  /** @type {import('./settings.mjs').StrykerConfig | undefined} */
+  /** @type {import('./settings.ts').StrykerConfig | undefined} */
   let config;
   await step('settings parse', () => {
     settings = readSettings(root);
@@ -116,7 +116,7 @@ export async function selftest(root, log = console.log) {
 export async function main(args) {
   const [dir] = args;
   if (!dir) {
-    console.error('Usage: selftest.mjs <app checkout>');
+    console.error('Usage: selftest.ts <app checkout>');
     return 2;
   }
   const failed = await selftest(path.resolve(dir));
