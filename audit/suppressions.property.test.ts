@@ -1,7 +1,7 @@
 import ts from 'typescript';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { knipSuppressions, suppressionTags } from './suppressions.mjs';
+import { knipSuppressions, suppressionTags } from './suppressions.ts';
 
 // A knip config is whatever the app wrote: any JSON, weighted towards the
 // options the scan reads.

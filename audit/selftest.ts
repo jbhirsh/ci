@@ -1,10 +1,10 @@
 // Self-test of the weekly audit against an app's checkout, its dependencies
-// installed: `node audit/selftest.mjs <app dir>`. Checks the app's `audit`
+// installed: `node audit/selftest.ts <app dir>`. Checks the app's `audit`
 // settings parse and its graph folders exist, then runs knip and jscpd as
 // the audit does, with the app's configs, and reads their reports (a dry
 // run: no issue is touched, and what they find is printed, not judged).
 // Two things fail it, as they fail the weekly run: a knip suppression in
-// the app (audit/suppressions.mjs), and a package.json without the `jscpd`
+// the app (audit/suppressions.ts), and a package.json without the `jscpd`
 // script the audit runs jscpd through.
 // Lychee and Graphviz aren't run: the action installs them, not the app.
 
@@ -12,11 +12,11 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
-import { main, settings, spawn as realSpawn } from './run.mjs';
+import { main, settings, spawn as realSpawn } from './run.ts';
 
 /**
  * @param {string} root
- * @param {import('./run.mjs').Spawn} [spawn] how to run the tools
+ * @param {import('./run.ts').Spawn} [spawn] how to run the tools
  * @returns {string[]} what to print; throws on a problem (both checks', when both have one)
  */
 export function selftest(root, spawn = realSpawn) {

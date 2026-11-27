@@ -2,9 +2,9 @@ import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isolateGit } from '../mutation/test-repo.mjs';
-import { TITLES, drawGraph, knipConfig, main, runJscpd, runKnip, settings } from './run.mjs';
-import { cli, selftest } from './selftest.mjs';
-import { app, cleanApps } from './test-app.mjs';
+import { TITLES, drawGraph, knipConfig, main, runJscpd, runKnip, settings } from './run.ts';
+import { cli, selftest } from './selftest.ts';
+import { app, cleanApps } from './test-app.ts';
 
 /** @type {() => void} */
 let restoreGit;
@@ -30,14 +30,14 @@ function root(files = []) {
 /**
  * Deps for main, with a spawn that answers each tool.
  *
- * @param {Partial<import('./run.mjs').Deps>} overrides
+ * @param {Partial<import('./run.ts').Deps>} overrides
  */
 function deps(overrides = {}) {
   const out = { summary: /** @type {string[]} */ ([]), outputs: /** @type {string[][]} */ ([]) };
   const gh = vi.fn((/** @type {string[]} */ args) =>
     args[1] === 'list' ? '[{"number":4,"title":"Dead code (weekly audit)","state":"OPEN"}]' : '',
   );
-  /** @type {import('./run.mjs').Deps} */
+  /** @type {import('./run.ts').Deps} */
   const d = {
     root: root(['knip.jsonc']),
     env: { GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'o/r', GITHUB_RUN_ID: '7' },
@@ -285,7 +285,7 @@ describe('graph', () => {
 });
 
 describe('selftest', () => {
-  /** @type {import('./run.mjs').Spawn} */
+  /** @type {import('./run.ts').Spawn} */
   const tools = (_, args) => {
     if (args.includes('jscpd')) {
       writeFileSync(path.join(args[args.indexOf('--output') + 1], 'jscpd-report.json'), '{}');

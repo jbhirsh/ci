@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { jscpdFindings, knipFindings, lycheeFindings } from './report.mjs';
+import { jscpdFindings, knipFindings, lycheeFindings } from './report.ts';
 
 /**
  * @param {string} file

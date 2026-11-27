@@ -2,8 +2,8 @@ name: Weekly audit check
 description: >-
   One check of the weekly audit, from checkout to its tracking issue: knip
   (dead code), jscpd (duplicated code), lychee (broken links in the
-  Markdown) or the dependency-cruiser graph (an artifact). run.mjs's header
-  says what each runs and reads, and audit/issue.mjs's how the issue is kept.
+  Markdown) or the dependency-cruiser graph (an artifact). run.ts's header
+  says what each runs and reads, and audit/issue.ts's how the issue is kept.
   The reusable workflow .github/workflows/audit.yml runs all four as jobs;
   an app calls that, not this.
 
@@ -48,11 +48,11 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
-      run: node "$GITHUB_ACTION_PATH/run.mjs" "${{ inputs.check }}"
+      run: node "$GITHUB_ACTION_PATH/run.ts" "${{ inputs.check }}"
 
     # Every Markdown file in the checkout; local links resolve against it,
     # and --include-fragments checks #anchors too. The action's major, with
-    # the lychee it carries: run.mjs reads lychee's JSON report, and fails
+    # the lychee it carries: run.ts reads lychee's JSON report, and fails
     # when the report no longer has the field it reads (a format change).
     - name: Run lychee
       id: lychee
@@ -76,7 +76,7 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         EXIT_CODE: ${{ steps.lychee.outputs.exit_code }}
-      run: node "$GITHUB_ACTION_PATH/run.mjs" lychee "$RUNNER_TEMP/lychee.json" "$EXIT_CODE"
+      run: node "$GITHUB_ACTION_PATH/run.ts" lychee "$RUNNER_TEMP/lychee.json" "$EXIT_CODE"
 
     - name: Install Graphviz
       if: inputs.check == 'graph'
@@ -86,7 +86,7 @@ runs:
     - name: Draw the graph
       if: inputs.check == 'graph'
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/run.mjs" graph "$RUNNER_TEMP/architecture"
+      run: node "$GITHUB_ACTION_PATH/run.ts" graph "$RUNNER_TEMP/architecture"
 
     - name: Upload the graph
       id: upload

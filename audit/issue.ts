@@ -6,10 +6,10 @@
 // clean sweep closes it as completed, with a comment saying so. Issues are
 // found by exact title among those labelled `weekly-audit`, so renaming a
 // category opens a new issue. The issue is the alert: the run stays green
-// whatever it finds, except that audit/run.mjs fails the knip check, once
-// the issue is synced, on a suppression (audit/suppressions.mjs).
+// whatever it finds, except that audit/run.ts fails the knip check, once
+// the issue is synced, on a suppression (audit/suppressions.ts).
 //
-// `gh` does the work (audit/run.mjs hands it in), so GH_TOKEN needs issues
+// `gh` does the work (audit/run.ts hands it in), so GH_TOKEN needs issues
 // write.
 
 export const LABEL = 'weekly-audit';

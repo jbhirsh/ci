@@ -4,11 +4,11 @@
 // show or switch off its ignores, so this reads where they live: the app's
 // knip config, and the JSDoc tags in its code.
 //
-//   node suppressions.mjs [--annotate]
+//   node suppressions.ts [--annotate]
 //
 // prints what it found and exits 1 when anything is, from the app's checkout
 // (audit/suppressions/action.yml runs it as a step of each app's CI job, with
-// --annotate for `::error` lines on the PR's diff); audit/run.mjs's knip
+// --annotate for `::error` lines on the PR's diff); audit/run.ts's knip
 // check lists the same at the top of the Dead code issue and fails the
 // weekly run on it.
 //
@@ -46,7 +46,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appRoot, requireFromApp } from '../lib/app.mjs';
-import { parseJsonc } from './jsonc.mjs';
+import { parseJsonc } from './jsonc.ts';
 
 /** The config files knip reads, in the order it looks (knip's KNIP_CONFIG_LOCATIONS). */
 export const KNIP_CONFIG_LOCATIONS = [

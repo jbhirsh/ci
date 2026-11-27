@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { parseJsonc } from './jsonc.mjs';
+import { parseJsonc } from './jsonc.ts';
 
 /**
  * JSON text with a comment or whitespace after each structural token, and a

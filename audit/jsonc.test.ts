@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseJsonc } from './jsonc.mjs';
-import { APP_CONFIGS } from './test-app.mjs';
+import { parseJsonc } from './jsonc.ts';
+import { APP_CONFIGS } from './test-app.ts';
 
 describe('parseJsonc', () => {
   it('drops line and block comments', () => {
