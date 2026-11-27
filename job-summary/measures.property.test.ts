@@ -1,6 +1,13 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { measureSlower, measureTrend, parseRecorded, recorded } from './measures.ts';
+import {
+  measureSlower,
+  measureTrend,
+  parseRecorded,
+  recorded,
+  requests,
+  summarize,
+} from './measures.ts';
 import { parseResults } from '../probe/results.ts';
 
 const ms = fc
@@ -73,6 +80,25 @@ describe('a record’s measurements', () => {
         const keys = new Set(rows.map((r) => JSON.stringify([r.name, r.phase, r.start])));
         expect(kept.values).toHaveLength(keys.size);
         expect(kept.environment).toBe(environment);
+      }),
+    );
+  });
+});
+
+describe('a results file’s requests', () => {
+  it('never throw, place every part at 0 or later, and keep one part per phase', () => {
+    fc.assert(
+      fc.property(fc.array(row), (rows) => {
+        const measurements = parseResults({ measurements: rows }).measurements;
+        const found = requests(measurements);
+        for (const { parts } of found) {
+          expect(new Set(parts.map((p) => p.key)).size).toBe(parts.length);
+          for (const p of parts)
+            for (const v of [p.cold, p.warm]) if (v) expect(v.at).toBeGreaterThanOrEqual(0);
+        }
+        expect(found.reduce((n, r) => n + r.parts.length, 0)).toBe(
+          new Set(summarize(measurements).map((s) => `${s.name} ${s.phase}`)).size,
+        );
       }),
     );
   });

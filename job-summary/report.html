@@ -928,6 +928,561 @@
       #problem {
         margin: 0;
       }
+
+      /* Where the time went (a results file's timings, in ms). Three levels:
+         a lane per operation (its time, how it compares, and one bar of what
+         it was made of, in time order); opened, a waterfall of the request,
+         whose server part fans out into a waterfall of its own; and a row's
+         details (its runs on main, its usual, its Server-Timing entry). */
+      #measures-card {
+        --k-net: #b4bdcc;
+        --k-cold: #8b5cf6;
+        --k-server: #2f5fd0;
+        --k-field: #0f9d8a;
+        --k-slow: #e0a33a;
+        --k-track: #eef1f5;
+        gap: 14px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) #measures-card {
+          --k-net: #4a5262;
+          --k-cold: #a78bfa;
+          --k-server: #7ea2ff;
+          --k-field: #3ccfba;
+          --k-slow: #e7b456;
+          --k-track: #222833;
+        }
+      }
+      :root[data-theme='dark'] #measures-card {
+        --k-net: #4a5262;
+        --k-cold: #a78bfa;
+        --k-server: #7ea2ff;
+        --k-field: #3ccfba;
+        --k-slow: #e7b456;
+        --k-track: #222833;
+      }
+      .k-net {
+        background: var(--k-net);
+      }
+      .k-cold {
+        background: var(--k-cold);
+      }
+      .k-server {
+        background: var(--k-server);
+      }
+      .k-field {
+        background: var(--k-field);
+      }
+      .k-slow {
+        background: var(--k-slow);
+      }
+
+      .mhead {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .mhead h2 {
+        font-size: 17px;
+      }
+      .msub {
+        margin: 2px 0 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .mswitch {
+        display: inline-flex;
+        background: var(--soft);
+        border-radius: 999px;
+        padding: 3px;
+      }
+      .mswitch button {
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+        background: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 6px 14px;
+        min-height: 32px;
+        cursor: pointer;
+      }
+      .mswitch button[aria-selected='true'] {
+        background: var(--surface);
+        color: var(--fg);
+        box-shadow:
+          0 1px 2px rgb(0 0 0 / 0.12),
+          0 0 0 1px var(--line);
+      }
+      .kinds {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .kinds i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        margin-right: 6px;
+        vertical-align: -1px;
+      }
+      .kinds .k-slow,
+      .seg-slow {
+        background: repeating-linear-gradient(
+          135deg,
+          var(--k-slow) 0 3px,
+          color-mix(in srgb, var(--k-slow) 55%, transparent) 3px 6px
+        );
+      }
+
+      /* An operation's lane. */
+      .lanes {
+        display: grid;
+        gap: 10px;
+      }
+      .lane {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+      .lane.slow {
+        border-color: color-mix(in srgb, var(--k-slow) 70%, var(--line));
+        box-shadow: inset 3px 0 0 var(--k-slow);
+      }
+      .lane > button.sum {
+        all: unset;
+        box-sizing: border-box;
+        width: 100%;
+        cursor: pointer;
+        display: grid;
+        grid-template-columns: minmax(150px, 210px) 1fr 112px 104px 16px;
+        grid-template-areas: 'name bar num spark chev';
+        align-items: center;
+        gap: 6px 18px;
+        padding: 14px 16px;
+      }
+      .lane > button.sum:hover {
+        background: color-mix(in srgb, var(--soft) 60%, transparent);
+      }
+      .lane > button.sum:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+        border-radius: 12px;
+      }
+      .sum .name {
+        grid-area: name;
+        min-width: 0;
+      }
+      .sum .opn {
+        font-size: 15px;
+        font-weight: 650;
+      }
+      .sum .opn small {
+        font-weight: 400;
+        color: var(--muted);
+        font-size: 12px;
+        margin-right: 5px;
+      }
+      .sum .why {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .sum .why b {
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .sum .num {
+        grid-area: num;
+        text-align: right;
+        display: grid;
+        justify-items: end;
+        gap: 3px;
+      }
+      .mbig {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+      }
+      .mbig .u {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+        margin-left: 1px;
+      }
+      .mchip {
+        font-size: 11px;
+        font-weight: 650;
+        padding: 1px 8px;
+        border-radius: 999px;
+        white-space: nowrap;
+        background: var(--soft);
+        color: var(--muted);
+        border: 1px solid var(--line);
+      }
+      .mchip.slow {
+        background: color-mix(in srgb, var(--k-slow) 22%, transparent);
+        color: var(--warn);
+      }
+      .mchip.fast {
+        background: color-mix(in srgb, var(--ok) 16%, transparent);
+        color: var(--ok);
+      }
+      .sum .mspark {
+        grid-area: spark;
+      }
+      .sum .chev {
+        grid-area: chev;
+        color: var(--muted);
+        transition: transform 0.2s;
+      }
+      .lane.open .sum .chev {
+        transform: rotate(90deg);
+      }
+      .lane.none .sum {
+        cursor: default;
+      }
+      .lane.none .opn,
+      .lane.none .mbig {
+        color: var(--muted);
+      }
+
+      /* The composition bar: the request from the browser's side, in time
+         order, each part where it happened. */
+      .comp {
+        grid-area: bar;
+        position: relative;
+        height: 14px;
+        border-radius: 7px;
+        background: var(--k-net);
+        overflow: hidden;
+      }
+      .comp.mempty {
+        height: 20px;
+        background: var(--k-track);
+      }
+      .comp i,
+      .wbar i {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+      }
+      .comp .k-server,
+      .wbar.k-server {
+        background: color-mix(in srgb, var(--k-server) 38%, var(--surface));
+      }
+      .comp i + i {
+        box-shadow: -1px 0 0 var(--surface);
+      }
+      .mspark svg {
+        display: block;
+        overflow: visible;
+      }
+
+      /* Opened: the waterfall. Columns: the name, the track, the time. */
+      .fall {
+        border-top: 1px solid var(--line);
+        padding: 14px 16px 16px;
+        display: grid;
+        gap: 6px;
+        background: color-mix(in srgb, var(--soft) 35%, var(--surface));
+      }
+      .fall h3 {
+        margin: 6px 0 2px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+      }
+      .fall h3 span {
+        text-transform: none;
+        letter-spacing: 0;
+        font-weight: 400;
+      }
+      .wgrid {
+        display: grid;
+        grid-template-columns: minmax(150px, 230px) 1fr 70px;
+        column-gap: 14px;
+        align-items: center;
+      }
+      .maxis {
+        position: relative;
+        height: 16px;
+        font-size: 11px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .maxis span {
+        position: absolute;
+        transform: translateX(-50%);
+        white-space: nowrap;
+      }
+      .maxis span:first-child {
+        transform: none;
+      }
+      .maxis span:last-child {
+        transform: translateX(-100%);
+      }
+      /* A row of the waterfall's grid, on its columns, a box of its own so
+         Needs attention can scroll to it and a keyboard can reach it. */
+      .wrow {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: subgrid;
+        align-items: center;
+        cursor: pointer;
+        border-radius: 6px;
+      }
+      .wrow:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+      .wrow > * {
+        padding-block: 5px;
+      }
+      .wrow:hover > *,
+      .wrow.sel > * {
+        background: color-mix(in srgb, var(--accent) 7%, transparent);
+      }
+      .wrow > .wname {
+        border-radius: 6px 0 0 6px;
+        padding-left: calc(6px + var(--d) * 14px);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 13px;
+      }
+      .wrow > .wval {
+        border-radius: 0 6px 6px 0;
+        text-align: right;
+        padding-right: 6px;
+        font-variant-numeric: tabular-nums;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .wrow.slow > .wval {
+        color: var(--warn);
+      }
+      .wname .lbl {
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+      .wname .lbl.plain {
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .wname .x {
+        margin-left: 6px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .wname .dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 7px;
+        vertical-align: 0;
+      }
+      .mtrack {
+        position: relative;
+        height: 22px;
+        align-self: stretch;
+        display: flex;
+        align-items: center;
+      }
+      .mtrack .mgrid {
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient(to right, var(--line) 1px, transparent 1px);
+        background-size: 25% 100%;
+        opacity: 0.6;
+        pointer-events: none;
+      }
+      .wbar {
+        position: absolute;
+        height: 12px;
+        min-width: 3px;
+        border-radius: 4px;
+      }
+      .wbar.k-net {
+        background: var(--k-net);
+      }
+      .wbar.seg-slow {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--k-slow) 35%, transparent);
+      }
+      /* The fan from the server's bar to its own waterfall below. */
+      .fan {
+        grid-column: 2;
+        height: 26px;
+        display: block;
+        width: 100%;
+      }
+      .fan polygon {
+        fill: color-mix(in srgb, var(--k-server) 12%, transparent);
+        stroke: color-mix(in srgb, var(--k-server) 45%, transparent);
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+      }
+
+      /* A row's details. */
+      .detail {
+        grid-column: 1 / -1;
+        margin: 4px 0 8px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+        padding: 14px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+        gap: 14px 24px;
+      }
+      .detail .stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        align-content: start;
+      }
+      .detail .stat small {
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .detail .stat b {
+        font-size: 18px;
+        font-variant-numeric: tabular-nums;
+      }
+      .detail .stat.slow b {
+        color: var(--warn);
+      }
+      .detail .what {
+        grid-column: 1 / -1;
+        margin: 0;
+        font-size: 13px;
+      }
+      .detail .what code,
+      .detail pre {
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+      .detail pre {
+        grid-column: 1 / -1;
+        margin: 0;
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: var(--soft);
+        overflow-x: auto;
+        white-space: pre;
+      }
+      .detail .hist svg {
+        width: 100%;
+        height: 120px;
+        display: block;
+        overflow: visible;
+      }
+      .detail .hist text {
+        font-size: 10px;
+        fill: var(--muted);
+      }
+      .measnotes {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      /* A phone: a lane's name and time on one line, its bar under them;
+         a waterfall row's name and time over its track. */
+      @media (max-width: 640px) {
+        section.card#measures-card {
+          padding: 14px 12px;
+        }
+        .lane > button.sum {
+          grid-template-columns: 1fr auto 14px;
+          grid-template-areas:
+            'name num chev'
+            'bar bar bar';
+          padding: 12px;
+          gap: 10px 10px;
+        }
+        .sum .mspark,
+        .lane.none .comp,
+        .wgrid > .msp {
+          display: none;
+        }
+        .sum .why {
+          white-space: normal;
+        }
+        .wrow {
+          display: grid;
+          grid-column: 1 / -1;
+          grid-template-columns: minmax(0, 1fr) auto;
+          column-gap: 8px;
+          align-items: stretch;
+        }
+        .wrow > .wname {
+          grid-area: 1 / 1;
+        }
+        .wrow > .wval {
+          grid-area: 1 / 2;
+        }
+        .wrow > .mtrack {
+          grid-area: 2 / 1 / 3 / 3;
+        }
+        .sum .num {
+          grid-auto-flow: row;
+        }
+        .fall {
+          padding: 12px 10px 14px;
+        }
+        .wgrid {
+          grid-template-columns: 1fr auto;
+          column-gap: 8px;
+        }
+        .wgrid > .maxis,
+        .wgrid > .mtrack,
+        .wgrid > .fan {
+          grid-column: 1 / -1;
+        }
+        .wrow > .wname,
+        .wrow > .wval {
+          padding-block: 6px 0;
+        }
+        .wrow > .mtrack {
+          height: 18px;
+          border-radius: 0 0 6px 6px;
+          padding-bottom: 4px;
+        }
+        .wrow > .wname {
+          border-radius: 6px 0 0 0;
+        }
+        .wrow > .wval {
+          border-radius: 0 6px 0 0;
+        }
+        .detail {
+          grid-template-columns: 1fr;
+          padding: 12px;
+        }
+      }
     </style>
   </head>
   <body>
@@ -946,6 +1501,29 @@
       <section class="card" id="attention-card">
         <h2>Needs attention</h2>
         <ul class="attention" id="attention"></ul>
+      </section>
+
+      <section class="card" id="measures-card" hidden>
+        <div class="mhead">
+          <div>
+            <h2>Where the time went</h2>
+            <p class="msub" id="measures-sub"></p>
+          </div>
+          <div class="mswitch" role="tablist" aria-label="Which request">
+            <button type="button" role="tab" data-mode="warm" aria-selected="true">Warm</button
+            ><button type="button" role="tab" data-mode="cold" aria-selected="false">
+              Cold start
+            </button>
+          </div>
+        </div>
+        <div class="kinds" aria-hidden="true">
+          <span><i class="k-net"></i>Network &amp; Vercel</span
+          ><span><i class="k-cold"></i>Starting up</span><span><i class="k-server"></i>Server</span
+          ><span><i class="k-field"></i>GraphQL fields</span
+          ><span><i class="k-slow"></i>Slower than usual</span>
+        </div>
+        <div class="lanes" id="measures"></div>
+        <ul class="measnotes" id="measures-notes"></ul>
       </section>
 
       <section class="card" id="steps-card">
@@ -1156,6 +1734,9 @@
       }
 
       const tests = data.tests ?? [];
+      // A probe's measurements, each part's value in each start: the rows
+      // Needs attention reads (null without job-summary's measurements input).
+      const measures = data.measurements?.rows ?? [];
       const nouns = esc(data.noun) + 's';
       const Nouns = nouns[0].toUpperCase() + nouns.slice(1);
       const runName = (i) => (i === N ? 'This run' : `Run #${data.runs[i]?.number ?? '?'}`);
@@ -1258,13 +1839,20 @@
             `<li ${x.i ? goStep(x) : goTest(x)}><span class="tag warn">Slower</span><span>${esc(x.i ? x.name : x.title)}${x.i ? ' (step)' : where(x)}: ${fmt(x.seconds)}, usually ${fmt(x.usual)} (${pct(x.seconds, x.usual)})${go}</span></li>`,
           ),
         );
+        // A measurement slower than usual: the same words as the summary's line.
+        measures.forEach((m, k) => {
+          if (m.slower)
+            att.push(
+              `<li tabindex="0" role="link" data-go="measure:${k}"><span class="tag warn">Slower</span><span>${esc(m.op)} › ${esc(m.label)}, ${m.start} (measurement): ${mms(m.ms)}, usually ${mms(m.usual)} (${m.usual > 0 ? pct(m.ms, m.usual) : `+${mms(m.ms - m.usual)}`})${go}</span></li>`,
+            );
+        });
         $('attention').innerHTML = att.join('');
         $('attention')
           .querySelectorAll('[data-go]')
           .forEach((li) => {
             const open = () => {
               const [kind, n] = li.dataset.go.split(':');
-              kind === 'step' ? showStep(+n) : showTest(+n);
+              kind === 'step' ? showStep(+n) : kind === 'measure' ? showMeasure(+n) : showTest(+n);
             };
             li.addEventListener('click', open);
             li.addEventListener('keydown', (e) => {
@@ -1277,6 +1865,9 @@
             });
           });
         $('attention-card').hidden = !att.length;
+
+        $('measures-card').hidden = !data.measurements;
+        if (data.measurements) drawMeasures();
 
         $('steps-card').hidden = !steps.length;
         if (steps.length)
@@ -1674,6 +2265,322 @@
           );
         });
       }
+      // Where the time went (data.measurements, null without job-summary's
+      // measurements input, and the card hidden then): a request's parts,
+      // each with a warm and a cold value, or none: its ms, its start (ms
+      // from the browser sending the request), its runs on main (lined up
+      // with data.measurements.runs, not data.runs: their history is main's
+      // runs of this workflow's event), their median and whether it's
+      // slower. Parts are in time order: the browser's whole request at
+      // depth 0; loading the code and the server at 1; inside the server,
+      // its other phases and the GraphQL fields by their path. Three levels:
+      // a lane per request; a waterfall when one is opened, whose server bar
+      // fans out into a waterfall of its own; and a row's details when one
+      // is picked. Its names start with m, apart from the page's own.
+      const MKIND = {
+        browser: 'k-net',
+        cold: 'k-cold',
+        server: 'k-server',
+        phase: 'k-server',
+        field: 'k-field',
+      };
+      const MABOUT = {
+        browser:
+          'From the browser sending the request to the last byte of its answer (Resource Timing). Most of what isn’t the server is the network and Vercel’s routing.',
+        loaded:
+          'Loading the function’s code, before the handler first ran. Only a cold start has it, and nothing in the server’s own time can make it shorter.',
+        total:
+          'The handler’s own time, from the request reaching it until its answer’s headers went out.',
+        deps: 'Building the API’s services, once per instance.',
+        'db-open':
+          'Opening and checking the database, once per instance, inside the first field that reads it.',
+      };
+      // Warm, unless no request ran warm.
+      let mmode = (data.measurements?.ops ?? []).some((op) => op.nodes.some((n) => n.warm))
+        ? 'warm'
+        : 'cold';
+      const mopen = new Set();
+      let msel = null;
+      const mkey = (op, n) => JSON.stringify([op.name, n.key]);
+      const mms = (v) =>
+        v == null
+          ? '–'
+          : v === 0
+            ? '0ms'
+            : v < 1
+              ? `${v.toFixed(1)}ms`
+              : v < 10
+                ? `${Math.round(v * 10) / 10}ms`
+                : v < 1000
+                  ? `${Math.round(v)}ms`
+                  : fmt(v / 1000);
+      const mbig = (v) => {
+        const [, n, u] = mms(v).match(/^([\d.]+)(\D*)$/) ?? [, mms(v), ''];
+        return `${esc(n)}<span class="u">${esc(u)}</span>`;
+      };
+      function mchange(v) {
+        if (!v || v.usual == null) return { cls: '', text: 'no usual yet' };
+        // A part that took no time on main has no ratio: say how much more.
+        if (v.usual === 0)
+          return v.ms === 0
+            ? { cls: '', text: '≈ usual' }
+            : { cls: v.slower ? 'slow' : '', text: `+${mms(v.ms)}` };
+        const r = v.ms / v.usual;
+        if (v.slower)
+          return {
+            cls: 'slow',
+            text: r >= 2 ? `${r.toFixed(1)}× usual` : `+${Math.round((r - 1) * 100)}%`,
+          };
+        if (Math.abs(r - 1) < 0.1) return { cls: '', text: '≈ usual' };
+        return {
+          cls: r < 1 ? 'fast' : '',
+          text: `${r < 1 ? '−' : '+'}${Math.abs(Math.round((r - 1) * 100))}%`,
+        };
+      }
+      const mat = (n) => n[mmode];
+      // A bar's place on an axis from `from` to `to`, in percent, kept on it.
+      const mplace = (v, from, to) => {
+        const left = Math.min(100, Math.max(0, ((v.start - from) / (to - from || 1)) * 100));
+        const width = Math.min(100 - left, (v.ms / (to - from || 1)) * 100);
+        return `left:${left.toFixed(2)}%;width:${width.toFixed(2)}%`;
+      };
+      const mkind = (n, v) => (v?.slower ? 'seg-slow' : MKIND[n.kind]);
+      function mspark(n) {
+        const v = mat(n);
+        const W = 104,
+          H = 30;
+        const all = [...(v?.past ?? []), v?.ms ?? null];
+        const got = all.filter((x) => x != null);
+        if (got.length < 2) return '';
+        const top = Math.max(...got, v.usual ?? 0) * 1.1 || 1;
+        const x = (i) => (i / (all.length - 1)) * W;
+        const y = (val) => H - (val / top) * H;
+        const pts = all
+          .map((val, i) => (val == null ? null : `${x(i).toFixed(1)},${y(val).toFixed(1)}`))
+          .filter(Boolean);
+        const u =
+          v.usual == null
+            ? ''
+            : `<line x1="0" x2="${W}" y1="${y(v.usual)}" y2="${y(v.usual)}" stroke="var(--muted)" stroke-dasharray="2 3" stroke-width="1"/>`;
+        const c = v.slower ? 'var(--k-slow)' : 'var(--accent)';
+        return `<svg width="${W}" height="${H}" aria-hidden="true">${u}<polyline points="${pts.join(' ')}" fill="none" stroke="var(--bar)" stroke-width="1.5" stroke-linejoin="round"/>${all
+          .map((val, i) =>
+            val == null || i === all.length - 1
+              ? ''
+              : `<circle cx="${x(i)}" cy="${y(val)}" r="1.6" fill="var(--bar)"/>`,
+          )
+          .join(
+            '',
+          )}<circle cx="${W}" cy="${y(v.ms)}" r="3.5" fill="${c}" stroke="var(--surface)" stroke-width="1.5"/></svg>`;
+      }
+      // One line on what the request was made of: its biggest part.
+      // A lane's root in this start: the browser's time, else the
+      // server's, else its first part that has a value; none when no part
+      // has one.
+      const mroot = (op) =>
+        op.nodes.find((n) => n.key === 'browser' && mat(n)) ??
+        op.nodes.find((n) => n.key === 'total' && mat(n)) ??
+        op.nodes.find((n) => mat(n));
+      // The span a lane's bars are drawn on: its browser's time, or, without
+      // one, from its first part's start to its last one's end.
+      function mspan(op, root) {
+        const vs = root.key === 'browser' ? [mat(root)] : op.nodes.map(mat).filter(Boolean);
+        return [Math.min(...vs.map((v) => v.start)), Math.max(...vs.map((v) => v.start + v.ms))];
+      }
+      function mwhy(op, root) {
+        const browser = root.key === 'browser';
+        const loaded = op.nodes.find((n) => n.key === 'loaded' && mat(n));
+        const server = op.nodes.find((n) => n.kind === 'server' && mat(n));
+        const s = server ? mat(server).ms : 0,
+          l = loaded ? mat(loaded).ms : 0;
+        if (!browser && !s && !l) return esc(root.title);
+        // Without the browser's time there's no network share to tell.
+        const B = browser ? mat(root).ms : l + s;
+        const parts = [
+          ...(browser ? [['network & Vercel', Math.max(0, B - s - l)]] : []),
+          ['starting up', l],
+          ['the server', s],
+        ].sort((a, b) => b[1] - a[1]);
+        const [name, val] = parts[0];
+        const rest = name === 'the server' ? '' : ` · server <b>${mms(s)}</b>`;
+        return `<b>${B ? Math.round((val / B) * 100) : 0}%</b> ${name}${rest}`;
+      }
+      // The composition bar: the request from the browser's side, in time
+      // order, each part where it happened.
+      function mcomp(op, root) {
+        const [from, to] = mspan(op, root);
+        const order = (n) => (n.kind === 'server' ? 0 : n.kind === 'field' ? 1 : 2);
+        return `<div class="comp" aria-hidden="true">${op.nodes
+          .filter((n) => n !== root && mat(n))
+          .sort((a, b) => order(a) - order(b))
+          .map((n) => `<i class="${mkind(n, mat(n))}" style="${mplace(mat(n), from, to)}"></i>`)
+          .join('')}</div>`;
+      }
+      function maxis(from, to) {
+        const t = [0, 0.25, 0.5, 0.75, 1].map(
+          (f) => `<span style="left:${f * 100}%">${f ? mms((to - from) * f) : '0'}</span>`,
+        );
+        return `<div class="msp"></div><div class="maxis">${t.join('')}</div><div class="msp"></div>`;
+      }
+      // A part's runs on main and this run, with its usual as a dashed line.
+      function mhist(v) {
+        const runs = data.measurements.runs;
+        const all = [
+          ...v.past.map((p, i) => ({ val: p, name: `#${runs[i]?.number ?? '?'}` })),
+          { val: v.ms, name: 'this', me: true },
+        ];
+        const got = all.filter((a) => a.val != null).map((a) => a.val);
+        const top = Math.max(...got, v.usual ?? 0) * 1.15 || 1;
+        const W = 100 / all.length;
+        const H = 96;
+        const bars = all
+          .map((a, i) => {
+            const x = i * W + W * 0.18,
+              w = W * 0.64;
+            const h = a.val == null ? 0 : (a.val / top) * H;
+            const fill = a.me ? (v.slower ? 'var(--k-slow)' : 'var(--accent)') : 'var(--bar)';
+            const bar =
+              a.val == null
+                ? `<text x="${x + w / 2}%" y="${H - 4}" text-anchor="middle">–</text>`
+                : `<rect x="${x}%" y="${H - h}" width="${w}%" height="${h}" rx="3" fill="${fill}"><title>${esc(a.name)}: ${mms(a.val)}</title></rect>`;
+            return `${bar}<text x="${x + w / 2}%" y="${H + 14}" text-anchor="middle">${esc(a.name)}</text>`;
+          })
+          .join('');
+        const uy = v.usual == null ? null : H - (v.usual / top) * H;
+        const u =
+          uy == null
+            ? ''
+            : `<line x1="0" x2="100%" y1="${uy}" y2="${uy}" stroke="var(--fg)" stroke-dasharray="3 3" stroke-width="1" opacity=".6"/><text x="0" y="${uy - 4}">usual ${mms(v.usual)}</text>`;
+        return `<svg aria-label="Its runs on main and this run">${bars}${u}</svg>`;
+      }
+      function mdetail(n) {
+        const v = mat(n);
+        const ch = mchange(v);
+        const runsWith = v.past.filter((p) => p != null).length;
+        const what =
+          n.kind === 'field'
+            ? `The resolver for <code>${esc(n.label)}</code>, at <code>${esc(n.path)}</code>${v.calls > 1 ? `: ${v.calls} calls, added up by path, the slowest ${mms(v.slowest)}` : ', called once'}.`
+            : esc(Object.hasOwn(MABOUT, n.key) ? MABOUT[n.key] : '');
+        const stats = [
+          ['This run', mms(v.ms), v.slower ? 'slow' : ''],
+          ['Usual', v.usual == null ? `needs 3 runs (has ${runsWith})` : mms(v.usual), ''],
+          ['Change', ch.text, ch.cls],
+          n.kind === 'field'
+            ? ['Calls', v.calls > 1 ? `${v.calls} · slowest ${mms(v.slowest)}` : '1', '']
+            : ['Started at', `${mms(v.start)} in`, ''],
+        ];
+        return `<div class="detail">${what ? `<p class="what">${what}</p>` : ''}<div class="stats">${stats
+          .map(
+            ([k, val, c]) =>
+              `<div class="stat ${c}"><small>${esc(k)}</small><b>${esc(val)}</b></div>`,
+          )
+          .join(
+            '',
+          )}</div><div class="hist">${mhist(v)}</div>${v.raw ? `<pre>${esc(v.raw)}</pre>` : ''}</div>`;
+      }
+      function mrows(op, nodes, from, to, base) {
+        return nodes
+          .map((n) => {
+            const v = mat(n);
+            const key = mkey(op, n);
+            const k = measures.findIndex(
+              (m) => m.op === op.name && m.key === n.key && m.start === mmode,
+            );
+            const name =
+              n.kind === 'field'
+                ? `<span class="lbl">${esc(n.label)}</span>${v.calls > 1 ? `<span class="x">×${v.calls}</span>` : ''}`
+                : `<span class="lbl plain">${esc(n.title)}</span>${n.title !== n.label && n.key !== 'browser' ? `<span class="x">${esc(n.label)}</span>` : ''}`;
+            const row = `<div class="wrow${v.slower ? ' slow' : ''}${msel === key ? ' sel' : ''}" id="measure-${k}" data-sel="${esc(key)}" tabindex="0" role="button" aria-expanded="${msel === key}"><div class="wname" style="--d:${Math.max(0, n.depth - base)}"><i class="dot ${mkind(n, v)}"></i>${name}</div><div class="mtrack"><div class="mgrid"></div><i class="wbar ${mkind(n, v)}" style="${mplace(v, from, to)}"></i></div><div class="wval">${mms(v.ms)}</div></div>`;
+            return row + (msel === key ? mdetail(n) : '');
+          })
+          .join('');
+      }
+      // Opened: the request as the browser saw it, then inside the server,
+      // zoomed in to the server's own axis.
+      // With no server row, its phases and fields join the request's own
+      // axis.
+      function mfall(op, root) {
+        const nodes = op.nodes.filter((n) => mat(n));
+        const [from, to] = mspan(op, root);
+        const server = nodes.find((n) => n.kind === 'server');
+        const inner = nodes.filter((n) => n.depth >= 2);
+        const outer = server ? nodes.filter((n) => n.depth <= 1) : nodes;
+        const head = `<div class="fall"><h3>The request <span>as the browser saw it</span></h3><div class="wgrid">${maxis(from, to)}${mrows(op, outer, from, to, 0)}`;
+        if (!server || !inner.length) return `${head}</div></div>`;
+        const s = mat(server);
+        const edge = (t) => Math.min(100, Math.max(0, ((t - from) / (to - from || 1)) * 100));
+        const fan = `<div class="msp"></div><svg class="fan" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"><polygon points="${edge(s.start).toFixed(2)},0 ${edge(s.start + s.ms).toFixed(2)},0 100,26 0,26"/></svg><div class="msp"></div>`;
+        return `${head}${fan}</div><h3>Inside the server <span>${mms(s.ms)}, zoomed in</span></h3><div class="wgrid">${maxis(0, s.ms)}${mrows(op, inner, s.start, s.start + s.ms, 2)}</div></div>`;
+      }
+      function drawMeasures() {
+        const M = data.measurements;
+        const on = M.environment ? ` on ${M.environment}` : '';
+        $('measures-sub').textContent = M.runs.length
+          ? `This run${on}, against the median of main's last ${M.runs.length} run${M.runs.length === 1 ? '' : 's'}${M.usualEnvironment ? ` on ${M.usualEnvironment}` : ''}`
+          : `This run${on}; main has no earlier runs to compare it with yet`;
+        document
+          .querySelectorAll('#measures-card .mswitch button')
+          .forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === mmode)));
+        $('measures').innerHTML = M.ops.length
+          ? M.ops
+              .map((op) => {
+                const root = mroot(op);
+                const v = root && mat(root);
+                if (!v)
+                  return `<div class="lane none"><button type="button" class="sum" disabled><div class="name"><div class="opn"><small>request</small>${esc(op.name)}</div><div class="why">${esc(mmode === 'cold' ? op.noCold : 'Ran only as this run’s cold start')}</div></div><div class="comp mempty"></div><div class="num"><span class="mbig">–</span><span class="mchip">${mmode === 'cold' ? 'warm only' : 'cold only'}</span></div><div class="mspark"></div><span></span></button></div>`;
+                const slowParts = op.nodes.filter((n) => mat(n)?.slower).length;
+                const ch = mchange(v);
+                const open = mopen.has(op.name);
+                const chip =
+                  slowParts && !v.slower
+                    ? `<span class="mchip slow">${slowParts} part${slowParts === 1 ? '' : 's'} slower</span>`
+                    : `<span class="mchip ${ch.cls}">${esc(ch.text)}</span>`;
+                return `<div class="lane${slowParts ? ' slow' : ''}${open ? ' open' : ''}"><button type="button" class="sum" data-op="${esc(op.name)}" aria-expanded="${open}"><div class="name"><div class="opn"><small>request</small>${esc(op.name)}</div><div class="why">${mwhy(op, root)}</div></div>${mcomp(op, root)}<div class="num"><span class="mbig">${mbig(v.ms)}</span>${chip}</div><div class="mspark">${mspark(root)}</div><svg class="chev" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>${open ? mfall(op, root) : ''}</div>`;
+              })
+              .join('')
+          : '<p class="msub">No measurements this run.</p>';
+        $('measures')
+          .querySelectorAll('button.sum[data-op]')
+          .forEach((b) =>
+            b.addEventListener('click', () => {
+              const o = b.dataset.op;
+              mopen.has(o) ? mopen.delete(o) : mopen.add(o);
+              keepFocus(drawMeasures);
+            }),
+          );
+        $('measures')
+          .querySelectorAll('.wrow')
+          .forEach((r) => {
+            const pick = () => {
+              msel = msel === r.dataset.sel ? null : r.dataset.sel;
+              keepFocus(drawMeasures);
+            };
+            r.addEventListener('click', pick);
+            r.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                pick();
+              }
+            });
+          });
+        $('measures-notes').innerHTML = (M.notes ?? []).map((n) => `<li>${esc(n)}</li>`).join('');
+      }
+      document.querySelectorAll('#measures-card .mswitch button').forEach((b) =>
+        b.addEventListener('click', () => {
+          mmode = b.dataset.mode;
+          drawMeasures();
+        }),
+      );
+      // Needs attention's link to a measurement: its start shown, its
+      // request opened and its row picked.
+      function showMeasure(k) {
+        const m = measures[k];
+        mmode = m.start;
+        mopen.add(m.op);
+        msel = JSON.stringify([m.op, m.key]);
+        drawMeasures();
+        reveal($('measure-' + k));
+      }
       // A step's recent runs as small bars from zero, to scale with each other:
       // one per run, oldest first, this run last; each opens its run.
       function spark(s) {
@@ -1874,7 +2781,9 @@
       // element, and focus would otherwise fall back to the page.
       function keepFocus(draw) {
         const a = document.activeElement;
-        const key = ['data-id', 'data-msg', 'data-code', 'data-go'].find((k) => a?.hasAttribute(k));
+        const key = ['data-id', 'data-msg', 'data-code', 'data-go', 'data-op', 'data-sel'].find(
+          (k) => a?.hasAttribute(k),
+        );
         const value = key ? a.getAttribute(key) : null;
         draw();
         if (key)

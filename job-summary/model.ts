@@ -6,9 +6,17 @@
 // of per-run values (a step's times, a test's results) lines up with them,
 // this run's value apart. A test's file, line and snippet come from
 // source.ts, its usual time and flakiness from trends.ts.
+//
+// A probe's measurements (measures.ts) are in ms, and only with
+// job-summary's measurements input: `measurements` is null without it, and
+// the report hides its card. Their earlier runs are main's of this run's
+// event (history.ts), so they line up with measurements.runs, not runs.
 
+import { measureTrend, rawEntry, requests } from './measures.ts';
 import { KEEP_DAYS } from './report.ts';
 import { jobSeconds, stepTrends, testTrends, usual } from './trends.ts';
+import type { Results, Start } from '../probe/results.ts';
+import type { Kind, Part } from './measures.ts';
 import type { TestCase } from './junit.ts';
 import type { Job, PastRun, Run } from './history.ts';
 import type { Outcome, StepRow } from './trends.ts';
@@ -49,6 +57,11 @@ export type Input = {
   load: Sample[];
   /** the settle wait's limit, % busy */
   settle: number | null;
+  /**
+   * a probe's results and main's earlier runs of this event, newest first;
+   * null (or left out) without the measurements input
+   */
+  measurements?: { results: Results; past: PastRun[] } | null;
 };
 
 /** A test in the model. */
@@ -116,7 +129,148 @@ export type Model = {
   notes: [string, string][];
   load: Sample[];
   settle: number | null;
+  /** null without the measurements input; left out by a model made before it */
+  measurements?: Measurements | null;
 };
+
+/** One start's value of a part of a request, in ms. */
+export type MeasureValue = {
+  ms: number;
+  /** ms from the browser sending the request */
+  start: number;
+  /** how many times a field ran (1 for anything else) */
+  calls: number;
+  /** a field's slowest call (its ms for anything else) */
+  slowest: number;
+  /** its value in each of measurements.runs, null where a run didn't have it */
+  past: (number | null)[];
+  usual: number | null;
+  slower: boolean;
+  /** its `Server-Timing` entry ('' for the browser's own time) */
+  raw: string;
+};
+
+/** A part of a request (measures.ts requests). */
+export type MeasureNode = {
+  /** its phase, unique in its request */
+  key: string;
+  title: string;
+  label: string;
+  path: string;
+  kind: Kind;
+  depth: number;
+  warm: MeasureValue | null;
+  cold: MeasureValue | null;
+};
+
+/** One value, for Needs attention and the summary's line. */
+export type MeasureRow = {
+  /** the request */
+  op: string;
+  /** its part's key */
+  key: string;
+  label: string;
+  depth: number;
+  start: Start;
+  ms: number;
+  usual: number | null;
+  slower: boolean;
+};
+
+/** A probe's measurements, as the report's card draws them. */
+export type Measurements = {
+  /** this run's deployment's ("preview") */
+  environment: string;
+  /** the earlier runs' ("production"), '' without any */
+  usualEnvironment: string;
+  /** main's earlier runs that kept measurements, oldest first */
+  runs: { number: number; url: string; when: string }[];
+  /** each request and its parts */
+  ops: { name: string; noCold: string; nodes: MeasureNode[] }[];
+  /** every part's value, in the order the card draws them */
+  rows: MeasureRow[];
+  /** the results file's notes */
+  notes: string[];
+};
+
+/**
+ * The measurements, each part's values with its earlier ones.
+ *
+ * @param given the results and earlier runs
+ * @param url an earlier run's page
+ */
+function measurements(
+  given: { results: Results; past: PastRun[] },
+  url: (p: PastRun) => string,
+): Measurements {
+  const { results } = given;
+  const earlier = [...given.past].reverse().filter((p) => p.measurements);
+  const pastOf = (name: string, phase: string, start: Start) =>
+    earlier.map(
+      (p) =>
+        p.measurements?.values.find(
+          (v) => v.name === name && v.phase === phase && v.start === start,
+        )?.ms ?? null,
+    );
+  const value = (name: string, part: Part | null): MeasureValue | null => {
+    if (!part) return null;
+    const past = pastOf(name, part.phase, part.start);
+    return {
+      ms: part.ms,
+      start: part.at,
+      calls: part.calls ?? 1,
+      slowest: part.slowestMs ?? part.ms,
+      past,
+      ...measureTrend(part.ms, past, part.phase),
+      raw: rawEntry(part),
+    };
+  };
+  const found = requests(results.measurements);
+  const carriers = found
+    .filter((r) => r.parts.some((p) => p.cold))
+    .map((r) => r.name)
+    .join(', ');
+  const ops = found.map(({ name, parts }) => ({
+    name,
+    noCold: carriers ? `${carriers} carried this run’s cold start` : 'No cold start this run',
+    nodes: parts.map(({ cold, warm, ...part }) => ({
+      ...part,
+      warm: value(name, warm),
+      cold: value(name, cold),
+    })),
+  }));
+  const environments = [
+    ...new Set(earlier.map((p) => p.measurements?.environment).filter(Boolean)),
+  ];
+  return {
+    environment: results.environment,
+    usualEnvironment: environments.join(' and '),
+    runs: earlier.map((p) => ({ number: p.run.run_number, url: url(p), when: p.run.created_at })),
+    ops,
+    rows: ops.flatMap((op) =>
+      op.nodes.flatMap((n) =>
+        (['warm', 'cold'] as const).flatMap((start) => {
+          const v = n[start];
+          return v
+            ? [
+                {
+                  op: op.name,
+                  key: n.key,
+                  label: n.label,
+                  depth: n.depth,
+                  start,
+                  ms: v.ms,
+                  usual: v.usual,
+                  slower: v.slower,
+                },
+              ]
+            : [];
+        }),
+      ),
+    ),
+    notes: results.notes,
+  };
+}
 
 /**
  * A test's place: the folder and file its suite names, the describe blocks
@@ -150,6 +304,11 @@ export function buildModel(input: Input): Model {
     pathOf,
   );
   const pastSeconds = (p: PastRun) => p.seconds ?? jobSeconds(p.job, now);
+  // Its report, while the Pages site still keeps it; its job page otherwise.
+  const pastUrl = (p: PastRun) =>
+    p.recorded && now - Date.parse(p.run.created_at) <= KEEP_DAYS * 86_400_000
+      ? input.reportOf(p.run.id)
+      : (p.job.html_url ?? p.run.html_url);
   return {
     repo: input.repo,
     workflow: input.workflow,
@@ -182,11 +341,7 @@ export function buildModel(input: Input): Model {
     }),
     runs: ordered.map((p) => ({
       number: p.run.run_number,
-      // Its report, while the Pages site still keeps it; its job page otherwise.
-      url:
-        p.recorded && now - Date.parse(p.run.created_at) <= KEEP_DAYS * 86_400_000
-          ? input.reportOf(p.run.id)
-          : (p.job.html_url ?? p.run.html_url),
+      url: pastUrl(p),
       sha: p.run.head_sha,
       branch: p.run.head_branch ?? '',
       when: p.run.created_at,
@@ -218,6 +373,7 @@ export function buildModel(input: Input): Model {
     notes: input.notes,
     load: input.load,
     settle: input.settle,
+    measurements: input.measurements ? measurements(input.measurements, pastUrl) : null,
   };
 }
 

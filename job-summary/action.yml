@@ -49,8 +49,11 @@ inputs:
     description: >-
       A probe's results file (jbhirsh/ci/probe/web's `results` output), to
       track its timings like the steps' and tests': each request's phases,
-      cold and warm, go in the run's record (measures.ts). None by default:
-      a job without it is summarized as before.
+      cold and warm, go in the run's record, compared with main's earlier
+      runs of this workflow's event, a value 1.25 times usual and at least
+      5 ms more (20 ms for the browser's time) marked slower than usual
+      (measures.ts). The report shows them in its "Where the time went"
+      card. None by default: a job without it is summarized as before.
     default: ""
   report-base:
     description: >-

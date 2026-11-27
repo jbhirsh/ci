@@ -6,6 +6,7 @@ import {
   cell,
   duration,
   fit,
+  milliseconds,
   over,
   render,
   section,
@@ -138,6 +139,49 @@ describe('duration and over', () => {
   it('is a percentage over a usual time, and seconds over a usual time of nothing', () => {
     expect(over(115, 100)).toBe('+15%');
     expect(over(40, 0)).toBe('+40s');
+  });
+});
+
+describe('milliseconds', () => {
+  it("writes a measurement's ms as the report's card does", () => {
+    expect([0, 0.2, 8.94, 34.1, 3400].map(milliseconds)).toEqual([
+      '0ms',
+      '0.2ms',
+      '8.9ms',
+      '34ms',
+      '3.4s',
+    ]);
+  });
+});
+
+describe('a slower measurement', () => {
+  const row = (ms: number, usual: number) => ({
+    op: 'games',
+    key: 'field.games.bgg',
+    label: 'Games.bgg',
+    depth: 3,
+    start: 'warm' as const,
+    ms,
+    usual,
+    slower: true,
+  });
+  const measured = (ms: number, usual: number): Model['measurements'] => ({
+    environment: 'preview',
+    usualEnvironment: 'production',
+    runs: [],
+    ops: [],
+    rows: [row(ms, usual), { ...row(1, 1), slower: false }],
+    notes: [],
+  });
+
+  it('joins the Slower than usual line, in ms to a tenth', () => {
+    const steps = model().steps.map((s) => ({ ...s, slower: false }));
+    expect(attention(model({ steps, tests: null, measurements: measured(6, 0.2) }))).toContain(
+      '- **Slower than usual:** games › Games.bgg, warm: 6ms, usually 0.2ms (+2900%)',
+    );
+    expect(attention(model({ steps, tests: null, measurements: measured(6, 0) })).at(-1)).toBe(
+      '- **Slower than usual:** games › Games.bgg, warm: 6ms, usually 0ms (+6ms)',
+    );
   });
 });
 

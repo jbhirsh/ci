@@ -10,7 +10,15 @@
 //
 // The numbers are a Check job's of this repo, rounded. A scenario that
 // needs more of the page (a card a later change adds) adds it here.
+//
+// It also carries a probe's measurements (measures.ts), for the "Where the
+// time went" card: three requests as BoardGames' probe takes them (ci#151's
+// mockup numbers), against main's eight earlier probe runs. games carried
+// the cold start (loading the code, then its phases: deps, db-open), and
+// its `Games.bgg` field ran slower than usual warm, so the card has a lane
+// to open, a slow field to pick and a cold start to switch to.
 
+import type { Measurement, Results, Start } from '../../probe/results.ts';
 import type { TestCase } from '../junit.ts';
 import type { Job, PastRun } from '../history.ts';
 import type { Input } from '../model.ts';
@@ -187,8 +195,183 @@ function pastRun(ago: number): PastRun {
 }
 
 /**
- * The model's input: this run of `Check`, still writing its summary, and
- * its five earlier runs.
+ * One part's numbers, cold or warm: its ms this run, when it started (ms
+ * from the browser sending the request), its ms in each of main's eight
+ * earlier probe runs, oldest first (null where a run had no cold start),
+ * then a field's calls and its slowest call's ms where it ran more than
+ * once.
+ */
+type PartNumbers = [
+  ms: number,
+  at: number,
+  past: (number | null)[],
+  calls?: number,
+  slowest?: number,
+];
+
+/** A request's part: its Server-Timing phase, a field's label, and its numbers. */
+type Part = { phase: string; label?: string; warm?: PartNumbers; cold?: PartNumbers };
+
+const _ = null;
+
+/** The probe's three requests, each part's numbers cold and warm. */
+const REQUESTS: { name: string; parts: Part[] }[] = [
+  {
+    name: 'games',
+    parts: [
+      {
+        phase: 'browser',
+        warm: [248, 0, [236, 241, 229, 244, 232, 238, 240, 235]],
+        cold: [3720, 0, [3810, _, 3650, _, 3590, 3700, _, _]],
+      },
+      { phase: 'loaded', cold: [3180, 140, [3240, _, 3120, _, 3060, 3150, _, _]] },
+      {
+        phase: 'total',
+        warm: [34.1, 112, [27.9, 28.6, 27.1, 29.4, 28.2, 27.6, 28.9, 28.0]],
+        cold: [376, 3320, [390, _, 350, _, 402, 365, _, _]],
+      },
+      { phase: 'deps', cold: [0.2, 3320.3, [0.2, _, 0.3, _, 0.2, 0.2, _, _]] },
+      { phase: 'db-open', cold: [249, 3321.5, [231, _, 262, _, 240, 255, _, _]] },
+      {
+        phase: 'field.games',
+        label: 'Query.games',
+        warm: [20.6, 113.4, [19.8, 20.4, 19.1, 21.6, 20.0, 19.5, 20.9, 20.2]],
+        cold: [338, 3321.5, [330, _, 352, _, 341, 329, _, _]],
+      },
+      {
+        phase: 'field.games.bgg',
+        label: 'Games.bgg',
+        warm: [8.9, 134.2, [2.8, 2.9, 2.6, 3.1, 2.8, 2.7, 3.0, 2.8]],
+        cold: [14, 3659.8, [12, _, 13, _, 11, 12, _, _]],
+      },
+      {
+        phase: 'field.games.wishlist',
+        label: 'Games.wishlist',
+        warm: [1.6, 134.2, [1.5, 1.4, 1.6, 1.7, 1.5, 1.4, 1.6, 1.5]],
+        cold: [3, 3659.8, [3, _, 3, _, 2.8, 3.1, _, _]],
+      },
+    ],
+  },
+  {
+    name: 'session',
+    parts: [
+      { phase: 'browser', warm: [238, 0, [236, 248, 229, 251, 240, 233, 244, 238]] },
+      { phase: 'total', warm: [14.1, 108, [13.2, 14.8, 13.9, 15.1, 13.5, 14.4, 13.7, 14.0]] },
+      {
+        phase: 'field.session',
+        label: 'Query.session',
+        warm: [9.2, 109.1, [8.8, 9.4, 9.0, 9.6, 8.7, 9.1, 9.3, 8.9]],
+      },
+    ],
+  },
+  {
+    name: 'wishlistVotes',
+    parts: [
+      { phase: 'browser', warm: [214, 0, [241, 252, 238, 255, 244, 249, 236, 247]] },
+      { phase: 'total', warm: [17.8, 96, [16.9, 18.4, 17.2, 19.0, 17.6, 18.1, 16.8, 17.5]] },
+      {
+        phase: 'field.wishlistVotes',
+        label: 'Query.wishlistVotes',
+        warm: [12.1, 97.2, [11.6, 12.4, 11.9, 12.8, 11.4, 12.2, 12.0, 11.7]],
+      },
+      {
+        phase: 'field.wishlistVotes.voters',
+        label: 'WishlistVote.voters',
+        warm: [4.8, 109.4, [4.6, 4.9, 4.7, 5.0, 4.5, 4.8, 4.6, 4.7], 30, 0.4],
+      },
+    ],
+  },
+];
+
+const STARTS: Start[] = ['cold', 'warm'];
+
+/** ms to a tenth, as the probe writes a Server-Timing offset. */
+const tenth = (ms: number) => Math.round(ms * 10) / 10;
+
+/**
+ * This run's results file, as probe/web writes one: each part's row, its
+ * phases' and fields' `atMs` from the server's start, the browser's from
+ * its request's start to the server's headers.
+ */
+function results(): Results {
+  const measurements: Measurement[] = [];
+  for (const start of STARTS) {
+    for (const { name, parts } of REQUESTS) {
+      const server = parts.find((p) => p.phase === 'total')?.[start];
+      for (const part of parts) {
+        const numbers = part[start];
+        if (!numbers || !server) continue;
+        const [ms, startedAt, , calls, slowestMs] = numbers;
+        const row: Measurement = { name, phase: part.phase, start, ms };
+        if (part.label) Object.assign(row, { label: part.label, calls: calls ?? 1 });
+        if (part.label || part.phase === 'deps' || part.phase === 'db-open') {
+          row.atMs = tenth(startedAt - server[1]);
+        }
+        if (slowestMs !== undefined) row.slowestMs = slowestMs;
+        if (part.phase === 'browser') {
+          Object.assign(row, { requestStartMs: 0, responseStartMs: server[1] + server[0] });
+        }
+        measurements.push(row);
+      }
+    }
+  }
+  return {
+    version: 1,
+    driver: 'web',
+    target: 'https://board-games.vercel.app',
+    environment: 'preview',
+    measurements,
+    notes: [
+      'Warm: the median of 5 requests after the cold one.',
+      '1 request not sent: POST /_vercel/insights/view, not a read.',
+    ],
+  };
+}
+
+/**
+ * The `ago`th of main's earlier probe runs (1 the newest, of 8), a day
+ * apart, keeping its measurements on production.
+ */
+function probeRun(ago: number): PastRun {
+  const id = 8000 - ago;
+  const start = -ago * 86_400;
+  const k = 8 - ago;
+  return {
+    run: {
+      id,
+      run_number: 300 - ago,
+      html_url: `https://github.com/jbhirsh/ci/actions/runs/${id}`,
+      head_branch: 'main',
+      head_sha: SHAS[1],
+      created_at: at(start),
+    },
+    job: {
+      name: 'Check',
+      conclusion: 'success',
+      started_at: at(start),
+      completed_at: at(start + 66),
+      html_url: `https://github.com/jbhirsh/ci/actions/runs/${id}/job/${id}`,
+    },
+    tests: null,
+    recorded: true,
+    seconds: 66,
+    measurements: {
+      environment: 'production',
+      values: REQUESTS.flatMap(({ name, parts }) =>
+        parts.flatMap((part) =>
+          STARTS.flatMap((start) => {
+            const ms = part[start]?.[2][k];
+            return ms == null ? [] : [{ name, phase: part.phase, start, ms }];
+          }),
+        ),
+      ),
+    },
+  };
+}
+
+/**
+ * The model's input: this run of `Check`, still writing its summary, its
+ * five earlier runs, and the probe's measurements with main's eight.
  */
 export function fixture(): Input {
   const seconds = STEPS.map(([, s]) => s);
@@ -231,5 +414,6 @@ export function fixture(): Input {
     notes: [],
     load: [],
     settle: null,
+    measurements: { results: results(), past: [1, 2, 3, 4, 5, 6, 7, 8].map(probeRun) },
   };
 }
