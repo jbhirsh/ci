@@ -585,14 +585,43 @@ describe('with measurements', () => {
     ],
     notes: ['cold carried by: games'],
   };
+  const earlier = [41, 40, 39].map((n, k) => ({
+    ...thisRun,
+    id: n,
+    run_number: n,
+    head_branch: 'main',
+    created_at: at(-3600 * (k + 1)),
+  }));
+  const gh = fakeGh({
+    [`repos/jbhirsh/sift/actions/workflows/7/runs?branch=main&event=deployment_status&status=completed&created=${encodeURIComponent(`<${thisRun.created_at}`)}&per_page=${HISTORY}`]:
+      { workflow_runs: earlier },
+    ...Object.fromEntries(
+      earlier.map((r) => [
+        `repos/jbhirsh/sift/actions/runs/${r.id}/jobs?per_page=100`,
+        { jobs: [{ name: 'Accessibility audit', conclusion: 'success', completed_at: at(10) }] },
+      ]),
+    ),
+  });
+  const browser = { 41: 230, 40: 240, 39: 220 } as Record<number, number>;
   const options: Io = {
     ...io,
     read: (f) => (f === 'probe.json' ? JSON.stringify(probe) : (io.read?.(f) ?? '')),
+    download: (id) =>
+      JSON.stringify({
+        version: 3,
+        seconds: 60,
+        tests: null,
+        measurements: {
+          environment: 'production',
+          values: [{ name: 'games', phase: 'browser', start: 'warm', ms: browser[id] }],
+        },
+      }),
   };
   const given = { ...env, MEASUREMENTS: 'probe.json', GITHUB_EVENT_NAME: 'deployment_status' };
+  const line = 'games › browser, warm: 410ms, usually 230ms (+78%)';
 
-  it('records each value, version 3', () => {
-    const built = build(given, fakeGh(), options);
+  it("records each value, version 3, and compares it with main's runs of this event", () => {
+    const built = build(given, gh, options);
     expect(JSON.parse(built.record ?? '')).toMatchObject({
       version: 3,
       measurements: {
@@ -605,13 +634,63 @@ describe('with measurements', () => {
         ],
       },
     });
+    expect(built.markdown).toContain(`- **Slower than usual:** ${line}`);
+    expect(built.section).toContain(`- **Slower than usual:** ${line}`);
+    const measurements = modelOf(built.report).measurements;
+    expect(measurements).toMatchObject({
+      environment: 'preview',
+      usualEnvironment: 'production',
+      notes: ['cold carried by: games'],
+    });
+    expect(measurements?.runs.map((r) => r.number)).toEqual([39, 40, 41]);
+    expect(measurements?.rows.filter((r) => r.slower).map((r) => [r.key, r.start])).toEqual([
+      ['browser', 'warm'],
+    ]);
   });
 
-  it("records no measurements when the results file couldn't be read", () => {
-    for (const file of ['gone.json', 'r/b.xml']) {
-      const built = build({ ...given, MEASUREMENTS: file }, fakeGh(), options);
-      expect(JSON.parse(built.record ?? '')).toMatchObject({ version: 2 });
-      expect(JSON.parse(built.record ?? '')).not.toHaveProperty('measurements');
-    }
+  it('draws the card, and leaves it out of a job without them', () => {
+    const page = (e: Record<string, string>) =>
+      build(e, gh, { ...options, page: template() }).report ?? '';
+    const shown = (html: string) => {
+      const { JSDOM }: { JSDOM: new (html: string, o: object) => { window: Window } } =
+        createRequire(import.meta.url)('jsdom');
+      const { document } = new JSDOM(html, {
+        runScripts: 'dangerously',
+        beforeParse(w: Window) {
+          w.matchMedia = (() => ({ matches: false })) as unknown as Window['matchMedia'];
+        },
+      }).window;
+      return !document.getElementById('measures-card')?.hidden;
+    };
+    expect(shown(page(given))).toBe(true);
+    expect(shown(page(env))).toBe(false);
+  });
+
+  it("says when the results file couldn't be read, and records no measurements", () => {
+    const built = build({ ...given, MEASUREMENTS: 'gone.json' }, gh, options);
+    expect(JSON.parse(built.record ?? '')).toEqual({
+      version: 2,
+      job: 'Accessibility audit',
+      seconds: 300,
+      tests: [
+        { name: 'T', seconds: 2, result: 'passed on re-run' },
+        { name: 'U', seconds: 5, result: 'passed' },
+      ],
+    });
+    expect(modelOf(built.report).measurements?.notes).toEqual([
+      "gone.json couldn't be read: not there.",
+    ]);
+    const bad = build({ ...given, MEASUREMENTS: 'r/b.xml' }, gh, options);
+    expect(modelOf(bad.report).measurements?.notes).toEqual([
+      "r/b.xml couldn't be read: not JSON.",
+    ]);
+    // Any other reason, as it is.
+    const folder = build({ ...given, MEASUREMENTS: 'job-summary' }, gh, {
+      ...options,
+      read: (f) => readFileSync(f, 'utf8'),
+    });
+    expect(modelOf(folder.report).measurements?.notes?.[0]).toMatch(
+      /^job-summary couldn't be read: EISDIR: /,
+    );
   });
 });

@@ -46,11 +46,23 @@ export function duration(seconds: number) {
 }
 
 /**
- * How much over its usual time, as "+18%", or "+40s" over a usual time of
- * nothing (the API times steps to the second).
+ * A time in ms as the report's card writes it, to a tenth under 10 ms so a
+ * field's 0.2 ms isn't "1ms": 0ms, 0.2ms, 8.9ms, 34ms, 3.4s.
  */
-export function over(seconds: number, typical: number) {
-  if (typical <= 0) return `+${duration(seconds - typical)}`;
+export function milliseconds(ms: number) {
+  if (ms === 0) return '0ms';
+  if (ms < 1) return `${ms.toFixed(1)}ms`;
+  if (ms < 10) return `${Math.round(ms * 10) / 10}ms`;
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return duration(ms / 1000);
+}
+
+/**
+ * How much over its usual time, as "+18%", or "+40s" over a usual time of
+ * nothing (the API times steps to the second), written by `format`.
+ */
+export function over(seconds: number, typical: number, format = duration) {
+  if (typical <= 0) return `+${format(seconds - typical)}`;
   return `+${Math.round((seconds / typical - 1) * 100)}%`;
 }
 
@@ -115,7 +127,8 @@ export function verdict(model: Model) {
 /**
  * What needs attention, one Markdown list item per kind: the failed tests
  * (or else the failed steps), those passed on a re-run, the flaky ones and
- * what got slower. Shared by the summary and the pull request's comment
+ * what got slower, a probe's measurements included ("games › browser,
+ * warm: 410ms, usually 230ms (+78%)", by measures.ts' ms rule). Shared by the summary and the pull request's comment
  * (comment.ts), so both say the same.
  */
 export function attention(model: Model): string[] {
@@ -154,17 +167,26 @@ export function attention(model: Model): string[] {
   const slow = [
     ...model.steps
       .filter((s) => s.slower)
-      .map((s) => ({ name: cell(s.name), seconds: s.seconds, usual: s.usual })),
+      .map((s) => ({ name: cell(s.name), seconds: s.seconds, usual: s.usual, format: duration })),
     ...tests
       .filter((t) => t.slower)
-      .map((t) => ({ name: testName(t), seconds: t.seconds, usual: t.usual })),
+      .map((t) => ({ name: testName(t), seconds: t.seconds, usual: t.usual, format: duration })),
+    // A measurement's in ms, written as the report's card writes them.
+    ...(model.measurements?.rows ?? [])
+      .filter((m) => m.slower)
+      .map((m) => ({
+        name: `${cell(m.op)} › ${cell(m.label)}, ${m.start}`,
+        seconds: m.ms,
+        usual: m.usual,
+        format: milliseconds,
+      })),
   ];
   if (slow.length) {
     items.push(
       `- **Slower than usual:** ${capped(
-        slow.map(({ name, seconds, usual }) => {
+        slow.map(({ name, seconds, usual, format }) => {
           const typical = usual ?? seconds;
-          return `${name}: ${duration(seconds)}, usually ${duration(typical)} (${over(seconds, typical)})`;
+          return `${name}: ${format(seconds)}, usually ${format(typical)} (${over(seconds, typical, format)})`;
         }),
       ).join(' · ')}`,
     );

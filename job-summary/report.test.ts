@@ -1,7 +1,9 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
+import { buildModel } from './model.ts';
 import { pagesBase, report, reportUrl, scriptJson, template } from './report.ts';
 import type { Model } from './model.ts';
+import type { Measurement } from '../probe/results.ts';
 
 type Win = typeof globalThis;
 type DomOptions = { runScripts: string; beforeParse: (window: Win) => void };
@@ -296,6 +298,213 @@ describe('report', () => {
     expect(hidden('notes-card')).toBe(true);
     expect(hidden('problem-card')).toBe(false);
     expect(w.document.getElementById('facts')?.textContent).toContain('No usual time yet');
+  });
+});
+
+/**
+ * A probe's measurements, as the model gives them: `name`'s request, cold
+ * and warm, its browser time slower than its last 3 runs on main (each
+ * `usualMs`).
+ */
+function measured(name = 'games', given?: Measurement[], usualMs = 230) {
+  const rows: Measurement[] = given ?? [
+    { name, phase: 'loaded', start: 'cold', ms: 800 },
+    { name, phase: 'db-open', start: 'cold', ms: 40, atMs: 1 },
+    { name, phase: 'total', start: 'cold', ms: 300 },
+    { name, phase: 'browser', start: 'cold', ms: 1200, responseStartMs: 1150 },
+    { name, phase: 'total', start: 'warm', ms: 34 },
+    { name, phase: 'field.games', label: '<b>Query.games</b>', start: 'warm', ms: 20, atMs: 2 },
+    { name, phase: 'browser', start: 'warm', ms: 410, responseStartMs: 300 },
+    { name: 'session', phase: 'browser', start: 'warm', ms: 200, responseStartMs: 100 },
+  ];
+  const past = [3, 2, 1].map((n) => ({
+    run: {
+      id: n,
+      run_number: n,
+      html_url: `https://gh/run/${n}`,
+      head_branch: 'main',
+      head_sha: 'a',
+      created_at: '2026-10-28T10:00:00Z',
+    },
+    job: { name: 'P', conclusion: 'success', started_at: null, completed_at: null },
+    tests: null,
+    recorded: false,
+    seconds: null,
+    measurements: {
+      environment: 'production',
+      values: [{ name, phase: 'browser', start: 'warm' as const, ms: usualMs }],
+    },
+  }));
+  return buildModel({
+    repo: 'o/r',
+    workflow: 'W',
+    job: 'P',
+    noun: 'test',
+    now: 0,
+    run: null,
+    current: null,
+    steps: [],
+    problem: '',
+    tests: null,
+    past: [],
+    located: new Map(),
+    changed: [],
+    reportOf: () => '',
+    notes: [],
+    load: [],
+    settle: null,
+    measurements: {
+      results: {
+        version: 1,
+        driver: 'web',
+        target: '',
+        environment: 'preview',
+        measurements: rows,
+        notes: ['cold carried by: <i>games</i>'],
+      },
+      past,
+    },
+  }).measurements;
+}
+
+describe('the measurements card', () => {
+  it('is hidden without measurements', () => {
+    expect(el(open(model()), '#measures-card').hidden).toBe(true);
+    expect(el(open({ ...model(), measurements: null }), '#measures-card').hidden).toBe(true);
+  });
+
+  it('draws a lane per request, warm first, and its slower part in Needs attention', () => {
+    const w = open({ ...model(), measurements: measured() });
+    const all = (s: string) => [...w.document.querySelectorAll(s)];
+    expect(el(w, '#measures-card').hidden).toBe(false);
+    expect(el(w, '#measures-sub').textContent).toBe(
+      "This run on preview, against the median of main's last 3 runs on production",
+    );
+    expect(all('#measures .lane').map((l) => l.querySelector('.opn')?.textContent)).toEqual([
+      'requestgames',
+      'requestsession',
+    ]);
+    expect(el(w, '#measures .lane.slow .mbig').textContent).toBe('410ms');
+    expect(el(w, '#measures .lane.slow .mchip').textContent).toBe('+78%');
+    expect(el(w, '#measures-notes').textContent).toBe('cold carried by: <i>games</i>');
+    const item = el(w, '#attention [data-go^="measure:"]');
+    expect(item.textContent).toContain(
+      'games › browser, warm (measurement): 410ms, usually 230ms (+78%)',
+    );
+    // Opens its request and picks its row.
+    item.click();
+    expect(el(w, '#measures .wrow.sel').textContent).toContain('Browser');
+    expect(el(w, '#measures .detail').textContent).toContain('230ms');
+  });
+
+  it('switches to the cold start, saying which request carried it', () => {
+    const w = open({ ...model(), measurements: measured() });
+    el(w, '#measures-card .mswitch button[data-mode="cold"]').click();
+    const lanes = [...w.document.querySelectorAll('#measures .lane')];
+    expect(lanes[0].querySelector('.why')?.textContent).toBe('67% starting up · server 300ms');
+    expect(lanes[1].classList.contains('none')).toBe(true);
+    expect(lanes[1].textContent).toContain('games carried this run’s cold start');
+    el(w, '#measures button.sum[data-op="games"]').click();
+    const names = [...w.document.querySelectorAll('#measures .wname')].map((n) => n.textContent);
+    expect(names).toEqual([
+      'Browser',
+      'Loading the codeloaded',
+      'Servertotal',
+      'Opening the databasedb-open',
+    ]);
+    // A row picked shows its details, needing 3 runs for a usual; picked again, it closes.
+    const row = () => el(w, '#measures .wrow[data-sel*="db-open"]');
+    row().focus();
+    row().dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(el(w, '#measures .detail').textContent).toContain('needs 3 runs (has 0)');
+    expect(el(w, '#measures .detail pre').textContent).toBe('db-open;dur=40;start=1');
+    expect(w.document.activeElement?.getAttribute('data-sel')).toBe(row().dataset.sel);
+    row().click();
+    expect(w.document.querySelector('#measures .detail')).toBeNull();
+  });
+
+  it('writes every name and note as text, never as HTML', () => {
+    const w = open({ ...model(), measurements: measured('<img src=x onerror=alert(1)>') });
+    el(w, '#measures button.sum').click();
+    el(w, '#measures .wrow[data-sel*="field.games"]').click();
+    expect(w.document.querySelector('#measures img, #measures-notes i, #attention img')).toBeNull();
+    expect(el(w, '#measures .detail code').textContent).toBe('<b>Query.games</b>');
+  });
+
+  it('judges a lane with no browser row by its server, telling no network share', () => {
+    const rows: Measurement[] = [
+      { name: 'games', phase: 'loaded', start: 'cold', ms: 800 },
+      { name: 'games', phase: 'total', start: 'cold', ms: 200 },
+      { name: 'games', phase: 'browser', start: 'warm', ms: 400, responseStartMs: 300 },
+    ];
+    const w = open({ ...model(), measurements: measured('games', rows) });
+    el(w, '#measures-card .mswitch button[data-mode="cold"]').click();
+    expect(w.document.querySelector('#measures .lane.none')).toBeNull();
+    expect(el(w, '#measures .lane .why').textContent).toBe('80% starting up · server 200ms');
+    expect(el(w, '#measures .lane .mbig').textContent).toBe('200ms');
+    el(w, '#measures button.sum').click();
+    const names = [...w.document.querySelectorAll('#measures .wname')].map((n) => n.textContent);
+    expect(names).toEqual(['Loading the codeloaded', 'Servertotal']);
+  });
+
+  it('draws a driver that writes no browser row at all', () => {
+    const rows: Measurement[] = [
+      { name: 'feed', phase: 'total', start: 'warm', ms: 50 },
+      { name: 'feed', phase: 'field.feed', start: 'warm', ms: 30, atMs: 10 },
+      { name: 'list', phase: 'render', start: 'warm', ms: 12 },
+    ];
+    const w = open({ ...model(), measurements: measured('feed', rows) });
+    const lanes = [...w.document.querySelectorAll('#measures .lane')];
+    expect(lanes.map((l) => l.classList.contains('none'))).toEqual([false, false]);
+    expect(lanes[0].querySelector('.why')?.textContent).toBe('100% the server');
+    // A lane with neither a server nor a start-up: its part's name.
+    expect(lanes[1].querySelector('.why')?.textContent).toBe('render');
+    expect(lanes[1].querySelector('.mbig')?.textContent).toBe('12ms');
+  });
+
+  it("draws the phases and fields of a request with no server row on the request's axis", () => {
+    const rows: Measurement[] = [
+      { name: 'games', phase: 'browser', start: 'warm', ms: 400, responseStartMs: 300 },
+      { name: 'games', phase: 'db-open', start: 'warm', ms: 40, atMs: 0 },
+      { name: 'games', phase: 'field.games', start: 'warm', ms: 20, atMs: 40 },
+    ];
+    const w = open({ ...model(), measurements: measured('games', rows) });
+    el(w, '#measures button.sum').click();
+    const names = [...w.document.querySelectorAll('#measures .wname')].map((n) => n.textContent);
+    expect(names).toEqual(['Browser', 'Opening the databasedb-open', 'games']);
+    expect(w.document.querySelectorAll('#measures .wgrid')).toHaveLength(1);
+    // Needs attention's link to the slower browser row finds it.
+    el(w, '#attention [data-go^="measure:"]').click();
+    expect(el(w, '#measures .wrow.sel').textContent).toContain('Browser');
+    // Every row Needs attention could name has a place on the page.
+    for (const [k, m] of (measured('games', rows)?.rows ?? []).entries())
+      if (m.start === 'warm') expect(w.document.getElementById(`measure-${k}`)).not.toBeNull();
+  });
+
+  it('says how much more a part took when its usual is 0ms, never Infinity times', () => {
+    const chip = (ms: number) => {
+      const rows: Measurement[] = [{ name: 'games', phase: 'browser', start: 'warm', ms }];
+      const w = open({ ...model(), measurements: measured('games', rows, 0) });
+      const text = el(w, '#measures .lane .mchip').textContent;
+      el(w, '#measures button.sum').click();
+      el(w, '#measures .wrow').click();
+      return [text, el(w, '#measures .detail').textContent?.includes('Infinity')];
+    };
+    expect(chip(30)).toEqual(['+30ms', false]);
+    expect(chip(0)).toEqual(['≈ usual', false]);
+  });
+
+  it('says when there was nothing to measure', () => {
+    const none = measured();
+    if (!none) throw new Error('no measurements');
+    const w = open({
+      ...model(),
+      measurements: { ...none, ops: [], rows: [], runs: [], environment: '' },
+    });
+    expect(el(w, '#measures').textContent).toBe('No measurements this run.');
+    expect(el(w, '#measures-sub').textContent).toBe(
+      'This run; main has no earlier runs to compare it with yet',
+    );
   });
 });
 

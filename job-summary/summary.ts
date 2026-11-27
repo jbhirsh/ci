@@ -29,18 +29,18 @@
 // LOAD: sift's own scripts write them) or else from what job-summary/note
 // and job-summary/sample-load left in RUNNER_TEMP (telemetry.mjs).
 //
-// A probe's results file (MEASUREMENTS, probe/results.ts) is kept only
-// when given: its values go in the record (version 3, measures.ts), for
-// later runs to compare theirs with. With no MEASUREMENTS, nothing reads
-// or writes them, and the record keeps version 2 with no measurements key,
-// as every job had before.
+// A probe's results file (MEASUREMENTS, probe/results.ts) is tracked only
+// when given: its values go in the record (version 3), compared with
+// main's earlier runs of this run's event (measures.ts, history.ts). With
+// no MEASUREMENTS, nothing reads or writes them, and the record keeps
+// version 2 with no measurements key, as every job had before.
 //
 //   node summary.ts   (env: JOB; JUNIT (patterns, one per line), NOUN,
 //                       NOTES (a JSON file), LOAD (a CSV file), SETTLE,
 //                       REPORT_BASE, MEASUREMENTS (a JSON file), all
 //                       optional; GITHUB_REPOSITORY, GITHUB_WORKFLOW,
-//                       GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, RUNNER_TEMP;
-//                       GH_TOKEN for gh)
+//                       GITHUB_EVENT_NAME, GITHUB_RUN_ID,
+//                       GITHUB_RUN_ATTEMPT, RUNNER_TEMP; GH_TOKEN for gh)
 
 import { execFileSync } from 'node:child_process';
 import { globSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -259,6 +259,7 @@ export function build(env: Record<string, string | undefined>, gh: Gh, io: Io = 
   let thisJob: Job | null = null;
   let past: PastRun[] = [];
   const results = env.MEASUREMENTS ? readMeasurements(env.MEASUREMENTS, read) : null;
+  let measured: PastRun[] = [];
   // One time limit for reading the history and asking git about it.
   const until = clock() + HISTORY_MS;
   const found = current(env, gh);
@@ -272,6 +273,23 @@ export function build(env: Record<string, string | undefined>, gh: Gh, io: Io = 
     } else {
       run = found.run;
       past = history(repo, run, found.defaultBranch, job, HISTORY, gh, io.download, until, clock);
+      // Measurements against main's runs of this event only (history.ts),
+      // with a time limit of their own: the steps' may be spent by now, and
+      // a probe's job is short, so up to another HISTORY_MS can't hold it
+      // near its own limit.
+      if (results)
+        measured = history(
+          repo,
+          run,
+          found.defaultBranch,
+          job,
+          HISTORY,
+          gh,
+          io.download,
+          clock() + HISTORY_MS,
+          clock,
+          { event: env.GITHUB_EVENT_NAME, branches: [found.defaultBranch] },
+        );
     }
   }
 
@@ -311,6 +329,7 @@ export function build(env: Record<string, string | undefined>, gh: Gh, io: Io = 
         ? parseLoad(loadText, started, jobSeconds(thisJob, now))
         : [],
     settle: Number.isFinite(settle) && env.SETTLE ? settle : null,
+    measurements: results && { results, past: measured },
   });
   // Snippets only for the tests worth reading, now that the model says which.
   const wanted = noteworthy(model);

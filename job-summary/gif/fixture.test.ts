@@ -48,6 +48,22 @@ describe('fixture', () => {
     expect(buildModel(fixture())).toEqual(model);
   });
 
+  it("measures three requests against main's eight probe runs, games carrying the cold start", () => {
+    const m = model.measurements;
+    expect(m?.ops.map((op) => op.name)).toEqual(['games', 'session', 'wishlistVotes']);
+    expect(m?.runs).toHaveLength(8);
+    expect(m).toMatchObject({ environment: 'preview', usualEnvironment: 'production' });
+    const cold = m?.rows.filter((r) => r.start === 'cold').map((r) => `${r.op} ${r.key}`);
+    expect(cold).toEqual(expect.arrayContaining(['games loaded', 'games deps', 'games db-open']));
+    expect(cold?.every((r) => r.startsWith('games '))).toBe(true);
+  });
+
+  it('measures only Games.bgg slower than usual, warm', () => {
+    expect(model.measurements?.rows.filter((r) => r.slower).map((r) => [r.label, r.start])).toEqual(
+      [['Games.bgg', 'warm']],
+    );
+  });
+
   it('links each earlier run to its report', () => {
     expect(model.runs[4].url).toBe('https://jbhirsh.github.io/ci/runs/8999/check/');
   });
