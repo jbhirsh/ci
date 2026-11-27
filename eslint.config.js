@@ -19,6 +19,14 @@ export default [
   ...tseslint.configs.recommended.map((config) => ({ ...config, files: TS })),
   { ...jsdoc.configs['flat/recommended-typescript'], files: TS },
   {
+    files: TS,
+    rules: {
+      // A destructured parameter's fields are named in its type, so its tag
+      // isn't asked to name each one again (as `@param options.base`).
+      'jsdoc/check-param-names': ['warn', { checkDestructured: false }],
+    },
+  },
+  {
     languageOptions: { globals: { ...globals.node } },
     rules: {
       'jsdoc/require-jsdoc': 'off',
