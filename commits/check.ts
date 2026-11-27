@@ -17,7 +17,7 @@
 // claude-autofix's commits are checked like any other.
 //
 // Reads the PR's commits from the API, so the app's checkout can stay
-// shallow: `node check.mjs` with GH_TOKEN (pull-requests: read), PR_NUMBER
+// shallow: `node check.ts` with GH_TOKEN (pull-requests: read), PR_NUMBER
 // and GITHUB_REPOSITORY set, as commits/action.yml runs it.
 
 import { execFileSync } from 'node:child_process';

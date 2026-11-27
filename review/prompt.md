@@ -70,7 +70,7 @@ inline suppression comments), the shape of JSDoc (eslint-plugin-jsdoc: a
 in TypeScript), types and `any` (the type-check and type coverage), import
 layering (dependency-cruiser), the coverage threshold, mutation testing,
 generated-code drift, the wording of commit messages (jbhirsh/ci's
-`commits/check.mjs`; don't comment on it at all), secrets (gitleaks), static analysis
+`commits/check.ts`; don't comment on it at all), secrets (gitleaks), static analysis
 (Semgrep), known vulnerabilities (`npm audit`), end-to-end and visual regression tests,
 and the weekly sweep
 for dead code, duplicates and broken links (lychee: every Markdown link,
