@@ -4,7 +4,7 @@ description: >-
   an eslint-disable: an ignore* option in the app's knip config, a loosened
   rule, include/exclude/tags, an allowed cycle, a negated project glob, a
   plugin turned off, or a @public, @beta or @alias tag in the code
-  (audit/suppressions.mjs's header says what counts). Each one gets an
+  (audit/suppressions.ts's header says what counts). Each one gets an
   error on the line that holds it. It reads the config and the tracked
   files' comments, parsed with the app's own typescript, and never runs the
   app's code: a step after the app's install, in the CI job that runs
@@ -19,4 +19,4 @@ runs:
 
     - name: Check for knip suppressions
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/../suppressions.mjs" --annotate
+      run: node "$GITHUB_ACTION_PATH/../suppressions.ts" --annotate

@@ -1,5 +1,5 @@
 // Turns each weekly-audit tool's JSON report into the findings its tracking
-// issue shows (audit/run.mjs runs the tools and audit/issue.mjs keeps the
+// issue shows (audit/run.ts runs the tools and audit/issue.ts keeps the
 // issue): a count, and Markdown saying what was found, where, and what to do
 // about it. Each takes the report as the tool wrote it, untrusted in shape,
 // so each tolerates fields it doesn't know.

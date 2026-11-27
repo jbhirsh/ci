@@ -1,7 +1,7 @@
 # The weekly audit, for an app's weekly-audit.yml to call: the checks that
 # need the whole repository at once, too slow or too noisy to gate a PR,
-# each a job running audit/action.yml (audit/run.mjs's header says what each
-# runs; audit/issue.mjs how its tracking issue is kept):
+# each a job running audit/action.yml (audit/run.ts's header says what each
+# runs; audit/issue.ts how its tracking issue is kept):
 #
 #   - Dead code (knip), Duplicated code (jscpd), Broken links (lychee): each
 #     keeps one issue labelled weekly-audit, opened or rewritten while there
@@ -10,7 +10,7 @@
 #     run's summary.
 #
 # The run stays green unless a tool breaks, or a knip config or tag
-# suppresses a finding (audit/suppressions.mjs; an app's CI runs the same
+# suppresses a finding (audit/suppressions.ts; an app's CI runs the same
 # scan on every PR, audit/suppressions/action.yml); the issues are the
 # alert. Not a PR workflow, so no required check depends on these job names.
 #

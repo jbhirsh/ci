@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { jscpdFindings, knipFindings, lycheeFindings } from './report.mjs';
+import { jscpdFindings, knipFindings, lycheeFindings } from './report.ts';
 
 // A tool's report is whatever its version writes: any JSON at all.
 const json = fc.jsonValue({ maxDepth: 5 });

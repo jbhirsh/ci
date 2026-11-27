@@ -1,11 +1,11 @@
 // One weekly-audit check, run from the app's checkout (audit/action.yml):
 //
-//   node run.mjs knip [--dry-run]                    dead code
-//   node run.mjs jscpd [--dry-run]                   duplicated code
-//   node run.mjs lychee <report.json> <exit code> [--dry-run]
+//   node run.ts knip [--dry-run]                    dead code
+//   node run.ts jscpd [--dry-run]                   duplicated code
+//   node run.ts lychee <report.json> <exit code> [--dry-run]
 //                                                    broken links, from the
 //                                                    report lychee-action wrote
-//   node run.mjs graph <out dir>                     the architecture graph
+//   node run.ts graph <out dir>                     the architecture graph
 //
 // The graph is dependency-cruiser's picture of the import graph, by folder
 // (architecture.svg) and by module (modules.svg, both drawn by Graphviz's
@@ -18,15 +18,15 @@
 //
 // It runs the tool with the app's own config (knip.json or knip.jsonc,
 // .jscpd.json, .lycheeignore: what each looks at stays the app's choice) and
-// its installed version, turns the report into findings (audit/report.mjs),
+// its installed version, turns the report into findings (audit/report.ts),
 // writes them to the job summary, sets the `findings` output to their count,
-// and keeps the category's tracking issue (audit/issue.mjs). jscpd runs as
+// and keeps the category's tracking issue (audit/issue.ts). jscpd runs as
 // the app's `jscpd` package script, which must be bare `jscpd` (its settings
 // are .jscpd.json): the command anyone runs locally, and what tells knip the
 // package is used. Findings never fail the run; a tool that breaks does:
 // knip exiting above 1, jscpd writing no report (or the app having no
 // `jscpd` script), lychee exiting other than 0 or 2 (2 is broken links).
-// So does a knip suppression (audit/suppressions.mjs: an `ignore*` option,
+// So does a knip suppression (audit/suppressions.ts: an `ignore*` option,
 // a loosened rule, an `@public` tag, …): the knip check lists them at the
 // top of the Dead code issue, counted with the findings, syncs the issue,
 // then fails, so a suppression the PR-time step missed still turns the run
@@ -42,9 +42,9 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput, summary } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
-import { sync } from './issue.mjs';
-import { jscpdFindings, knipFindings, lycheeFindings } from './report.mjs';
-import { KNIP_CONFIG_LOCATIONS, suppressions, suppressionsMessage } from './suppressions.mjs';
+import { sync } from './issue.ts';
+import { jscpdFindings, knipFindings, lycheeFindings } from './report.ts';
+import { KNIP_CONFIG_LOCATIONS, suppressions, suppressionsMessage } from './suppressions.ts';
 
 /** Each check's tracking issue. */
 export const TITLES = /** @type {const} */ ({
@@ -182,7 +182,7 @@ export function drawGraph(root, folders, out, run) {
  * @property {string} root the app's checkout
  * @property {Record<string, string | undefined>} env
  * @property {Spawn} spawn
- * @property {import('./issue.mjs').Gh} gh
+ * @property {import('./issue.ts').Gh} gh
  * @property {(markdown: string) => void} summary
  * @property {(name: string, value: string) => void} setOutput
  * @property {Date} now
@@ -217,7 +217,7 @@ export function main(argv, deps = defaultDeps()) {
     const files = drawGraph(deps.root, graph, path.resolve(out), deps.spawn);
     return `Architecture graph of ${graph.join(', ')}: ${files.join(', ')}.`;
   }
-  /** @type {import('./report.mjs').Findings} */
+  /** @type {import('./report.ts').Findings} */
   let findings;
   /** @type {string | undefined} */
   let refused;
@@ -225,7 +225,7 @@ export function main(argv, deps = defaultDeps()) {
     // A config the scan can't read (a knip.ts) fails the run too, and heads
     // the issue as one suppression would, but only once the issue shows
     // this week's findings.
-    /** @type {{ config: string, list: import('./suppressions.mjs').Suppression[] }} */
+    /** @type {{ config: string, list: import('./suppressions.ts').Suppression[] }} */
     let hidden = { config: knipConfig(deps.root), list: [] };
     try {
       hidden = suppressions(deps.root);
@@ -261,7 +261,7 @@ export function main(argv, deps = defaultDeps()) {
     findings = lycheeFindings(parsed);
   } else {
     throw new Error(
-      'usage: run.mjs knip|jscpd [--dry-run] | lychee <report.json> <exit code> [--dry-run] | graph <out dir>',
+      'usage: run.ts knip|jscpd [--dry-run] | lychee <report.json> <exit code> [--dry-run] | graph <out dir>',
     );
   }
   const title = TITLES[check];

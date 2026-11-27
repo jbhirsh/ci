@@ -3,7 +3,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isolateGit } from '../mutation/test-repo.mjs';
-import { parseJsonc } from './jsonc.mjs';
+import { parseJsonc } from './jsonc.ts';
 import {
   annotations,
   cli,
@@ -13,8 +13,8 @@ import {
   suppressionTags,
   suppressions,
   suppressionsMessage,
-} from './suppressions.mjs';
-import { APP_CONFIGS, app, cleanApps } from './test-app.mjs';
+} from './suppressions.ts';
+import { APP_CONFIGS, app, cleanApps } from './test-app.ts';
 
 /** @type {() => void} */
 let restoreGit;
