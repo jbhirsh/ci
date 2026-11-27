@@ -554,6 +554,34 @@ describe('publish', () => {
     ).rejects.toThrow('git push failed');
   });
 
+  it('reads a refusal in what git said, not in the SHAs of its command line', async () => {
+    const ci = ciRoot();
+    const remote = appRemote({});
+    const github = fakeGitHub('jbhirsh/sift', remote.bare);
+    // A lost lease as git reports it, for a pushed SHA holding "403".
+    const sha = '403a46816b7f7b50995de90beff86dc7678051fc';
+    const refusing = (stderr: string) => (g: Git) =>
+      ((args, options) => {
+        if (!args.includes('push')) return g(args, options);
+        throw Object.assign(
+          new Error(
+            `Command failed: git push --atomic --force-with-lease=refs/heads/${BRANCH}: ` +
+              `${remote.url} ${sha}:refs/heads/${BRANCH}\n${stderr}`,
+          ),
+          { stderr },
+        );
+      }) as Git;
+    const stale = ` ! [rejected]        ${sha} -> ${BRANCH} (stale info)\n`;
+    await expect(
+      run({ app: 'sift', ci, remote, github, wrapGit: refusing(stale) }),
+    ).rejects.toThrow(/stale info/);
+    const forbidden =
+      "fatal: unable to access 'https://github.com/jbhirsh/sift.git/': The requested URL returned error: 403\n";
+    await expect(
+      run({ app: 'sift', ci, remote, github, wrapGit: refusing(forbidden) }),
+    ).rejects.toThrow("BOT_PR_TOKEN can't push to jbhirsh/sift");
+  });
+
   it('never overwrites a branch that moved after it was read', async () => {
     const ci = ciRoot();
     const remote = appRemote({ '.github/workflows/hello.yml': 'old\n' });
