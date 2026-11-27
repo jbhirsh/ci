@@ -14,11 +14,8 @@ import { isSource, readEntries, trackedFiles } from './check.ts';
 /**
  * Reads the app's setting and files and returns what to print; throws when
  * the setting can't be read.
- *
- * @param {string} root
- * @returns {string[]}
  */
-export function selftest(root) {
+export function selftest(root: string): string[] {
   const { entries, malformed } = readEntries(appConfig('unmeasured', root));
   const tracked = trackedFiles(root);
   return [
@@ -36,12 +33,8 @@ export function selftest(root) {
 
 /**
  * Runs the self-test on the app at `argv[0]` and returns the exit code.
- *
- * @param {string[]} argv
- * @param {(line: string) => void} [log]
- * @returns {number}
  */
-export function cli(argv, log = console.log) {
+export function cli(argv: string[], log: (line: string) => void = console.log): number {
   try {
     for (const line of selftest(path.resolve(argv[0] ?? '.'))) log(line);
     return 0;

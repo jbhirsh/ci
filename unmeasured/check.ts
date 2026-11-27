@@ -65,9 +65,9 @@ const TEST_FOLDERS = new Set(['__tests__', '__mocks__']);
  * Whether a tracked file is source the gate should measure: code, and not a
  * test, a declaration or a root config file.
  *
- * @param {string} file a repository path, with forward slashes
+ * @param file a repository path, with forward slashes
  */
-export function isSource(file) {
+export function isSource(file: string) {
   if (!CODE.test(file)) return false;
   const segments = file.split('/');
   const name = segments.at(-1) ?? '';
@@ -80,10 +80,8 @@ export function isSource(file) {
 /**
  * A path with its symbolic links resolved, or the path itself when it
  * doesn't exist (a report key for a file since deleted).
- *
- * @param {string} file
  */
-export function realPath(file) {
+export function realPath(file: string) {
   try {
     return realpathSync(file);
   } catch {
@@ -97,13 +95,16 @@ export function realPath(file) {
  * runner may write real paths while the root it was given runs through a
  * link (APP_ROOT on a symlinked checkout).
  *
- * @param {Record<string, unknown>} report the parsed coverage-final.json
- * @param {string} root the app's root, absolute
- * @param {(file: string) => string} [real]
- * @returns {Set<string>}
+ * @param report the parsed coverage-final.json
+ * @param root the app's root, absolute
+ * @param real
  */
-export function measuredFiles(report, root, real = (file) => file) {
-  const files = new Set();
+export function measuredFiles(
+  report: Record<string, unknown>,
+  root: string,
+  real: (file: string) => string = (file) => file,
+): Set<string> {
+  const files = new Set<string>();
   const base = real(root);
   for (const key of Object.keys(report)) {
     const relative = path.relative(base, real(path.resolve(root, key)));
@@ -113,20 +114,22 @@ export function measuredFiles(report, root, real = (file) => file) {
   return files;
 }
 
-/**
- * @typedef {object} Entry
- * @property {string} glob
- * @property {string} text the entry as written
- */
+export type Entry = {
+  glob: string;
+  /** the entry as written */
+  text: string;
+};
 
 /**
  * The app's `unmeasured.files` entries, split into globs and the entries
  * that are malformed (with what's wrong).
  *
- * @param {Record<string, unknown>} settings the app's `unmeasured` key
- * @returns {{ entries: Entry[], malformed: string[] }}
+ * @param settings the app's `unmeasured` key
  */
-export function readEntries(settings) {
+export function readEntries(settings: Record<string, unknown>): {
+  entries: Entry[];
+  malformed: string[];
+} {
   const unknown = Object.keys(settings).filter((key) => key !== 'files');
   if (unknown.length > 0) {
     throw new Error(`.github/ci.json: unmeasured has no setting ${unknown.join(', ')}`);
@@ -135,10 +138,8 @@ export function readEntries(settings) {
   if (!Array.isArray(value) || !value.every((v) => typeof v === 'string')) {
     throw new Error('.github/ci.json: unmeasured.files must be a list of "<glob>: <reason>"');
   }
-  /** @type {Entry[]} */
-  const entries = [];
-  /** @type {string[]} */
-  const malformed = [];
+  const entries: Entry[] = [];
+  const malformed: string[] = [];
   for (const text of value) {
     const at = text.indexOf(': ');
     if (at <= 0) {
@@ -156,26 +157,27 @@ export function readEntries(settings) {
   return { entries, malformed };
 }
 
-/**
- * @typedef {object} Result
- * @property {string[]} measured source files the report holds
- * @property {string[]} listed source files it doesn't, that an entry lists
- * @property {string[]} unmeasured source files it doesn't, that nothing lists
- * @property {Entry[]} stale entries whose glob matches no unmeasured file
- */
+export type Result = {
+  /** source files the report holds */
+  measured: string[];
+  /** source files it doesn't, that an entry lists */
+  listed: string[];
+  /** source files it doesn't, that nothing lists */
+  unmeasured: string[];
+  /** entries whose glob matches no unmeasured file */
+  stale: Entry[];
+};
 
 /**
  * Sorts the app's source files by whether the gate measures them, and finds
  * the entries that list nothing.
  *
- * @param {string[]} tracked every file git tracks
- * @param {Set<string>} measured the report's files
- * @param {Entry[]} entries
- * @returns {Result}
+ * @param tracked every file git tracks
+ * @param measured the report's files
+ * @param entries
  */
-export function classify(tracked, measured, entries) {
-  /** @type {Result} */
-  const result = { measured: [], listed: [], unmeasured: [], stale: [] };
+export function classify(tracked: string[], measured: Set<string>, entries: Entry[]): Result {
+  const result: Result = { measured: [], listed: [], unmeasured: [], stale: [] };
   const missing = tracked.filter((file) => isSource(file) && !measured.has(file));
   for (const file of tracked) {
     if (!isSource(file)) continue;
@@ -189,12 +191,8 @@ export function classify(tracked, measured, entries) {
 
 /**
  * What fails, as messages that say how to fix it.
- *
- * @param {Result} result
- * @param {string[]} malformed
- * @returns {string[]}
  */
-export function failures(result, malformed) {
+export function failures(result: Result, malformed: string[]): string[] {
   return [
     ...result.unmeasured.map(
       (file) =>
@@ -211,19 +209,15 @@ export function failures(result, malformed) {
 /**
  * Reads the report; throws, saying how to fix it, when it's missing or isn't
  * a coverage-final.json.
- *
- * @param {string} root
- * @returns {Record<string, unknown>}
  */
-export function readReport(root) {
+export function readReport(root: string): Record<string, unknown> {
   const file = path.join(root, REPORT);
   if (!existsSync(file)) {
     throw new Error(
       `${REPORT} is missing. Run this after the coverage run, and give it a "json" reporter (Vitest: coverage.reporter; Jest writes it by default).`,
     );
   }
-  /** @type {unknown} */
-  let report;
+  let report: unknown;
   try {
     report = JSON.parse(readFileSync(file, 'utf8'));
   } catch (error) {
@@ -235,16 +229,13 @@ export function readReport(root) {
   if (report === null || typeof report !== 'object' || Array.isArray(report)) {
     throw new Error(`${REPORT} isn't a coverage report: it should be an object keyed by file.`);
   }
-  return /** @type {Record<string, unknown>} */ (report);
+  return report as Record<string, unknown>;
 }
 
 /**
  * The files git tracks in the app.
- *
- * @param {string} root
- * @returns {string[]}
  */
-export function trackedFiles(root) {
+export function trackedFiles(root: string): string[] {
   let out;
   try {
     out = execFileSync('git', ['ls-files', '-z'], {
@@ -263,15 +254,14 @@ export function trackedFiles(root) {
 
 /**
  * Runs the check on the app at `root` and returns the exit code.
- *
- * @param {string} root
- * @param {{ log?: (line: string) => void, actions?: boolean }} [options]
- * @returns {number}
  */
 export function main(
-  root,
-  { log = console.log, actions = Boolean(process.env.GITHUB_ACTIONS) } = {},
-) {
+  root: string,
+  {
+    log = console.log,
+    actions = Boolean(process.env.GITHUB_ACTIONS),
+  }: { log?: (line: string) => void; actions?: boolean } = {},
+): number {
   let messages;
   let result;
   try {

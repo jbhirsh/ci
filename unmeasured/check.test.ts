@@ -192,23 +192,14 @@ describe('trackedFiles', () => {
 });
 
 describe('main', () => {
-  /**
-   * @param {Record<string, string>} files
-   * @param {string[]} measured
-   */
-  function app(files, measured) {
+  function app(files: Record<string, string>, measured: string[]) {
     const root = testApp(files);
     const report = Object.fromEntries(measured.map((f) => [path.join(root, f), {}]));
     writeFiles(root, { [REPORT]: JSON.stringify(report) });
     return root;
   }
-  /**
-   * @param {string} root
-   * @param {boolean} [actions]
-   */
-  function run(root, actions = false) {
-    /** @type {string[]} */
-    const out = [];
+  function run(root: string, actions = false) {
+    const out: string[] = [];
     return { code: main(root, { log: (l) => out.push(l), actions }), out };
   }
 
