@@ -10,7 +10,7 @@ const master = readFileSync(
   'utf8',
 );
 const TEMPLATE = '.github/pull_request_template.md';
-const app = (/** @type {Record<string, string>} */ files) => {
+const app = (files: Record<string, string>) => {
   const root = mkdtempSync(path.join(tmpdir(), 'app-'));
   writeFiles(root, files);
   return root;
@@ -32,12 +32,11 @@ describe('selftest', () => {
 
   it("fails when the check doesn't ask for the new revision's row, or rejects it filled (ci#140)", async () => {
     const real = await import('../pr-template/body.ts');
-    /** @type {(body: string, sha: string) => string[]} */
-    let check = () => [];
+    let check: (body: string, sha: string) => string[] = () => [];
     vi.resetModules();
     vi.doMock('../pr-template/body.ts', () => ({
       ...real,
-      bodyProblems: (/** @type {string} */ body, /** @type {string} */ sha) => check(body, sha),
+      bodyProblems: (body: string, sha: string) => check(body, sha),
     }));
     try {
       const fresh = (await import('./selftest.ts')).selftest;
@@ -73,8 +72,7 @@ describe('selftest', () => {
 
 describe('cli', () => {
   it('returns 0 and prints for a good app, and 1 saying why for a bad one', () => {
-    /** @type {string[]} */
-    const out = [];
+    const out: string[] = [];
     expect(cli([app({ [TEMPLATE]: master })], (l) => out.push(l))).toBe(0);
     expect(
       cli(

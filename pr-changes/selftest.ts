@@ -15,6 +15,7 @@ import { pathToFileURL } from 'node:url';
 import { bodyProblems } from '../pr-template/body.ts';
 import { fill, ownBlock, placed } from './changes.ts';
 import { revisions } from './revisions-run.ts';
+import type { Io } from './revisions-run.ts';
 
 const TEMPLATE = '.github/pull_request_template.md';
 const SHA = 'a'.repeat(40);
@@ -22,17 +23,15 @@ const SHA = 'a'.repeat(40);
 /**
  * Writes the Revisions table into the template as a push would, and checks it.
  *
- * @param {string} template
- * @returns {string} what to print; throws on the first problem
+ * @returns what to print; throws on the first problem
  */
-function revisionsSelftest(template) {
+function revisionsSelftest(template: string): string {
   if (!ownBlock(template, 'revisions')) {
     return `pr-changes: ${TEMPLATE} has no revisions pair; Revisions not used.`;
   }
   const [opened, head] = ['b'.repeat(40), 'c'.repeat(40)];
   let body = template;
-  /** @type {import('./revisions-run.ts').Io} */
-  const io = {
+  const io: Io = {
     pull: () => ({
       state: 'open',
       author: 'a',
@@ -53,8 +52,8 @@ function revisionsSelftest(template) {
   if (!revisions(io, { repo: 'owner/app', before: opened })) {
     throw new Error(`${TEMPLATE}: the Revisions table was not written for a pushed head`);
   }
-  /** @param {string} sha */
-  const problems = (sha, text = body) => bodyProblems(text, sha).filter((p) => /Revisions/.test(p));
+  const problems = (sha: string, text = body) =>
+    bodyProblems(text, sha).filter((p) => /Revisions/.test(p));
   // The new revision's row is the author's (ci#140): the check asks for it, and only for it, until
   // it is filled.
   const fresh = problems(head);
@@ -78,10 +77,9 @@ function revisionsSelftest(template) {
 }
 
 /**
- * @param {string} root
- * @returns {string[]} what to print; throws on the first problem
+ * @returns what to print; throws on the first problem
  */
-export function selftest(root) {
+export function selftest(root: string): string[] {
   const file = path.join(root, TEMPLATE);
   const template = existsSync(file) ? readFileSync(file, 'utf8') : '';
   const slots = placed(template);
@@ -110,12 +108,8 @@ export function selftest(root) {
 
 /**
  * Runs the self-test on the app at `argv[0]` and returns the exit code.
- *
- * @param {string[]} argv
- * @param {(line: string) => void} [log]
- * @returns {number}
  */
-export function cli(argv, log = console.log) {
+export function cli(argv: string[], log: (line: string) => void = console.log): number {
   try {
     for (const line of selftest(path.resolve(argv[0] ?? '.'))) log(line);
     return 0;

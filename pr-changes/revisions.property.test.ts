@@ -30,14 +30,15 @@ const SEED =
   process.env.REVISIONS_FUZZ_SEED === undefined
     ? undefined
     : Number(process.env.REVISIONS_FUZZ_SEED);
-/** @type {{ numRuns: number, seed?: number }} */
-const RUN = { numRuns: RUNS, ...(SEED === undefined ? {} : { seed: SEED }) };
+const RUN: { numRuns: number; seed?: number } = {
+  numRuns: RUNS,
+  ...(SEED === undefined ? {} : { seed: SEED }),
+};
 
 const sha = fc.stringMatching(/^[0-9a-f]{40}$/);
-const ahref = (/** @type {string} */ s) =>
+const ahref = (s: string) =>
   `<a href="https://github.com/${REPO}/commit/${s}"><code>${s.slice(0, 7)}</code></a>`;
-const mdlink = (/** @type {string} */ s) =>
-  `[\`${s.slice(0, 7)}\`](https://github.com/${REPO}/commit/${s})`;
+const mdlink = (s: string) => `[\`${s.slice(0, 7)}\`](https://github.com/${REPO}/commit/${s})`;
 const ONE = 'a'.repeat(40);
 const LS = String.fromCharCode(0x2028);
 const PS = String.fromCharCode(0x2029);
@@ -185,7 +186,7 @@ const tables = fc
  * zero-width space dropped on both sides, and whitespace squeezed. Nothing is sanitised here: it
  * only drops what the tool may change.
  */
-const flat = (/** @type {string} */ text) =>
+const flat = (text: string) =>
   text
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -194,12 +195,12 @@ const flat = (/** @type {string} */ text) =>
     .trim();
 
 /** A row as `flat` reads it, with the pipes and the backslashes of its escapes dropped too: a row of other than two cells is written as GitHub reads it. */
-const flatRow = (/** @type {string} */ row) => flat(row.replace(/[|\\]/g, ' '));
+const flatRow = (row: string) => flat(row.replace(/[|\\]/g, ' '));
 
 /** Tables of at most 4 revisions: the round-trip properties don't need 8, and each thousand runs stays near a second under load. */
 const smallTables = tables.map((t) => ({ ...t, rows: t.rows.slice(0, 4) }));
 
-const wrap = (/** @type {string} */ block) =>
+const wrap = (block: string) =>
   `## Goal\n\nx.\n\n## Changes\n\n### 1. c\n\nwhy\n\n<!-- pr-changes:revisions -->\n${block}\n<!-- /pr-changes:revisions -->\n`;
 const BAD_TAG = /<\/?(?:details|summary|table|thead|tbody|tfoot|tr|td|th|colgroup|col|caption)\b/i;
 const BOGUS = /<!|<\?|<\/(?![A-Za-z])/;
@@ -234,8 +235,7 @@ describe('parseTable', () => {
   });
 
   it('agrees with the check on every form of a current revision, in every shape', () => {
-    /** @type {[string, (s: string) => string][]} */
-    const forms = [
+    const forms: [string, (s: string) => string][] = [
       ['details', (s) => `<summary><b>👉 ${ahref(s)}</b> (current)</summary>`],
       ['details', (s) => `<summary><b>${ahref(s)}</b> (current)</summary>`],
       ['details', (s) => `<summary>${ahref(s)} (current)</summary>`],
@@ -291,7 +291,7 @@ describe('parseTable', () => {
       maxLength: 8,
     });
     /** The letters and digits of a text: what a reader would see of it, in order. */
-    const alnum = (/** @type {string} */ t) => {
+    const alnum = (t: string) => {
       let inTag = false;
       let out = '';
       for (const c of t) {
@@ -481,7 +481,7 @@ describe('addRevision and budgeted', () => {
         expect(kept.rows.filter((r) => r.current && r.sha === head)).toHaveLength(1);
         // The new revision's placeholder is the author's to fill (ci#140): the one problem, until
         // its row is written. The newest revision is the first block, so its placeholder is the first.
-        const revisionsProblems = (/** @type {string} */ text) =>
+        const revisionsProblems = (text: string) =>
           bodyProblems(wrap(text), head).filter((p) => /Revisions/.test(p));
         expect(revisionsProblems(out)).toEqual([
           `fill Revisions' current revision, \`${head.slice(0, 7)}\`: its table has no row with both cells filled. In the description, write one row for each change this push made, both cells in plain words, such as \`| The cap fails closed | It's the only paid API |\` (each row opens with \`|\`; write a pipe in a cell as \`\\|\`). Do it once this push's \`PR changes\` run has ended: a run still going can write an older copy over your edit`,
@@ -498,7 +498,7 @@ describe('addRevision and budgeted', () => {
         fc.array(fc.array(authorRow, { maxLength: 4 }), { minLength: 1, maxLength: 6 }),
         (perPush) => {
           let t = parseTable('', REPO);
-          const written = /** @type {string[][]} */ ([]);
+          const written = [] as string[][];
           perPush.forEach((rows, i) => {
             const head = (i + 1).toString(16).padStart(2, '0').repeat(20);
             t = addRevision(t, {
@@ -577,7 +577,7 @@ describe('withPair (property)', () => {
       { maxLength: 30 },
     )
     .map((parts) => parts.join(''));
-  const squash = (/** @type {string} */ t) => t.replace(/\s+/g, '');
+  const squash = (t: string) => t.replace(/\s+/g, '');
 
   it('never throws, is idempotent, and only ever adds the one empty pair', () => {
     fc.assert(
@@ -588,7 +588,7 @@ describe('withPair (property)', () => {
         // One clean pair, as the description check counts it, and nothing else added.
         const at = revisionsPair(out).at;
         expect(at).not.toBeNull();
-        const { from, to } = /** @type {{ from: number, to: number }} */ (at);
+        const { from, to } = at as { from: number; to: number };
         expect(out.slice(from, to).replace(/\r?\n/, '\n')).toBe(PAIR);
         expect(squash(out.slice(0, from) + out.slice(to))).toBe(squash(b));
       }),
@@ -681,7 +681,7 @@ describe('summaryReader (property)', () => {
       ),
   );
   /** What the old pattern read of `label`, in the reader's shape. */
-  const reference = (/** @type {string} */ label) => {
+  const reference = (label: string) => {
     const s = oldBold.exec(label) ?? oldPlain.exec(label);
     if (!s) return null;
     return {
@@ -692,9 +692,9 @@ describe('summaryReader (property)', () => {
     };
   };
   const [A, B, C] = ['a', 'b', 'c'].map((c) => c.repeat(40));
-  const ahrefOf = (/** @type {string} */ s, /** @type {string} */ repo = REPO) =>
+  const ahrefOf = (s: string, repo: string = REPO) =>
     `<a href="https://github.com/${repo}/commit/${s}"><code>${s.slice(0, 7)}</code></a>`;
-  const compareOf = (/** @type {string} */ from, /** @type {string} */ to, repo = REPO) =>
+  const compareOf = (from: string, to: string, repo = REPO) =>
     `<a href="https://github.com/${repo}/compare/${from}...${to}">compare <code>${from.slice(0, 7)}…${to.slice(0, 7)}</code></a>`;
   const shaOf = fc.constantFrom(A, B, C);
   // Spaces of every kind the pattern's `\s` reads, and two it doesn't.

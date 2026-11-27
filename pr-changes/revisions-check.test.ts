@@ -24,14 +24,10 @@ const FENCE = `\`\`\`\n${PAIR}\n\`\`\`\n`;
 
 /**
  * The tool on a description at a push (head A to B, or `before` to `head`), and what it wrote.
- *
- * @param {string} first
- * @param {{ head?: string, before?: string }} [push]
  */
-function runTool(first, { head = B, before = A } = {}) {
+function runTool(first: string, { head = B, before = A }: { head?: string; before?: string } = {}) {
   let body = first;
-  /** @type {string[]} */
-  const logs = [];
+  const logs: string[] = [];
   const wrote = revisions(
     {
       pull: () => ({ state: 'open', author: 'p', headRef: 'f', headSha: head, headRepo: REPO }),
@@ -50,15 +46,13 @@ function runTool(first, { head = B, before = A } = {}) {
   return { wrote, body, logs };
 }
 
-/** @param {string} body */
-const pairProblems = (body) =>
+const pairProblems = (body: string) =>
   bodyProblems(body, B, { pushed: true }).filter((p) =>
     /pr-changes:revisions` and|exactly one/.test(p),
   );
 
 describe('the tool and the check agree on the revisions pair', () => {
-  /** @type {[string, string][]} */
-  const cases = [
+  const cases: [string, string][] = [
     ['no marker at all', BASE],
     ['a fenced example and the real pair', `${BASE}\n${PAIR}\n\n${FENCE}`],
     ['the real pair and a fenced example after it', `${BASE}\n${FENCE}\n${PAIR}\n`],
@@ -98,10 +92,9 @@ describe('the tool and the check agree on the revisions pair', () => {
 
 describe('the row a push leaves to its author (ci#140)', () => {
   /** The check's Revisions problems at `head`, on a push or on an edit. */
-  const problems = (/** @type {string} */ body, /** @type {string} */ head, pushed = false) =>
+  const problems = (body: string, head: string, pushed = false) =>
     bodyProblems(body, head, { pushed }).filter((p) => /Revisions/.test(p));
-  /** @param {string} head */
-  const toFill = (head) => [
+  const toFill = (head: string) => [
     expect.stringMatching(
       new RegExp(`^fill Revisions' current revision, \`${head.slice(0, 7)}\`: `),
     ),
@@ -133,8 +126,7 @@ describe("the tool and the check read a revision's rows alike (ci#140)", () => {
   const summary = `<summary><b>👉 ${link}</b> (current)</summary>`;
   const frame = '| What changed | Why |\n| --- | --- |';
   const older = `<details>\n<summary><a href="https://github.com/${REPO}/commit/${A}"><code>aaaaaaa</code></a> · Opened</summary>\n\n${frame}\n| Opened | For the goal |\n\n</details>`;
-  /** @type {[string, (row: string) => string][]} */
-  const shapes = [
+  const shapes: [string, (row: string) => string][] = [
     [
       'as the tool writes it',
       (row) => `<details open>\n${summary}\n\n${frame}\n${row}\n\n</details>`,
@@ -153,11 +145,11 @@ describe("the tool and the check read a revision's rows alike (ci#140)", () => {
       (row) => `<details open>\n${summary}\n\n${frame}\n${row}\n\n${older}`,
     ],
   ];
-  const inner = (/** @type {string} */ block) => `## Revisions\n\n${block}\n\n${older}`;
-  const body = (/** @type {string} */ block) => `${BASE}\n${START}\n${inner(block)}\n${END}\n`;
-  const checkPasses = (/** @type {string} */ block) =>
+  const inner = (block: string) => `## Revisions\n\n${block}\n\n${older}`;
+  const body = (block: string) => `${BASE}\n${START}\n${inner(block)}\n${END}\n`;
+  const checkPasses = (block: string) =>
     !bodyProblems(body(block), B).some((p) => /Revisions/.test(p));
-  const toolRows = (/** @type {string} */ block) =>
+  const toolRows = (block: string) =>
     parseTable(inner(block), REPO).rows.find((r) => r.current)?.rows ?? [];
 
   it.each(shapes)('%s', (_name, shape) => {

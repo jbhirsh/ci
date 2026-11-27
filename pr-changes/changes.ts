@@ -52,21 +52,17 @@ export const BUDGET = 60_000;
 /** Another tool's marker, which a placed slot must not hold. */
 const ANY_MARKER = /<!-- \/?[a-z][a-z0-9-]*:[^\s<>]+ -->/;
 
-/**
- * One commit of the PR.
- *
- * @typedef {object} Commit
- * @property {string} sha
- * @property {string} subject
- * @property {{ path: string, added: number, removed: number }[]} files
- */
+/** One commit of the PR. */
+export type Commit = {
+  sha: string;
+  subject: string;
+  files: { path: string; added: number; removed: number }[];
+};
 
 /**
  * Where the PR's diff of a file is, by GitHub's anchor for its path.
- *
- * @param {string} path
  */
-export const anchor = (path) => `#diff-${createHash('sha256').update(path).digest('hex')}`;
+export const anchor = (path: string) => `#diff-${createHash('sha256').update(path).digest('hex')}`;
 
 /**
  * Bidirectional controls and zero-width characters: they would reorder or hide
@@ -78,10 +74,8 @@ const INVISIBLE = /[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/
 /**
  * Text that is safe as one line of Markdown: nothing in it makes a tag, a
  * link, emphasis, a table cell or a mention.
- *
- * @param {string} text
  */
-export function escape(text) {
+export function escape(text: string) {
   return (
     text
       .replace(INVISIBLE, '')
@@ -98,10 +92,8 @@ export function escape(text) {
 
 /**
  * A path as inline code: fenced by more backticks than it holds.
- *
- * @param {string} path
  */
-function code(path) {
+function code(path: string) {
   // No `<`, so a path can't hold a marker that would make its own slot look torn.
   const clean = path.replace(/[\r\n]+/g, ' ').replace(/</g, '‹');
   const longest = Math.max(0, ...(clean.match(/`+/g) ?? []).map((run) => run.length));
@@ -109,42 +101,40 @@ function code(path) {
   return `${fence}${clean.startsWith('`') || clean.endsWith('`') ? ` ${clean} ` : clean}${fence}`;
 }
 
-/**
- * @param {number} n
- * @param {string} noun
- */
-const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
 
 /**
- * The steps a long description steps down through, best first: `full`
- * (pictures in the title and on every file line), `titles` (pictures in the
- * title, plain counts on the file lines) and `totals` (a plain line, no file
- * lists).
- *
- * @typedef {'full' | 'titles' | 'totals'} Level
+ * The steps a long description steps down through, best first: `full` (pictures in the title and on
+ * every file line), `titles` (pictures in the title, plain counts on the file lines) and `totals`
+ * (a plain line, no file lists).
  */
-export const LEVELS = /** @type {const} */ (['full', 'titles', 'totals']);
+export type Level = 'full' | 'titles' | 'totals';
+export const LEVELS = ['full', 'titles', 'totals'] as const;
 
-/**
- * A pair's markup: given the added and removed counts.
- *
- * @typedef {(added: number, removed: number) => string} Pair
- */
+/** A pair's markup: given the added and removed counts. */
+export type Pair = (added: number, removed: number) => string;
 
 /** The plain text of a pair, for a pair with no picture. */
-export const plain = (/** @type {number} */ added, /** @type {number} */ removed) =>
-  `+${added} −${removed}`;
+export const plain = (added: number, removed: number) => `+${added} −${removed}`;
 
 /**
  * What goes between a slot's markers for one commit.
  *
- * @param {Commit} commit
- * @param {{ repo: string, number: number, n: number, level?: Level, pair?: Pair }} options
- *   `n` is the change's number, from its marker; `pair` is the markup of a
- *   pair (default: plain text); `level` says how much to show (default `full`)
- * @returns {string}
+ * @param commit
+ * @param options `n` is the change's number, from its marker; `pair` is the
+ *   markup of a pair (default: plain text); `level` says how much to show
+ *   (default `full`)
  */
-export function renderChange(commit, { repo, number, n, level = 'full', pair = plain }) {
+export function renderChange(
+  commit: Commit,
+  {
+    repo,
+    number,
+    n,
+    level = 'full',
+    pair = plain,
+  }: { repo: string; number: number; n: number; level?: Level; pair?: Pair },
+): string {
   const added = commit.files.reduce((sum, f) => sum + f.added, 0);
   const removed = commit.files.reduce((sum, f) => sum + f.removed, 0);
   // Trimmed before it is escaped, and never empty: a space inside the bold's
@@ -173,13 +163,9 @@ export function renderChange(commit, { repo, number, n, level = 'full', pair = p
  * Where text is that a marker doesn't count in: inside a code fence, or
  * inside another tool's block (describe rewrites it, so a slot there would
  * be wiped).
- *
- * @param {string} body
- * @returns {{ from: number, to: number }[]}
  */
-export function shielded(body) {
-  /** @type {{ from: number, to: number }[]} */
-  const out = [];
+export function shielded(body: string): { from: number; to: number }[] {
+  const out: { from: number; to: number }[] = [];
   let open = -1;
   let fence = '';
   let at = 0;
@@ -199,7 +185,7 @@ export function shielded(body) {
     if (m[1] === 'pr-changes') continue;
     const end = `<!-- /${m[1]}:${m[2]} -->`;
     const to = body.indexOf(end, m.index);
-    if (to !== -1) out.push({ from: /** @type {number} */ (m.index), to: to + end.length });
+    if (to !== -1) out.push({ from: m.index as number, to: to + end.length });
   }
   return out;
 }
@@ -207,12 +193,8 @@ export function shielded(body) {
 /**
  * Where a block of this tool is in a description, outside any code fence: a
  * description may show the markers as an example, and that isn't a block.
- *
- * @param {string} body
- * @param {string} key
- * @returns {{ from: number, to: number } | null}
  */
-export function ownBlock(body, key) {
+export function ownBlock(body: string, key: string): { from: number; to: number } | null {
   const at = blocks.find(body, key);
   if (!at) return null;
   return shielded(body).some((r) => r.from <= at.from && at.to <= r.to) ? null : at;
@@ -222,12 +204,8 @@ export function ownBlock(body, key) {
  * The description with a block of this tool set to `text`: in place of its
  * own, or after the rest when it has none (an example in a fence is left as
  * it is).
- *
- * @param {string} body
- * @param {string} key
- * @param {string} text
  */
-export function putBlock(body, key, text) {
+export function putBlock(body: string, key: string, text: string) {
   const { start, end } = blocks.markers(key);
   const marked = `${start}\n${text}\n${end}`;
   const at = ownBlock(body, key);
@@ -238,11 +216,8 @@ export function putBlock(body, key, text) {
 /**
  * The description without a block of this tool, nor the blank line that kept
  * it apart from what came before.
- *
- * @param {string} body
- * @param {string} key
  */
-export function dropBlock(body, key) {
+export function dropBlock(body: string, key: string) {
   const at = ownBlock(body, key);
   if (!at) return body;
   const head = body.slice(0, at.from).trimEnd();
@@ -254,11 +229,8 @@ export function dropBlock(body, key) {
  * The numbers of the change slots a description has placed, in order: a
  * clean pair, once, outside a code fence and another tool's block, with no
  * other tool's marker inside it.
- *
- * @param {string} body
- * @returns {number[]}
  */
-export function placed(body) {
+export function placed(body: string): number[] {
   const keys = blocks.keys(body).filter((key) => /^change:[1-9]\d*$/.test(key));
   const covered = shielded(body);
   return [...new Set(keys)]
@@ -276,20 +248,14 @@ export function placed(body) {
 
 /**
  * Whether the slots and the commits match: one slot per commit, numbered from 1.
- *
- * @param {readonly number[]} slots
- * @param {number} commits
  */
-const matches = (slots, commits) => slots.length === commits && slots.every((n, i) => n === i + 1);
+const matches = (slots: readonly number[], commits: number) =>
+  slots.length === commits && slots.every((n, i) => n === i + 1);
 
 /**
  * The description with each placed slot written by `text`.
- *
- * @param {string} body
- * @param {readonly number[]} slots
- * @param {(n: number) => string} text
  */
-const writeAll = (body, slots, text) =>
+const writeAll = (body: string, slots: readonly number[], text: (n: number) => string) =>
   slots.reduce((acc, n) => blocks.write(acc, `change:${n}`, text(n)), body);
 
 /**
@@ -297,14 +263,18 @@ const writeAll = (body, slots, text) =>
  * BUDGET with `reserve` characters to spare (what the run adds besides: the
  * index of uploaded pictures), or null when none does.
  *
- * @param {string} body
- * @param {readonly Commit[]} commits
- * @param {{ repo: string, number: number }} where
- * @param {{ pair: Pair, reserve?: number }} options `pair` should make the
- *   longest markup a pair can have, so the choice holds whatever links come
- * @returns {Level | null}
+ * @param body
+ * @param commits
+ * @param where
+ * @param options `pair` should make the longest markup a pair can have, so the
+ *   choice holds whatever links come
  */
-export function chooseLevel(body, commits, where, { pair, reserve = 0 }) {
+export function chooseLevel(
+  body: string,
+  commits: readonly Commit[],
+  where: { repo: string; number: number },
+  { pair, reserve = 0 }: { pair: Pair; reserve?: number },
+): Level | null {
   const slots = placed(body);
   if (!matches(slots, commits.length)) return null;
   for (const level of LEVELS) {
@@ -319,18 +289,21 @@ export function chooseLevel(body, commits, where, { pair, reserve = 0 }) {
 /**
  * The description with each placed slot filled from its commit.
  *
- * @param {string} body
- * @param {readonly Commit[]} commits the PR's commits by someone other than a bot, oldest first
- * @param {{ repo: string, number: number }} where
- * @param {{ level?: Level, pair?: Pair, reserve?: number }} [options] `pair`
- *   makes a pair's markup (default plain text); `level` is the step to write
- *   at; without one the best that fits is chosen
- * @returns {{ body: string, problem: string | null }} `problem` says what
- *   went wrong (the slots don't match the commits, or the description would
- *   be too long), or is null; the body then has the problem in each slot, or
- *   is unchanged when it is too long
+ * @param body
+ * @param commits the PR's commits by someone other than a bot, oldest first
+ * @param where
+ * @param options `pair` makes a pair's markup (default plain text); `level` is
+ *   the step to write at; without one the best that fits is chosen
+ * @returns `problem` says what went wrong (the slots don't match the commits,
+ *   or the description would be too long), or is null; the body then has the
+ *   problem in each slot, or is unchanged when it is too long
  */
-export function fill(body, commits, where, { level, pair = plain, reserve = 0 } = {}) {
+export function fill(
+  body: string,
+  commits: readonly Commit[],
+  where: { repo: string; number: number },
+  { level, pair = plain, reserve = 0 }: { level?: Level; pair?: Pair; reserve?: number } = {},
+): { body: string; problem: string | null } {
   const slots = placed(body);
   if (slots.length === 0) return { body, problem: null };
   if (!matches(slots, commits.length)) {

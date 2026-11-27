@@ -10,22 +10,18 @@ import {
   putBlock,
   renderChange,
 } from './changes.ts';
+import type { Level } from './changes.ts';
 
 const WHERE = { repo: 'jbhirsh/app', number: 7, n: 1 };
 const SHA = 'abcdef0123456789abcdef0123456789abcdef01';
 
-/**
- * @param {string} subject
- * @param {[string, number, number][]} [files]
- */
-const commit = (subject, files = [['src/a.ts', 3, 1]]) => ({
+const commit = (subject: string, files: [string, number, number][] = [['src/a.ts', 3, 1]]) => ({
   sha: SHA,
   subject,
   files: files.map(([path, added, removed]) => ({ path, added, removed })),
 });
 
-const slot = (/** @type {number} */ n) =>
-  `<!-- pr-changes:change:${n} -->\n<!-- /pr-changes:change:${n} -->`;
+const slot = (n: number) => `<!-- pr-changes:change:${n} -->\n<!-- /pr-changes:change:${n} -->`;
 
 describe('anchor', () => {
   it("is GitHub's diff anchor: the sha256 of the path", () => {
@@ -83,8 +79,7 @@ describe('renderChange', () => {
     );
   });
   it('keeps the bold closed round a subject with trailing space, a CR or nothing', () => {
-    const first = (/** @type {string} */ subject) =>
-      renderChange(commit(subject), WHERE).split('\n')[0];
+    const first = (subject: string) => renderChange(commit(subject), WHERE).split('\n')[0];
     const link = `[\`abcdef0\`](https://github.com/jbhirsh/app/commit/${SHA})`;
     expect(first('Fix x ')).toBe(`**1. Fix x** ${link}`);
     expect(first('Fix x\r')).toBe(`**1. Fix x** ${link}`);
@@ -216,14 +211,13 @@ describe('fill', () => {
 });
 
 describe('chooseLevel', () => {
-  const stand = (/** @type {number} */ a, /** @type {number} */ r) =>
-    `<pair ${a} ${r} ${'x'.repeat(240)}>`;
-  const many = (/** @type {number} */ n) =>
+  const stand = (a: number, r: number) => `<pair ${a} ${r} ${'x'.repeat(240)}>`;
+  const many = (n: number) =>
     commit(
       'Big',
       Array.from({ length: n }, (_, i) => [`dir/file${i}.ts`, i + 1, 1]),
     );
-  const body = (/** @type {number} */ extra) => `${slot(1)}\n${'x'.repeat(extra)}`;
+  const body = (extra: number) => `${slot(1)}\n${'x'.repeat(extra)}`;
 
   it('is full when everything fits', () => {
     expect(chooseLevel(body(100), [many(3)], WHERE, { pair: stand })).toBe('full');
@@ -231,10 +225,8 @@ describe('chooseLevel', () => {
 
   /**
    * How much text to put in the description so that `level` just fits.
-   *
-   * @param {import('./changes.ts').Level} level
    */
-  const padFor = (level) =>
+  const padFor = (level: Level) =>
     BUDGET - renderChange(many(150), { ...WHERE, level, pair: stand }).length - slot(1).length - 2;
 
   it('steps down to titles, then totals, then null, as the description grows', () => {
@@ -262,7 +254,7 @@ describe('chooseLevel', () => {
 
 describe('fill at a level', () => {
   it('writes at the level it is told, with the pair it is given', () => {
-    const pair = (/** @type {number} */ a, /** @type {number} */ r) => `<p ${a} ${r}>`;
+    const pair = (a: number, r: number) => `<p ${a} ${r}>`;
     const out = fill(slot(1), [commit('x')], WHERE, { level: 'titles', pair });
     expect(out.problem).toBeNull();
     expect(out.body).toContain('changed <p 3 1></summary>');

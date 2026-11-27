@@ -36,11 +36,8 @@ describe('renderChange and fill', () => {
 
   /**
    * A stand-in for a pair's picture, so what is where can be told apart.
-   *
-   * @param {number} added
-   * @param {number} removed
    */
-  const pair = (added, removed) => `<pair ${added} ${removed}>`;
+  const pair = (added: number, removed: number) => `<pair ${added} ${removed}>`;
 
   it('never throws, totals what the files add up to, and puts the pair in the title and on every file line', () => {
     fc.assert(
@@ -141,7 +138,7 @@ describe('fill and the budget', () => {
       files: fc.array(file, { maxLength: 120 }),
     });
     const link = 'https://github.com/user-attachments/assets/0123abcd-0000-1111-2222-333344445555';
-    const stand = (/** @type {number} */ a, /** @type {number} */ r) =>
+    const stand = (a: number, r: number) =>
       `<picture><source media="(min-width: 768px)" srcset="${link}"><img src="${link}" alt="+${a} −${r}"></picture>`;
     fc.assert(
       fc.property(

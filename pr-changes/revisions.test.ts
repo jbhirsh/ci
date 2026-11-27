@@ -15,6 +15,7 @@ import {
   renderTable,
   withPair,
 } from './revisions.ts';
+import type { Row } from './revisions.ts';
 
 const REPO = 'o/r';
 const A = 'a'.repeat(40);
@@ -24,37 +25,31 @@ const C = 'c'.repeat(40);
 const Z = String.fromCharCode(0x200b);
 const LS = String.fromCharCode(0x2028);
 const PS = String.fromCharCode(0x2029);
-const head = (/** @type {string} */ sha) =>
-  `[\`${sha.slice(0, 7)}\`](https://github.com/${REPO}/commit/${sha})`;
-const ahref = (/** @type {string} */ sha) =>
+const head = (sha: string) => `[\`${sha.slice(0, 7)}\`](https://github.com/${REPO}/commit/${sha})`;
+const ahref = (sha: string) =>
   `<a href="https://github.com/${REPO}/commit/${sha}"><code>${sha.slice(0, 7)}</code></a>`;
-const compare = (/** @type {string} */ prev, /** @type {string} */ sha) =>
+const compare = (prev: string, sha: string) =>
   `<a href="https://github.com/${REPO}/compare/${prev}...${sha}">compare <code>${prev.slice(0, 7)}…${sha.slice(0, 7)}</code></a>`;
 
 // The old four-column table, which is still read.
-const row = (/** @type {string} */ rev, /** @type {string} */ sha, what = 'w', why = 'y') =>
+const row = (rev: string, sha: string, what = 'w', why = 'y') =>
   `| ${rev} | ${head(sha)} | ${what} | ${why} |`;
-const table = (/** @type {string[]} */ ...lines) =>
+const table = (...lines: string[]) =>
   ['| Rev | Head | What changed | Why |', '| --- | --- | --- | --- |', ...lines].join('\n');
 // The two-column table of ci#126: the current row bold with a pointer, an older one plain.
-const now = (/** @type {string} */ sha, what = 'w', why = 'y') =>
+const now = (sha: string, what = 'w', why = 'y') =>
   `| **👉 ${head(sha)}** (current)${what === '' ? '' : `<br>**${what}**`} | ${why} |`;
-const older = (/** @type {string} */ sha, what = 'w', why = 'y') =>
+const older = (sha: string, what = 'w', why = 'y') =>
   `| ${head(sha)}${what === '' ? '' : `<br>${what}`} | ${why} |`;
-const fresh = (/** @type {string[]} */ ...lines) =>
+const fresh = (...lines: string[]) =>
   ['| What changed | Why |', '| --- | --- |', ...lines].join('\n');
 // The HTML table of ci#132's first push: a `<tbody>` for each revision, its first row the head and
 // the Why, then a row across the table for each line of what changed.
-const htmlFirst = (
-  /** @type {string} */ sha,
-  /** @type {string[]} */ what = [],
-  why = '',
-  current = false,
-) => [
+const htmlFirst = (sha: string, what: string[] = [], why = '', current = false) => [
   `<tr><td>${current ? `<b>👉 ${ahref(sha)}</b> (current)` : ahref(sha)}</td><td>${why}</td></tr>`,
   ...what.map((w) => `<tr><td colspan="2">${w}</td></tr>`),
 ];
-const htmlTable = (/** @type {string[]} */ ...rows) =>
+const htmlTable = (...rows: string[]) =>
   [
     '<table width="100%">',
     '<thead><tr><th width="30%">Revision</th><th width="70%">Why</th></tr></thead>',
@@ -65,13 +60,13 @@ const htmlTable = (/** @type {string[]} */ ...rows) =>
   ].join('\n');
 
 /** A revision's summary, as the tool writes it. */
-const summary = (/** @type {string} */ sha, { current = false, prev = '', note = '' } = {}) =>
+const summary = (sha: string, { current = false, prev = '', note = '' } = {}) =>
   `<summary>${current ? `<b>👉 ${ahref(sha)}</b> (current)` : ahref(sha)}${prev === '' ? '' : ` · ${compare(prev, sha)}`}${note === '' ? '' : ` · ${note}`}</summary>`;
 /** A revision's block, as the tool writes it. */
 const block = (
-  /** @type {string} */ sha,
-  /** @type {{ current?: boolean, prev?: string, note?: string }} */ opts = {},
-  /** @type {string[]} */ rows = ['|  |  |'],
+  sha: string,
+  opts: { current?: boolean; prev?: string; note?: string } = {},
+  rows: string[] = ['|  |  |'],
 ) =>
   [
     `<details${opts.current ? ' open' : ''}>`,
@@ -83,8 +78,7 @@ const block = (
     '',
     '</details>',
   ].join('\n');
-/** @param {Partial<import('./revisions.ts').Row> & { sha: string, rev: number }} r */
-const revision = (r) => ({
+const revision = (r: Partial<Row> & { sha: string; rev: number }) => ({
   current: false,
   prev: null,
   note: '',
@@ -93,9 +87,9 @@ const revision = (r) => ({
   ...r,
 });
 /** The description the check reads, with a block between the Revisions markers. */
-const described = (/** @type {string} */ inner) =>
+const described = (inner: string) =>
   `## Goal\n\nx.\n\n## Changes\n\n### 1. c\n\nwhy\n\n<!-- pr-changes:revisions -->\n${inner}\n<!-- /pr-changes:revisions -->\n`;
-const problems = (/** @type {string} */ inner, /** @type {string} */ sha) =>
+const problems = (inner: string, sha: string) =>
   bodyProblems(described(inner), sha).filter((p) => /Revisions/.test(p));
 
 describe('parseTable, the details blocks', () => {
@@ -428,7 +422,7 @@ describe('parseTable, the shapes of earlier PRs', () => {
   });
 
   it('takes the repo as text, not as a pattern: a dot, a backslash or a bracket in it match themselves', () => {
-    const summaryFor = (/** @type {string} */ repo) =>
+    const summaryFor = (repo: string) =>
       `<details open>\n<summary><b>👉 <a href="https://github.com/${repo}/commit/${A}"><code>aaaaaaa</code></a></b> (current)</summary>\n</details>`;
     for (const repo of ['o/r.x', 'o/r[x]', 'o/r\\x', 'o/r+x', 'o/(r)']) {
       expect(parseTable(summaryFor(repo), repo).rows).toHaveLength(1);
@@ -704,7 +698,7 @@ describe('addRevision', () => {
 });
 
 describe('budgeted', () => {
-  const many = (/** @type {number} */ n) => ({
+  const many = (n: number) => ({
     rows: Array.from({ length: n }, (_, i) =>
       revision({
         rev: i + 1,
@@ -748,7 +742,7 @@ describe('budgeted', () => {
   });
 
   it('stops shrinking when only revision 1 and the newest are left', () => {
-    const huge = (/** @type {number} */ rev) =>
+    const huge = (rev: number) =>
       revision({
         rev,
         current: rev === 7,
@@ -845,8 +839,8 @@ describe('withPair', () => {
 });
 
 describe('headChain and capChain', () => {
-  const sha = (/** @type {number} */ n) => n.toString(16).padStart(2, '0').repeat(20);
-  const forced = (/** @type {string} */ id) => ({ event: 'head_ref_force_pushed', commit_id: id });
+  const sha = (n: number) => n.toString(16).padStart(2, '0').repeat(20);
+  const forced = (id: string) => ({ event: 'head_ref_force_pushed', commit_id: id });
 
   it('is the heads force-pushes made, the head before this push, and the head', () => {
     const [a, b, c, d] = [sha(1), sha(2), sha(3), sha(4)];
@@ -869,8 +863,7 @@ describe('headChain and capChain', () => {
 
   it('reads only what is a head: 40 hex, an event of its kind, once in a row', () => {
     const [a, b] = [sha(1), sha(2)];
-    /** @type {Record<string, unknown>[]} */
-    const events = [
+    const events: Record<string, unknown>[] = [
       forced(a),
       forced(a),
       forced(a.toUpperCase()),
@@ -956,11 +949,11 @@ describe('replacement patterns', () => {
 });
 
 describe('what an author types in a row', () => {
-  const block = (/** @type {string[]} */ ...lines) =>
+  const block = (...lines: string[]) =>
     `<details open>\n<summary>${ahref(A)} (current)</summary>\n\n| What changed | Why |\n| --- | --- |\n${lines.join('\n')}\n\n</details>`;
 
   it('writes a row of other than two cells as GitHub reads it, and leaves a row of two exactly as it is', () => {
-    const rows = (/** @type {string} */ text) => parseTable(text, REPO).rows[0].rows;
+    const rows = (text: string) => parseTable(text, REPO).rows[0].rows;
     expect(rows(block('| a | b | c |'))).toEqual(['| a | b \\| c |']);
     expect(rows(block('| a | b | c | d'))).toEqual(['| a | b \\| c \\| d |']);
     expect(rows(block('| a \\| b |'))).toEqual(['| a \\| b | |']);

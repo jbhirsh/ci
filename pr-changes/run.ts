@@ -52,6 +52,9 @@ import { ghIn } from '../lib/gh.mjs';
 import { pages, prTarget } from '../lib/github.mjs';
 import { chooseLevel, dropBlock, fill, ownBlock, placed, plain, putBlock } from './changes.ts';
 import { ENTRY_CHARS, hashOf, images, indexText, picture, readIndex } from './counts.ts';
+import type { Api } from '../lib/comment.mjs';
+import type { Command } from '../lib/gh.mjs';
+import type { Commit, Level } from './changes.ts';
 
 /** How many times a write is worked out again because the description moved under it. */
 const ATTEMPTS = 3;
@@ -65,36 +68,35 @@ const LINK_STAND_IN = `https://github.com/user-attachments/assets/${'0'.repeat(3
 /** What the markers around the index and the staging block cost, before their content. */
 const BLOCK_CHARS = 140;
 
-/**
- * @typedef {object} Io
- * @property {() => string} body the description
- * @property {(body: string) => void} write
- * @property {() => import('./changes.ts').Commit[]} commits the PR's commits
- *   by someone other than a bot, oldest first, with their files
- * @property {(link: string, sha: string) => Promise<boolean>} verify whether
- *   the link, fetched signed out, answers with bytes that hash to `sha`
- * @property {((files: { file: string, svg: string }[], body: string, was: string) => string) | null} upload
- *   attaches the files to the description, which is `body`, a staging block
- *   added to `was`, and returns the description as it is then; null when the
- *   run may not upload (no token)
- * @property {boolean} ownEdit the run was woken by an edit from the token's own
- *   account: the upload's own, or a hand edit where the token is a person's.
- *   Such a run uploads only while the description has no index block yet (no
- *   upload was ever tried for it; a failed attempt leaves the block empty), so
- *   the upload's own edit finds nothing to do
- * @property {(line: string) => void} log
- */
+export type Io = {
+  /** the description */
+  body: () => string;
+  write: (body: string) => void;
+  /** the PR's commits by someone other than a bot, oldest first, with their files */
+  commits: () => Commit[];
+  /** whether the link, fetched signed out, answers with bytes that hash to `sha` */
+  verify: (link: string, sha: string) => Promise<boolean>;
+  /**
+   * attaches the files to the description, which is `body`, a staging block added to `was`, and
+   * returns the description as it is then; null when the run may not upload (no token)
+   */
+  upload: ((files: { file: string; svg: string }[], body: string, was: string) => string) | null;
+  /**
+   * the run was woken by an edit from the token's own account: the upload's own, or a hand edit
+   * where the token is a person's. Such a run uploads only while the description has no index block
+   * yet (no upload was ever tried for it; a failed attempt leaves the block empty), so the upload's
+   * own edit finds nothing to do
+   */
+  ownEdit: boolean;
+  log: (line: string) => void;
+};
 
 /**
  * The io for one PR.
  *
- * @param {{ api: import('../lib/comment.mjs').Api, repo: string, number: number,
- *   log: (line: string) => void, upload?: Io['upload'], ownEdit?: boolean,
- *   writeToken?: string, verify?: Io['verify'] }} options
- *   `writeToken`: the person's token for the final description write, which then
- *   starts the workflows an edit by the Actions token doesn't; if that write
- *   fails, the Actions token writes it once
- * @returns {Io}
+ * @param options `writeToken`: the person's token for the final description
+ *   write, which then starts the workflows an edit by the Actions token doesn't;
+ *   if that write fails, the Actions token writes it once
  */
 export function gitHubIo({
   api,
@@ -105,10 +107,19 @@ export function gitHubIo({
   ownEdit = false,
   writeToken = '',
   verify = (link, sha) => fetchVerify(link, sha, log),
-}) {
+}: {
+  api: Api;
+  repo: string;
+  number: number;
+  log: (line: string) => void;
+  upload?: Io['upload'];
+  ownEdit?: boolean;
+  writeToken?: string;
+  verify?: Io['verify'];
+}): Io {
   const issue = `repos/${repo}/issues/${number}`;
   return {
-    body: () => String(/** @type {{ body?: string | null }} */ (api('GET', issue)).body ?? ''),
+    body: () => String((api('GET', issue) as { body?: string | null }).body ?? ''),
     write: (body) => {
       if (writeToken === '') {
         api('PATCH', issue, { body });
@@ -128,15 +139,25 @@ export function gitHubIo({
       }
     },
     commits: () =>
-      /** @type {{ sha: string, commit: { message: string }, parents: unknown[], author: { login: string } | null, committer: { login: string } | null }[]} */ (
-        pages(api, `repos/${repo}/pulls/${number}/commits`)
+      (
+        pages(api, `repos/${repo}/pulls/${number}/commits`) as {
+          sha: string;
+          commit: { message: string };
+          parents: unknown[];
+          author: { login: string } | null;
+          committer: { login: string } | null;
+        }[]
       )
         .filter((c) => c.parents.length < 2 && !(c.author ?? c.committer)?.login.endsWith('[bot]'))
         .map((c) => ({
           sha: c.sha,
           subject: c.commit.message.split('\n')[0],
-          files: /** @type {{ filename: string, additions: number, deletions: number }[]} */ (
-            pages(api, `repos/${repo}/commits/${c.sha}`, 'files')
+          files: (
+            pages(api, `repos/${repo}/commits/${c.sha}`, 'files') as {
+              filename: string;
+              additions: number;
+              deletions: number;
+            }[]
           ).map((f) => ({ path: f.filename, added: f.additions, removed: f.deletions })),
         })),
     verify,
@@ -150,13 +171,12 @@ export function gitHubIo({
  * Whether a link answers, signed out, with bytes that hash to `sha`. Asked
  * once, never retried or waited on: a link not yet live just isn't reused.
  * Why a link failed is logged, as a notice.
- *
- * @param {string} link
- * @param {string} sha
- * @param {(line: string) => void} [log]
- * @returns {Promise<boolean>}
  */
-export async function fetchVerify(link, sha, log = () => {}) {
+export async function fetchVerify(
+  link: string,
+  sha: string,
+  log: (line: string) => void = () => {},
+): Promise<boolean> {
   try {
     const response = await fetch(link, { redirect: 'follow', signal: AbortSignal.timeout(10_000) });
     if (response.status !== 200) {
@@ -178,14 +198,27 @@ export async function fetchVerify(link, sha, log = () => {}) {
  * The upload, with gh: the files written under `dir` (named by their hash and
  * size alone), attached to PR `number` by a person's token.
  *
- * @param {{ repo: string, number: number, token: string, dir: string, view: () => string, log: (line: string) => void, run?: import('../lib/gh.mjs').Command }} options
- *   `run` is gh in `dir`, for a test to stand in for
- * @returns {NonNullable<Io['upload']>}
+ * @param options `run` is gh in `dir`, for a test to stand in for
  */
-export function ghUpload({ repo, number, token, dir, view, log, run = ghIn(dir) }) {
+export function ghUpload({
+  repo,
+  number,
+  token,
+  dir,
+  view,
+  log,
+  run = ghIn(dir),
+}: {
+  repo: string;
+  number: number;
+  token: string;
+  dir: string;
+  view: () => string;
+  log: (line: string) => void;
+  run?: Command;
+}): NonNullable<Io['upload']> {
   // The person's token is for this one call: every other call uses the Actions token.
-  /** @type {import('../lib/gh.mjs').Command} */
-  const gh = (args, options = {}) =>
+  const gh: Command = (args, options = {}) =>
     run(args, { ...options, env: { ...process.env, GH_TOKEN: token } });
   return (files, body, was) => {
     mkdirSync(dir, { recursive: true });
@@ -216,19 +249,13 @@ export function ghUpload({ repo, number, token, dir, view, log, run = ghIn(dir) 
 
 /**
  * The pairs of counts a description shows at a level, each once, in order.
- *
- * @param {readonly import('./changes.ts').Commit[]} commits
- * @param {import('./changes.ts').Level} level
- * @returns {[number, number][]}
  */
-export function pairsAt(commits, level) {
+export function pairsAt(commits: readonly Commit[], level: Level): [number, number][] {
   if (level === 'totals') return [];
-  /** @type {Map<string, [number, number]>} */
-  const found = new Map();
+  const found: Map<string, [number, number]> = new Map();
   for (const c of commits) {
     if (c.files.length === 0) continue;
-    const add = (/** @type {number} */ a, /** @type {number} */ r) =>
-      found.set(`${a},${r}`, [a, r]);
+    const add = (a: number, r: number) => found.set(`${a},${r}`, [a, r]);
     add(
       c.files.reduce((n, f) => n + f.added, 0),
       c.files.reduce((n, f) => n + f.removed, 0),
@@ -242,26 +269,26 @@ export function pairsAt(commits, level) {
  * The links for the pairs a description shows: reused from its index after
  * checking each, and uploaded when missing and the run may.
  *
- * @param {Io} io
- * @param {string} body
- * @param {readonly [number, number][]} pairs
- * @returns {Promise<{ known: Map<string, string>, tried: boolean }>} image hash →
- *   link, and whether an upload was attempted (it may have edited the
- *   description, whatever it returned)
+ * @returns image hash → link, and whether an upload was attempted (it may have
+ *   edited the description, whatever it returned)
  */
-async function resolve(io, body, pairs) {
-  /** @type {Map<string, string>} */
-  const known = new Map();
+async function resolve(
+  io: Io,
+  body: string,
+  pairs: readonly [number, number][],
+): Promise<{ known: Map<string, string>; tried: boolean }> {
+  const known: Map<string, string> = new Map();
   const claimed = readIndex(body);
   // An own-edit run with an index has nothing of its own to upload: the pictures
   // it finds are the ones the last upload put there.
   // The empty index an attempt that failed leaves counts too: see `changes`.
   const mayUpload = io.upload !== null && !(io.ownEdit && ownBlock(body, 'index') !== null);
-  /** @type {{ pair: [number, number], missing: { file: string, svg: string, sha: string }[] }[]} */
-  const wanted = [];
+  const wanted: {
+    pair: [number, number];
+    missing: { file: string; svg: string; sha: string }[];
+  }[] = [];
   for (const pair of pairs) {
-    /** @type {{ file: string, svg: string, sha: string }[]} */
-    const missing = [];
+    const missing: { file: string; svg: string; sha: string }[] = [];
     for (const image of images(...pair)) {
       const link = claimed.get(image.sha);
       if (link !== undefined && (await io.verify(link, image.sha))) known.set(image.sha, link);
@@ -295,8 +322,7 @@ async function resolve(io, body, pairs) {
   // a person may have saved a change while the links were being checked.
   const was = io.body();
   const staging = files.map((f) => `![${f.sha}](./${f.file})`).join('\n');
-  /** @type {string} */
-  let after;
+  let after: string;
   try {
     after = io.upload(files, putBlock(was, 'staging', staging), was);
   } catch (error) {
@@ -322,21 +348,16 @@ async function resolve(io, body, pairs) {
  * description is read again just before the write, and the edit worked out
  * again if a person changed it meanwhile, as describe does.
  *
- * @param {Io} io
- * @param {{ repo: string, number: number }} where
- * @returns {Promise<boolean>} whether the description was written
+ * @returns whether the description was written
  */
-export async function changes(io, where) {
+export async function changes(io: Io, where: { repo: string; number: number }): Promise<boolean> {
   const first = io.body();
   if (placed(first).length === 0) return false;
   const commits = io.commits();
 
-  /**
-   * @param {number} a
-   * @param {number} r
-   */
-  const stand = (a, r) => picture(a, r, { small: LINK_STAND_IN, large: LINK_STAND_IN });
-  const reserve = (/** @type {number} */ n) => BLOCK_CHARS + 2 * n * ENTRY_CHARS;
+  const stand = (a: number, r: number) =>
+    picture(a, r, { small: LINK_STAND_IN, large: LINK_STAND_IN });
+  const reserve = (n: number) => BLOCK_CHARS + 2 * n * ENTRY_CHARS;
   const level = chooseLevel(first, commits, where, {
     pair: stand,
     reserve: reserve(pairsAt(commits, 'full').length),
@@ -345,11 +366,7 @@ export async function changes(io, where) {
   const { known, tried } =
     pairs.length > 0 ? await resolve(io, first, pairs) : { known: new Map(), tried: false };
 
-  /**
-   * @param {number} a
-   * @param {number} r
-   */
-  const pair = (a, r) => {
+  const pair = (a: number, r: number) => {
     const [small, large] = images(a, r).map((i) => known.get(i.sha));
     return small !== undefined && large !== undefined
       ? picture(a, r, { small, large })
@@ -360,7 +377,7 @@ export async function changes(io, where) {
   for (let attempt = 1; ; attempt++) {
     // The staging block, if an upload left one, is gone from what is written.
     const clean = dropBlock(current, 'staging');
-    const idx = (/** @type {string} */ text) =>
+    const idx = (text: string) =>
       indexText(new Map([...known].filter(([, link]) => text.includes(link))));
     const ask = indexText(known);
     const filled = fill(clean, commits, where, {
@@ -401,11 +418,10 @@ export async function changes(io, where) {
  * keeps only the newer, so the push's pairs stay plain until the next event;
  * and where the token is the owner's own account, a hand edit that adds pairs
  * to a description that already has an index stays plain until the next push.
- *
- * @param {Record<string, string | undefined>} env
- * @returns {{ ok: true, ownEdit: boolean } | { ok: false, why: string }}
  */
-export function uploadAllowed(env) {
+export function uploadAllowed(
+  env: Record<string, string | undefined>,
+): { ok: true; ownEdit: boolean } | { ok: false; why: string } {
   if ((env.UPLOAD_TOKEN ?? '') === '') {
     return { ok: false, why: 'no token that may attach, so the counts are plain text' };
   }
@@ -414,8 +430,7 @@ export function uploadAllowed(env) {
   return { ok: true, ownEdit };
 }
 
-/** @param {Record<string, string | undefined>} env */
-export async function main(env) {
+export async function main(env: Record<string, string | undefined>) {
   const { repo, number } = prTarget(env);
   const log = console.log;
   const verdict = uploadAllowed(env);
@@ -425,10 +440,7 @@ export async function main(env) {
   const token = env.UPLOAD_TOKEN ?? '';
   delete env.UPLOAD_TOKEN;
   const view = () =>
-    String(
-      /** @type {{ body?: string | null }} */ (ghApi('GET', `repos/${repo}/issues/${number}`))
-        .body ?? '',
-    );
+    String((ghApi('GET', `repos/${repo}/issues/${number}`) as { body?: string | null }).body ?? '');
   const upload = verdict.ok
     ? ghUpload({
         repo,

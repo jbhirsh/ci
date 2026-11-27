@@ -12,6 +12,8 @@ import {
   pairsAt,
   uploadAllowed,
 } from './run.ts';
+import type { Api } from '../lib/comment.mjs';
+import type { Io } from './run.ts';
 
 // main reaches GitHub through ghApi (the real `gh`): the main test stubs it.
 vi.mock('../lib/comment.mjs', async (importOriginal) => ({
@@ -26,12 +28,9 @@ const C = 'c'.repeat(40);
 const D = 'd'.repeat(40);
 const SLOT = '<!-- pr-changes:change:1 -->\n<!-- /pr-changes:change:1 -->';
 
-/** @param {Record<string, unknown>} routes */
-function fakeApi(routes) {
-  /** @type {{ method: string, route: string, body?: unknown, token?: string }[]} */
-  const calls = [];
-  /** @type {import('../lib/comment.mjs').Api} */
-  const api = (method, route, body, options) => {
+function fakeApi(routes: Record<string, unknown>) {
+  const calls: { method: string; route: string; body?: unknown; token?: string }[] = [];
+  const api: Api = (method, route, body, options) => {
     calls.push({
       method,
       route,
@@ -103,12 +102,9 @@ describe('gitHubIo', () => {
   });
 
   it("writes with the Actions token, once and at once, when the person's token can't write", () => {
-    /** @type {{ token?: string }[]} */
-    const patches = [];
-    /** @type {string[]} */
-    const log = [];
-    /** @type {import('../lib/comment.mjs').Api} */
-    const api = (_method, _route, _body, options) => {
+    const patches: { token?: string }[] = [];
+    const log: string[] = [];
+    const api: Api = (_method, _route, _body, options) => {
       patches.push({ token: options?.token });
       if (options?.token !== undefined) throw new Error('403 Resource not accessible');
       return {};
@@ -127,8 +123,7 @@ describe('gitHubIo', () => {
   });
 
   it('surfaces the error when the Actions token cannot write either', () => {
-    /** @type {import('../lib/comment.mjs').Api} */
-    const api = () => {
+    const api: Api = () => {
       throw new Error('403 no');
     };
     const io = gitHubIo({ api, repo: REPO, number: 5, log: () => {}, writeToken: 'person' });
@@ -139,18 +134,13 @@ describe('gitHubIo', () => {
 /**
  * The link a picture gets when "uploaded": made from its hash alone, in
  * GitHub's attachment form.
- *
- * @param {string} sha
  */
-const linkFor = (sha) =>
+const linkFor = (sha: string) =>
   `https://github.com/user-attachments/assets/${sha.slice(0, 8)}-0000-0000-0000-${sha.slice(8, 20)}`;
 
 /**
  * An io over a description held in memory, and an upload that does what gh's
  * `--attach` does: it rewrites each `](./file)` to a link.
- *
- * @param {{ body: string, files?: [string, number, number][][], verify?: (link: string, sha: string) => boolean,
- *   upload?: boolean, ownEdit?: boolean, rewrite?: (file: string) => string | null, fail?: boolean }} options
  */
 function fakeIo({
   body,
@@ -160,21 +150,28 @@ function fakeIo({
   ownEdit = false,
   rewrite,
   fail = false,
+}: {
+  body: string;
+  files?: [string, number, number][][];
+  verify?: (link: string, sha: string) => boolean;
+  upload?: boolean;
+  ownEdit?: boolean;
+  rewrite?: (file: string) => string | null;
+  fail?: boolean;
 }) {
   const state = {
     body,
-    /** @type {string[]} */ writes: [],
-    /** @type {string[][]} */ uploads: [],
-    /** @type {string[]} */ log: [],
-    /** @type {string[]} */ verified: [],
+    writes: [] as string[],
+    uploads: [] as string[][],
+    log: [] as string[],
+    verified: [] as string[],
   };
   const commits = files.map((fs, i) => ({
     sha: `${i}`.repeat(40),
     subject: `Change ${i + 1}`,
     files: fs.map(([path, added, removed]) => ({ path, added, removed })),
   }));
-  /** @type {import('./run.ts').Io} */
-  const io = {
+  const io: Io = {
     body: () => state.body,
     write: (b) => {
       state.writes.push(b);
@@ -454,7 +451,7 @@ describe('changes', () => {
     const { io, state } = fakeIo({ body: DESC });
     const upload = io.upload;
     io.upload = (list, staged, was) => {
-      const after = /** @type {NonNullable<typeof upload>} */ (upload)(list, staged, was);
+      const after = (upload as NonNullable<typeof upload>)(list, staged, was);
       state.body = `Mine, edited.\n${after}`;
       return after;
     };
@@ -466,7 +463,7 @@ describe('changes', () => {
   it('uploads at most MAX_PAIRS pairs a run, the rest staying plain', async () => {
     const many = Array.from(
       { length: 30 },
-      (_, i) => /** @type {[string, number, number]} */ ([`f${i}.ts`, i + 1, 0]),
+      (_, i) => [`f${i}.ts`, i + 1, 0] as [string, number, number],
     );
     const { io, state } = fakeIo({ body: DESC, files: [many] });
     await changes(io, WHERE);
@@ -480,10 +477,9 @@ describe('changes', () => {
     // Ten distinct pairs, so the cap on new pairs a run uploads isn't what limits it.
     const many = Array.from(
       { length: 80 },
-      (_, i) => /** @type {[string, number, number]} */ ([`dir/file${i}.ts`, (i % 10) + 1, 1]),
+      (_, i) => [`dir/file${i}.ts`, (i % 10) + 1, 1] as [string, number, number],
     );
-    /** @param {number} pad */
-    const run = async (pad) => {
+    const run = async (pad: number) => {
       const { io, state } = fakeIo({ body: `${DESC}\n${'x'.repeat(pad)}\n`, files: [many] });
       await changes(io, WHERE);
       return state.body;
@@ -552,12 +548,12 @@ describe('changes', () => {
     const first = fakeIo({ body: DESC, files: [[['a.ts', 5, 0]]] });
     await changes(first.io, WHERE);
     // A push adds a file: the +5 −0 pair is reused, and +1 −0 is new.
-    const two = /** @type {[string, number, number][][]} */ ([
+    const two = [
       [
         ['a.ts', 5, 0],
         ['b.ts', 1, 0],
       ],
-    ]);
+    ] as [string, number, number][][];
     const second = fakeIo({ body: first.state.body, files: two });
     await changes(second.io, WHERE);
     const third = fakeIo({ body: second.state.body, files: two });
@@ -641,20 +637,15 @@ describe('pairsAt', () => {
 
 describe('fetchVerify', () => {
   const sha = hashOf('abc');
-  /**
-   * @param {number} status
-   * @param {string} text
-   */
-  const stub = (status, text) => {
+  const stub = (status: number, text: string) => {
     const real = globalThis.fetch;
-    globalThis.fetch = /** @type {typeof fetch} */ (async () => new Response(text, { status }));
+    globalThis.fetch = (async () => new Response(text, { status })) as typeof fetch;
     return () => {
       globalThis.fetch = real;
     };
   };
   it('says why a link failed, as a notice', async () => {
-    /** @type {string[]} */
-    const lines = [];
+    const lines: string[] = [];
     const real = globalThis.fetch;
     try {
       let restore = stub(404, 'x');
@@ -663,11 +654,9 @@ describe('fetchVerify', () => {
       restore = stub(200, 'abd');
       expect(await fetchVerify('https://x/y', sha, (l) => lines.push(l))).toBe(false);
       restore();
-      globalThis.fetch = /** @type {typeof fetch} */ (
-        async () => {
-          throw new Error('timed out');
-        }
-      );
+      globalThis.fetch = (async () => {
+        throw new Error('timed out');
+      }) as typeof fetch;
       expect(await fetchVerify('https://x/y', sha, (l) => lines.push(l))).toBe(false);
     } finally {
       globalThis.fetch = real;
@@ -690,11 +679,9 @@ describe('fetchVerify', () => {
     expect(await fetchVerify('https://x/y', sha)).toBe(false);
     restore();
     const real = globalThis.fetch;
-    globalThis.fetch = /** @type {typeof fetch} */ (
-      async () => {
-        throw new Error('down');
-      }
-    );
+    globalThis.fetch = (async () => {
+      throw new Error('down');
+    }) as typeof fetch;
     expect(await fetchVerify('https://x/y', sha)).toBe(false);
     globalThis.fetch = real;
   });
@@ -702,8 +689,7 @@ describe('fetchVerify', () => {
 
 describe('ghUpload', () => {
   it("gives the person's token to the attach call alone, and names files by hash and size", () => {
-    /** @type {{ args: string[], token: string | undefined }[]} */
-    const calls = [];
+    const calls: { args: string[]; token: string | undefined }[] = [];
     const [small] = images(3, 1);
     const staged = `x\n<!-- pr-changes:staging -->\n![${small.sha}](./${small.file})\n<!-- /pr-changes:staging -->`;
     const after = staged.replace(`./${small.file}`, linkFor(small.sha));
@@ -737,7 +723,7 @@ describe('uploadAllowed', () => {
 
   it("marks the run woken by the token's own edit, and only that one", () => {
     const base = { UPLOAD_TOKEN: 't', TOKEN_LOGIN: 'owner' };
-    const own = (/** @type {Record<string, string>} */ env) => {
+    const own = (env: Record<string, string>) => {
       const verdict = uploadAllowed({ ...base, ...env });
       return verdict.ok && verdict.ownEdit;
     };
@@ -766,8 +752,7 @@ describe('main', () => {
       EVENT_ACTION: 'edited',
       SENDER: 'owner',
     };
-    /** @type {{ method: string, route: string, token?: string, tokenInEnv: boolean }[]} */
-    const calls = [];
+    const calls: { method: string; route: string; token?: string; tokenInEnv: boolean }[] = [];
     vi.mocked(ghApi).mockImplementation((method, route, _body, options) => {
       calls.push({ method, route, token: options?.token, tokenInEnv: 'UPLOAD_TOKEN' in env });
       const key = `${method} ${route}`;
