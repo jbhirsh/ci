@@ -3,8 +3,8 @@ description: >-
   Attaches the GIFs the record job left in the run's pr-gif artifact to the
   PR: each scenario's table goes into its description between markers,
   and gh uploads each GIF and links it there, labelled "GIF:" for the
-  review; then each link is checked until it answers (gif/workflow.ts's
-  header says how). The attach job of pr-gif.yml (a run by hand) and of
+  review; then the description is read back, one link a GIF, and no link
+  is fetched (gif/workflow.ts's header says why). The attach job of pr-gif.yml (a run by hand) and of
   pr-gif-attach.yml (automatic, on workflow_run). It runs none of the PR's
   code and checks nothing out, so it alone holds the token.
 

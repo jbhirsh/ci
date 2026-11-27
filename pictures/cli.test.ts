@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ATTACH_LIMIT } from '../lib/attach.mjs';
 import { main } from './cli.ts';
 import type { Command } from '../lib/gh.mjs';
@@ -78,7 +78,7 @@ const env = {
 };
 
 /**
- * Runs main with every link answering at once.
+ * Runs main, checking that it fetches none of the links it attached.
  */
 async function run(
   values: Record<string, string | undefined>,
@@ -86,20 +86,14 @@ async function run(
   fake: ReturnType<typeof fakeGh>,
 ) {
   const logs: string[] = [];
-  const fetched: string[] = [];
-  const fetch = (async (link: string) => {
-    fetched.push(link);
-    return new Response('PNG', { status: 200 });
-  }) as unknown as typeof globalThis.fetch;
-  const url = await main({
-    env: values,
-    cwd,
-    gh: fake.gh,
-    fetch,
-    wait: async () => {},
-    log: (l) => logs.push(l),
-  });
-  return { url, logs, fetched };
+  const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('no network in tests'));
+  try {
+    const url = await main({ env: values, cwd, gh: fake.gh, log: (l) => logs.push(l) });
+    expect(fetch).not.toHaveBeenCalled();
+    return { url, logs };
+  } finally {
+    fetch.mockRestore();
+  }
 }
 
 const verbs = (calls: string[][]) =>
@@ -110,7 +104,7 @@ describe('main', () => {
     const cwd = artifact(['light.png', 'dark.png']);
     const posts = { 240: { pr: true, body: 'Host.' }, 222: { pr: false, body: 'The plan.' } };
     const fake = fakeGh(posts);
-    const { url, logs, fetched } = await run(env, cwd, fake);
+    const { url, logs } = await run(env, cwd, fake);
     expect(verbs(fake.calls)).toEqual([
       'api repos/o/r/issues/240',
       'api repos/o/r/issues/222',
@@ -156,7 +150,6 @@ describe('main', () => {
         '',
       ].join('\n'),
     );
-    expect(fetched).toEqual([`${ASSET}1`, `${ASSET}2`]);
     expect(url).toBe('https://github.com/o/r/issues/222');
     expect(logs).toEqual([
       "pictures: attached 2 pictures to #240's description",
@@ -212,10 +205,12 @@ describe('main', () => {
     const cwd = artifact(names);
     const posts = { 240: { pr: true, body: '' }, 222: { pr: false, body: '' } };
     const fake = fakeGh(posts);
-    const { fetched } = await run({ ...env, FILES: names.join('\n'), COLUMNS: '4' }, cwd, fake);
+    await run({ ...env, FILES: names.join('\n'), COLUMNS: '4' }, cwd, fake);
     const edits = fake.calls.filter((c) => c[0] === 'pr' && c[1] === 'edit');
     expect(edits.map((c) => c.filter((a) => a === '--attach').length)).toEqual([ATTACH_LIMIT, 3]);
-    expect(fetched).toEqual(names.map((_, i) => `${ASSET}${i + 1}`));
+    expect([...posts[222].body.matchAll(/<img src="([^"]+)"/g)].map((m) => m[1])).toEqual(
+      names.map((_, i) => `${ASSET}${i + 1}`),
+    );
     expect(posts[222].body).toContain(`alt="${ATTACH_LIMIT + 2}.png"`);
   });
 
