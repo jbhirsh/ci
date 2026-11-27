@@ -34,3 +34,6 @@ Changing and testing a tool against an app is in `CONTRIBUTING.md`.
   names. Secrets come in as inputs.
 - **Node 24 and the latest major of each action**, everywhere.
 - **A test beside each module** (`*.test.mjs` or `*.test.ts`, Vitest).
+- **Each test file's temp directory is removed when the file ends**: `lib/test-tmpdir.mjs`
+  points `TMPDIR` at one of its own, so `tmpdir()` needs no cleanup; a child a test starts with
+  an env of its own passes `TMPDIR` on, or what it writes stays in `/tmp`.
