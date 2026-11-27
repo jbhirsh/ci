@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { classify, isSource, measuredFiles, readEntries } from './check.mjs';
+import { classify, isSource, measuredFiles, readEntries } from './check.ts';
 
 const segment = fc.stringMatching(/^[A-Za-z0-9._ -]{1,8}$/).filter((s) => s !== '.' && s !== '..');
 const repoPath = fc

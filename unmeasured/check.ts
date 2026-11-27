@@ -1,6 +1,6 @@
 // Fails when a source file escapes the app's coverage gate unnoticed.
 //
-//   node unmeasured/check.mjs     from the app's checkout (or APP_ROOT), after
+//   node unmeasured/check.ts     from the app's checkout (or APP_ROOT), after
 //                                 a passing coverage run
 //
 // The coverage gate holds every file it measures to the app's bar, but which
@@ -285,7 +285,7 @@ export function main(
   log(
     messages.length === 0 && result
       ? `unmeasured: every source file is measured (${result.measured.length}) or listed with a reason (${result.listed.length}).`
-      : `unmeasured: ${messages.length} to fix (unmeasured/check.mjs says what counts).`,
+      : `unmeasured: ${messages.length} to fix (unmeasured/check.ts says what counts).`,
   );
   return messages.length === 0 ? 0 : 1;
 }

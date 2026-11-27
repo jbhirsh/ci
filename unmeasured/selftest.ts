@@ -1,5 +1,5 @@
 // Self-test of the unmeasured check against an app's checkout:
-// `node unmeasured/selftest.mjs <app dir>`. jbhirsh/ci's own CI doesn't run
+// `node unmeasured/selftest.ts <app dir>`. jbhirsh/ci's own CI doesn't run
 // the app's tests, so there's no coverage report to compare; this checks
 // what holds without one: the app's `unmeasured` setting parses, and says
 // how many source files there are and which tracked files each entry's glob
@@ -9,7 +9,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
 import { matches } from '../lib/match.mjs';
-import { isSource, readEntries, trackedFiles } from './check.mjs';
+import { isSource, readEntries, trackedFiles } from './check.ts';
 
 /**
  * Reads the app's setting and files and returns what to print; throws when

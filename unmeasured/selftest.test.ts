@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from '../review/testApp.mjs';
-import { cli, selftest } from './selftest.mjs';
+import { cli, selftest } from './selftest.ts';
 
 describe('selftest', () => {
   it('prints the source files and what each glob lists, without judging', () => {

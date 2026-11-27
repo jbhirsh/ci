@@ -6,7 +6,7 @@ description: >-
   Also when an entry lists no unmeasured file, or gives too short a reason.
   Runs as a step of the app's coverage job, after a passing coverage run
   that writes coverage/coverage-final.json. What counts as source, and the
-  setting, are in check.mjs's header.
+  setting, are in check.ts's header.
 
 runs:
   using: composite
@@ -17,4 +17,4 @@ runs:
 
     - name: Check for source files the coverage gate doesn't measure
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/check.mjs"
+      run: node "$GITHUB_ACTION_PATH/check.ts"
