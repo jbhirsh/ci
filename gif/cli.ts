@@ -3,6 +3,8 @@
 //
 //   node ../ci/gif/cli.mjs <scenario> [options]      (options.ts lists them)
 //
+// cli.mjs is the entry that path names, and calls main here.
+//
 // For a web app (the `gif.source` setting, settings.ts), it builds the app
 // twice, from --base (origin/main, in a temporary worktree sharing the
 // checkout's node_modules) and from the working tree, uncommitted changes
@@ -45,7 +47,6 @@
 import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { appRoot, importFromApp } from '../lib/app.mjs';
 import { addBaseTree, build, git, serve, stopServers } from './build.ts';
 import { checkFfmpeg, framesToGif, sideBySide } from './ffmpeg.ts';
@@ -396,12 +397,4 @@ export async function main(argv) {
     process.off('SIGINT', interrupted);
     process.off('SIGTERM', interrupted);
   }
-}
-
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  main(process.argv.slice(2)).catch((/** @type {unknown} */ error) => {
-    console.error(error instanceof Error ? error.message : error);
-    if (error instanceof Error && error.cause instanceof Error) console.error(error.cause.message);
-    process.exitCode = 1;
-  });
 }
