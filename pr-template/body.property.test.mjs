@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { bodyProblems, holdsText, maskFences, revisionsPair } from './body.mjs';
+import { bodyProblems, holdsText, maskFences, renderedLines, revisionsPair } from './body.mjs';
 
 const GOOD = [
   '## Goal',
@@ -380,6 +380,183 @@ describe("the current revision's rows", () => {
         expect(() => bodyProblems(text, HEAD, { pushed: true })).not.toThrow();
       }),
       RUN,
+    );
+  });
+});
+
+describe('renderedLines against its old scans (property)', () => {
+  // renderedLines as it was before ci#157, kept as the reference: each tool start marker scanned
+  // every line after it for its end, and each unclosed inline `<!--` searched the rest of its
+  // paragraph for a `-->`; both quadratic, so the bodies here stay short.
+  const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+  const TOOL_START = /^ *<!-- ([a-z][a-z0-9-]*:[^\s<>]+) -->\s*$/;
+  /**
+   * @param {string} text
+   * @param {number} from
+   * @param {number} n
+   */
+  const findRun = (text, from, n) => {
+    for (let at = text.indexOf('`', from); at !== -1; at = text.indexOf('`', at)) {
+      let len = 0;
+      while (text[at + len] === '`') len++;
+      if (len === n) return at;
+      at += len;
+    }
+    return -1;
+  };
+  /** @param {string[]} paragraph */
+  const withoutSpans = (paragraph) => {
+    const text = paragraph.join('\n');
+    let out = '';
+    for (let at = 0; at < text.length;) {
+      if (text[at] === '`') {
+        let n = 0;
+        while (text[at + n] === '`') n++;
+        const close = findRun(text, at + n, n);
+        if (close === -1) {
+          out += text.slice(at, at + n);
+          at += n;
+        } else {
+          out += text.slice(at, close + n).replace(/[^\n]/g, '');
+          at = close + n;
+        }
+      } else if (text.startsWith('<!--', at)) {
+        const end = text.indexOf('-->', at + 4);
+        if (end === -1) {
+          out += '<';
+          at += 1;
+        } else {
+          out += text.slice(at, end + 3).replace(/[^\n]/g, '');
+          at = end + 3;
+        }
+      } else {
+        out += text[at++];
+      }
+    }
+    return out.split('\n');
+  };
+  /** @param {string[]} lines */
+  const inline = (lines) => {
+    /** @type {string[]} */
+    const out = [];
+    let start = 0;
+    for (let i = 0; i <= lines.length; i++) {
+      const marker = i < lines.length && lines[i].startsWith('@@tool:');
+      if (i < lines.length && lines[i].trim() !== '' && !marker) continue;
+      const paragraph = lines.slice(start, i);
+      out.push(...(paragraph.length ? withoutSpans(paragraph) : []));
+      if (i < lines.length) out.push(marker ? lines[i] : '');
+      start = i + 1;
+    }
+    return out;
+  };
+  /**
+   * @param {string} body
+   * @param {{ keepTools?: boolean, onBlock?: (key: string, inner: string[], at: number) => void }} [options]
+   */
+  const reference = (body, { keepTools = false, onBlock } = {}) => {
+    const lines = body.replace(/\r\n?/g, '\n').split('\n');
+    /** @type {string[]} */
+    const kept = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const fence = FENCE.exec(line);
+      if (fence) {
+        const [mark] = fence[1];
+        const closing = new RegExp(`^ {0,3}\\${mark}{${fence[1].length},} *$`);
+        i++;
+        while (i < lines.length && !closing.test(lines[i])) i++;
+        kept.push('');
+        continue;
+      }
+      const tool = TOOL_START.exec(line);
+      if (tool) {
+        const end = `<!-- /${tool[1]} -->`;
+        let j = i + 1;
+        while (j < lines.length && lines[j].trim() !== end) j++;
+        if (j < lines.length) {
+          onBlock?.(tool[1], lines.slice(i + 1, j), kept.length);
+          i = j;
+          kept.push(keepTools ? `@@tool:${tool[1]}@@` : '');
+          continue;
+        }
+      }
+      if (/^ {0,3}<!--/.test(line)) {
+        let j = i;
+        while (
+          j < lines.length &&
+          !lines[j].includes('-->', j === i ? line.indexOf('<!--') + 4 : 0)
+        )
+          j++;
+        const rest =
+          j < lines.length
+            ? lines[j].slice(lines[j].indexOf('-->', j === i ? line.indexOf('<!--') + 4 : 0) + 3)
+            : '';
+        i = j;
+        kept.push(rest);
+        continue;
+      }
+      kept.push(keepTools ? line.replaceAll('@@', '@ @') : line);
+    }
+    return inline(kept);
+  };
+  // Tool markers closed, unclosed, closed only inside a fence, repeated and spaced; fences,
+  // comments and spans that open and close around them.
+  const line = fc.oneof(
+    {
+      weight: 6,
+      arbitrary: fc.constantFrom(
+        '<!-- a:b -->',
+        '<!-- a:c -->',
+        '  <!-- a:b -->  ',
+        '<!-- pr-gif:x -->',
+        '<!-- /a:b -->',
+        '  <!-- /a:b -->\t',
+        '<!-- /a:c -->',
+        '<!-- /pr-gif:x -->',
+        '<!-- / a:b -->',
+        '<!-- /A:b -->',
+      ),
+    },
+    {
+      weight: 4,
+      arbitrary: fc.constantFrom(
+        '```',
+        '~~~',
+        '````',
+        '   ```',
+        '<!--',
+        'a <!-- b',
+        '-->',
+        'a --> b',
+        '<!-- c -->',
+        '`',
+        '``',
+        'x ` y',
+        '@@',
+        '',
+        ' ',
+      ),
+    },
+    { weight: 2, arbitrary: fc.string({ maxLength: 8 }) },
+  );
+  const body = fc
+    .tuple(fc.array(line, { maxLength: 30 }), fc.constantFrom('\n', '\r\n', '\r'))
+    .map(([lines, eol]) => lines.join(eol));
+
+  it('reads every body as the old scans did, its tool blocks heard the same, with keepTools or not', () => {
+    fc.assert(
+      fc.property(body, fc.boolean(), (text, keepTools) => {
+        /** @type {unknown[][]} */
+        const heard = [];
+        /** @type {unknown[][]} */
+        const expected = [];
+        const got = renderedLines(text, { keepTools, onBlock: (...a) => heard.push(a) });
+        const want = reference(text, { keepTools, onBlock: (...a) => expected.push(a) });
+        expect(got).toEqual(want);
+        expect(heard).toEqual(expected);
+      }),
+      { numRuns: 1000 },
     );
   });
 });

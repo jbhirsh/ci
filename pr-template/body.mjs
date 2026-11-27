@@ -514,6 +514,8 @@ export function renderedLines(body, { keepTools = false, onBlock } = {}) {
   const lines = (body ?? '').replace(/\r\n?/g, '\n').split('\n');
   /** @type {string[]} */
   const kept = [];
+  /** @type {((key: string, after: number) => number) | undefined} */
+  let endOf;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const fence = FENCE.exec(line);
@@ -527,9 +529,8 @@ export function renderedLines(body, { keepTools = false, onBlock } = {}) {
     }
     const tool = TOOL_START.exec(line);
     if (tool) {
-      const end = `<!-- /${tool[1]} -->`;
-      let j = i + 1;
-      while (j < lines.length && lines[j].trim() !== end) j++;
+      endOf ??= endMarkers(lines);
+      const j = endOf(tool[1], i);
       if (j < lines.length) {
         onBlock?.(tool[1], lines.slice(i + 1, j), kept.length);
         i = j;
@@ -553,6 +554,37 @@ export function renderedLines(body, { keepTools = false, onBlock } = {}) {
     kept.push(keepTools ? line.replaceAll('@@', '@ @') : line);
   }
   return inline(kept);
+}
+
+/**
+ * Where each line that may end a tool's block is, read once: the first line after `after` that is
+ * the end marker of `key`, `<!-- /key -->` (spaces aside), or `lines.length` when none is, and in a
+ * fence too, as a scan from the start marker would find it. Each start marker scanning the lines after it was quadratic on a body of
+ * unclosed ones (`'<!-- x:y -->\n'.repeat(5000)`, ci#157); `after` only grows between calls, so
+ * each end's list is read once in all.
+ *
+ * @param {string[]} lines
+ * @returns {(key: string, after: number) => number}
+ */
+function endMarkers(lines) {
+  // Every end marker opens so, and only its key and its close follow: `end` below.
+  const open = '<!-- /';
+  const end = (/** @type {string} */ key) => `${open}${key} -->`;
+  /** @type {Map<string, { at: number[], next: number }>} */
+  const ends = new Map();
+  lines.forEach((line, n) => {
+    const text = line.trim();
+    if (!text.startsWith(open)) return;
+    const found = ends.get(text);
+    if (found) found.at.push(n);
+    else ends.set(text, { at: [n], next: 0 });
+  });
+  return (key, after) => {
+    const found = ends.get(end(key));
+    if (!found) return lines.length;
+    while (found.next < found.at.length && found.at[found.next] <= after) found.next++;
+    return found.at[found.next] ?? lines.length;
+  };
 }
 
 /**
@@ -588,6 +620,9 @@ function inline(lines) {
 function withoutSpans(paragraph) {
   const text = paragraph.join('\n');
   let out = '';
+  // Once no `-->` is left after an unclosed `<!--`, none is after a later one: searching again from
+  // each was quadratic on a paragraph of them (ci#157).
+  let unclosed = false;
   for (let at = 0; at < text.length;) {
     if (text[at] === '`') {
       let n = 0;
@@ -601,8 +636,9 @@ function withoutSpans(paragraph) {
         at = close + n;
       }
     } else if (text.startsWith('<!--', at)) {
-      const end = text.indexOf('-->', at + 4);
+      const end = unclosed ? -1 : text.indexOf('-->', at + 4);
       if (end === -1) {
+        unclosed = true;
         out += '<';
         at += 1;
       } else {
