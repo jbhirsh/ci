@@ -24,11 +24,8 @@ import { appRoot } from '../lib/app.mjs';
 
 /**
  * Whether a repo path is Claude's: instructions or settings.
- *
- * @param {string} file
- * @returns {boolean}
  */
-export function isClaudeFile(file) {
+export function isClaudeFile(file: string): boolean {
   const parts = file.split('/');
   const name = parts[parts.length - 1];
   return (
@@ -36,12 +33,7 @@ export function isClaudeFile(file) {
   );
 }
 
-/**
- * @param {string} root
- * @param {string[]} args
- * @returns {string}
- */
-function git(root, args) {
+function git(root: string, args: string[]): string {
   return execFileSync('git', ['-C', root, ...args], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -51,11 +43,8 @@ function git(root, args) {
 
 /**
  * Whether a path exists as a symlink (not followed).
- *
- * @param {string} p
- * @returns {boolean}
  */
-function isLink(p) {
+function isLink(p: string): boolean {
   try {
     return lstatSync(p).isSymbolicLink();
   } catch {
@@ -67,11 +56,9 @@ function isLink(p) {
  * The real folder holding a repo path, made through real folders only: a
  * symlink on the way is removed and a folder made in its place.
  *
- * @param {string} root
- * @param {string} file
- * @returns {string} the file's absolute path
+ * @returns the file's absolute path
  */
-function realPathFor(root, file) {
+function realPathFor(root: string, file: string): string {
   const parts = file.split('/');
   let dir = root;
   for (const part of parts.slice(0, -1)) {
@@ -84,14 +71,13 @@ function realPathFor(root, file) {
 
 /**
  * Makes the checkout's Claude files the base's. Returns what it changed.
- *
- * @param {{ root: string, base: string }} where
- * @returns {{ restored: string[], removed: string[] }}
  */
-export function restoreFromBase({ root, base }) {
+export function restoreFromBase({ root, base }: { root: string; base: string }): {
+  restored: string[];
+  removed: string[];
+} {
   const ref = `origin/${base}`;
-  const list = (/** @type {string[]} */ args) =>
-    git(root, args).split('\0').filter(Boolean).filter(isClaudeFile);
+  const list = (args: string[]) => git(root, args).split('\0').filter(Boolean).filter(isClaudeFile);
   const inBase = new Set(list(['ls-tree', '-r', '-z', '--name-only', ref]));
   const inHead = list(['ls-files', '-z']);
   const restored = [];

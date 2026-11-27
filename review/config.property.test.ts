@@ -11,12 +11,8 @@ const value = fc.oneof(
 
 /**
  * What a setting reads as, or the error it throws.
- *
- * @template T
- * @param {() => T} read
- * @returns {{ ok: true, value: T } | { ok: false, message: string }}
  */
-function attempt(read) {
+function attempt<T>(read: () => T): { ok: true; value: T } | { ok: false; message: string } {
   try {
     return { ok: true, value: read() };
   } catch (error) {

@@ -10,29 +10,23 @@ import {
   toolCalls,
   unreadFiles,
 } from './coverage.ts';
-
-/** @typedef {import('./coverage.ts').ToolCall} ToolCall */
+import type { ToolCall } from './coverage.ts';
 
 const REPO = '/home/runner/work/sift/sift';
 const RANGE = 'origin/main...HEAD';
-/** @returns {ToolCall} */
-const bash = (/** @type {string} */ command, result = 'diff --git a/x b/x') => ({
+const bash = (command: string, result = 'diff --git a/x b/x'): ToolCall => ({
   name: 'Bash',
   input: { command },
   result,
 });
-/** @returns {ToolCall} */
-const read = (
-  /** @type {string} */ file_path,
-  /** @type {Record<string, unknown>} */ extra = {},
-) => ({
+const read = (file_path: string, extra: Record<string, unknown> = {}): ToolCall => ({
   name: 'Read',
   input: { file_path, ...extra },
   result: '1\tx',
 });
 const changed = ['src/a.ts', 'src/b.ts', '__tests__/unit/a.test.ts'];
 /** What each call alone counts as read. */
-const readBy = (/** @type {ToolCall[]} */ ...calls) => {
+const readBy = (...calls: ToolCall[]) => {
   const unread = new Set(unreadFiles(changed, calls, { repoDir: REPO }));
   return changed.filter((f) => !unread.has(f));
 };
@@ -69,7 +63,7 @@ describe('filesToRead', () => {
 
 describe('commandLine', () => {
   /** A line's one command's words, or null. */
-  const plainWords = (/** @type {string} */ command) => {
+  const plainWords = (command: string) => {
     const line = commandLine(command);
     return line?.alone && line.commands.length === 1 ? line.commands[0] : null;
   };
@@ -484,7 +478,7 @@ describe('deleted files', () => {
   const files = ['src/a.ts', 'src/gone.ts', 'src/old.test.ts'];
   const removed = ['src/gone.ts', 'src/old.test.ts'];
   /** What the calls count as read, with gone.ts and old.test.ts deleted. */
-  const covered = (/** @type {ToolCall[]} */ ...calls) => {
+  const covered = (...calls: ToolCall[]) => {
     const unread = new Set(unreadFiles(files, calls, { repoDir: REPO, removed }));
     return files.filter((f) => !unread.has(f));
   };
@@ -672,7 +666,7 @@ describe('deleted files', () => {
 
 describe('main', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'coverage-'));
-  const file = (/** @type {string} */ name, /** @type {unknown} */ value) => {
+  const file = (name: string, value: unknown) => {
     const full = path.join(dir, name);
     writeFileSync(full, typeof value === 'string' ? value : JSON.stringify(value));
     return full;
@@ -698,14 +692,14 @@ describe('main', () => {
   ]);
 
   it('reads the changed files from stdin and the passes from their files', () => {
-    const warn = /** @type {string[]} */ ([]);
+    const warn = [] as string[];
     const env = { REPO_DIR: REPO, SKIP: 'gen/**\n\n' };
     expect(main([pass], 'a.ts\n b.ts \n\ngen/x.ts\n', env, (m) => warn.push(m))).toEqual(['b.ts']);
     expect(warn).toEqual([]);
   });
 
   it('counts an unreadable execution file as a pass that read nothing', () => {
-    const warn = /** @type {string[]} */ ([]);
+    const warn = [] as string[];
     const broken = file('broken.json', '{');
     expect(
       main([broken, path.join(dir, 'missing.json')], 'a.ts\n', {}, (m) => warn.push(m)),
@@ -747,12 +741,11 @@ describe('main', () => {
 });
 
 describe("the reviewer's tools", () => {
-  /** @returns {ToolCall} */
   const own = (
-    /** @type {string} */ name,
-    /** @type {Record<string, unknown>} */ input = {},
+    name: string,
+    input: Record<string, unknown> = {},
     result = 'diff --git a/x b/x',
-  ) => ({ name: `mcp__review__${name}`, input, result });
+  ): ToolCall => ({ name: `mcp__review__${name}`, input, result });
 
   it('count a diff of the PR, whole or for the files named', () => {
     expect(readBy(own('diff'))).toEqual(changed);
@@ -787,7 +780,7 @@ describe("the reviewer's tools", () => {
     expect(readBy(cut, read(saved))).toEqual(changed);
   });
   it('count a diff read in parts once every part came back, and not before', () => {
-    const part = (/** @type {number} */ n, of = 3, paths = ['src/a.ts']) =>
+    const part = (n: number, of = 3, paths = ['src/a.ts']) =>
       own('diff', { paths, part: n }, `Part ${n} of ${of} of this diff.\ndiff --git`);
     expect(readBy(part(1), part(3))).toEqual([]);
     expect(readBy(part(1), part(2), part(3))).toEqual(['src/a.ts']);

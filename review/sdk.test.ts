@@ -10,37 +10,34 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OIDC = 'https://oidc.example/token?x=1';
 
 /**
- * Anything the fake SDK was handed: options, servers, tools, hooks. Read
- * loosely, as the tests poke at its parts.
- *
- * @typedef {{ [key: string]: Loose } & ((...args: unknown[]) => Promise<Loose>)} Loose
+ * Anything the fake SDK was handed: options, servers, tools, hooks. Read loosely, as the tests poke
+ * at its parts.
  */
+type Loose = { [key: string]: Loose } & ((...args: unknown[]) => Promise<Loose>);
 
 /**
  * A fake Agent SDK: records the options it's given and yields the messages,
  * or with `then`, those of `then` from its second query on.
- *
- * @param {unknown[]} messages
- * @param {{ throws?: string, then?: unknown[] }} [behaviour]
  */
-function fakeSdk(messages, behaviour = {}) {
-  /** @type {{ prompt?: string, options?: Loose, calls: { prompt: string, options: Loose }[] }} */
-  const seen = { calls: [] };
+function fakeSdk(messages: unknown[], behaviour: { throws?: string; then?: unknown[] } = {}) {
+  const seen: { prompt?: string; options?: Loose; calls: { prompt: string; options: Loose }[] } = {
+    calls: [],
+  };
   const sdk = {
-    /** @param {{ name: string, tools: unknown[] }} server */
-    createSdkMcpServer: (server) => ({ type: 'sdk', ...server }),
+    createSdkMcpServer: (server: { name: string; tools: unknown[] }) => ({
+      type: 'sdk',
+      ...server,
+    }),
+    tool: (
+      name: string,
+      description: string,
+      schema: unknown,
+      handler: (args: unknown) => Promise<unknown>,
+    ) => ({ name, description, schema, handler }),
     /**
-     * @param {string} name
-     * @param {string} description
-     * @param {unknown} schema
-     * @param {(args: unknown) => Promise<unknown>} handler
-     */
-    tool: (name, description, schema, handler) => ({ name, description, schema, handler }),
-    /**
-     * @param {{ prompt: string, options: Loose }} args
      * @yields {unknown} each message
      */
-    query: async function* ({ prompt, options }) {
+    query: async function* ({ prompt, options }: { prompt: string; options: Loose }) {
       seen.prompt = prompt;
       seen.options = options;
       seen.calls.push({ prompt, options });
@@ -49,9 +46,7 @@ function fakeSdk(messages, behaviour = {}) {
     },
   };
   return {
-    sdk: /** @type {typeof import('@anthropic-ai/claude-agent-sdk')} */ (
-      /** @type {unknown} */ (sdk)
-    ),
+    sdk: sdk as unknown as typeof import('@anthropic-ai/claude-agent-sdk'),
     seen,
   };
 }
@@ -74,11 +69,7 @@ const success = {
   },
 };
 
-/**
- * @param {Record<string, string>} [over]
- * @returns {Record<string, string>}
- */
-function env(over = {}) {
+function env(over: Record<string, string> = {}): Record<string, string> {
   return {
     RUNNER_TEMP: mkdtempSync(path.join(tmpdir(), 'review-sdk-')),
     PROMPT: 'Review it.',
@@ -120,7 +111,7 @@ describe('main', () => {
     expect(out.report).toContain('success, 3 turns, $0.046');
     expect(out.report).toContain('| claude-sonnet-5-5 | $0.046 |');
 
-    const o = /** @type {Loose} */ (seen.options);
+    const o = seen.options as Loose;
     expect(seen.prompt).toBe('Review it.');
     expect(o).toMatchObject({
       model: 'sonnet',
@@ -149,7 +140,7 @@ describe('main', () => {
   it('guards every tool call with its hooks', async () => {
     const { sdk, seen } = fakeSdk([success]);
     await main(env(), { sdk, fetchImpl: oidc, root: '/app' });
-    const o = /** @type {Loose} */ (seen.options);
+    const o = seen.options as Loose;
     const pre = o.hooks.PreToolUse[0].hooks[0];
     const post = o.hooks.PostToolUse[0].hooks[0];
     expect(await pre({ tool_name: 'Bash', tool_input: { command: 'ls' } })).toMatchObject({
@@ -169,11 +160,9 @@ describe('main', () => {
   it("wraps each tool's result for the SDK, an error flagged", async () => {
     const { sdk, seen } = fakeSdk([success]);
     await main(env(), { sdk, fetchImpl: oidc, root: '/app' });
-    const servers = /** @type {Loose} */ (seen.options).mcpServers;
-    const list = /** @type {{ name: string, handler: Loose }[]} */ (
-      /** @type {unknown} */ (servers.review.tools)
-    );
-    const show = /** @type {{ handler: Loose }} */ (list.find((t) => t.name === 'show'));
+    const servers = (seen.options as Loose).mcpServers;
+    const list = servers.review.tools as unknown as { name: string; handler: Loose }[];
+    const show = list.find((t) => t.name === 'show') as { handler: Loose };
     expect(await show.handler({ ref: 'HEAD~2', path: 'a.ts' })).toEqual({
       content: [{ type: 'text', text: 'ref must be HEAD or origin/main' }],
       isError: true,
@@ -299,7 +288,7 @@ describe('main', () => {
       fetchImpl: fakeFetch({}),
       root: '/app',
     });
-    const o = /** @type {Loose} */ (seen.options);
+    const o = seen.options as Loose;
     expect(o.env.ANTHROPIC_API_KEY).toBe('sk-test');
     expect(o.env.ANTHROPIC_IDENTITY_TOKEN_FILE).toBeUndefined();
     // The key alone: the federation IDs beside it would be a second credential.
@@ -328,7 +317,7 @@ describe('oidcToken', () => {
 
 describe('helpers', () => {
   it('tells spent credit and limits from other failures, by the API only', () => {
-    const failed = (/** @type {string} */ result) => [{ ...success, is_error: true, result }];
+    const failed = (result: string) => [{ ...success, is_error: true, result }];
     expect(stoppedBy(failed('API Error: Credit balance is too low'), '')).toBe('credit');
     expect(stoppedBy([{ type: 'assistant', error: 'billing_error' }, success], 'x')).toBe('credit');
     expect(stoppedBy(failed('You have reached your workspace spend limit'), '')).toBe('limit');
@@ -338,8 +327,7 @@ describe('helpers', () => {
     expect(stoppedBy(failed('error_max_turns'), '')).toBeNull();
   });
   it("stops on a subscription's usage limit, read from the API's error code", () => {
-    /** @type {Record<string, unknown>[]} */
-    const limited = JSON.parse(
+    const limited: Record<string, unknown>[] = JSON.parse(
       readFileSync(path.join(HERE, 'fixtures', 'usage-limit.json'), 'utf8'),
     );
     expect(stoppedBy(limited, '')).toBe('limit');

@@ -42,7 +42,7 @@ describe('the guard, for any path or URL', () => {
         g.after('WebSearch', shown.join(' '));
         const decision = g.before('WebFetch', { url });
         if (decision.allow) {
-          const strip = (/** @type {string} */ u) => u.replace(/[#?].*$/, '').replace(/\/+$/, '');
+          const strip = (u: string) => u.replace(/[#?].*$/, '').replace(/\/+$/, '');
           expect(shown.some((s) => s.includes(strip(url)) || strip(s).startsWith(strip(url)))).toBe(
             true,
           );

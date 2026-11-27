@@ -8,15 +8,14 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 /**
- * @param {Record<string, string>} files repo-relative path → content
- * @returns {string} the checkout's root
+ * @param files repo-relative path → content
+ * @returns the checkout's root
  */
-export function testApp(files) {
+export function testApp(files: Record<string, string>): string {
   const root = mkdtempSync(path.join(tmpdir(), 'app-'));
   const all = { 'package.json': '{}', ...files };
   writeFiles(root, all);
-  /** @param {string[]} args */
-  const git = (...args) =>
+  const git = (...args: string[]) =>
     execFileSync('git', ['-C', root, ...args], {
       stdio: 'ignore',
       env: {
@@ -36,11 +35,8 @@ export function testApp(files) {
 
 /**
  * Writes files under a root, making their folders.
- *
- * @param {string} root
- * @param {Record<string, string>} files
  */
-export function writeFiles(root, files) {
+export function writeFiles(root: string, files: Record<string, string>) {
   for (const [file, content] of Object.entries(files)) {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     writeFileSync(path.join(root, file), content);

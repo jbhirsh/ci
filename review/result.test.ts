@@ -5,8 +5,11 @@ import { describe, expect, it } from 'vitest';
 import { judge, main } from './result.ts';
 
 const init = { type: 'system', subtype: 'init' };
-/** @param {Record<string, unknown>} result */
-const run = (result) => [init, { type: 'assistant', message: { content: [] } }, result];
+const run = (result: Record<string, unknown>) => [
+  init,
+  { type: 'assistant', message: { content: [] } },
+  result,
+];
 
 describe('judge', () => {
   it('passes a successful result past the turn cap, which claude-code-action fails', () => {

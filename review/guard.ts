@@ -23,19 +23,13 @@ const OWN_TOOLS = /^mcp__(review__[a-z_]+|github_inline_comment__create_inline_c
 const URL_SOURCES = /^(WebSearch|mcp__review__(pr|diff))$/;
 const URL = /https?:\/\/[^\s"'<>()[\]{}`\\]+/g;
 
-/**
- * @typedef {{ allow: true } | { allow: false, reason: string }} Decision
- */
+export type Decision = { allow: true } | { allow: false; reason: string };
 
 /**
  * A path made absolute and resolved through any symlinks, as far as it
  * exists (a file that isn't there yet resolves by its folder).
- *
- * @param {string} file
- * @param {string} cwd
- * @returns {string}
  */
-export function resolved(file, cwd) {
+export function resolved(file: string, cwd: string): string {
   const absolute = path.resolve(cwd, file);
   let probe = absolute;
   const rest = [];
@@ -52,41 +46,37 @@ export function resolved(file, cwd) {
 }
 
 /**
- * @param {string} file
- * @param {string[]} roots resolved already
- * @returns {boolean}
+ * @param file
+ * @param roots resolved already
  */
-function inside(file, roots) {
+function inside(file: string, roots: string[]): boolean {
   return roots.some((root) => file === root || file.startsWith(`${root}${path.sep}`));
 }
 
 /**
  * A URL as compared: no fragment, no trailing slash.
- *
- * @param {string} url
- * @returns {string}
  */
-export function normalUrl(url) {
+export function normalUrl(url: string): string {
   return url
     .replace(/#.*$/, '')
     .replace(/[.,;:!?]+$/, '')
     .replace(/\/+$/, '');
 }
 
-/**
- * @param {{ roots: string[], cwd: string, maxSearches?: number }} options
- */
-export function createGuard({ roots, cwd, maxSearches = 5 }) {
+export function createGuard({
+  roots,
+  cwd,
+  maxSearches = 5,
+}: {
+  roots: string[];
+  cwd: string;
+  maxSearches?: number;
+}) {
   const allowedRoots = roots.map((r) => resolved(r, cwd));
-  /** @type {Set<string>} */
-  const seen = new Set();
+  const seen: Set<string> = new Set();
   let searches = 0;
 
-  /**
-   * @param {unknown} value
-   * @returns {Decision}
-   */
-  const pathAllowed = (value) => {
+  const pathAllowed = (value: unknown): Decision => {
     if (value === undefined) return { allow: true };
     if (typeof value !== 'string' || value === '') return { allow: false, reason: 'not a path' };
     return inside(resolved(value, cwd), allowedRoots)
@@ -96,15 +86,9 @@ export function createGuard({ roots, cwd, maxSearches = 5 }) {
 
   /**
    * Whether this tool call may run.
-   *
-   * @param {string} tool
-   * @param {unknown} input
-   * @returns {Decision}
    */
-  const before = (tool, input) => {
-    const args = /** @type {Record<string, unknown>} */ (
-      input && typeof input === 'object' ? input : {}
-    );
+  const before = (tool: string, input: unknown): Decision => {
+    const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
     if (OWN_TOOLS.test(tool) || tool === 'ToolSearch') return { allow: true };
     if (tool === 'Read') {
       return args.file_path === undefined
@@ -144,11 +128,8 @@ export function createGuard({ roots, cwd, maxSearches = 5 }) {
 
   /**
    * Notes the URLs a tool's output showed, which WebFetch may then open.
-   *
-   * @param {string} tool
-   * @param {unknown} response
    */
-  const after = (tool, response) => {
+  const after = (tool: string, response: unknown) => {
     if (!URL_SOURCES.test(tool)) return;
     const text = typeof response === 'string' ? response : JSON.stringify(response ?? '');
     for (const match of text.matchAll(URL)) seen.add(normalUrl(match[0]));
