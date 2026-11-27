@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { changedFiles, main, plan, prBody } from './publish.mjs';
+import { changedFiles, main, plan, prBody } from './publish.ts';
 
 const BASE = 'a'.repeat(40);
 const HEAD = 'b'.repeat(40);
@@ -94,7 +94,7 @@ function fake({ open = '', fail } = {}) {
   const calls = /** @type {{ command: string, args: string[], input?: string }[]} */ ([]);
   let revs = 0;
   let created = false;
-  /** @type {import('./publish.mjs').Run} */
+  /** @type {import('./publish.ts').Run} */
   const run = (command, args, input) => {
     calls.push({ command, args, input });
     const line = `${command} ${args.join(' ')}`;

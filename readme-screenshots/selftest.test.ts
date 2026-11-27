@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { testPng as png } from '../lib/test-pixels.mjs';
-import { cli, selftest } from './selftest.mjs';
+import { cli, selftest } from './selftest.ts';
 
 /**
  * A git checkout holding these files, with two commits.

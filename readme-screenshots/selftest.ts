@@ -1,10 +1,10 @@
 // Self-test of the README screenshot bot against an app's checkout, its
-// dependencies installed: `node readme-screenshots/selftest.mjs <app dir>`.
+// dependencies installed: `node readme-screenshots/selftest.ts <app dir>`.
 // Checks that
 //   - the app's `readme-screenshots` settings parse (or the defaults);
 //   - its screenshots folder holds PNGs, each a name the bot may write;
 //   - every `shows` glob the app sets names a file git tracks;
-//   - decide.mjs's rules run over the app's recent history (printed);
+//   - decide.ts's rules run over the app's recent history (printed);
 //   - pngjs reads every screenshot, and pixelmatch finds one wholly
 //     different from one of another size.
 
@@ -15,9 +15,9 @@ import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
 import { PIXELS, readPng } from '../lib/pixels.mjs';
 import { matchesAny } from '../lib/match.mjs';
-import { diffRatio } from './compare.mjs';
-import { changedSince, decide } from './decide.mjs';
-import { isShotName, settings } from './settings.mjs';
+import { diffRatio } from './compare.ts';
+import { changedSince, decide } from './decide.ts';
+import { isShotName, settings } from './settings.ts';
 
 /** How far back decide's rules are tried. */
 export const DEPTH = 20;
@@ -39,7 +39,7 @@ export async function selftest(root) {
   if (bad.length > 0) throw new Error(`screenshot names the bot can't write: ${bad.join(', ')}`);
   const lines = [`readme-screenshots: ${shots.length} screenshots in ${s.dir}.`];
 
-  /** @type {import('./decide.mjs').Run} */
+  /** @type {import('./decide.ts').Run} */
   const run = (command, args) =>
     execFileSync(command, args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   const tracked = run('git', ['ls-files']).split('\n').filter(Boolean);

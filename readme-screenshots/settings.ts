@@ -3,7 +3,7 @@
 // build, or the E2E job's artifact); these say what the shared parts need:
 //
 //   dir      where the README's screenshots live (default docs/screenshots)
-//   shows    globs of what the screenshots show, for decide.mjs: a change to
+//   shows    globs of what the screenshots show, for decide.ts: a change to
 //            one of these files since the last finished run retakes them
 //            (default DEFAULT_SHOWS); list the capture's own scripts and
 //            config too, since a change to how they're taken changes them

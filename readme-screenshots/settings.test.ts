@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_IGNORE, DEFAULT_SHOWS, isShotName, settings } from './settings.mjs';
+import { DEFAULT_IGNORE, DEFAULT_SHOWS, isShotName, settings } from './settings.ts';
 
 describe('settings', () => {
   it('fills in the defaults', () => {
