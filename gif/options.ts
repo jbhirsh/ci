@@ -27,36 +27,39 @@
 // and whatever options the app's setup module adds (scenario.ts).
 
 import { parseArgs } from 'node:util';
+import type { GifSettings } from './settings.ts';
 
-/** @typedef {import('./settings.ts').GifSettings} GifSettings */
-/** @typedef {Record<string, { type: 'boolean' | 'string'; default?: boolean | string }>} OptionSpecs */
+export type OptionSpecs = Record<
+  string,
+  { type: 'boolean' | 'string'; default?: boolean | string }
+>;
 
-/**
- * @typedef {object} Options What cli.ts was asked to do.
- * @property {string} scenario
- * @property {string | undefined} dir
- * @property {boolean} push
- * @property {string} base
- * @property {boolean} afterOnly
- * @property {boolean} beforeMayFail
- * @property {boolean} sideBySide
- * @property {number | undefined} width
- * @property {number} fps
- * @property {number} scale
- * @property {string | undefined} mode
- * @property {string} branch
- * @property {string | undefined} repo
- * @property {boolean} keep
- * @property {Record<string, string | boolean | undefined>} app the setup module's own options
- */
+/** What cli.ts was asked to do. */
+export type Options = {
+  scenario: string;
+  dir: string | undefined;
+  push: boolean;
+  base: string;
+  afterOnly: boolean;
+  beforeMayFail: boolean;
+  sideBySide: boolean;
+  width: number | undefined;
+  fps: number;
+  scale: number;
+  mode: string | undefined;
+  branch: string;
+  repo: string | undefined;
+  keep: boolean;
+  /** the setup module's own options */
+  app: Record<string, string | boolean | undefined>;
+};
 
 export const USAGE =
   'usage: gif <scenario> [--dir <PR>] [--no-push] [--base origin/main] [--after-only | --side-by-side | --before-may-fail] ' +
   '[--width <px>] [--fps <n>] [--scale <n>] [--mode <mode>] [--branch <name>] ' +
   '[--repo owner/name] [--keep]';
 
-/** @type {OptionSpecs} */
-const OWN = {
+const OWN: OptionSpecs = {
   dir: { type: 'string' },
   'no-push': { type: 'boolean' },
   base: { type: 'string' },
@@ -72,12 +75,7 @@ const OWN = {
   keep: { type: 'boolean' },
 };
 
-/**
- * @param {string} flag
- * @param {unknown} value
- * @param {number | undefined} fallback
- */
-function positive(flag, value, fallback) {
+function positive(flag: string, value: unknown, fallback: number | undefined) {
   if (value === undefined) return fallback;
   const n = Number(value);
   if (!(n > 0)) throw new Error(`${flag} takes a number above 0\n${USAGE}`);
@@ -88,17 +86,15 @@ function positive(flag, value, fallback) {
  * Reads the command line (after node and the script). Throws, with the
  * usage, on anything it can't use. `appOptions` are the setup module's; one
  * named like the recorder's own is refused, as it would shadow it.
- *
- * @param {readonly string[]} argv
- * @param {{ settings: GifSettings; appOptions?: OptionSpecs }} context
- * @returns {Options}
  */
-export function parseOptions(argv, { settings, appOptions = {} }) {
+export function parseOptions(
+  argv: readonly string[],
+  { settings, appOptions = {} }: { settings: GifSettings; appOptions?: OptionSpecs },
+): Options {
   const clash = Object.keys(appOptions).filter((name) => name in OWN);
   if (clash.length > 0)
     throw new Error(`the setup module's --${clash[0]} clashes with the recorder's own`);
-  /** @type {ReturnType<typeof parseArgs>} */
-  let parsed;
+  let parsed: ReturnType<typeof parseArgs>;
   try {
     parsed = parseArgs({
       args: [...argv],
@@ -111,8 +107,7 @@ export function parseOptions(argv, { settings, appOptions = {} }) {
     });
   }
   const { values, positionals } = parsed;
-  /** @param {string} name */
-  const str = (name) => {
+  const str = (name: string) => {
     const v = values[name];
     return typeof v === 'string' ? v : undefined;
   };
@@ -134,8 +129,7 @@ export function parseOptions(argv, { settings, appOptions = {} }) {
   if (values['no-push'] === true && dir === undefined) {
     throw new Error('--no-push is for publishing: give --dir too');
   }
-  /** @type {Record<string, string | boolean | undefined>} */
-  const app = {};
+  const app: Record<string, string | boolean | undefined> = {};
   for (const [name, spec] of Object.entries(appOptions)) {
     const v = values[name];
     app[name] = Array.isArray(v) ? v[0] : (v ?? spec.default);
@@ -149,8 +143,8 @@ export function parseOptions(argv, { settings, appOptions = {} }) {
     beforeMayFail,
     sideBySide,
     width: positive('--width', values.width, undefined),
-    fps: /** @type {number} */ (positive('--fps', values.fps, settings.fps)),
-    scale: /** @type {number} */ (positive('--scale', values.scale, settings.scale)),
+    fps: positive('--fps', values.fps, settings.fps) as number,
+    scale: positive('--scale', values.scale, settings.scale) as number,
     mode: str('mode') ?? settings.build.mode,
     branch: str('branch') ?? settings.branch,
     repo,
@@ -163,11 +157,8 @@ export function parseOptions(argv, { settings, appOptions = {} }) {
  * A GIF's width when neither --width nor the scenario sets one: the window's
  * own, so a phone's frames aren't blown up, but no more than 700; side by
  * side, two of those (each at most 496) and the 8px between them.
- *
- * @param {number} viewportWidth
- * @param {boolean} sideBySide
  */
-export function defaultWidth(viewportWidth, sideBySide) {
+export function defaultWidth(viewportWidth: number, sideBySide: boolean) {
   if (!sideBySide) return Math.min(700, viewportWidth);
   // ffmpeg.ts's sideBySideFilter splits its width into two even halves.
   const half = Math.floor(Math.min(496, viewportWidth) / 2) * 2;
@@ -176,10 +167,7 @@ export function defaultWidth(viewportWidth, sideBySide) {
 
 /**
  * The name a scenario's GIFs go by: its own, or its file's.
- *
- * @param {string} file
- * @param {unknown} name
  */
-export function scenarioName(file, name) {
+export function scenarioName(file: string, name: unknown) {
   return typeof name === 'string' ? name : file.replace(/^.*[\\/]/, '').replace(/\.[^.]*$/, '');
 }

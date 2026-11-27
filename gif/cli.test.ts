@@ -2,26 +2,21 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 
 // Everything with a side effect is a stand-in: no builds, no browser, no
 // ffmpeg, no git. What's left is the order cli.ts does things in, and what
 // it hands each part.
-const calls = vi.hoisted(() => /** @type {string[]} */ ([]));
+const calls = vi.hoisted(() => [] as string[]);
 const fakes = vi.hoisted(() => ({
-  /** @type {unknown} */
-  playwright: undefined,
-  /** @type {string | null} */
-  playwrightFails: null,
+  playwright: undefined as unknown,
+  playwrightFails: null as string | null,
 }));
 
 vi.mock('./build.ts', () => ({
-  addBaseTree: vi.fn((/** @type {string} */ _root, /** @type {string} */ ref) =>
-    calls.push(`base ${ref}`),
-  ),
-  build: vi.fn((/** @type {{ cwd: string; mode?: string }} */ { mode }) =>
-    calls.push(`build ${mode}`),
-  ),
-  git: vi.fn((/** @type {string} */ _root, /** @type {string[]} */ ...args) => {
+  addBaseTree: vi.fn((_root: string, ref: string) => calls.push(`base ${ref}`)),
+  build: vi.fn(({ mode }: { cwd: string; mode?: string }) => calls.push(`build ${mode}`)),
+  git: vi.fn((_root: string, ...args: string[]) => {
     calls.push(`git ${args.join(' ')}`);
     if (args[0] === 'remote') return 'https://github.com/jbhirsh/BoardGames.git';
     if (args[0] === 'rev-parse') return 'abc1234';
@@ -36,40 +31,26 @@ vi.mock('./build.ts', () => ({
 vi.mock('./ffmpeg.ts', async () => {
   const fs = await import('node:fs');
   const nodePath = await import('node:path');
-  /** @param {string} out */
-  const write = (out) => {
+  const write = (out: string) => {
     fs.mkdirSync(nodePath.dirname(out), { recursive: true });
     fs.writeFileSync(out, 'GIF89a');
   };
   return {
-    checkFfmpeg: vi.fn((/** @type {boolean} */ labels) => calls.push(`ffmpeg ${labels}`)),
-    framesToGif: vi.fn(
-      (
-        /** @type {string} */ dir,
-        /** @type {string} */ out,
-        /** @type {{ width: number }} */ { width },
-      ) => {
-        calls.push(`gif ${nodePath.basename(dir)} ${nodePath.basename(out)} ${width}`);
-        write(out);
-      },
-    ),
-    sideBySide: vi.fn(
-      (
-        /** @type {string} */ _b,
-        /** @type {string} */ _a,
-        /** @type {string} */ out,
-        /** @type {{ width: number }} */ { width },
-      ) => {
-        calls.push(`side ${nodePath.basename(out)} ${width}`);
-        write(out);
-      },
-    ),
+    checkFfmpeg: vi.fn((labels: boolean) => calls.push(`ffmpeg ${labels}`)),
+    framesToGif: vi.fn((dir: string, out: string, { width }: { width: number }) => {
+      calls.push(`gif ${nodePath.basename(dir)} ${nodePath.basename(out)} ${width}`);
+      write(out);
+    }),
+    sideBySide: vi.fn((_b: string, _a: string, out: string, { width }: { width: number }) => {
+      calls.push(`side ${nodePath.basename(out)} ${width}`);
+      write(out);
+    }),
   };
 });
 vi.mock('./record.ts', () => ({
   showPointer: vi.fn(() => Promise.resolve(calls.push('pointer'))),
   waitForPictures: vi.fn(() => Promise.resolve(calls.push('pictures'))),
-  recordFrames: vi.fn((/** @type {unknown} */ _page, /** @type {unknown} */ clip) => {
+  recordFrames: vi.fn((_page: unknown, clip: unknown) => {
     calls.push(`record ${JSON.stringify(clip)}`);
     return Promise.resolve(() => {
       calls.push('stop');
@@ -81,9 +62,9 @@ vi.mock('./publish.ts', async (actual) => ({
   ...(await actual()),
   publishFiles: vi.fn(
     (
-      /** @type {unknown} */ _git,
-      /** @type {[string, string][]} */ files,
-      /** @type {{ message: string; branch: string; push: boolean }} */ options,
+      _git: unknown,
+      files: [string, string][],
+      options: { message: string; branch: string; push: boolean },
     ) => {
       calls.push(
         `publish ${files.map(([file]) => file).join(',')} ${options.branch} ${options.push}`,
@@ -93,13 +74,11 @@ vi.mock('./publish.ts', async (actual) => ({
   ),
 }));
 vi.mock('./videos.ts', () => ({
-  main: vi.fn((/** @type {string[]} */ argv) =>
-    Promise.resolve(calls.push(`videos ${argv.join(' ')}`)),
-  ),
+  main: vi.fn((argv: string[]) => Promise.resolve(calls.push(`videos ${argv.join(' ')}`))),
 }));
 vi.mock('../lib/app.mjs', async (actual) => ({
   ...(await actual()),
-  importFromApp: vi.fn((/** @type {string} */ name) => {
+  importFromApp: vi.fn((name: string) => {
     if (name === 'vite') return Promise.reject(new Error('no vite'));
     if (name === '@playwright/test' && fakes.playwrightFails !== '@playwright/test') {
       return Promise.resolve({ default: fakes.playwright });
@@ -114,12 +93,10 @@ const publish = await import('./publish.ts');
 
 /**
  * A browser whose pages note what's done with them.
- *
- * @param {{ width: number; height: number }} [viewport]
  */
-function fakeBrowser(viewport = { width: 402, height: 874 }) {
+function fakeBrowser(viewport: { width: number; height: number } = { width: 402, height: 874 }) {
   const page = {
-    goto: vi.fn((/** @type {string} */ url) => Promise.resolve(calls.push(`goto ${url}`))),
+    goto: vi.fn((url: string) => Promise.resolve(calls.push(`goto ${url}`))),
     viewportSize: () => viewport,
   };
   const context = {
@@ -127,13 +104,13 @@ function fakeBrowser(viewport = { width: 402, height: 874 }) {
     close: vi.fn(() => Promise.resolve(calls.push('context closed'))),
   };
   const browser = {
-    newContext: vi.fn((/** @type {object} */ options) => {
+    newContext: vi.fn((options: object) => {
       calls.push(`context ${JSON.stringify(options)}`);
       return Promise.resolve(context);
     }),
     close: vi.fn(() => Promise.resolve(calls.push('browser closed'))),
   };
-  const launch = vi.fn((/** @type {object} */ options) => {
+  const launch = vi.fn((options: object) => {
     calls.push(`launch ${JSON.stringify(options)}`);
     return Promise.resolve(browser);
   });
@@ -160,11 +137,8 @@ export default {
 
 /**
  * An app with a scenario, a setup module and the gif settings given.
- *
- * @param {Record<string, unknown>} gif
- * @param {Record<string, string>} [files]
  */
-function app(gif, files = {}) {
+function app(gif: Record<string, unknown>, files: Record<string, string> = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'gif-cli-'));
   mkdirSync(path.join(root, '.github'));
   writeFileSync(path.join(root, '.github', 'ci.json'), JSON.stringify({ gif }));
@@ -180,8 +154,7 @@ function app(gif, files = {}) {
   return root;
 }
 
-/** @type {import('vitest').MockInstance} */
-let log;
+let log: MockInstance;
 beforeEach(() => {
   calls.length = 0;
   Object.assign(globalThis, { gifCalls: calls });
@@ -199,7 +172,7 @@ describe('main, for a web app', () => {
     fakes.playwright = { webkit: { launch } };
     const root = app({ setup: 'setup.mjs', build: { mode: 'test' }, cellWidth: 420 });
     await main(['flow.mjs', '--dir', '263', '--fixtures']);
-    const side = (/** @type {string} */ name) => [
+    const side = (name: string) => [
       expect.stringMatching(
         /^context \{"viewport":\{"width":402,"height":874\},"deviceScaleFactor":1,"colorScheme":"light","reducedMotion":"no-preference","serviceWorkers":"block"\}$/,
       ),
@@ -254,9 +227,11 @@ describe('main, for a web app', () => {
         { width: 420, base: 'main' },
       ),
     );
-    const [, , options] = /** @type {[unknown, unknown, { message: string }]} */ (
-      vi.mocked(publish.publishFiles).mock.calls[0]
-    );
+    const [, , options] = vi.mocked(publish.publishFiles).mock.calls[0] as [
+      unknown,
+      unknown,
+      { message: string },
+    ];
     expect(options.message).toMatch(
       /^Add the flow GIFs for 263\n\nRecorded from local builds of origin\/main and abc1234/,
     );

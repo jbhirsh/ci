@@ -72,7 +72,7 @@ describe('withBlock, for any description', () => {
         (parts, b) => {
           const held = parts.join('\n');
           const once = withBlock(held, 'a', b);
-          const words = (/** @type {string} */ t) => t.replace(pairs, '').replace(/\s+/g, '');
+          const words = (t: string) => t.replace(pairs, '').replace(/\s+/g, '');
           expect(words(once)).toBe(words(held));
           const found = findBlock(once, 'a');
           expect(once.slice(found?.from, found?.to)).toBe(`${start}\n${b}\n${end}`);
@@ -107,7 +107,7 @@ describe('withBlock, for any description', () => {
         const { start, end } = blockMarkers(k);
         const once = withBlock(text, k, b1);
         const twice = withBlock(once, k, b2);
-        const marked = (/** @type {string} */ b) => `${start}\n${b}\n${end}`;
+        const marked = (b: string) => `${start}\n${b}\n${end}`;
         const at = once.indexOf(marked(b1));
         expect(twice.slice(0, at)).toBe(once.slice(0, at));
         expect(twice.slice(at + marked(b2).length)).toBe(once.slice(at + marked(b1).length));
@@ -152,7 +152,7 @@ describe('withoutBlock and staleNote, for any description', () => {
         const note = staleText(s, 'https://github.com/o/r/actions/runs/1');
         const marked = staleNote(once, k, note);
         expect(staleNote(marked, k, note)).toBe(marked);
-        const found = /** @type {{ from: number; to: number }} */ (findBlock(once, k));
+        const found = findBlock(once, k) as { from: number; to: number };
         expect(marked.slice(0, found.from)).toBe(once.slice(0, found.from));
         const tail = once.length - found.to;
         expect(marked.slice(marked.length - tail)).toBe(once.slice(found.to));

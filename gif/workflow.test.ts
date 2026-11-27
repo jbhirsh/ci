@@ -27,15 +27,14 @@ import {
   writeManifest,
 } from './workflow.ts';
 import { recordedLine, withBlock } from './publish.ts';
+import type { Inputs, Manifest, Pull, WorkflowRun } from './workflow.ts';
 
 const GIF = 'GIF89a…';
 
 /**
  * A folder holding `files` (path → content).
- *
- * @param {Record<string, string>} files
  */
-function folder(files) {
+function folder(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), 'pr-gif-workflow-'));
   for (const [file, content] of Object.entries(files)) {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
@@ -92,8 +91,7 @@ describe('parseInputs', () => {
 });
 
 describe('recordRuns', () => {
-  /** @type {import('./workflow.ts').Inputs} */
-  const inputs = {
+  const inputs: Inputs = {
     pr: '7',
     scenarios: ['a.ts', 'b.ts'],
     sideBySide: false,
@@ -233,30 +231,23 @@ describe('waitForLinks', () => {
   /**
    * A fetch answering each link from its own list of statuses (or errors),
    * the last repeating; a clock that moves on each wait.
-   *
-   * @param {Record<string, (number | Error)[]>} answers
    */
-  function fake(answers) {
+  function fake(answers: Record<string, (number | Error)[]>) {
     let clock = 0;
-    /** @type {string[]} */
-    const asked = [];
-    const fetch = /** @type {typeof globalThis.fetch} */ (
-      /** @type {unknown} */ (
-        async (/** @type {string} */ url) => {
-          asked.push(url);
-          const list = answers[url];
-          const next = list.length > 1 ? list.shift() : list[0];
-          if (next instanceof Error) throw next;
-          return new Response(next === 200 ? 'GIF89a' : null, { status: next });
-        }
-      )
-    );
+    const asked: string[] = [];
+    const fetch = (async (url: string) => {
+      asked.push(url);
+      const list = answers[url];
+      const next = list.length > 1 ? list.shift() : list[0];
+      if (next instanceof Error) throw next;
+      return new Response(next === 200 ? 'GIF89a' : null, { status: next });
+    }) as unknown as typeof globalThis.fetch;
     return {
       asked,
       options: {
         fetch,
         now: () => clock,
-        wait: async (/** @type {number} */ ms) => {
+        wait: async (ms: number) => {
           clock += ms;
         },
         limitMs: 20,
@@ -289,8 +280,8 @@ describe('main', () => {
     }
   });
 
-  /** @param {Record<string, unknown>} gif the app's gif settings */
-  function app(gif) {
+  /** @param gif the app's gif settings */
+  function app(gif: Record<string, unknown>) {
     const root = folder({ '.github/ci.json': JSON.stringify({ gif }) });
     process.env.APP_ROOT = root;
     return root;
@@ -299,8 +290,7 @@ describe('main', () => {
   it("says the app's source, as a step output", async () => {
     app({ source: 'ci-videos' });
     const output = path.join(folder({}), 'output');
-    /** @type {string[]} */
-    const logs = [];
+    const logs: string[] = [];
     expect(
       await main(['source'], { env: { GITHUB_OUTPUT: output }, log: (l) => logs.push(l) }),
     ).toBe(0);
@@ -311,12 +301,10 @@ describe('main', () => {
 
   it('records every scenario, failing the step if any failed', async () => {
     app({});
-    /** @type {string[][]} */
-    const ran = [];
-    /** @type {string[]} */
-    const logs = [];
+    const ran: string[][] = [];
+    const logs: string[] = [];
     const env = { PR: '7', SCENARIOS: 'a.ts b.ts c.ts' };
-    const run = (/** @type {string[]} */ args) => (ran.push(args), args[0] === 'b.ts' ? 1 : 0);
+    const run = (args: string[]) => (ran.push(args), args[0] === 'b.ts' ? 1 : 0);
     const git = () => `${'f'.repeat(40)}\n`;
     expect(await main(['record'], { env, run, git, log: (l) => logs.push(l) })).toBe(1);
     expect(ran).toEqual([['a.ts'], ['b.ts'], ['c.ts']]);
@@ -327,10 +315,9 @@ describe('main', () => {
   it('names each web scenario by the folder its recording made, in a manifest of the commit', async () => {
     const root = app({});
     const head = 'e'.repeat(40);
-    /** @type {string[]} */
-    const logs = [];
+    const logs: string[] = [];
     // a.ts names itself "sheet"; b.ts fails before making a folder.
-    const run = (/** @type {string[]} */ args) => {
+    const run = (args: string[]) => {
       if (args[0] === 'b.ts') return 1;
       mkdirSync(path.join(root, 'pr-gif', 'sheet'), { recursive: true });
       writeFileSync(path.join(root, 'pr-gif', 'sheet', 'sheet-after.gif'), GIF);
@@ -353,9 +340,8 @@ describe('main', () => {
   it("records sift's changed scenarios from its CI run, counting the ones it left out as failed", async () => {
     const root = app({ source: 'ci-videos' });
     const head = 'e'.repeat(40);
-    /** @type {string[][]} */
-    const ran = [];
-    const run = (/** @type {string[]} */ args) => {
+    const ran: string[][] = [];
+    const run = (args: string[]) => {
       ran.push(args);
       mkdirSync(path.join(root, 'pr-gif', 'swipe'), { recursive: true });
       writeFileSync(path.join(root, 'pr-gif', 'swipe', 'swipe-after.gif'), GIF);
@@ -390,10 +376,8 @@ describe('main', () => {
    * A gh first on PATH, written in Node: `--version` prints `version`, `pr
    * view` the description kept in a file beside it, and `pr edit` takes the
    * body file, each `--attach`ed file's reference becoming a link, as gh does.
-   *
-   * @param {string} version
    */
-  function fakeGh(version) {
+  function fakeGh(version: string) {
     const bin = folder({});
     const state = path.join(bin, 'body.md');
     const headFile = path.join(bin, 'head');
@@ -418,8 +402,8 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
     process.env.PATH = `${bin}${path.delimiter}${saved.PATH}`;
     return {
       body: () => readFileSync(state, 'utf8'),
-      setBody: (/** @type {string} */ text) => writeFileSync(state, text),
-      setHead: (/** @type {string} */ sha) => writeFileSync(headFile, sha),
+      setBody: (text: string) => writeFileSync(state, text),
+      setHead: (sha: string) => writeFileSync(headFile, sha),
     };
   }
 
@@ -430,15 +414,12 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
       'pr-gif/sheet/sheet-before.gif': GIF,
     });
     const summary = path.join(cwd, 'summary.md');
-    /** @type {string[]} */
-    const fetched = [];
-    const fetch = /** @type {typeof globalThis.fetch} */ (
-      /** @type {unknown} */ (
-        async (/** @type {string} */ url) => (fetched.push(url), new Response('GIF89a'))
-      )
-    );
-    /** @type {string[]} */
-    const logs = [];
+    const fetched: string[] = [];
+    const fetch = (async (url: string) => (
+      fetched.push(url),
+      new Response('GIF89a')
+    )) as unknown as typeof globalThis.fetch;
+    const logs: string[] = [];
     const env = {
       PR: '12',
       GH_TOKEN: 'token',
@@ -477,9 +458,8 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
     const output = path.join(root, 'output');
     const base = 'b'.repeat(40);
     const head = 'c'.repeat(40);
-    /** @type {string[][]} */
-    const asked = [];
-    const git = (/** @type {string[]} */ args) => {
+    const asked: string[][] = [];
+    const git = (args: string[]) => {
       asked.push(args);
       if (args[0] === 'merge-base') return `${'d'.repeat(40)}\n`;
       return [
@@ -546,17 +526,13 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
   /**
    * A workflow_run event's file, and an api answering from `answers` by the
    * endpoint's start, noting each call.
-   *
-   * @param {Record<string, unknown>} run
-   * @param {Record<string, unknown>} answers
    */
-  function checkWorld(run, answers) {
+  function checkWorld(run: Record<string, unknown>, answers: Record<string, unknown>) {
     const dir = folder({});
     const eventPath = path.join(dir, 'event.json');
     writeFileSync(eventPath, JSON.stringify({ workflow_run: run }));
-    /** @type {string[][]} */
-    const calls = [];
-    const api = (/** @type {string[]} */ args) => {
+    const calls: string[][] = [];
+    const api = (args: string[]) => {
       calls.push(args);
       if (args[0] === '-X') return '{}';
       const endpoint = args.find((a) => a.startsWith('repos/')) ?? '';
@@ -580,7 +556,7 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
         readFileSync(output, 'utf8')
           .trim()
           .split('\n')
-          .map((line) => /** @type {[string, string]} */ (line.split(/=(.*)/s).slice(0, 2))),
+          .map((line) => line.split(/=(.*)/s).slice(0, 2) as [string, string]),
       );
     return { api, calls, env, outputs };
   }
@@ -619,8 +595,7 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
         ],
       },
     });
-    /** @type {string[]} */
-    const logs = [];
+    const logs: string[] = [];
     expect(
       await main(['check'], { env: world.env, api: world.api, log: (l) => logs.push(l) }),
     ).toBe(0);
@@ -673,7 +648,7 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
       "description=A fork's PR: not recorded here. Run PR GIFs by hand if you trust it",
     );
 
-    for (const [what, r, answers] of /** @type {const} */ ([
+    for (const [what, r, answers] of [
       ['a run by hand', { ...run, event: 'workflow_dispatch' }, {}],
       ['a cancelled run', { ...run, conclusion: 'cancelled' }, {}],
       ['a run with no PR', { ...run, pull_requests: [] }, {}],
@@ -685,7 +660,7 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
           'repos/o/r/pulls/12': { ...pull, head: { ...pull.head, sha: 'b'.repeat(40) } },
         },
       ],
-    ])) {
+    ] as const) {
       const w = checkWorld(r, answers);
       expect(await main(['check'], { env: w.env, api: w.api, log: () => {} }), what).toBe(0);
       expect(w.outputs().go, what).toBe('false');
@@ -699,8 +674,7 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
   it("attaches an automatic run's GIFs at its commit, marks what failed, drops what the PR no longer changes", async () => {
     const gh = fakeGh('2.103.3');
     const runUrl = 'https://github.com/o/r/actions/runs/5';
-    const old = (/** @type {string} */ sha) =>
-      `${recordedLine(sha, { automatic: true })}\n\n| old |`;
+    const old = (sha: string) => `${recordedLine(sha, { automatic: true })}\n\n| old |`;
     gh.setBody(
       withBlock(
         withBlock(
@@ -729,11 +703,8 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
         failed: ['broken'],
       }),
     });
-    const fetch = /** @type {typeof globalThis.fetch} */ (
-      /** @type {unknown} */ (async () => new Response('GIF89a'))
-    );
-    /** @type {string[]} */
-    const logs = [];
+    const fetch = (async () => new Response('GIF89a')) as unknown as typeof globalThis.fetch;
+    const logs: string[] = [];
     const env = {
       PR: '12',
       GH_TOKEN: 'token',
@@ -772,8 +743,7 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
       RECORD: 'false',
       HEAD_SHA: head,
     };
-    /** @type {string[]} */
-    const logs = [];
+    const logs: string[] = [];
     expect(await main(['attach'], { env, cwd: folder({}), log: (l) => logs.push(l) })).toBe(0);
     expect(gh.body()).toBe('Intro');
 
@@ -783,7 +753,7 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
     expect(gh.body()).toBe(auto);
     expect(logs.at(-1)).toMatch(/head moved on to bbbbbbb from aaaaaaa/);
 
-    const manifest = (/** @type {Partial<import('./workflow.ts').Manifest>} */ m) =>
+    const manifest = (m: Partial<Manifest>) =>
       folder({
         'pr-gif/s/s-after.gif': GIF,
         'pr-gif/pr-gif.json': writeManifest({
@@ -841,9 +811,7 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
         failed: [],
       }),
     });
-    const fetch = /** @type {typeof globalThis.fetch} */ (
-      /** @type {unknown} */ (async () => new Response('GIF89a'))
-    );
+    const fetch = (async () => new Response('GIF89a')) as unknown as typeof globalThis.fetch;
     const env = { PR: '12', GH_TOKEN: 'token', GITHUB_REPOSITORY: 'o/r' };
     expect(await main(['attach'], { env, cwd, fetch, log: () => {} })).toBe(0);
     expect(gh.body()).toContain('<!-- pr-gif:sheet -->\nRecorded at `aaaaaaa`.\n\n| Scenario |');
@@ -930,8 +898,7 @@ describe('which scenarios a PR changes', () => {
 
 describe('screenRun and checkRun', () => {
   const head = 'a'.repeat(40);
-  /** @type {import('./workflow.ts').WorkflowRun} */
-  const run = {
+  const run: WorkflowRun = {
     id: 5,
     event: 'pull_request',
     conclusion: 'success',
@@ -939,8 +906,7 @@ describe('screenRun and checkRun', () => {
     html_url: 'u',
     head_repository: { full_name: 'o/r' },
   };
-  /** @type {import('./workflow.ts').Pull} */
-  const pull = {
+  const pull: Pull = {
     number: 12,
     state: 'open',
     body: '',
@@ -952,7 +918,7 @@ describe('screenRun and checkRun', () => {
     repo: 'o/r',
     fork: false,
     changed: [],
-    source: /** @type {const} */ ('web'),
+    source: 'web' as const,
   };
 
   it('passes a finished pull_request run, telling a fork', () => {

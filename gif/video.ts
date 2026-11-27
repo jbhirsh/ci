@@ -38,28 +38,24 @@ export const TOUCH_JOIN_S = 0.5;
 /** A wait shorter than this between kept stretches isn't worth a cut. */
 export const MIN_CUT_S = 0.6;
 
-/**
- * @typedef {object} Window A stretch of a video, in seconds.
- * @property {number} start
- * @property {number} end
- */
+/** A stretch of a video, in seconds. */
+export type Window = {
+  start: number;
+  end: number;
+};
 
-/**
- * @typedef {object} GifOptions
- * @property {number} width
- * @property {number} fps
- */
+export type GifOptions = {
+  width: number;
+  fps: number;
+};
 
-/** @param {number} n */
-const round3 = (n) => Math.round(n * 1000) / 1000;
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /**
  * The timestamps (s) of the frames mpdecimate kept, from ffmpeg's stderr
  * with `showinfo` after it: the first frame, then each one that changed.
- *
- * @param {string} stderr
  */
-export function keptTimes(stderr) {
+export function keptTimes(stderr: string) {
   return [...stderr.matchAll(/Parsed_showinfo\S*\s.*?pts_time:\s*([\d.]+)/g)].map((m) =>
     Number(m[1]),
   );
@@ -68,14 +64,13 @@ export function keptTimes(stderr) {
 /**
  * The part of the video worth keeping: from just before the first change
  * on screen to just after the last. Null when nothing ever changed.
- *
- * @param {readonly number[]} times
- * @param {number} duration
- * @param {number} [lead]
- * @param {number} [tail]
- * @returns {Window | null}
  */
-export function activeWindow(times, duration, lead = LEAD_S, tail = TAIL_S) {
+export function activeWindow(
+  times: readonly number[],
+  duration: number,
+  lead: number = LEAD_S,
+  tail: number = TAIL_S,
+): Window | null {
   // The first kept frame is the opening still, not a change.
   const changes = times.slice(1);
   if (changes.length === 0) return null;
@@ -90,32 +85,23 @@ export function activeWindow(times, duration, lead = LEAD_S, tail = TAIL_S) {
  * start, so the closing still (from the last change to the end) would
  * otherwise flash by: ffmpeg's -final_delay holds it. Times are relative to
  * the GIF's start.
- *
- * @param {number} lastChange
- * @param {number} end
  */
-export function finalDelayCs(lastChange, end) {
+export function finalDelayCs(lastChange: number, end: number) {
   return Math.max(0, Math.round((end - lastChange) * 100));
 }
 
 /**
  * The last change on screen inside a window, relative to its start.
- *
- * @param {readonly number[]} times
- * @param {Window} window
  */
-export function lastChangeIn(times, window) {
+export function lastChangeIn(times: readonly number[], window: Window) {
   const inside = times.slice(1).filter((t) => t >= window.start && t <= window.end);
   return round3((inside.length > 0 ? inside[inside.length - 1] : window.start) - window.start);
 }
 
 /**
  * The colour a `#rrggbb` setting names, as [r, g, b].
- *
- * @param {string} hex
- * @returns {[number, number, number]}
  */
-export function parseColor(hex) {
+export function parseColor(hex: string): [number, number, number] {
   const match = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
   if (!match) throw new Error(`not a #rrggbb colour: ${hex}`);
   return [parseInt(match[1], 16), parseInt(match[2], 16), parseInt(match[3], 16)];
@@ -126,12 +112,12 @@ export function parseColor(hex) {
  * `tolerance` (sift's ring, #E11D48, and its Remove red, #FF3B30, are about
  * 48 apart, so 28 keeps the red out while the video's compression keeps the
  * ring in).
- *
- * @param {Uint8Array} rgb
- * @param {readonly [number, number, number]} ring
- * @param {number} [tolerance]
  */
-export function ringPixels(rgb, ring, tolerance = RING_TOLERANCE) {
+export function ringPixels(
+  rgb: Uint8Array,
+  ring: readonly [number, number, number],
+  tolerance: number = RING_TOLERANCE,
+) {
   const [r, g, b] = ring;
   const limit = tolerance * tolerance;
   let count = 0;
@@ -146,15 +132,13 @@ export function ringPixels(rgb, ring, tolerance = RING_TOLERANCE) {
 
 /**
  * The stretches of the video where a touch shows, from each frame's ring count.
- *
- * @param {readonly number[]} times
- * @param {readonly number[]} counts
- * @param {number} [minPixels]
- * @returns {Window[]}
  */
-export function touchSpans(times, counts, minPixels = RING_MIN_PIXELS) {
-  /** @type {Window[]} */
-  const spans = [];
+export function touchSpans(
+  times: readonly number[],
+  counts: readonly number[],
+  minPixels: number = RING_MIN_PIXELS,
+): Window[] {
+  const spans: Window[] = [];
   times.forEach((t, i) => {
     if (counts[i] < minPixels) return;
     const last = spans[spans.length - 1];
@@ -168,15 +152,10 @@ export function touchSpans(times, counts, minPixels = RING_MIN_PIXELS) {
  * The stretches to keep: each touch with TOUCH_LEAD_S before and
  * TOUCH_AFTER_S after (END_HOLD_S after the last), joined where the wait
  * between them is shorter than MIN_CUT_S. Null when there's no touch.
- *
- * @param {readonly Window[]} spans
- * @param {number} duration
- * @returns {Window[] | null}
  */
-export function keptStretches(spans, duration) {
+export function keptStretches(spans: readonly Window[], duration: number): Window[] | null {
   if (spans.length === 0) return null;
-  /** @type {Window[]} */
-  const kept = [];
+  const kept: Window[] = [];
   spans.forEach((span, i) => {
     const after = i === spans.length - 1 ? END_HOLD_S : TOUCH_AFTER_S;
     const next = {
@@ -195,10 +174,8 @@ export function keptStretches(spans, duration) {
  * A Simulator records a frame only when the screen changes, so each stretch
  * is first made a steady frame rate: cut as it is, one would end at its last
  * change and lose the still time after it.
- *
- * @param {readonly Window[]} stretches
  */
-export function cutFilter(stretches) {
+export function cutFilter(stretches: readonly Window[]) {
   const parts = stretches.map(
     (w, i) => `[0:v]fps=30,trim=start=${w.start}:end=${w.end},setpts=PTS-STARTPTS[s${i}]`,
   );
@@ -208,20 +185,15 @@ export function cutFilter(stretches) {
 
 /**
  * One video to one GIF: real timing, still frames dropped, scaled sharp.
- *
- * @param {GifOptions} options
  */
-export function gifFilter({ width, fps }) {
+export function gifFilter({ width, fps }: GifOptions) {
   return `fps=${fps},mpdecimate,scale=${width}:-1:flags=lanczos,${PALETTE}`;
 }
 
 /**
  * A label drawn across the top of a side of the side-by-side GIF.
- *
- * @param {string} text
- * @param {string | null} fontfile
  */
-function label(text, fontfile) {
+function label(text: string, fontfile: string | null) {
   const font = fontfile ? `fontfile='${fontfile.replace(/'/g, "'\\''")}':` : '';
   return `drawtext=${font}text='${text}':fontsize=22:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=8:x=(w-text_w)/2:y=12`;
 }
@@ -232,26 +204,19 @@ function label(text, fontfile) {
  * frame until the longer one ends. `aspect` is the taller recording's
  * height over its width: both sides are fitted into that box, as hstack
  * needs equal heights (recordings from different simulators differ).
- *
- * @param {GifOptions} options
- * @param {Window} before
- * @param {Window} after
- * @param {string | null} fontfile
- * @param {number} aspect
  */
-export function videoSideBySideFilter({ width, fps }, before, after, fontfile, aspect) {
+export function videoSideBySideFilter(
+  { width, fps }: GifOptions,
+  before: Window,
+  after: Window,
+  fontfile: string | null,
+  aspect: number,
+) {
   const half = Math.round(width / 2);
   const height = 2 * Math.round((half * aspect) / 2);
-  /** @param {Window} w */
-  const length = (w) => w.end - w.start;
+  const length = (w: Window) => w.end - w.start;
   const longest = Math.max(length(before), length(after));
-  /**
-   * @param {number} input
-   * @param {Window} w
-   * @param {string} text
-   * @param {string} out
-   */
-  const side = (input, w, text, out) =>
+  const side = (input: number, w: Window, text: string, out: string) =>
     `[${input}:v]trim=start=${w.start}:end=${w.end},setpts=PTS-STARTPTS,fps=${fps},` +
     `scale=${half}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,` +
     `pad=${half}:${height}:(ow-iw)/2:(oh-ih)/2,${label(text, fontfile)},` +

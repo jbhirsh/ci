@@ -3,56 +3,60 @@
 // area, and naming a key press for the overlay. No browser, no ffmpeg, no
 // files, so all of it is unit tested.
 
-/**
- * @typedef {object} Clip The part of the viewport recorded, in CSS pixels.
- * @property {number} x
- * @property {number} y
- * @property {number} width
- * @property {number} height
- */
+/** The part of the viewport recorded, in CSS pixels. */
+export type Clip = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+/** A frame kept while recording: its file, when it was painted (ms), and a hash of its pixels. */
+export type Shot = {
+  file: string;
+  at: number;
+  hash: string;
+};
+
+/** A frame of the GIF and how long it shows, in ms. */
+export type Still = {
+  file: string;
+  ms: number;
+};
+
+/** The most the GIF dwells on its first and last frames, in ms. */
+export type Holds = {
+  lead: number;
+  tail: number;
+};
 
 /**
- * @typedef {object} Shot A frame kept while recording: its file, when it was painted (ms), and a hash of its pixels.
- * @property {string} file
- * @property {number} at
- * @property {string} hash
+ * One of the page's animation frames, as the overlay saw it: when (ms), and whether anything in the
+ * recorded area moved since the frame before (an animation or transition running there, the
+ * pointer, a key, the wheel).
  */
+export type Tick = {
+  t: number;
+  moving: boolean;
+};
 
-/**
- * @typedef {object} Still A frame of the GIF and how long it shows, in ms.
- * @property {string} file
- * @property {number} ms
- */
+/** A pointer position the overlay saw, at a time in ms. */
+export type Move = {
+  x: number;
+  y: number;
+  t: number;
+};
 
-/**
- * @typedef {object} Holds The most the GIF dwells on its first and last frames, in ms.
- * @property {number} lead
- * @property {number} tail
- */
+/** A stretch of the recording with the pointer still, outside the clip. */
+export type Rest = {
+  x: number;
+  y: number;
+  /** ms from the start of the recording */
+  at: number;
+  ms: number;
+};
 
-/**
- * @typedef {object} Tick One of the page's animation frames, as the overlay saw it: when (ms), and whether anything in the recorded area moved since the frame before (an animation or transition running there, the pointer, a key, the wheel).
- * @property {number} t
- * @property {boolean} moving
- */
-
-/**
- * @typedef {object} Move A pointer position the overlay saw, at a time in ms.
- * @property {number} x
- * @property {number} y
- * @property {number} t
- */
-
-/**
- * @typedef {object} Rest A stretch of the recording with the pointer still, outside the clip.
- * @property {number} x
- * @property {number} y
- * @property {number} at ms from the start of the recording
- * @property {number} ms
- */
-
-/** @type {Holds} */
-export const HOLDS = { lead: 500, tail: 1500 };
+export const HOLDS: Holds = { lead: 500, tail: 1500 };
 
 // Browsers show a GIF frame of under 20 ms for 100 ms, so a brief frame
 // would stall the clip rather than flash by. GIF delays are whole
@@ -64,13 +68,8 @@ const TICK = 10;
  * How long, of `from` to `to`, the page was still by its ticks (in time
  * order): the stretches between ticks in which nothing moved. Undefined
  * when no tick falls inside, as nothing then says either way.
- *
- * @param {readonly Tick[]} ticks
- * @param {number} from
- * @param {number} to
- * @returns {number | undefined}
  */
-export function stillTime(ticks, from, to) {
+export function stillTime(ticks: readonly Tick[], from: number, to: number): number | undefined {
   let still = 0;
   let previous = from;
   let seen = false;
@@ -103,16 +102,14 @@ export function stillTime(ticks, from, to) {
  *     with a pause holds there).
  * `end` is when recording stopped. Durations round to a GIF's hundredths;
  * none is under 20 ms.
- *
- * @param {readonly Shot[]} shots
- * @param {number} end
- * @param {Holds} [holds]
- * @param {{ ticks?: readonly Tick[]; frame?: number }} [options]
- * @returns {Still[]}
  */
-export function timeline(shots, end, holds = HOLDS, { ticks = [], frame = 1000 / 15 } = {}) {
-  /** @type {{ file: string; hash: string; ms: number }[]} */
-  const runs = [];
+export function timeline(
+  shots: readonly Shot[],
+  end: number,
+  holds: Holds = HOLDS,
+  { ticks = [], frame = 1000 / 15 }: { ticks?: readonly Tick[]; frame?: number } = {},
+): Still[] {
+  const runs: { file: string; hash: string; ms: number }[] = [];
   shots.forEach((shot, i) => {
     const until = i + 1 < shots.length ? shots[i + 1].at : end;
     let ms = until - shot.at;
@@ -142,17 +139,13 @@ export function timeline(shots, end, holds = HOLDS, { ticks = [], frame = 1000 /
  * it if that one is kept; flush() returns the last.
  * Now and then the screencast sends a frame painted no later than the one
  * before it; shown after it, the GIF would flick back, so it is dropped.
- *
- * @template {{ at: number }} F
- * @param {number} [gap]
- * @returns {{ push(frame: F): F | null; flush(): F | null }}
  */
-export function thinner(gap = 40) {
-  /** @type {F | null} */
-  let pending = null;
+export function thinner<F extends { at: number }>(
+  gap = 40,
+): { push(frame: F): F | null; flush(): F | null } {
+  let pending: F | null = null;
   let kept = -Infinity;
-  /** @param {number} next */
-  const decide = (next) => {
+  const decide = (next: number) => {
     const frame = pending;
     if (!frame || (next - frame.at < gap && frame.at - kept < gap)) return null;
     kept = frame.at;
@@ -176,10 +169,8 @@ export function thinner(gap = 40) {
 /**
  * A kept frame's file name: f0000.jpg, f0001.jpg, … (the screencast's
  * JPEGs).
- *
- * @param {number} n
  */
-export function frameName(n) {
+export function frameName(n: number) {
   return `f${String(n).padStart(4, '0')}.jpg`;
 }
 
@@ -189,13 +180,10 @@ export function frameName(n) {
  * at the image reader's default 25, every duration would snap to 40 ms
  * steps. The demuxer ignores the last entry's duration unless the file is
  * listed once more after it, so it is.
- *
- * @param {readonly Still[]} stills
  */
-export function concatList(stills) {
+export function concatList(stills: readonly Still[]) {
   const lines = ['ffconcat version 1.0'];
-  /** @param {string} name */
-  const file = (name) => [`file '${name}'`, 'option framerate 100'];
+  const file = (name: string) => [`file '${name}'`, 'option framerate 100'];
   for (const { file: name, ms } of stills) {
     lines.push(...file(name), `duration ${(ms / 1000).toFixed(3)}`);
   }
@@ -208,11 +196,8 @@ export function concatList(stills) {
  * A JPEG's size in pixels, from its first frame header (SOF), or null for
  * bytes that hold none. Segments are skipped by their lengths, so a
  * thumbnail's or a comment's bytes can't be read as the header.
- *
- * @param {Uint8Array} jpeg
- * @returns {{ width: number; height: number } | null}
  */
-export function jpegSize(jpeg) {
+export function jpegSize(jpeg: Uint8Array): { width: number; height: number } | null {
   const view = new DataView(jpeg.buffer, jpeg.byteOffset, jpeg.byteLength);
   if (jpeg.length < 2 || view.getUint16(0) !== 0xffd8) return null;
   let at = 2;
@@ -249,12 +234,12 @@ export function jpegSize(jpeg) {
  * `viewport` (pixels: the device scale factor times the viewport, rounded),
  * in whole pixels, each axis by its own scale and never past the frame's
  * edge, which ffmpeg refuses.
- *
- * @param {Clip} clip
- * @param {{ width: number; height: number }} frame
- * @param {{ width: number; height: number }} viewport
  */
-export function cropFilter(clip, frame, viewport) {
+export function cropFilter(
+  clip: Clip,
+  frame: { width: number; height: number },
+  viewport: { width: number; height: number },
+) {
   const sx = frame.width / viewport.width;
   const sy = frame.height / viewport.height;
   const x = Math.round(clip.x * sx);
@@ -267,11 +252,8 @@ export function cropFilter(clip, frame, viewport) {
 /**
  * The height, in whole even pixels as ffmpeg's video wants, of a frame cut
  * by `crop` (a cropFilter) once scaled to `width`.
- *
- * @param {string} crop
- * @param {number} width
  */
-export function scaledHeight(crop, width) {
+export function scaledHeight(crop: string, width: number) {
   const [w, h] = crop.replace('crop=', '').split(':').map(Number);
   return Math.max(2, Math.round((h * width) / w / 2) * 2);
 }
@@ -281,20 +263,17 @@ export function scaledHeight(crop, width) {
  * ms between `start` and `end`, so the GIF lost sight of it. Before its
  * first move the pointer is nowhere the overlay can draw, so that doesn't
  * count.
- *
- * @param {readonly Move[]} moves
- * @param {Clip} clip
- * @param {number} start
- * @param {number} end
- * @param {number} [min]
- * @returns {Rest[]}
  */
-export function restsOutside(moves, clip, start, end, min = 500) {
-  /** @param {Move} move */
-  const inside = ({ x, y }) =>
+export function restsOutside(
+  moves: readonly Move[],
+  clip: Clip,
+  start: number,
+  end: number,
+  min = 500,
+): Rest[] {
+  const inside = ({ x, y }: Move) =>
     x >= clip.x && x <= clip.x + clip.width && y >= clip.y && y <= clip.y + clip.height;
-  /** @type {Rest[]} */
-  const rests = [];
+  const rests: Rest[] = [];
   moves.forEach((move, i) => {
     const from = Math.max(move.t, start);
     const to = Math.min(i + 1 < moves.length ? moves[i + 1].t : end, end);
@@ -305,14 +284,14 @@ export function restsOutside(moves, clip, start, end, min = 500) {
   return rests;
 }
 
-/**
- * @typedef {object} KeyPress The parts of a keydown the overlay names.
- * @property {string} key
- * @property {boolean} shiftKey
- * @property {boolean} ctrlKey
- * @property {boolean} altKey
- * @property {boolean} metaKey
- */
+/** The parts of a keydown the overlay names. */
+export type KeyPress = {
+  key: string;
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  metaKey: boolean;
+};
 
 /**
  * How the overlay labels a key press: "Tab", "Shift+Tab", "→", "Space", a
@@ -322,13 +301,9 @@ export function restsOutside(moves, clip, start, end, min = 500) {
  * A modifier on its own names nothing: it shows with the key it modifies.
  * The overlay inlines this function's source, so it must stay
  * self-contained.
- *
- * @param {KeyPress} e
- * @returns {string | null}
  */
-export function keyLabel(e) {
-  /** @type {Record<string, string>} */
-  const names = {
+export function keyLabel(e: KeyPress): string | null {
+  const names: Record<string, string> = {
     ' ': 'Space',
     ArrowLeft: '←',
     ArrowRight: '→',

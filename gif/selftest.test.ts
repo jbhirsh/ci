@@ -7,14 +7,10 @@ import { selftest } from './selftest.ts';
 /**
  * An app with these files (its .github/ci.json among them, if given), and a
  * stand-in Playwright of release `version` unless `playwright` is false.
- *
- * @param {Record<string, string>} files
- * @param {string | false} [playwright]
- * @param {string} [version]
  */
 function app(
-  files,
-  playwright = 'module.exports = { webkit: { launch() {} } };',
+  files: Record<string, string>,
+  playwright: string | false = 'module.exports = { webkit: { launch() {} } };',
   version = '1.64.1',
 ) {
   const root = mkdtempSync(path.join(tmpdir(), 'gif-selftest-'));
@@ -41,8 +37,7 @@ function app(
   return root;
 }
 
-/** @param {Record<string, unknown>} gif */
-const ciJson = (gif) => JSON.stringify({ gif });
+const ciJson = (gif: Record<string, unknown>) => JSON.stringify({ gif });
 
 describe('selftest', () => {
   it('checks an app with no gif settings against the defaults, and nothing more', async () => {
@@ -88,8 +83,7 @@ describe('selftest', () => {
 
   it('checks that the scenarios folder of an app whose CI records videos holds a flow', async () => {
     const gif = { source: 'ci-videos', scenarios: 'e2e/gifs' };
-    /** @type {string[]} */
-    const logs = [];
+    const logs: string[] = [];
     expect(
       await selftest(
         app(

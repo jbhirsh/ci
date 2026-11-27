@@ -30,6 +30,7 @@ import { appConfig } from '../lib/app.mjs';
 import { appPlaywright } from './cli.ts';
 import { loadModule, scenarioFiles, scenarioProblems, setupProblems } from './scenario.ts';
 import { parseSettings } from './settings.ts';
+import type { GifSettings } from './settings.ts';
 
 /**
  * The first Playwright release recordFrames is known to work with: its
@@ -40,30 +41,23 @@ const SCREENCAST_SINCE = [1, 64];
 /**
  * The app's Playwright release, from playwright-core's package.json (which
  * both `@playwright/test` and `playwright` install).
- *
- * @param {string} root
- * @returns {number[]}
  */
-function playwrightVersion(root) {
+function playwrightVersion(root: string): number[] {
   const require = createRequire(path.join(root, 'package.json'));
-  const { version } = /** @type {{ version: string }} */ (require('playwright-core/package.json'));
+  const { version } = require('playwright-core/package.json') as { version: string };
   return version.split('.').map(Number);
 }
 
 /**
  * The problems found in the app at `root`, saying what it checked to `log`.
- *
- * @param {string} root
- * @param {(line: string) => void} [log]
- * @returns {Promise<string[]>}
  */
-export async function selftest(root, log = console.log) {
-  /** @type {string[]} */
-  const problems = [];
-  /** @type {Record<string, unknown>} */
-  let raw;
-  /** @type {import('./settings.ts').GifSettings} */
-  let settings;
+export async function selftest(
+  root: string,
+  log: (line: string) => void = console.log,
+): Promise<string[]> {
+  const problems: string[] = [];
+  let raw: Record<string, unknown>;
+  let settings: GifSettings;
   try {
     raw = appConfig('gif', root);
     settings = parseSettings(raw);

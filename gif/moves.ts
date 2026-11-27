@@ -18,50 +18,46 @@
 // for a viewer to follow, keep the pointer inside the recorded area while it
 // rests, and end on a pause, which the GIF holds before it loops.
 
-/**
- * @typedef {object} Point
- * @property {number} x
- * @property {number} y
- */
+export type Point = {
+  x: number;
+  y: number;
+};
 
-/**
- * @typedef {object} Mouse What these need of Playwright's page.mouse: a page passes as is.
- * @property {(x: number, y: number) => Promise<void>} move
- * @property {() => Promise<void>} down
- * @property {() => Promise<void>} up
- * @property {(deltaX: number, deltaY: number) => Promise<void>} wheel
- */
+/** What these need of Playwright's page.mouse: a page passes as is. */
+export type Mouse = {
+  move: (x: number, y: number) => Promise<void>;
+  down: () => Promise<void>;
+  up: () => Promise<void>;
+  wheel: (deltaX: number, deltaY: number) => Promise<void>;
+};
 
-/**
- * @typedef {{ boundingBox(): Promise<{ x: number; y: number; width: number; height: number } | null> } | Point} Target
- *   A locator (its middle), or a point in CSS pixels.
- */
+/** A locator (its middle), or a point in CSS pixels. */
+export type Target =
+  | { boundingBox(): Promise<{ x: number; y: number; width: number; height: number } | null> }
+  | Point;
 
 /** How long the moves wait between the events they send, in ms. */
 export const STEP_MS = 16;
 
 /**
  * Eases 0..1 in and out; anything outside is held at its end.
- *
- * @param {number} t
  */
-export function smoothstep(t) {
+export function smoothstep(t: number) {
   const c = Math.min(Math.max(t, 0), 1);
   return c * c * (3 - 2 * c);
 }
 
-/** @param {number} ms */
-const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
 /**
  * Calls `step` with the eased progress, 0 to 1, every STEP_MS for `ms`, and
  * once more at 1.
- *
- * @param {number} ms
- * @param {(progress: number) => Promise<void>} step
- * @param {(t: number) => number} [ease]
  */
-async function overTime(ms, step, ease = smoothstep) {
+async function overTime(
+  ms: number,
+  step: (progress: number) => Promise<void>,
+  ease: (t: number) => number = smoothstep,
+) {
   const start = performance.now();
   for (;;) {
     const t = ms > 0 ? (performance.now() - start) / ms : 1;
@@ -73,14 +69,9 @@ async function overTime(ms, step, ease = smoothstep) {
 
 // Where each page's pointer was last put, for the next move to start from.
 // The same Page across a page load, so it outlives one.
-/** @type {WeakMap<object, Point>} */
-const pointers = new WeakMap();
+const pointers: WeakMap<object, Point> = new WeakMap();
 
-/**
- * @param {Target} target
- * @returns {Promise<Point>}
- */
-async function pointOf(target) {
+async function pointOf(target: Target): Promise<Point> {
   if (!('boundingBox' in target)) return target;
   const box = await target.boundingBox();
   if (!box) throw new Error('glide: the target has no box (is it on the page?)');
@@ -92,13 +83,12 @@ async function pointOf(target) {
  * easing in and out from where it last was, so the drawn arrow glides there
  * rather than jumping. The first move of a page, or one of 0 ms, puts it
  * straight there. Resolves with where it went.
- *
- * @param {{ mouse: Pick<Mouse, 'move'> }} page
- * @param {Target} target
- * @param {number} [ms]
- * @returns {Promise<Point>}
  */
-export async function glide(page, target, ms = 500) {
+export async function glide(
+  page: { mouse: Pick<Mouse, 'move'> },
+  target: Target,
+  ms = 500,
+): Promise<Point> {
   const to = await pointOf(target);
   const from = pointers.get(page) ?? to;
   await overTime(ms, (e) =>
@@ -112,13 +102,12 @@ export async function glide(page, target, ms = 500) {
  * A click as a person makes it: glides to `target` over `ms`, pauses, and
  * holds the button for `holdMs`, long enough for the drawn ring to be in a
  * frame.
- *
- * @param {{ mouse: Pick<Mouse, 'move' | 'down' | 'up'> }} page
- * @param {Target} target
- * @param {{ ms?: number; holdMs?: number }} [options]
- * @returns {Promise<Point>}
  */
-export async function click(page, target, { ms = 500, holdMs = 200 } = {}) {
+export async function click(
+  page: { mouse: Pick<Mouse, 'move' | 'down' | 'up'> },
+  target: Target,
+  { ms = 500, holdMs = 200 }: { ms?: number; holdMs?: number } = {},
+): Promise<Point> {
   const at = await glide(page, target, ms);
   await wait(150);
   await page.mouse.down();
@@ -129,13 +118,13 @@ export async function click(page, target, { ms = 500, holdMs = 200 } = {}) {
 
 /**
  * A drag from `from` to `to`, over `ms`, holding a moment at either end.
- *
- * @param {{ mouse: Pick<Mouse, 'move' | 'down' | 'up'> }} page
- * @param {Target} from
- * @param {Target} to
- * @param {number} [ms]
  */
-export async function drag(page, from, to, ms = 800) {
+export async function drag(
+  page: { mouse: Pick<Mouse, 'move' | 'down' | 'up'> },
+  from: Target,
+  to: Target,
+  ms = 800,
+) {
   await glide(page, from);
   await page.mouse.down();
   await wait(250);
@@ -148,12 +137,8 @@ export async function drag(page, from, to, ms = 800) {
  * Turns the wheel `dy` pixels (down when positive) over `ms`, a little at a
  * time, so the page glides rather than leaping in one event, and the drawn
  * ↓/↑ stays up all the while. Glide the pointer over what scrolls first.
- *
- * @param {{ mouse: Pick<Mouse, 'wheel'> }} page
- * @param {number} dy
- * @param {number} [ms]
  */
-export async function scroll(page, dy, ms = 700) {
+export async function scroll(page: { mouse: Pick<Mouse, 'wheel'> }, dy: number, ms = 700) {
   let done = 0;
   await overTime(ms, async (e) => {
     const target = Math.round(dy * e);
@@ -163,17 +148,18 @@ export async function scroll(page, dy, ms = 700) {
   });
 }
 
-/**
- * @typedef {object} TouchStep One step of a finger's touch, as touchStep takes it.
- * @property {'start' | 'move' | 'end'} type
- * @property {Point} at where the finger is, in CSS pixels from the viewport's top left
- */
+/** One step of a finger's touch, as touchStep takes it. */
+export type TouchStep = {
+  type: 'start' | 'move' | 'end';
+  /** where the finger is, in CSS pixels from the viewport's top left */
+  at: Point;
+};
 
-/**
- * @typedef {object} TouchPage What swipe needs of a page: a page passes as is.
- * @property {Pick<Mouse, 'move'>} mouse
- * @property {(fn: (step: TouchStep) => void, step: TouchStep) => Promise<unknown>} evaluate
- */
+/** What swipe needs of a page: a page passes as is. */
+export type TouchPage = {
+  mouse: Pick<Mouse, 'move'>;
+  evaluate: (fn: (step: TouchStep) => void, step: TouchStep) => Promise<unknown>;
+};
 
 /**
  * One step of a finger's touch, dispatched in the page (it runs there, so it
@@ -184,13 +170,11 @@ export async function scroll(page, dy, ms = 700) {
  * constructor; what a page reads of one (`touches`, `changedTouches`, each
  * point's `clientX`/`clientY` and `target`, `preventDefault` on a cancelable
  * move) it has. The pointer event draws the ring and trail (overlay.ts).
- *
- * @param {TouchStep} step
  */
-export function touchStep({ type, at }) {
+export function touchStep({ type, at }: TouchStep) {
   // The page's own, named off globalThis, as this module is also Node's.
   const { document, PointerEvent } = globalThis;
-  const held = /** @type {{ __prGifTouch?: EventTarget }} */ (/** @type {unknown} */ (globalThis));
+  const held = globalThis as unknown as { __prGifTouch?: EventTarget };
   if (type === 'start') {
     held.__prGifTouch = document.elementFromPoint(at.x, at.y) ?? document.documentElement;
   }
@@ -245,21 +229,12 @@ export function touchStep({ type, at }) {
  * would stop first), and lifts at `to`. Each step is a touch pointer event
  * and a touch event in the page (touchStep), so what listens to either
  * moves, and the drawn ring and trail show the swipe as they show a drag.
- *
- * @param {TouchPage} page
- * @param {Target} from
- * @param {Target} to
- * @param {number} [ms]
  */
-export async function swipe(page, from, to, ms = 300) {
+export async function swipe(page: TouchPage, from: Target, to: Target, ms = 300) {
   const start = await glide(page, from);
   const end = await pointOf(to);
   await wait(150);
-  /**
-   * @param {TouchStep['type']} type
-   * @param {Point} at
-   */
-  const touch = (type, at) => page.evaluate(touchStep, { type, at });
+  const touch = (type: TouchStep['type'], at: Point) => page.evaluate(touchStep, { type, at });
   await touch('start', start);
   await overTime(
     ms,

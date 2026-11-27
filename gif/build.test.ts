@@ -24,6 +24,7 @@ import {
   serve,
   stopServers,
 } from './build.ts';
+import type { ChildProcess } from 'node:child_process';
 
 const temp = () => mkdtempSync(path.join(tmpdir(), 'gif-build-'));
 
@@ -149,8 +150,7 @@ describe('freePort', () => {
 describe('serve and stopServers', () => {
   it('serves a build until stopped, resolving once it answers', async () => {
     const root = fakeApp();
-    /** @type {import('node:child_process').ChildProcess[]} */
-    const servers = [];
+    const servers: ChildProcess[] = [];
     const origin = await serve({ root, outDir: 'dist', host: '127.0.0.1', servers });
     expect(origin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
     expect(await (await fetch(origin)).text()).toBe('ok');
@@ -164,8 +164,7 @@ describe('serve and stopServers', () => {
 
   it('says so when the server exits, or never answers', async () => {
     const root = fakeApp();
-    /** @type {import('node:child_process').ChildProcess[]} */
-    const servers = [];
+    const servers: ChildProcess[] = [];
     process.env.GIF_FAKE_PREVIEW = 'exit';
     await expect(serve({ root, outDir: 'dist', host: '127.0.0.1', servers })).rejects.toThrow(
       'vite preview exited with 3',
@@ -192,8 +191,7 @@ function buildRepo() {
     GIT_COMMITTER_NAME: 'T',
     GIT_COMMITTER_EMAIL: 't@example.com',
   };
-  /** @param {string[]} args */
-  const raw = (...args) =>
+  const raw = (...args: string[]) =>
     execFileSync('git', args, {
       cwd: path.join(dir, 'app'),
       env,
@@ -213,8 +211,7 @@ function buildRepo() {
 }
 
 describe('git and addBaseTree', () => {
-  /** @type {string} */
-  let template;
+  let template: string;
   beforeAll(() => {
     template = buildRepo();
   });

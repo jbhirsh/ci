@@ -21,10 +21,8 @@ const { document } = globalThis;
 const temp = () => mkdtempSync(path.join(tmpdir(), 'gif-record-'));
 /**
  * Any fake, as the structural type a function asks for.
- *
- * @param {unknown} fake
  */
-const as = (fake) => /** @type {never} */ (fake);
+const as = (fake: unknown) => fake as never;
 
 describe('showPointer', () => {
   it('draws the overlay from an init script, on every page the context opens', async () => {
@@ -57,23 +55,16 @@ describe('waitForPictures', () => {
 
   it('counts a picture loaded or broken, out of view, or with no src', () => {
     // The check itself, run here against jsdom's images.
-    const check = () => /** @type {boolean} */ (new Function(`return ${PICTURES_LOADED}`)());
+    const check = () => new Function(`return ${PICTURES_LOADED}`)() as boolean;
     const img = document.createElement('img');
     document.body.append(img);
-    /**
-     * @param {number} top
-     * @param {number} [width]
-     */
-    const box = (top, width = 100) =>
-      vi.spyOn(img, 'getBoundingClientRect').mockReturnValue(
-        /** @type {ReturnType<typeof document.body.getBoundingClientRect>} */ ({
-          top,
-          bottom: top + 50,
-          width,
-        }),
-      );
-    /** @param {boolean} value */
-    const complete = (value) =>
+    const box = (top: number, width = 100) =>
+      vi.spyOn(img, 'getBoundingClientRect').mockReturnValue({
+        top,
+        bottom: top + 50,
+        width,
+      } as ReturnType<typeof document.body.getBoundingClientRect>);
+    const complete = (value: boolean) =>
       Object.defineProperty(img, 'complete', { value, configurable: true });
     try {
       box(10);
@@ -114,12 +105,8 @@ describe('clockOffset', () => {
 /**
  * A JPEG's start: an APP0 segment, then a frame header of this size, and
  * `tag` after.
- *
- * @param {number} width
- * @param {number} height
- * @param {string} [tag]
  */
-function jpeg(width, height, tag = '') {
+function jpeg(width: number, height: number, tag = '') {
   const head = Buffer.from([
     0xff,
     0xd8,
@@ -158,8 +145,6 @@ describe('recordFrames', () => {
    * stamped (in ms) as `stamps` says, alike every `same` frames, and of the
    * size `size` gives in its header (none by default), until it's stopped;
    * its overlay reports `ticks` and `moves`.
-   *
-   * @param {{ stamps?: (n: number) => number; size?: { width: number; height: number }; viewport?: { width: number; height: number }; dpr?: number; silent?: boolean; same?: number; moves?: unknown; ticks?: unknown; evaluateFails?: boolean; noScreencast?: boolean }} [options]
    */
   function fakePage({
     stamps = () => Date.now() - 2,
@@ -172,19 +157,24 @@ describe('recordFrames', () => {
     ticks = [],
     evaluateFails = false,
     noScreencast = false,
+  }: {
+    stamps?: (n: number) => number;
+    size?: { width: number; height: number };
+    viewport?: { width: number; height: number };
+    dpr?: number;
+    silent?: boolean;
+    same?: number;
+    moves?: unknown;
+    ticks?: unknown;
+    evaluateFails?: boolean;
+    noScreencast?: boolean;
   } = {}) {
-    /** @type {ReturnType<typeof setInterval> | undefined} */
-    let sending;
+    let sending: ReturnType<typeof setInterval> | undefined;
     let n = 0;
-    /** @type {(() => unknown)[]} */
-    const loads = [];
+    const loads: (() => unknown)[] = [];
     const screencast = {
       start: vi.fn(
-        (
-          /** @type {{ onFrame: (frame: { data: Buffer; timestamp: number }) => void }} */ {
-            onFrame,
-          },
-        ) => {
+        ({ onFrame }: { onFrame: (frame: { data: Buffer; timestamp: number }) => void }) => {
           if (!silent) {
             sending = setInterval(() => {
               const i = n++;
@@ -204,23 +194,20 @@ describe('recordFrames', () => {
     const page = {
       screencast: noScreencast ? undefined : screencast,
       viewportSize: () => viewport,
-      evaluate: vi.fn((/** @type {string} */ script) => {
+      evaluate: vi.fn((script: string) => {
         if (script === 'devicePixelRatio') return Promise.resolve(dpr);
         if (evaluateFails) return Promise.reject(new Error('page closed'));
         if (script.includes('__prGifTicks ||')) return Promise.resolve(ticks);
         if (script.includes('__prGifMoves ||')) return Promise.resolve(moves);
         return Promise.resolve(undefined);
       }),
-      on: vi.fn((/** @type {string} */ _event, /** @type {() => unknown} */ fn) => loads.push(fn)),
+      on: vi.fn((_event: string, fn: () => unknown) => loads.push(fn)),
       off: vi.fn(),
     };
     return { page, screencast, sent: () => n, loads };
   }
-  /**
-   * @param {string} dir
-   * @param {number} i
-   */
-  const frameText = (dir, i) => readFileSync(path.join(dir, frameName(i))).toString();
+  const frameText = (dir: string, i: number) =>
+    readFileSync(path.join(dir, frameName(i))).toString();
 
   it('keeps the frames painted until stopped, thinned, with their timeline and crop', async () => {
     const dir = path.join(temp(), 'frames');

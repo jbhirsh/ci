@@ -44,40 +44,31 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { importFromApp } from '../lib/app.mjs';
 
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
- */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Imports `file` (from the app's root, or absolute) through the app's Vite,
  * or Node's import when the app has none.
- *
- * @param {string} file
- * @param {string} root
- * @returns {Promise<Record<string, unknown>>}
  */
-export async function loadModule(file, root) {
+export async function loadModule(file: string, root: string): Promise<Record<string, unknown>> {
   const absolute = path.resolve(root, file);
   if (!existsSync(absolute)) throw new Error(`pr-gif: no such file: ${file}`);
-  /** @type {unknown} */
-  let vite;
+  let vite: unknown;
   try {
     vite = await importFromApp('vite', root);
   } catch {
     vite = null;
   }
   if (isObject(vite) && typeof vite.runnerImport === 'function') {
-    const runnerImport =
-      /** @type {(id: string, config: object) => Promise<{ module: unknown }>} */ (
-        vite.runnerImport
-      );
+    const runnerImport = vite.runnerImport as (
+      id: string,
+      config: object,
+    ) => Promise<{ module: unknown }>;
     const { module } = await runnerImport(absolute, { root, logLevel: 'error' });
     return isObject(module) ? module : {};
   }
-  /** @type {unknown} */
-  const module = await import(pathToFileURL(absolute).href);
+  const module: unknown = await import(pathToFileURL(absolute).href);
   return isObject(module) ? module : {};
 }
 
@@ -93,31 +84,20 @@ const SCENARIO_KEYS = [
   'play',
 ];
 
-/**
- * @param {unknown} value
- * @returns {value is { width: number; height: number }}
- */
-const isSize = (value) =>
+const isSize = (value: unknown): value is { width: number; height: number } =>
   isObject(value) &&
   typeof value.width === 'number' &&
   value.width > 0 &&
   typeof value.height === 'number' &&
   value.height > 0;
 
-/**
- * @param {unknown} value
- * @returns {value is { x: number; y: number }}
- */
-const isPoint = (value) =>
+const isPoint = (value: unknown): value is { x: number; y: number } =>
   isObject(value) && typeof value.x === 'number' && typeof value.y === 'number';
 
 /**
  * What's wrong with a scenario module's default export, or nothing.
- *
- * @param {unknown} scenario
- * @returns {string[]}
  */
-export function scenarioProblems(scenario) {
+export function scenarioProblems(scenario: unknown): string[] {
   if (!isObject(scenario)) return ['its default export is not a scenario object'];
   const problems = [];
   for (const key of Object.keys(scenario)) {
@@ -154,11 +134,8 @@ const SETUP_KEYS = ['options', 'beforeSetup', 'afterSetup', 'check'];
 
 /**
  * What's wrong with a setup module's default export, or nothing.
- *
- * @param {unknown} setup
- * @returns {string[]}
  */
-export function setupProblems(setup) {
+export function setupProblems(setup: unknown): string[] {
   if (!isObject(setup)) return ['its default export is not a setup object'];
   const problems = [];
   for (const key of Object.keys(setup)) {
@@ -190,11 +167,8 @@ export function setupProblems(setup) {
  * e2e/gifs/*.yaml), so a .yml file there is never one.
  * scenarioFiles and workflow.ts's changedScenarios (which scenarios a PR
  * changes) both ask this, so the two never disagree.
- *
- * @param {string} name
- * @param {'web' | 'ci-videos'} [source]
  */
-export function isScenarioFile(name, source = 'web') {
+export function isScenarioFile(name: string, source: 'web' | 'ci-videos' = 'web') {
   if (source === 'ci-videos') return /^[^/]+\.yaml$/.test(name);
   return /^[^/]+\.(ts|mjs|js)$/.test(name) && !/\.(test|d)\.(ts|mjs|js)$/.test(name);
 }
@@ -204,12 +178,8 @@ export function isScenarioFile(name, source = 'web') {
  * whose default export is meant to be a scenario (isScenarioFile). A helper
  * module beside them (no default export) is left out by selftest.ts once
  * loaded.
- *
- * @param {string} dir
- * @param {string} root
- * @param {'web' | 'ci-videos'} [source]
  */
-export function scenarioFiles(dir, root, source = 'web') {
+export function scenarioFiles(dir: string, root: string, source: 'web' | 'ci-videos' = 'web') {
   return readdirSync(path.join(root, dir))
     .filter((file) => isScenarioFile(file, source))
     .sort()

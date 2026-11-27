@@ -93,10 +93,10 @@ describe('parseOptions', () => {
   });
 
   it("takes the setup module's own options, with their defaults", () => {
-    const appOptions = /** @type {const} */ ({
+    const appOptions = {
       fixtures: { type: 'boolean' },
       production: { type: 'string', default: 'https://x.app' },
-    });
+    } as const;
     expect(parseOptions(['a.ts', '--fixtures'], { settings, appOptions }).app).toEqual({
       fixtures: true,
       production: 'https://x.app',

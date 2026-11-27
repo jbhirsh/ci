@@ -9,17 +9,13 @@ import { execFileSync, spawn } from 'node:child_process';
 import { symlinkSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
-
-/** @typedef {import('./settings.ts').BuildSettings} BuildSettings */
-/** @typedef {import('node:child_process').ChildProcess} ChildProcess */
+import type { BuildSettings } from './settings.ts';
+import type { ChildProcess } from 'node:child_process';
 
 /**
  * Git in `cwd`, returning what it printed, trimmed.
- *
- * @param {string} cwd
- * @param {...string} args
  */
-export function git(cwd, ...args) {
+export function git(cwd: string, ...args: string[]) {
   return execFileSync('git', args, {
     cwd,
     encoding: 'utf8',
@@ -30,11 +26,8 @@ export function git(cwd, ...args) {
 /**
  * The branch to fetch for a remote-tracking ref (origin/main → origin, main),
  * or null for a ref that isn't one (a SHA, a local branch).
- *
- * @param {string} ref
- * @returns {{ remote: string; branch: string } | null}
  */
-export function remoteBranch(ref) {
+export function remoteBranch(ref: string): { remote: string; branch: string } | null {
   const match = /^(origin|upstream)\/(.+)$/.exec(ref);
   return match ? { remote: match[1], branch: match[2] } : null;
 }
@@ -43,12 +36,8 @@ export function remoteBranch(ref) {
  * Checks `ref` out in a new worktree at `tree`, fetching it first if it's a
  * remote's (a fetch that fails falls back to the copy here, with a warning),
  * and links the checkout's node_modules into it.
- *
- * @param {string} root
- * @param {string} ref
- * @param {string} tree
  */
-export function addBaseTree(root, ref, tree) {
+export function addBaseTree(root: string, ref: string, tree: string) {
   const remote = remoteBranch(ref);
   if (remote) {
     try {
@@ -64,11 +53,8 @@ export function addBaseTree(root, ref, tree) {
 /**
  * The environment a build runs in: the shell's, with the settings' `env`
  * set and its `unsetEnv` dropped.
- *
- * @param {Record<string, string | undefined>} shell
- * @param {BuildSettings} settings
  */
-export function buildEnv(shell, settings) {
+export function buildEnv(shell: Record<string, string | undefined>, settings: BuildSettings) {
   const env = { ...shell, ...settings.env };
   for (const name of settings.unsetEnv) delete env[name];
   return env;
@@ -77,12 +63,8 @@ export function buildEnv(shell, settings) {
 /**
  * The arguments to the app's Vite for a production build of `cwd` into
  * `outDir`.
- *
- * @param {string} vite
- * @param {string} outDir
- * @param {string | undefined} mode
  */
-export function buildArgs(vite, outDir, mode) {
+export function buildArgs(vite: string, outDir: string, mode: string | undefined) {
   return [
     vite,
     'build',
@@ -95,15 +77,24 @@ export function buildArgs(vite, outDir, mode) {
   ];
 }
 
-/** @param {string} root */
-const viteBin = (root) => path.join(root, 'node_modules', 'vite', 'bin', 'vite.js');
+const viteBin = (root: string) => path.join(root, 'node_modules', 'vite', 'bin', 'vite.js');
 
 /**
  * Builds the app at `cwd` into `outDir` with `root`'s Vite.
- *
- * @param {{ root: string; cwd: string; outDir: string; mode: string | undefined; settings: BuildSettings }} options
  */
-export function build({ root, cwd, outDir, mode, settings }) {
+export function build({
+  root,
+  cwd,
+  outDir,
+  mode,
+  settings,
+}: {
+  root: string;
+  cwd: string;
+  outDir: string;
+  mode: string | undefined;
+  settings: BuildSettings;
+}) {
   console.log(`pr-gif: building ${cwd === root ? 'this working tree' : 'the base'}`);
   execFileSync(process.execPath, buildArgs(viteBin(root), outDir, mode), {
     cwd,
@@ -114,11 +105,8 @@ export function build({ root, cwd, outDir, mode, settings }) {
 
 /**
  * A port nothing is listening on, from the OS.
- *
- * @param {string} [host]
- * @returns {Promise<number>}
  */
-export function freePort(host = '127.0.0.1') {
+export function freePort(host = '127.0.0.1'): Promise<number> {
   return new Promise((done, failed) => {
     const server = createServer();
     server.once('error', failed);
@@ -134,10 +122,20 @@ export function freePort(host = '127.0.0.1') {
  * Serves `outDir` with `vite preview` on a free port of `host` (the process
  * goes in `servers`, for stopServers), and resolves with its origin once it
  * answers.
- *
- * @param {{ root: string; outDir: string; host: string; servers: ChildProcess[]; timeoutMs?: number }} options
  */
-export async function serve({ root, outDir, host, servers, timeoutMs = 30_000 }) {
+export async function serve({
+  root,
+  outDir,
+  host,
+  servers,
+  timeoutMs = 30_000,
+}: {
+  root: string;
+  outDir: string;
+  host: string;
+  servers: ChildProcess[];
+  timeoutMs?: number;
+}) {
   const port = await freePort(host);
   const server = spawn(
     process.execPath,
@@ -171,20 +169,16 @@ export async function serve({ root, outDir, host, servers, timeoutMs = 30_000 })
 
 /**
  * Stops the servers serve started, and waits for them to go.
- *
- * @param {ChildProcess[]} servers
  */
-export async function stopServers(servers) {
+export async function stopServers(servers: ChildProcess[]) {
   await Promise.all(
     servers.splice(0).map(
       (server) =>
-        /** @type {Promise<void>} */ (
-          new Promise((done) => {
-            if (server.exitCode !== null || server.signalCode !== null) return done();
-            server.once('exit', () => done());
-            server.kill('SIGTERM');
-          })
-        ),
+        new Promise((done) => {
+          if (server.exitCode !== null || server.signalCode !== null) return done();
+          server.once('exit', () => done());
+          server.kill('SIGTERM');
+        }) as Promise<void>,
     ),
   );
 }

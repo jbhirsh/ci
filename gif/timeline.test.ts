@@ -13,16 +13,9 @@ import {
   thinner,
   timeline,
 } from './timeline.ts';
+import type { Shot, Tick } from './timeline.ts';
 
-/** @typedef {import('./timeline.ts').Shot} Shot */
-/** @typedef {import('./timeline.ts').Tick} Tick */
-
-/**
- * @param {number} at
- * @param {string} [hash]
- * @returns {Shot}
- */
-const shot = (at, hash = `h${at}`) => ({ file: `f${at}.png`, at, hash });
+const shot = (at: number, hash: string = `h${at}`): Shot => ({ file: `f${at}.png`, at, hash });
 
 describe('timeline', () => {
   it('shows each frame until the next came, cutting a long start and end short', () => {
@@ -80,8 +73,7 @@ describe('timeline', () => {
 
 describe('stillTime', () => {
   // A tick every 20 ms from 0 to 400, moving from 100 to 200.
-  /** @type {Tick[]} */
-  const ticks = Array.from({ length: 21 }, (_, i) => ({
+  const ticks: Tick[] = Array.from({ length: 21 }, (_, i) => ({
     t: i * 20,
     moving: i * 20 > 100 && i * 20 <= 200,
   }));
@@ -100,11 +92,7 @@ describe('stillTime', () => {
 
 describe("timeline, with the page's ticks", () => {
   const frame = 70;
-  /**
-   * @param {(t: number) => boolean} moving
-   * @returns {Tick[]}
-   */
-  const ticksFor = (moving) =>
+  const ticksFor = (moving: (t: number) => boolean): Tick[] =>
     Array.from({ length: 101 }, (_, i) => ({ t: i * 20, moving: moving(i * 20) }));
 
   it('cuts a stall, a long frame while things kept moving, to one frame', () => {
@@ -176,13 +164,9 @@ describe('concatList', () => {
 describe('thinner', () => {
   /**
    * Feeds frames at the given times, returning the times of those kept.
-   *
-   * @param {number[]} times
-   * @param {number} [gap]
    */
-  function keep(times, gap = 40) {
-    /** @type {ReturnType<typeof thinner<{ at: number }>>} */
-    const thin = thinner(gap);
+  function keep(times: number[], gap = 40) {
+    const thin: ReturnType<typeof thinner<{ at: number }>> = thinner(gap);
     const kept = times.map((at) => thin.push({ at })).concat(thin.flush());
     return kept.flatMap((f) => (f ? [f.at] : []));
   }
@@ -317,12 +301,10 @@ describe('restsOutside', () => {
 });
 
 describe('keyLabel', () => {
-  /**
-   * @param {string} key
-   * @param {Partial<{ shiftKey: boolean; ctrlKey: boolean; altKey: boolean; metaKey: boolean }>} [mods]
-   */
-  const press = (key, mods = {}) =>
-    keyLabel({ key, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, ...mods });
+  const press = (
+    key: string,
+    mods: Partial<{ shiftKey: boolean; ctrlKey: boolean; altKey: boolean; metaKey: boolean }> = {},
+  ) => keyLabel({ key, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, ...mods });
 
   it('names keys as a keyboard does', () => {
     expect(press('Tab')).toBe('Tab');
