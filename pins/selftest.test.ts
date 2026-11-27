@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { cli, selftest } from './selftest.ts';
 
 /** A throwaway checkout holding this package.json. */
-function app(/** @type {Record<string, unknown>} */ pkg) {
+function app(pkg: Record<string, unknown>) {
   const root = mkdtempSync(path.join(tmpdir(), 'pins-self-'));
   mkdirSync(path.join(root, '.github'), { recursive: true });
   writeFileSync(path.join(root, 'package.json'), JSON.stringify(pkg, null, 2));
@@ -23,15 +23,13 @@ describe('selftest', () => {
 
 describe('cli', () => {
   it('passes when the files read', () => {
-    /** @type {string[]} */
-    const out = [];
+    const out: string[] = [];
     expect(cli([app({})], (l) => out.push(l))).toBe(0);
     expect(out).toEqual(['pins: 0 pinned or ignored without a reason.']);
   });
 
   it("fails when a file can't be read", () => {
-    /** @type {string[]} */
-    const out = [];
+    const out: string[] = [];
     expect(cli([app({ dependencies: { expo: '~57' } })], (l) => out.push(l))).toBe(1);
     expect(out[0]).toContain('pins self-test failed: expo is a dependency');
   });

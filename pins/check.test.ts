@@ -21,7 +21,7 @@ import {
 } from './check.ts';
 
 /** A throwaway checkout holding these files. */
-function checkout(/** @type {Record<string, string>} */ files) {
+function checkout(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), 'pins-'));
   for (const [rel, text] of Object.entries(files)) {
     mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
@@ -30,8 +30,7 @@ function checkout(/** @type {Record<string, string>} */ files) {
   return root;
 }
 
-/** @param {Record<string, unknown>} pkg */
-const json = (pkg) => JSON.stringify(pkg, null, 2);
+const json = (pkg: Record<string, unknown>) => JSON.stringify(pkg, null, 2);
 
 describe('rangeOf', () => {
   it('reads the range after an npm alias', () => {
@@ -507,8 +506,7 @@ describe('findings and main', () => {
   });
 
   it('prints each as an annotation in Actions and fails', () => {
-    /** @type {string[]} */
-    const out = [];
+    const out: string[] = [];
     expect(main(pinned, { log: (l) => out.push(l), actions: true })).toBe(1);
     expect(out[0]).toBe(
       '::error file=package.json,line=3::typescript ~6.0.2 holds it below its next major: use ^6.0.2, or say why in "//pins".',
@@ -519,8 +517,7 @@ describe('findings and main', () => {
   });
 
   it('passes a checkout with nothing pinned, printing file:line otherwise', () => {
-    /** @type {string[]} */
-    const out = [];
+    const out: string[] = [];
     expect(main(checkout({ '.nvmrc': '24\n' }), { log: (l) => out.push(l), actions: false })).toBe(
       0,
     );
