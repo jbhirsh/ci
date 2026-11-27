@@ -106,12 +106,15 @@ import {
   prBody,
   report,
 } from './plan.ts';
+import type { Companion, Resolved } from './manifest.ts';
+import type { Change, Thread } from './plan.ts';
+import type { Api } from '../lib/comment.mjs';
 
-/** @typedef {import('../lib/comment.mjs').Api} Api */
-/** @typedef {import('./plan.ts').Change} Change */
-/** @typedef {import('./manifest.ts').Resolved} Resolved */
-/** @typedef {(query: string, variables: Record<string, unknown>) => unknown} Graphql */
-/** @typedef {(args: string[], options?: { input?: string | Buffer, env?: Record<string, string> }) => string} Git */
+export type Graphql = (query: string, variables: Record<string, unknown>) => unknown;
+export type Git = (
+  args: string[],
+  options?: { input?: string | Buffer; env?: Record<string, string> },
+) => string;
 
 /** The secret the token comes from, as every refusal names it. */
 export const SECRET = 'BOT_PR_TOKEN';
@@ -131,10 +134,8 @@ const SHA = /^[0-9a-f]{40}$/;
 
 /**
  * The app a run is for, checked: one of the manifest's apps.
- *
- * @param {string | undefined} value
  */
-export function appOf(value) {
+export function appOf(value: string | undefined) {
   if (!value || !APPS.includes(value)) {
     throw new Error(`the app must be one of ${APPS.join(', ')}, not "${value ?? ''}"`);
   }
@@ -143,11 +144,8 @@ export function appOf(value) {
 
 /**
  * A commit SHA from the environment, checked.
- *
- * @param {string | undefined} value
- * @param {string} name
  */
-function shaOf(value, name) {
+function shaOf(value: string | undefined, name: string) {
   if (!value || !SHA.test(value)) throw new Error(`${name} must be a full commit SHA`);
   return value;
 }
@@ -158,12 +156,8 @@ function shaOf(value, name) {
  * by this repo's CI instead (sync/content.test.ts, with lint/actions.mjs),
  * which must have passed on the commit before the sync runs: that lint reads
  * YAML, and the sync imports no package, so its jobs install none.
- *
- * @param {Resolved[]} files
- * @param {string} ciRoot
- * @returns {string[]}
  */
-export function contentProblems(files, ciRoot) {
+export function contentProblems(files: Resolved[], ciRoot: string): string[] {
   return files
     .filter((file) => file.path === TEMPLATE)
     .flatMap((file) =>
@@ -175,27 +169,29 @@ export function contentProblems(files, ciRoot) {
 
 /**
  * An app's settings, from its ci.json's text ('' when it has none).
- *
- * @param {string} text
- * @returns {Record<string, unknown>}
  */
-function settingsOf(text) {
+function settingsOf(text: string): Record<string, unknown> {
   if (text.trim() === '') return {};
-  /** @type {unknown} */
-  const value = JSON.parse(text);
+  const value: unknown = JSON.parse(text);
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`${SETTINGS_FILE} must hold an object`);
   }
-  return /** @type {Record<string, unknown>} */ (value);
+  return value as Record<string, unknown>;
 }
 
 /**
  * What the sync would change in an app, read through `readApp`, refusing
  * content that fails its checks.
- *
- * @param {{ app: string, ciRoot: string, readApp: (file: string) => Buffer | null }} input
  */
-export function planFor({ app, ciRoot, readApp }) {
+export function planFor({
+  app,
+  ciRoot,
+  readApp,
+}: {
+  app: string;
+  ciRoot: string;
+  readApp: (file: string) => Buffer | null;
+}) {
   const files = resolve(loadManifest(ciRoot), app);
   const found = contentProblems(files, ciRoot);
   if (found.length > 0) {
@@ -214,15 +210,13 @@ export function planFor({ app, ciRoot, readApp }) {
 /**
  * The app's ci.json after each change that adds companions, by the change's
  * path, the companions accumulating in commit order.
- *
- * @param {Change[]} changes
- * @param {string} settingsText
- * @param {(text: string) => Promise<string> | string} format
- * @returns {Promise<Record<string, string>>}
  */
-export async function settingsAfter(changes, settingsText, format) {
-  /** @type {Record<string, string>} */
-  const out = {};
+export async function settingsAfter(
+  changes: Change[],
+  settingsText: string,
+  format: (text: string) => Promise<string> | string,
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
   let text = settingsText;
   for (const change of changes) {
     if (change.companions.length === 0) continue;
@@ -239,14 +233,17 @@ export async function settingsAfter(changes, settingsText, format) {
  * a ci commit whose CI didn't pass; says to skip a commit that main has moved
  * past (that newer commit's own run syncs it).
  *
- * @param {Record<string, string | undefined>} env TOKEN_SET, CI_SHA, and
- *   GH_TOKEN (the Actions token, with actions read here)
- * @param {Api} api
- * @param {() => string} [checkedOut] the commit this repo's checkout holds:
+ * @param env TOKEN_SET, CI_SHA, and GH_TOKEN (the Actions token, with actions
+ *   read here)
+ * @param api
+ * @param checkedOut the commit this repo's checkout holds:
  *   the workflow checks out main, so it must be CI_SHA, or main has moved on
- * @returns {{ go: boolean, message: string }}
  */
-export function check(env, api, checkedOut = () => gitIn(CI_ROOT)(['rev-parse', 'HEAD']).trim()) {
+export function check(
+  env: Record<string, string | undefined>,
+  api: Api,
+  checkedOut: () => string = () => gitIn(CI_ROOT)(['rev-parse', 'HEAD']).trim(),
+): { go: boolean; message: string } {
   if (env.TOKEN_SET !== 'true') {
     throw new Error(
       `${SECRET} is empty: add it as an Actions secret of ${CI_REPO}, a fine-grained token on ` +
@@ -255,7 +252,7 @@ export function check(env, api, checkedOut = () => gitIn(CI_ROOT)(['rev-parse', 
     );
   }
   const sha = shaOf(env.CI_SHA, 'CI_SHA');
-  const head = /** @type {{ sha: string }} */ (api('GET', `repos/${CI_REPO}/commits/main`)).sha;
+  const head = (api('GET', `repos/${CI_REPO}/commits/main`) as { sha: string }).sha;
   const here = checkedOut();
   if (head !== sha || here !== sha) {
     return {
@@ -266,12 +263,10 @@ export function check(env, api, checkedOut = () => gitIn(CI_ROOT)(['rev-parse', 
         "a run from main's head syncs, after its CI passes or when dispatched on main.",
     };
   }
-  const runs = /** @type {{ total_count: number }} */ (
-    api(
-      'GET',
-      `repos/${CI_REPO}/actions/workflows/ci.yml/runs?head_sha=${sha}&branch=main&event=push&status=success&per_page=1`,
-    )
-  );
+  const runs = api(
+    'GET',
+    `repos/${CI_REPO}/actions/workflows/ci.yml/runs?head_sha=${sha}&branch=main&event=push&status=success&per_page=1`,
+  ) as { total_count: number };
   if (!runs || runs.total_count < 1) {
     throw new Error(
       `CI hasn't passed on ${CI_REPO}@${sha.slice(0, 7)} (its push to main): the sync runs only from ` +
@@ -286,15 +281,10 @@ export function check(env, api, checkedOut = () => gitIn(CI_ROOT)(['rev-parse', 
 /**
  * A reader of an app's checkout on disk, refusing a file that isn't UTF-8
  * text (publish, reading git's text, would see it lossily).
- *
- * @param {string} root
- * @param {string} app
- * @returns {(file: string) => Buffer | null}
  */
-function diskReader(root, app) {
+function diskReader(root: string, app: string): (file: string) => Buffer | null {
   return (file) => {
-    /** @type {Buffer} */
-    let bytes;
+    let bytes: Buffer;
     try {
       bytes = readFileSync(path.join(root, file));
     } catch {
@@ -311,12 +301,22 @@ function diskReader(root, app) {
  * formatted by the app's own Prettier, which it installs (with no install
  * scripts) only then. publish re-reads everything else itself, from git.
  *
- * @param {Record<string, string | undefined>} env APP, APP_ROOT, SYNC_OUT
- * @param {{ install: (root: string) => void, format?: (text: string, root: string) => Promise<string>,
- *   ciRoot?: string }} deps `ciRoot`: this repo's checkout, unless a test brings its own
- * @returns {Promise<string[]>} what to print
+ * @param env APP, APP_ROOT, SYNC_OUT
+ * @param deps `ciRoot`: this repo's checkout, unless a test brings its own
+ * @returns what to print
  */
-export async function prepare(env, { install, format = formatSettings, ciRoot = CI_ROOT }) {
+export async function prepare(
+  env: Record<string, string | undefined>,
+  {
+    install,
+    format = formatSettings,
+    ciRoot = CI_ROOT,
+  }: {
+    install: (root: string) => void;
+    format?: (text: string, root: string) => Promise<string>;
+    ciRoot?: string;
+  },
+): Promise<string[]> {
   const app = appOf(env.APP);
   const root = path.resolve(env.APP_ROOT ?? '.');
   const out = env.SYNC_OUT;
@@ -340,13 +340,9 @@ export async function prepare(env, { install, format = formatSettings, ciRoot = 
 
 /**
  * What prepare left, checked where it enters the step with the token.
- *
- * @param {string} file
- * @returns {{ appSha: string, settings: Record<string, string> }}
  */
-export function readPrepared(file) {
-  /** @type {string} */
-  let text;
+export function readPrepared(file: string): { appSha: string; settings: Record<string, string> } {
+  let text: string;
   try {
     text = readFileSync(file, 'utf8');
   } catch {
@@ -354,9 +350,8 @@ export function readPrepared(file) {
       `${file} is missing: the Prepare job for this app failed or was skipped, so its log says why.`,
     );
   }
-  /** @type {unknown} */
-  const value = JSON.parse(text);
-  const v = /** @type {{ appSha?: unknown, settings?: unknown }} */ (value);
+  const value: unknown = JSON.parse(text);
+  const v = value as { appSha?: unknown; settings?: unknown };
   if (typeof value !== 'object' || value === null || typeof v.appSha !== 'string') {
     throw new Error(`${file} is not what prepare writes`);
   }
@@ -371,38 +366,35 @@ export function readPrepared(file) {
   }
   return {
     appSha: shaOf(v.appSha, 'prepared.json appSha'),
-    settings: /** @type {Record<string, string>} */ (settings),
+    settings: settings as Record<string, string>,
   };
 }
 
-/**
- * A pull request, as far as the sync reads it.
- *
- * @typedef {object} Pull
- * @property {number} number
- * @property {string} node_id
- * @property {boolean} draft
- * @property {string | null} mergeable_state
- * @property {unknown} auto_merge
- * @property {{ sha: string }} head
- */
+/** A pull request, as far as the sync reads it. */
+export type Pull = {
+  number: number;
+  node_id: string;
+  draft: boolean;
+  mergeable_state: string | null;
+  auto_merge: unknown;
+  head: { sha: string };
+};
 
 /**
  * The app's open sync PR, or null: one into main from the app's own
  * bot/sync-files whose description carries the sync's marker. Anyone can
  * push a branch of that name, so an open PR from it without the marker is a
  * person's, and the run refuses rather than force-push it.
- *
- * @param {Api} api
- * @param {string} repo
- * @returns {Pull | null}
  */
-function openPull(api, repo) {
+function openPull(api: Api, repo: string): Pull | null {
   const [owner] = repo.split('/');
-  const list =
-    /** @type {{ number: number, body: string | null, head: { repo: { full_name: string } | null } }[]} */ (
-      api('GET', `repos/${repo}/pulls?head=${owner}:${BRANCH}&base=main&state=open&per_page=100`)
-    ).filter((pull) => pull.head.repo?.full_name === repo);
+  const list = (
+    api('GET', `repos/${repo}/pulls?head=${owner}:${BRANCH}&base=main&state=open&per_page=100`) as {
+      number: number;
+      body: string | null;
+      head: { repo: { full_name: string } | null };
+    }[]
+  ).filter((pull) => pull.head.repo?.full_name === repo);
   if (list.length === 0) return null;
   const ours = list.find((pull) => pull.body?.includes(MARKER));
   if (!ours) {
@@ -411,75 +403,62 @@ function openPull(api, repo) {
         `${MARKER}): close it, or move its work to another branch, and the next run opens its own.`,
     );
   }
-  return /** @type {Pull} */ (api('GET', `repos/${repo}/pulls/${ours.number}`));
+  return api('GET', `repos/${repo}/pulls/${ours.number}`) as Pull;
 }
 
-/**
- * A file of a compare, as GitHub lists it.
- *
- * @typedef {{ filename: string, status: string, sha: string | null, previous_filename?: string }} ComparedFile
- */
+/** A file of a compare, as GitHub lists it. */
+export type ComparedFile = {
+  filename: string;
+  status: string;
+  sha: string | null;
+  previous_filename?: string;
+};
 
-/**
- * A three-dot compare, as far as the sync reads it.
- *
- * @typedef {object} Comparison
- * @property {number} ahead_by
- * @property {number} behind_by
- * @property {{ sha: string }} merge_base_commit
- * @property {ComparedFile[]} [files]
- */
+/** A three-dot compare, as far as the sync reads it. */
+export type Comparison = {
+  ahead_by: number;
+  behind_by: number;
+  merge_base_commit: { sha: string };
+  files?: ComparedFile[];
+};
 
 /**
  * The files a branch changes since it left `base` (GitHub's three-dot
  * compare), with their blobs.
- *
- * @param {Api} api
- * @param {string} repo
- * @param {string} base
- * @param {string} head
- * @returns {Comparison}
  */
-function compare(api, repo, base, head) {
-  return /** @type {Comparison} */ (api('GET', `repos/${repo}/compare/${base}...${head}`));
+function compare(api: Api, repo: string, base: string, head: string): Comparison {
+  return api('GET', `repos/${repo}/compare/${base}...${head}`) as Comparison;
 }
 
 /**
  * Whether a branch changes exactly these files, to exactly these bytes.
- *
- * @param {{ filename: string, status: string, sha: string | null }[]} files
- * @param {Map<string, Buffer>} expected
  */
-function holdsExactly(files, expected) {
+function holdsExactly(
+  files: { filename: string; status: string; sha: string | null }[],
+  expected: Map<string, Buffer>,
+) {
   return (
     files.length === expected.size &&
     files.every(
       (file) =>
         ['added', 'modified'].includes(file.status) &&
         expected.has(file.filename) &&
-        file.sha === blobSha(/** @type {Buffer} */ (expected.get(file.filename))),
+        file.sha === blobSha(expected.get(file.filename) as Buffer),
     )
   );
 }
 
 /**
  * The mode GitHub holds for a path at a commit, or null when it holds none.
- *
- * @param {Api} api
- * @param {string} repo
- * @param {string} commit
- * @param {string} file
  */
-function modeAt(api, repo, commit, file) {
-  let tree = /** @type {{ tree: { sha: string } }} */ (
-    api('GET', `repos/${repo}/git/commits/${commit}`)
-  ).tree.sha;
+function modeAt(api: Api, repo: string, commit: string, file: string) {
+  let tree = (api('GET', `repos/${repo}/git/commits/${commit}`) as { tree: { sha: string } }).tree
+    .sha;
   const segments = file.split('/');
   for (const [i, segment] of segments.entries()) {
-    const { tree: entries } =
-      /** @type {{ tree: { path: string, mode: string, type: string, sha: string }[] }} */ (
-        api('GET', `repos/${repo}/git/trees/${tree}`)
-      );
+    const { tree: entries } = api('GET', `repos/${repo}/git/trees/${tree}`) as {
+      tree: { path: string; mode: string; type: string; sha: string }[];
+    };
     const entry = entries.find((e) => e.path === segment);
     if (!entry) return null;
     if (i === segments.length - 1) return entry.mode;
@@ -492,16 +471,28 @@ function modeAt(api, repo, commit, file) {
 /**
  * The guard: what GitHub holds on the pushed branch is only what the sync
  * meant to write. Returns each problem; [] when there is none.
- *
- * @param {{ api: Api, repo: string, base: string, head: string, commits: number,
- *   expected: Map<string, Buffer>, settingsBefore: string,
- *   companions: import('./manifest.ts').Companion[] }} input
- * @returns {string[]}
  */
-export function guard({ api, repo, base, head, commits, expected, settingsBefore, companions }) {
+export function guard({
+  api,
+  repo,
+  base,
+  head,
+  commits,
+  expected,
+  settingsBefore,
+  companions,
+}: {
+  api: Api;
+  repo: string;
+  base: string;
+  head: string;
+  commits: number;
+  expected: Map<string, Buffer>;
+  settingsBefore: string;
+  companions: Companion[];
+}): string[] {
   const { ahead_by: ahead, behind_by: behind, files = [] } = compare(api, repo, base, head);
-  /** @type {string[]} */
-  const problems = [];
+  const problems: string[] = [];
   if (ahead !== commits || behind !== 0) {
     problems.push(
       `the branch is ${ahead} commit(s) ahead and ${behind} behind its base, not ${commits} and 0`,
@@ -532,7 +523,7 @@ export function guard({ api, repo, base, head, commits, expected, settingsBefore
     problems.push(
       ...settingsProblems(
         settingsBefore,
-        /** @type {Buffer} */ (expected.get(SETTINGS_FILE)).toString('utf8'),
+        (expected.get(SETTINGS_FILE) as Buffer).toString('utf8'),
         companions,
       ),
     );
@@ -543,11 +534,8 @@ export function guard({ api, repo, base, head, commits, expected, settingsBefore
 /**
  * git in a folder, its output as text; the environment's GIT_* left out, so
  * nothing a hook or a caller set reaches it.
- *
- * @param {string} cwd
- * @returns {Git}
  */
-export function gitIn(cwd) {
+export function gitIn(cwd: string): Git {
   const base = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')),
   );
@@ -567,11 +555,8 @@ export function gitIn(cwd) {
  * The environment that hands the token to git for github.com, as
  * actions/checkout does, but in this process's children only (nothing on
  * disk).
- *
- * @param {string} token
- * @returns {Record<string, string>}
  */
-function tokenEnv(token) {
+function tokenEnv(token: string): Record<string, string> {
   return {
     GIT_CONFIG_COUNT: '1',
     GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
@@ -581,11 +566,9 @@ function tokenEnv(token) {
 
 /**
  * The text of a failed command, for matching what git said.
- *
- * @param {unknown} error
  */
-const said = (error) =>
-  `${error instanceof Error ? error.message : String(error)}\n${String(/** @type {{ stderr?: unknown }} */ (error)?.stderr ?? '')}`;
+const said = (error: unknown) =>
+  `${error instanceof Error ? error.message : String(error)}\n${String((error as { stderr?: unknown })?.stderr ?? '')}`;
 
 /**
  * The refusals GitHub gives when a PR could merge now, so auto-merge has
@@ -599,10 +582,20 @@ const MERGEABLE_NOW = /\bis in (clean|unstable|has_hooks) status\b/i;
  * Turns auto-merge on for the PR's verified head, squashing; merges it at
  * once, bound to that head, when GitHub says there is nothing to wait for.
  * Any other refusal fails, naming the PR and what to do.
- *
- * @param {{ api: Api, graphql: Graphql, repo: string, pull: Pull, head: string }} input
  */
-function autoMerge({ api, graphql, repo, pull, head }) {
+function autoMerge({
+  api,
+  graphql,
+  repo,
+  pull,
+  head,
+}: {
+  api: Api;
+  graphql: Graphql;
+  repo: string;
+  pull: Pull;
+  head: string;
+}) {
   try {
     graphql(
       `
@@ -634,11 +627,8 @@ function autoMerge({ api, graphql, repo, pull, head }) {
 /**
  * Turns the PR's auto-merge off: before its branch is pushed, when the guard
  * refuses it, or when this run may not turn it on.
- *
- * @param {Graphql} graphql
- * @param {Pull} pull
  */
-function autoMergeOff(graphql, pull) {
+function autoMergeOff(graphql: Graphql, pull: Pull) {
   graphql(
     `
       mutation ($id: ID!) {
@@ -653,13 +643,8 @@ function autoMergeOff(graphql, pull) {
 
 /**
  * The PR's review threads.
- *
- * @param {Graphql} graphql
- * @param {string} repo
- * @param {number} number
- * @returns {import('./plan.ts').Thread[]}
  */
-function threadsOf(graphql, repo, number) {
+function threadsOf(graphql: Graphql, repo: string, number: number): Thread[] {
   const [owner, name] = repo.split('/');
   const data = graphql(
     `
@@ -684,11 +669,15 @@ function threadsOf(graphql, repo, number) {
     `,
     { owner, name, number },
   );
-  /** @typedef {{ isResolved: boolean, path: string | null, line: number | null, comments?: { nodes?: { url: string }[] } }} ThreadNode */
-  const answer =
-    /** @type {{ repository?: { pullRequest?: { reviewThreads?: { nodes?: ThreadNode[] } } } } | null} */ (
-      data
-    );
+  type ThreadNode = {
+    isResolved: boolean;
+    path: string | null;
+    line: number | null;
+    comments?: { nodes?: { url: string }[] };
+  };
+  const answer = data as {
+    repository?: { pullRequest?: { reviewThreads?: { nodes?: ThreadNode[] } } };
+  } | null;
   return (answer?.repository?.pullRequest?.reviewThreads?.nodes ?? []).map((n) => ({
     isResolved: n.isResolved,
     path: n.path,
@@ -700,16 +689,12 @@ function threadsOf(graphql, repo, number) {
 /**
  * The app's rules on main: the status checks they require, and the type of
  * every rule, for a PR GitHub calls blocked with nothing else to name.
- *
- * @param {Api} api
- * @param {string} repo
- * @returns {{ required: string[], types: string[] }}
  */
-function rulesOf(api, repo) {
-  const rules =
-    /** @type {{ type: string, parameters?: { required_status_checks?: { context: string }[] } }[]} */ (
-      pages(api, `repos/${repo}/rules/branches/main`)
-    );
+function rulesOf(api: Api, repo: string): { required: string[]; types: string[] } {
+  const rules = pages(api, `repos/${repo}/rules/branches/main`) as {
+    type: string;
+    parameters?: { required_status_checks?: { context: string }[] };
+  }[];
   return {
     required: rules
       .filter((rule) => rule.type === 'required_status_checks')
@@ -726,16 +711,32 @@ const PLAIN = new Set(['100644', '100755']);
  * Builds the branch: one commit per change on `base`, with git's plumbing
  * (no work tree, no blob of the app fetched), and pushes it, leased to the
  * head it read. Returns the new head.
- *
- * @param {{ git: Git, base: string, changes: Change[], settings: Record<string, string>,
- *   ciSha: string, oldHead: string, remote: string, token: string, app: string }} input
  */
-function build({ git, base, changes, settings, ciSha, oldHead, remote, token, app }) {
+function build({
+  git,
+  base,
+  changes,
+  settings,
+  ciSha,
+  oldHead,
+  remote,
+  token,
+  app,
+}: {
+  git: Git;
+  base: string;
+  changes: Change[];
+  settings: Record<string, string>;
+  ciSha: string;
+  oldHead: string;
+  remote: string;
+  token: string;
+  app: string;
+}) {
   git(['read-tree', base]);
   let parent = base;
   for (const change of changes) {
-    /** @type {[string, Buffer][]} */
-    const files = [[change.path, change.bytes]];
+    const files: [string, Buffer][] = [[change.path, change.bytes]];
     if (settings[change.path] !== undefined) {
       files.push([SETTINGS_FILE, Buffer.from(settings[change.path])]);
     }
@@ -799,13 +800,10 @@ function build({ git, base, changes, settings, ciSha, oldHead, remote, token, ap
 /**
  * An error that also carries what the run had done when it was thrown, so
  * the log says it (main prints `done` first).
- *
- * @param {unknown} error
- * @param {string[]} done
  */
-function withDone(error, done) {
+function withDone(error: unknown, done: string[]) {
   const out = error instanceof Error ? error : new Error(String(error));
-  /** @type {Error & { done?: string[] }} */ (out).done = done;
+  (out as Error & { done?: string[] }).done = done;
   return out;
 }
 
@@ -813,14 +811,22 @@ function withDone(error, done) {
  * The step with the token: brings the app's sync PR in line with this
  * repo's files, then fails naming whatever keeps it from merging.
  *
- * @param {Record<string, string | undefined>} env APP, CI_SHA, GH_TOKEN, SYNC_OUT,
+ * @param env APP, CI_SHA, GH_TOKEN, SYNC_OUT,
  *   RUN_URL, and AUTO_MERGE ('false' leaves the PR for a person to merge)
- * @param {{ api: Api, graphql: Graphql, git: Git, remote?: string, ciRoot?: string }} deps
- *   `remote` and `ciRoot`: the app's GitHub repository and this checkout,
- *   unless a test brings its own
- * @returns {string[]} what it did
+ * @param deps `remote` and `ciRoot`: the app's GitHub repository and this
+ *   checkout, unless a test brings its own
+ * @returns what it did
  */
-export function publish(env, { api, graphql, git, remote, ciRoot = CI_ROOT }) {
+export function publish(
+  env: Record<string, string | undefined>,
+  {
+    api,
+    graphql,
+    git,
+    remote,
+    ciRoot = CI_ROOT,
+  }: { api: Api; graphql: Graphql; git: Git; remote?: string; ciRoot?: string },
+): string[] {
   const token = env.GH_TOKEN ?? '';
   if (!token) throw new Error(`${SECRET} is empty: the publish step got no token`);
   const app = appOf(env.APP);
@@ -836,17 +842,15 @@ export function publish(env, { api, graphql, git, remote, ciRoot = CI_ROOT }) {
   git(['config', 'remote.origin.url', url]);
   git(['config', 'remote.origin.promisor', 'true']);
   git(['config', 'remote.origin.partialclonefilter', 'blob:none']);
-  const remoteHead = (/** @type {string} */ ref) =>
+  const remoteHead = (ref: string) =>
     git(['ls-remote', url, ref], { env: tokenEnv(token) }).split(/\s/)[0];
   const base = shaOf(remoteHead('refs/heads/main'), `jbhirsh/${app}'s main`);
   git(['fetch', '-q', '--filter=blob:none', '--depth=1', 'origin', base]);
   // Every synced file is text (Markdown, YAML, JSON), read as UTF-8: one
   // that isn't (a replacement character after decoding) is refused, as
   // prepare refuses it, rather than compared lossily.
-  /** @type {(file: string) => Buffer | null} */
-  const readApp = (file) => {
-    /** @type {string} */
-    let text;
+  const readApp: (file: string) => Buffer | null = (file) => {
+    let text: string;
     try {
       text = git(['cat-file', 'blob', `${base}:${file}`]);
     } catch {
@@ -858,8 +862,9 @@ export function publish(env, { api, graphql, git, remote, ciRoot = CI_ROOT }) {
   const { changes, settingsText } = planFor({ app, ciRoot, readApp });
 
   // What the branch must change, and to what.
-  /** @type {Map<string, Buffer>} */
-  const expected = new Map(changes.map((change) => [change.path, change.bytes]));
+  const expected: Map<string, Buffer> = new Map(
+    changes.map((change) => [change.path, change.bytes]),
+  );
   const companions = changes.flatMap((change) => change.companions);
   const withSettings = changes.filter((change) => change.companions.length > 0);
   if (withSettings.length > 0 && prepared.appSha !== base) {
@@ -878,12 +883,11 @@ export function publish(env, { api, graphql, git, remote, ciRoot = CI_ROOT }) {
   if (withSettings.length > 0) {
     expected.set(
       SETTINGS_FILE,
-      Buffer.from(prepared.settings[/** @type {Change} */ (withSettings.at(-1)).path]),
+      Buffer.from(prepared.settings[(withSettings.at(-1) as Change).path]),
     );
   }
 
-  /** @type {string[]} */
-  const lines = [];
+  const lines: string[] = [];
   let pull = openPull(api, repo);
   const matches =
     pull !== null && holdsExactly(compare(api, repo, base, pull.head.sha).files ?? [], expected);
@@ -904,7 +908,7 @@ export function publish(env, { api, graphql, git, remote, ciRoot = CI_ROOT }) {
     return [`${app}: every synced file matches ${CI_REPO}; no PR open.`];
   }
   if (action === 'close') {
-    const number = /** @type {Pull} */ (pull).number;
+    const number = (pull as Pull).number;
     api('POST', `repos/${repo}/issues/${number}/comments`, {
       body: `Every synced file in this repo matches [${CI_REPO}@${ciSha.slice(0, 7)}](https://github.com/${CI_REPO}/commit/${ciSha}) again, so this PR has nothing left to sync.`,
     });
@@ -913,7 +917,7 @@ export function publish(env, { api, graphql, git, remote, ciRoot = CI_ROOT }) {
     return [`${app}: closed #${number}: every synced file matches ${CI_REPO} again.`];
   }
 
-  let head = /** @type {string} */ (pull?.head.sha);
+  let head = pull?.head.sha as string;
   const fresh = action === 'build';
   if (fresh) {
     if (pull?.auto_merge) autoMergeOff(graphql, pull);
@@ -979,9 +983,9 @@ export function publish(env, { api, graphql, git, remote, ciRoot = CI_ROOT }) {
         );
         lines.push(`${app}: opened #${number}.`);
       }
-      pull = /** @type {Pull} */ (api('GET', `repos/${repo}/pulls/${number}`));
+      pull = api('GET', `repos/${repo}/pulls/${number}`) as Pull;
     }
-    const current = /** @type {Pull} */ (pull);
+    const current = pull as Pull;
     if (current.draft) {
       lines.push(
         `${app}: #${current.number} is a draft, so auto-merge stays off until it is marked ready.`,
@@ -1006,13 +1010,18 @@ export function publish(env, { api, graphql, git, remote, ciRoot = CI_ROOT }) {
       required: rules.required,
       checkRuns: fresh
         ? []
-        : /** @type {{ id: number, name: string, status: string, conclusion: string | null }[]} */ (
-            pages(api, `repos/${repo}/commits/${head}/check-runs`, 'check_runs')
-          ),
+        : (pages(api, `repos/${repo}/commits/${head}/check-runs`, 'check_runs') as {
+            id: number;
+            name: string;
+            status: string;
+            conclusion: string | null;
+          }[]),
       statuses: fresh
         ? []
-        : /** @type {{ statuses: { context: string, state: string }[] }} */ (
-            api('GET', `repos/${repo}/commits/${head}/status?per_page=100`)
+        : (
+            api('GET', `repos/${repo}/commits/${head}/status?per_page=100`) as {
+              statuses: { context: string; state: string }[];
+            }
           ).statuses,
       mergeable: fresh ? null : (pull?.mergeable_state ?? null),
       ruleTypes: rules.types,
@@ -1028,11 +1037,8 @@ export function publish(env, { api, graphql, git, remote, ciRoot = CI_ROOT }) {
 
 /**
  * Why a synced file of the app can't be compared: it isn't UTF-8 text.
- *
- * @param {string} file
- * @param {string} app
  */
-function notText(file, app) {
+function notText(file: string, app: string) {
   return new Error(
     `${file} in jbhirsh/${app} is not UTF-8 text: the sync holds only text files, so replace it in the app.`,
   );
@@ -1040,11 +1046,8 @@ function notText(file, app) {
 
 /**
  * Deletes the sync's branch; one already gone is what this wanted.
- *
- * @param {Api} api
- * @param {string} repo
  */
-function deleteBranch(api, repo) {
+function deleteBranch(api: Api, repo: string) {
   try {
     api('DELETE', `repos/${repo}/git/refs/heads/${BRANCH}`);
   } catch (error) {
@@ -1057,16 +1060,17 @@ function deleteBranch(api, repo) {
  * token may push but not open a PR), the branch is deleted again, so a
  * refusal leaves the app as it was, and the run fails naming the permission.
  *
- * @param {Api} api
- * @param {string} repo
- * @param {string} body
- * @param {() => void} unpush deletes the pushed branch, leased to its head
- * @returns {number}
+ * @param api
+ * @param repo
+ * @param body
+ * @param unpush deletes the pushed branch, leased to its head
  */
-function openNew(api, repo, body, unpush) {
+function openNew(api: Api, repo: string, body: string, unpush: () => void): number {
   try {
-    return /** @type {{ number: number }} */ (
-      api('POST', `repos/${repo}/pulls`, { title: PR_TITLE, head: BRANCH, base: 'main', body })
+    return (
+      api('POST', `repos/${repo}/pulls`, { title: PR_TITLE, head: BRANCH, base: 'main', body }) as {
+        number: number;
+      }
     ).number;
   } catch (error) {
     unpush();
@@ -1080,16 +1084,12 @@ function openNew(api, repo, body, unpush) {
 
 /**
  * The app's ci.json at a commit, by the contents API ('' when it has none).
- *
- * @param {Api} api
- * @param {string} repo
- * @param {string} ref
  */
-function readSettingsAt(api, repo, ref) {
+function readSettingsAt(api: Api, repo: string, ref: string) {
   try {
-    const file = /** @type {{ content: string }} */ (
-      api('GET', `repos/${repo}/contents/${SETTINGS_FILE}?ref=${ref}`)
-    );
+    const file = api('GET', `repos/${repo}/contents/${SETTINGS_FILE}?ref=${ref}`) as {
+      content: string;
+    };
     return Buffer.from(file.content, 'base64').toString('utf8');
   } catch (error) {
     if (statusOf(error) === 404) return '';
@@ -1101,31 +1101,23 @@ function readSettingsAt(api, repo, ref) {
 
 /**
  * GitHub's GraphQL API through gh (GH_TOKEN from the environment).
- *
- * @type {Graphql}
  */
-function ghGraphql(query, variables) {
+function ghGraphql(query: string, variables: Record<string, unknown>): unknown {
   const out = execFileSync('gh', ['api', 'graphql', '--input', '-'], {
     input: JSON.stringify({ query, variables }),
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe'],
     timeout: 30_000,
   });
-  /** @type {{ data?: unknown, errors?: { message: string }[] }} */
-  const parsed = JSON.parse(out);
+  const parsed: { data?: unknown; errors?: { message: string }[] } = JSON.parse(out);
   if (parsed.errors?.length) throw new Error(parsed.errors.map((e) => e.message).join('; '));
   return parsed.data;
 }
 
 /**
  * The dry run: the PR the sync would open for an app's checkout.
- *
- * @param {string} app
- * @param {string} root
- * @param {string} [ciRoot]
- * @returns {string[]}
  */
-export function dryRun(app, root, ciRoot = CI_ROOT) {
+export function dryRun(app: string, root: string, ciRoot: string = CI_ROOT): string[] {
   const readApp = diskReader(root, app);
   const { changes } = planFor({
     app: appOf(app),
@@ -1145,10 +1137,8 @@ export function dryRun(app, root, ciRoot = CI_ROOT) {
 
 /**
  * Installs the app's packages, with no install scripts, for its Prettier.
- *
- * @param {string} root
  */
-function npmCi(root) {
+function npmCi(root: string) {
   execFileSync('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], {
     cwd: root,
     stdio: 'inherit',
@@ -1158,15 +1148,25 @@ function npmCi(root) {
 /**
  * The command line; returns its exit code.
  *
- * @param {string[]} argv
- * @param {Record<string, string | undefined>} env
- * @param {(line: string) => void} [log]
- * @param {{ api?: Api, graphql?: Graphql, gitFor?: (cwd: string) => Git,
- *   install?: (root: string) => void, remote?: string, ciRoot?: string,
- *   checkedOut?: () => string }} [deps]
- *   GitHub, git and npm, unless a test brings its own
+ * @param argv
+ * @param env
+ * @param log
+ * @param deps GitHub, git and npm, unless a test brings its own
  */
-export async function main(argv, env, log = console.log, deps = {}) {
+export async function main(
+  argv: string[],
+  env: Record<string, string | undefined>,
+  log: (line: string) => void = console.log,
+  deps: {
+    api?: Api;
+    graphql?: Graphql;
+    gitFor?: (cwd: string) => Git;
+    install?: (root: string) => void;
+    remote?: string;
+    ciRoot?: string;
+    checkedOut?: () => string;
+  } = {},
+) {
   const { api = ghApi, graphql = ghGraphql, gitFor = gitIn, install = npmCi } = deps;
   const { remote, ciRoot = CI_ROOT } = deps;
   const [command, ...rest] = argv;
@@ -1196,7 +1196,7 @@ export async function main(argv, env, log = console.log, deps = {}) {
     log('usage: node sync/sync.ts check | prepare | publish | dry-run <app> <app dir>');
     return 2;
   } catch (error) {
-    for (const line of /** @type {{ done?: string[] }} */ (error)?.done ?? []) log(line);
+    for (const line of (error as { done?: string[] })?.done ?? []) log(line);
     const message = error instanceof Error ? error.message : String(error);
     for (const line of message.split('\n')) log(`::error::${line}`);
     return 1;

@@ -25,6 +25,8 @@ import {
   SECRET,
 } from './sync.ts';
 import { loadManifest, resolve } from './manifest.ts';
+import type { Api } from '../lib/comment.mjs';
+import type { Git, Graphql } from './sync.ts';
 
 const CI_SHA = 'abcdef0123456789abcdef0123456789abcdef01';
 const TEMPLATE = readFileSync(path.join(CI_ROOT, '.github/pull_request_template.md'), 'utf8');
@@ -33,8 +35,7 @@ const HELLO =
 const SIFT_HELLO = HELLO.replace('on: pull_request', 'on: workflow_dispatch');
 const SETTINGS = '{\n  "autofix": {\n    "exempt": {\n      "PR changes": "data"\n    }\n  }\n}\n';
 
-/** @type {string[]} */
-const temps = [];
+const temps: string[] = [];
 const temp = () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'sync-'));
   temps.push(dir);
@@ -48,9 +49,9 @@ afterEach(() => {
  * A checkout of this repo holding a small manifest: the real template, and a
  * workflow with a companion and a variant for sift.
  *
- * @param {Record<string, string>} [files] more or other files
+ * @param files more or other files
  */
-function ciRoot(files = {}) {
+function ciRoot(files: Record<string, string> = {}) {
   const root = temp();
   writeFiles(root, {
     'sync/manifest.json': JSON.stringify({
@@ -80,8 +81,7 @@ function ciRoot(files = {}) {
   return root;
 }
 
-/** @param {string} cwd */
-const git = (cwd) => gitIn(cwd);
+const git = (cwd: string) => gitIn(cwd);
 const ENV = {
   GIT_AUTHOR_NAME: 't',
   GIT_AUTHOR_EMAIL: 't@t',
@@ -92,18 +92,15 @@ const ENV = {
 /**
  * The app on "GitHub": a bare repository whose main holds these files, and
  * a function that commits more to its main.
- *
- * @param {Record<string, string>} files
  */
-function appRemote(files) {
+function appRemote(files: Record<string, string>) {
   const bare = temp();
   git(bare)(['init', '-q', '--bare', '-b', 'main']);
   git(bare)(['config', 'uploadpack.allowFilter', 'true']);
   git(bare)(['config', 'uploadpack.allowAnySHA1InWant', 'true']);
   const work = temp();
   git(work)(['init', '-q', '-b', 'main']);
-  /** @param {Record<string, string>} more */
-  const commit = (more) => {
+  const commit = (more: Record<string, string>) => {
     writeFiles(work, more);
     git(work)(['add', '--', ...Object.keys(more)]);
     git(work)(['commit', '-q', '--no-gpg-sign', '-m', 'app'], { env: ENV });
@@ -112,11 +109,8 @@ function appRemote(files) {
   };
   /**
    * Commits a change made in the app's work tree by `edit` (a link, a mode).
-   *
-   * @param {(dir: string) => void} edit
-   * @param {string[]} paths
    */
-  const commitWith = (edit, paths) => {
+  const commitWith = (edit: (dir: string) => void, paths: string[]) => {
     edit(work);
     git(work)(['add', '--', ...paths]);
     git(work)(['commit', '-q', '--no-gpg-sign', '-m', 'app'], { env: ENV });
@@ -129,34 +123,34 @@ function appRemote(files) {
 
 /**
  * The fake GitHub API for one app, answering from its bare repository.
- *
- * @param {string} repo
- * @param {string} bare
  */
-function fakeGitHub(repo, bare) {
+function fakeGitHub(repo: string, bare: string) {
   const g = git(bare);
-  /**
-   * @typedef {{ number: number, node_id: string, draft: boolean, state: string,
-   *   mergeable_state: string | null, auto_merge: unknown, title?: string, body?: string,
-   *   headRepo?: string }} FakePull
-   */
-  /** @type {Map<number, FakePull>} */
-  const pulls = new Map();
-  /** @type {[string, string, unknown?][]} */
-  const calls = [];
-  /** @type {{ query: string, variables: Record<string, unknown>, branch: string }[]} */
-  const mutations = [];
+  type FakePull = {
+    number: number;
+    node_id: string;
+    draft: boolean;
+    state: string;
+    mergeable_state: string | null;
+    auto_merge: unknown;
+    title?: string;
+    body?: string;
+    headRepo?: string;
+  };
+  const pulls: Map<number, FakePull> = new Map();
+  const calls: [string, string, unknown?][] = [];
+  const mutations: { query: string; variables: Record<string, unknown>; branch: string }[] = [];
   const state = {
-    threads: /** @type {unknown[]} */ ([]),
-    required: /** @type {string[]} */ ([]),
-    checkRuns: /** @type {unknown[]} */ ([]),
-    statuses: /** @type {unknown[]} */ ([]),
+    threads: [] as unknown[],
+    required: [] as string[],
+    checkRuns: [] as unknown[],
+    statuses: [] as unknown[],
     clean: false,
     /** A refusal enabling auto-merge gives, as GitHub words it. */
-    refusal: /** @type {string | null} */ (null),
+    refusal: null as string | null,
     refuseCreate: false,
     ruleTypes: ['required_status_checks', 'pull_request', 'code_scanning'],
-    mergeable: /** @type {string | null} */ (null),
+    mergeable: null as string | null,
   };
   const branchHead = () => {
     try {
@@ -165,13 +159,11 @@ function fakeGitHub(repo, bare) {
       return '';
     }
   };
-  /** @param {number} n */
-  const pull = (n) => {
-    const p = /** @type {NonNullable<ReturnType<typeof pulls.get>>} */ (pulls.get(n));
+  const pull = (n: number) => {
+    const p = pulls.get(n) as NonNullable<ReturnType<typeof pulls.get>>;
     return { ...p, mergeable_state: state.mergeable, head: { sha: branchHead() } };
   };
-  /** @type {import('../lib/comment.mjs').Api} */
-  const api = (method, route, body) => {
+  const api: Api = (method, route, body) => {
     calls.push([method, route, body]);
     const r = route.replace(`repos/${repo}/`, '');
     let m;
@@ -197,12 +189,12 @@ function fakeGitHub(repo, bare) {
         state: 'open',
         mergeable_state: null,
         auto_merge: null,
-        .../** @type {object} */ (body),
+        ...(body as object),
       });
       return { number };
     }
     if (method === 'PATCH' && (m = /^pulls\/(\d+)$/.exec(r))) {
-      Object.assign(/** @type {object} */ (pulls.get(Number(m[1]))), body);
+      Object.assign(pulls.get(Number(m[1])) as object, body);
       return {};
     }
     if (method === 'PUT' && /^pulls\/\d+\/merge$/.test(r)) return { merged: true };
@@ -268,8 +260,7 @@ function fakeGitHub(repo, bare) {
     if (method === 'GET' && /^commits\/\w+\/status/.test(r)) return { statuses: state.statuses };
     throw new Error(`unexpected ${method} ${route}`);
   };
-  /** @type {import('./sync.ts').Graphql} */
-  const graphql = (query, variables) => {
+  const graphql: Graphql = (query, variables) => {
     if (query.includes('reviewThreads')) {
       return { repository: { pullRequest: { reviewThreads: { nodes: state.threads } } } };
     }
@@ -290,10 +281,6 @@ function fakeGitHub(repo, bare) {
 /**
  * Runs prepare on a fresh checkout of the app's main, then publish with the
  * fake GitHub, as the action's steps run them.
- *
- * @param {{ app: string, ci: string, remote: ReturnType<typeof appRemote>,
- *   github: ReturnType<typeof fakeGitHub>, token?: string, autoMerge?: string,
- *   wrapGit?: (git: import('./sync.ts').Git) => import('./sync.ts').Git }} input
  */
 async function run({
   app,
@@ -303,12 +290,19 @@ async function run({
   token = 'secret',
   wrapGit = (g) => g,
   autoMerge = 'true',
+}: {
+  app: string;
+  ci: string;
+  remote: ReturnType<typeof appRemote>;
+  github: ReturnType<typeof fakeGitHub>;
+  token?: string;
+  autoMerge?: string;
+  wrapGit?: (git: Git) => Git;
 }) {
   const checkout = temp();
   execFileSync('git', ['clone', '-q', remote.url, checkout], { env: { PATH: process.env.PATH } });
   const out = temp();
-  /** @type {string[]} */
-  const installs = [];
+  const installs: string[] = [];
   await prepare(
     { APP: app, APP_ROOT: checkout, SYNC_OUT: out, CI_SHA },
     { install: (root) => installs.push(root), format: async (text) => text, ciRoot: ci },
@@ -336,20 +330,14 @@ async function run({
 
 /**
  * The commits the sync branch holds on top of `base`, oldest first.
- *
- * @param {string} bare
- * @param {string} base
  */
-const branchCommits = (bare, base) =>
+const branchCommits = (bare: string, base: string) =>
   git(bare)(['log', '--reverse', '--format=%P|%s', `${base}..refs/heads/${BRANCH}`])
     .trim()
     .split('\n');
 
-/**
- * @param {string} bare
- * @param {string} file
- */
-const onBranch = (bare, file) => git(bare)(['show', `refs/heads/${BRANCH}:${file}`]);
+const onBranch = (bare: string, file: string) =>
+  git(bare)(['show', `refs/heads/${BRANCH}:${file}`]);
 
 describe('publish', () => {
   it('opens one PR with a commit per file, byte-identical, auto-merge bound to its head', async () => {
@@ -523,19 +511,17 @@ describe('publish', () => {
     const ci = ciRoot();
     const remote = appRemote({});
     const github = fakeGitHub('jbhirsh/fog-and-frontier', remote.bare);
-    /**
-     * @param {import('./sync.ts').Git} g
-     * @returns {import('./sync.ts').Git}
-     */
-    const wrapGit = (g) => (args, options) => {
-      if (args.includes('push')) {
-        throw Object.assign(new Error('git push failed'), {
-          stderr:
-            '! [remote rejected] bot/sync-files (refusing to allow a Personal Access Token to create or update workflow `.github/workflows/hello.yml` without `workflow` scope)',
-        });
-      }
-      return g(args, options);
-    };
+    const wrapGit =
+      (g: Git): Git =>
+      (args, options) => {
+        if (args.includes('push')) {
+          throw Object.assign(new Error('git push failed'), {
+            stderr:
+              '! [remote rejected] bot/sync-files (refusing to allow a Personal Access Token to create or update workflow `.github/workflows/hello.yml` without `workflow` scope)',
+          });
+        }
+        return g(args, options);
+      };
     await expect(run({ app: 'fog-and-frontier', ci, remote, github, wrapGit })).rejects.toThrow(
       'BOT_PR_TOKEN lacks the Workflows permission on jbhirsh/fog-and-frontier, which a push of a workflow file needs: give the token Workflows read and write there. Nothing was pushed.',
     );
@@ -547,14 +533,11 @@ describe('publish', () => {
     const ci = ciRoot();
     const remote = appRemote({});
     const github = fakeGitHub('jbhirsh/sift', remote.bare);
-    /** @param {string} stderr */
-    const refusing = (stderr) => (/** @type {import('./sync.ts').Git} */ g) =>
-      /** @type {import('./sync.ts').Git} */ (
-        (args, options) => {
-          if (args.includes('push')) throw Object.assign(new Error('git push failed'), { stderr });
-          return g(args, options);
-        }
-      );
+    const refusing = (stderr: string) => (g: Git) =>
+      ((args, options) => {
+        if (args.includes('push')) throw Object.assign(new Error('git push failed'), { stderr });
+        return g(args, options);
+      }) as Git;
     await expect(
       run({
         app: 'sift',
@@ -576,18 +559,16 @@ describe('publish', () => {
     const remote = appRemote({ '.github/workflows/hello.yml': 'old\n' });
     const github = fakeGitHub('jbhirsh/sift', remote.bare);
     const other = remote.commit({ 'theirs.txt': 'pushed by someone else\n' });
-    /**
-     * @param {import('./sync.ts').Git} g
-     * @returns {import('./sync.ts').Git}
-     */
-    const wrapGit = (g) => (args, options) => {
-      const out = g(args, options);
-      // Someone pushes the branch between the sync's read and its push.
-      if (args[0] === 'ls-remote' && args.includes(`refs/heads/${BRANCH}`)) {
-        git(remote.bare)(['update-ref', `refs/heads/${BRANCH}`, other]);
-      }
-      return out;
-    };
+    const wrapGit =
+      (g: Git): Git =>
+      (args, options) => {
+        const out = g(args, options);
+        // Someone pushes the branch between the sync's read and its push.
+        if (args[0] === 'ls-remote' && args.includes(`refs/heads/${BRANCH}`)) {
+          git(remote.bare)(['update-ref', `refs/heads/${BRANCH}`, other]);
+        }
+        return out;
+      };
     await expect(run({ app: 'sift', ci, remote, github, wrapGit })).rejects.toThrow(/stale info/);
     expect(github.branchHead()).toBe(other);
   });
@@ -622,7 +603,7 @@ describe('publish', () => {
     const remote = appRemote({ '.github/workflows/hello.yml': 'old\n' });
     const github = fakeGitHub('jbhirsh/BoardGames', remote.bare);
     await run({ app: 'BoardGames', ci, remote, github });
-    /** @type {{ auto_merge: unknown }} */ (github.pulls.get(1)).auto_merge = null;
+    (github.pulls.get(1) as { auto_merge: unknown }).auto_merge = null;
     remote.commit({ 'other.txt': 'unrelated\n' });
     const { lines } = await run({ app: 'BoardGames', ci, remote, github });
     expect(lines).toEqual([
@@ -649,8 +630,7 @@ describe('publish', () => {
     const ci = ciRoot();
     const remote = appRemote({ '.github/workflows/hello.yml': 'old\n' });
     const github = fakeGitHub('jbhirsh/BoardGames', remote.bare);
-    /** @type {import('./sync.ts').Graphql} */
-    const graphql = (query, variables) => {
+    const graphql: Graphql = (query, variables) => {
       if (query.includes('enablePullRequestAutoMerge'))
         throw new Error('Auto merge is not allowed');
       return github.graphql(query, variables);
@@ -665,7 +645,7 @@ describe('publish', () => {
     const remote = appRemote({ '.github/workflows/hello.yml': 'old\n' });
     const github = fakeGitHub('jbhirsh/BoardGames', remote.bare);
     await run({ app: 'BoardGames', ci, remote, github });
-    const pr = /** @type {{ draft: boolean, auto_merge: unknown }} */ (github.pulls.get(1));
+    const pr = github.pulls.get(1) as { draft: boolean; auto_merge: unknown };
     pr.draft = true;
     pr.auto_merge = null;
     writeFileSync(path.join(ci, 'sync/callers/hello.yml'), `${HELLO}# newer\n`);
@@ -721,11 +701,10 @@ describe('publish', () => {
     const ci = ciRoot();
     const remote = appRemote({ '.github/workflows/hello.yml': 'old\n' });
     const github = fakeGitHub('jbhirsh/BoardGames', remote.bare);
-    /** @type {import('../lib/comment.mjs').Api} */
-    const api = (method, route, body) => {
+    const api: Api = (method, route, body) => {
       const answer = github.api(method, route, body);
       if (!route.includes('/compare/')) return answer;
-      const c = /** @type {{ files: unknown[] }} */ (answer);
+      const c = answer as { files: unknown[] };
       return {
         ...c,
         files: [...c.files, { filename: 'package.json', status: 'modified', sha: 'x' }],
@@ -746,37 +725,35 @@ describe('guard', () => {
   /**
    * A fake API answering the compare and the trees of one commit pair.
    *
-   * @param {object} compareAnswer
-   * @param {Record<string, string>} [modes] head modes by path
-   * @param {string} [baseMode] every file's mode at the base
+   * @param compareAnswer
+   * @param modes head modes by path
+   * @param baseMode every file's mode at the base
    */
-  const api = (compareAnswer, modes = {}, baseMode = '100644') =>
-    /** @type {import('../lib/comment.mjs').Api} */ (
-      (_method, route) => {
-        if (route.includes('/compare/')) return compareAnswer;
-        if (route.includes('/git/commits/'))
-          return { tree: { sha: route.endsWith('head') ? 'th' : 'tb' } };
-        const head = route.endsWith('/th') || route.endsWith('/thw');
-        if (route.endsWith('/th') || route.endsWith('/tb')) {
-          return {
-            tree: [
-              { path: 'w', mode: '040000', type: 'tree', sha: head ? 'thw' : 'tbw' },
-              { path: 'f', mode: '100644', type: 'blob', sha: 'x' },
-            ],
-          };
-        }
+  const api = (compareAnswer: object, modes: Record<string, string> = {}, baseMode = '100644') =>
+    ((_method, route) => {
+      if (route.includes('/compare/')) return compareAnswer;
+      if (route.includes('/git/commits/'))
+        return { tree: { sha: route.endsWith('head') ? 'th' : 'tb' } };
+      const head = route.endsWith('/th') || route.endsWith('/thw');
+      if (route.endsWith('/th') || route.endsWith('/tb')) {
         return {
-          tree: Object.entries({ 'w/a.yml': '100644', 'w/b.yml': '100644', ...modes })
-            .filter(([file]) => head || file !== 'w/new.yml')
-            .map(([file, mode]) => ({
-              path: file.slice(2),
-              mode: head ? (modes[file] ?? mode) : baseMode,
-              type: 'blob',
-              sha: 'x',
-            })),
+          tree: [
+            { path: 'w', mode: '040000', type: 'tree', sha: head ? 'thw' : 'tbw' },
+            { path: 'f', mode: '100644', type: 'blob', sha: 'x' },
+          ],
         };
       }
-    );
+      return {
+        tree: Object.entries({ 'w/a.yml': '100644', 'w/b.yml': '100644', ...modes })
+          .filter(([file]) => head || file !== 'w/new.yml')
+          .map(([file, mode]) => ({
+            path: file.slice(2),
+            mode: head ? (modes[file] ?? mode) : baseMode,
+            type: 'blob',
+            sha: 'x',
+          })),
+      };
+    }) as Api;
   const expected = new Map([['w/a.yml', content]]);
   const ok = {
     ahead_by: 1,
@@ -857,15 +834,13 @@ describe('guard', () => {
       '{\n  "a": 1,\n  "autofix": { "exempt": { "Hello": "hi" } },\n  "b": 2\n}\n',
     );
     const files = [{ filename: '.github/ci.json', status: 'modified', sha: blobSha(after) }];
-    const answer = /** @type {import('../lib/comment.mjs').Api} */ (
-      (_m, route) => {
-        if (route.includes('/compare/')) return { ahead_by: 1, behind_by: 0, files };
-        if (route.includes('/git/commits/')) return { tree: { sha: 't' } };
-        if (route.endsWith('/t'))
-          return { tree: [{ path: '.github', mode: '040000', type: 'tree', sha: 'g' }] };
-        return { tree: [{ path: 'ci.json', mode: '100644', type: 'blob', sha: 'x' }] };
-      }
-    );
+    const answer = ((_m, route) => {
+      if (route.includes('/compare/')) return { ahead_by: 1, behind_by: 0, files };
+      if (route.includes('/git/commits/')) return { tree: { sha: 't' } };
+      if (route.endsWith('/t'))
+        return { tree: [{ path: '.github', mode: '040000', type: 'tree', sha: 'g' }] };
+      return { tree: [{ path: 'ci.json', mode: '100644', type: 'blob', sha: 'x' }] };
+    }) as Api;
     expect(
       guard({
         ...args,
@@ -882,19 +857,14 @@ describe('guard', () => {
 
 describe('check', () => {
   const here = () => CI_SHA;
-  /**
-   * @param {{ head?: string, runs?: number }} answers
-   * @returns {import('../lib/comment.mjs').Api & { calls: string[] }}
-   */
-  const api = ({ head = CI_SHA, runs = 1 } = {}) => {
-    /** @type {string[]} */
-    const calls = [];
-    const fn = /** @type {import('../lib/comment.mjs').Api & { calls: string[] }} */ (
-      (/** @type {string} */ _method, /** @type {string} */ route) => {
-        calls.push(route);
-        return route.endsWith('commits/main') ? { sha: head } : { total_count: runs };
-      }
-    );
+  const api = ({ head = CI_SHA, runs = 1 }: { head?: string; runs?: number } = {}): Api & {
+    calls: string[];
+  } => {
+    const calls: string[] = [];
+    const fn = ((_method: string, route: string) => {
+      calls.push(route);
+      return route.endsWith('commits/main') ? { sha: head } : { total_count: runs };
+    }) as Api & { calls: string[] };
     fn.calls = calls;
     return fn;
   };
@@ -950,12 +920,12 @@ describe('prepare and readPrepared', () => {
   it('refuses what prepare would not write', () => {
     const dir = temp();
     const file = path.join(dir, 'prepared.json');
-    for (const [value, message] of /** @type {[unknown, string][]} */ ([
+    for (const [value, message] of [
       [[], 'is not what prepare writes'],
       [{ appSha: 'main', settings: {} }, 'prepared.json appSha must be a full commit SHA'],
       [{ appSha: CI_SHA, settings: [] }, 'settings must map paths to text'],
       [{ appSha: CI_SHA, settings: { a: 1 } }, 'settings must map paths to text'],
-    ])) {
+    ] as [unknown, string][]) {
       writeFileSync(file, JSON.stringify(value));
       expect(() => readPrepared(file)).toThrow(message);
     }
@@ -1024,8 +994,7 @@ describe('dryRun and main', () => {
     const remote = appRemote({ '.github/workflows/hello.yml': 'old\n' });
     const github = fakeGitHub('jbhirsh/BoardGames', remote.bare);
     const output = path.join(temp(), 'output');
-    /** @type {string[]} */
-    const log = [];
+    const log: string[] = [];
     const deps = {
       api: github.api,
       graphql: github.graphql,
@@ -1034,9 +1003,8 @@ describe('dryRun and main', () => {
       install: () => {},
     };
 
-    const checkApi = /** @type {import('../lib/comment.mjs').Api} */ (
-      (_m, route) => (route.endsWith('commits/main') ? { sha: CI_SHA } : { total_count: 1 })
-    );
+    const checkApi = ((_m, route) =>
+      route.endsWith('commits/main') ? { sha: CI_SHA } : { total_count: 1 }) as Api;
     expect(
       await main(
         ['check'],
@@ -1070,8 +1038,7 @@ describe('dryRun and main', () => {
   });
 
   it('prints each line of a failure as an error, after what it did', async () => {
-    /** @type {string[]} */
-    const log = [];
+    const log: string[] = [];
     expect(await main(['check'], { TOKEN_SET: 'false' }, (l) => log.push(l))).toBe(1);
     expect(log[0]).toMatch(/^::error::BOT_PR_TOKEN is empty/);
 
@@ -1126,8 +1093,7 @@ describe('gitIn', () => {
 });
 
 describe('publish, in the cases review found', () => {
-  /** @param {import('./sync.ts').Git} g @returns {import('./sync.ts').Git} */
-  const id = (g) => g;
+  const id = (g: Git): Git => g;
 
   it('names a PR GitHub calls blocked with every check passed and no thread, and main’s rules', async () => {
     const ci = ciRoot();
@@ -1155,15 +1121,16 @@ describe('publish, in the cases review found', () => {
     });
     const big = git(remote.bare)(['rev-parse', 'main:docs/big.bin']).trim();
     const github = fakeGitHub('jbhirsh/BoardGames', remote.bare);
-    /** @param {import('./sync.ts').Git} g @returns {import('./sync.ts').Git} */
-    const wrapGit = (g) => (args, options) => {
-      // main moves after the sync read it, so GitHub no longer advertises its base.
-      if (args[0] === 'ls-remote' && args.includes(`refs/heads/${BRANCH}`)) {
-        remote.commit({ 'moved.txt': 'main moved\n' });
-      }
-      // As git's own default, which this sandbox's global config changes.
-      return g(args.includes('push') ? ['-c', 'push.negotiate=false', ...args] : args, options);
-    };
+    const wrapGit =
+      (g: Git): Git =>
+      (args, options) => {
+        // main moves after the sync read it, so GitHub no longer advertises its base.
+        if (args[0] === 'ls-remote' && args.includes(`refs/heads/${BRANCH}`)) {
+          remote.commit({ 'moved.txt': 'main moved\n' });
+        }
+        // As git's own default, which this sandbox's global config changes.
+        return g(args.includes('push') ? ['-c', 'push.negotiate=false', ...args] : args, options);
+      };
     const { work } = await run({ app: 'BoardGames', ci, remote, github, wrapGit });
     expect(github.branchHead()).not.toBe('');
     const held = git(work)(['cat-file', '--batch-all-objects', '--batch-check=%(objectname)']);
@@ -1180,7 +1147,7 @@ describe('publish, in the cases review found', () => {
     );
     expect(github.mutations).toEqual([]);
     // A PR whose auto-merge an earlier run turned on has it turned off.
-    /** @type {{ auto_merge: unknown }} */ (github.pulls.get(1)).auto_merge = {
+    (github.pulls.get(1) as { auto_merge: unknown }).auto_merge = {
       merge_method: 'squash',
     };
     await run({ app: 'BoardGames', ci, remote, github, autoMerge: 'false' });
@@ -1225,12 +1192,9 @@ describe('publish, in the cases review found', () => {
     const ci = ciRoot();
     const remote = appRemote({ '.github/workflows/hello.yml': 'old\n' });
     const github = fakeGitHub('jbhirsh/sift', remote.bare);
-    /** @type {import('../lib/comment.mjs').Api} */
-    const api = (method, route, body) => {
+    const api: Api = (method, route, body) => {
       const answer = github.api(method, route, body);
-      return route.includes('/compare/')
-        ? { .../** @type {object} */ (answer), ahead_by: 9 }
-        : answer;
+      return route.includes('/compare/') ? { ...(answer as object), ahead_by: 9 } : answer;
     };
     const failed = await run({ app: 'sift', ci, remote, github: { ...github, api } }).catch(
       (e) => e,
@@ -1299,7 +1263,7 @@ describe('publish, in the cases review found', () => {
     const remote = appRemote({ '.github/workflows/hello.yml': 'old\n' });
     const github = fakeGitHub('jbhirsh/BoardGames', remote.bare);
     await run({ app: 'BoardGames', ci, remote, github });
-    /** @type {{ state: string }} */ (github.pulls.get(1)).state = 'closed';
+    (github.pulls.get(1) as { state: string }).state = 'closed';
     remote.commit({
       '.github/workflows/hello.yml': HELLO,
       '.github/pull_request_template.md': TEMPLATE,

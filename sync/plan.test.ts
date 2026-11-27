@@ -14,17 +14,14 @@ import {
   report,
   sameBytes,
 } from './plan.ts';
+import type { Companion, Resolved } from './manifest.ts';
+import type { Change } from './plan.ts';
 
 const SHA = 'abcdef0123456789abcdef0123456789abcdef01';
 
-/** @type {import('./manifest.ts').Companion} */
-const exempt = { key: ['autofix', 'exempt', 'Hello'], value: 'reads the PR as data' };
+const exempt: Companion = { key: ['autofix', 'exempt', 'Hello'], value: 'reads the PR as data' };
 
-/**
- * @param {Partial<import('./plan.ts').Change>} [over]
- * @returns {import('./plan.ts').Change}
- */
-const change = (over = {}) => ({
+const change = (over: Partial<Change> = {}): Change => ({
   path: '.github/workflows/hello.yml',
   source: 'sync/callers/hello.yml',
   why: undefined,
@@ -78,22 +75,22 @@ describe('holds', () => {
 });
 
 describe('changesFor', () => {
-  /** @type {import('./manifest.ts').Resolved[]} */
-  const files = [
+  const files: Resolved[] = [
     { path: 'same.md', source: 's/same.md', why: undefined, companions: [] },
     { path: 'old.yml', source: 's/old.yml', why: 'its own build', companions: [exempt] },
     { path: 'new.yml', source: 's/new.yml', why: undefined, companions: [exempt] },
     { path: 'held.yml', source: 's/held.yml', why: undefined, companions: [exempt] },
   ];
-  /** @type {Record<string, string>} */
-  const sources = {
+  const sources: Record<string, string> = {
     's/same.md': 'same\n',
     's/old.yml': '# new comment\nname: x\n',
     's/new.yml': 'name: new\n',
     's/held.yml': 'name: held\n',
   };
-  /** @type {Record<string, string>} */
-  const app = { 'same.md': 'same\n', 'old.yml': '# old comment\nname: x\n' };
+  const app: Record<string, string> = {
+    'same.md': 'same\n',
+    'old.yml': '# old comment\nname: x\n',
+  };
   const changes = changesFor(
     files,
     (source) => Buffer.from(sources[source]),

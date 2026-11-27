@@ -25,25 +25,14 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appSettings, SETTINGS_FILE } from '../lib/app.mjs';
-import {
-  APPS,
-  CI_ROOT,
-  companionProblem,
-  loadManifest,
-  lstatOrNull,
-  resolve,
-} from './manifest.ts';
+import { APPS, CI_ROOT, companionProblem, loadManifest, lstatOrNull, resolve } from './manifest.ts';
 import { changesFor, report } from './plan.ts';
-
-/** @typedef {import('./manifest.ts').Manifest} Manifest */
+import type { Manifest } from './manifest.ts';
 
 /**
  * The app the self-test is for, or undefined when none is named.
- *
- * @param {Record<string, string | undefined>} [env]
- * @returns {string | undefined}
  */
-export function appName(env = process.env) {
+export function appName(env: Record<string, string | undefined> = process.env): string | undefined {
   if (env.APP_NAME) {
     if (!APPS.includes(env.APP_NAME)) {
       throw new Error(`APP_NAME "${env.APP_NAME}" is not one of ${APPS.join(', ')}`);
@@ -59,11 +48,10 @@ export function appName(env = process.env) {
  * the way where a folder belongs, or something that isn't a regular file at
  * the path itself. What is absent is fine: the sync makes it.
  *
- * @param {string} root the app's checkout
- * @param {string} file a synced path, relative to it
- * @returns {string | null}
+ * @param root the app's checkout
+ * @param file a synced path, relative to it
  */
-function pathProblem(root, file) {
+function pathProblem(root: string, file: string): string | null {
   const segments = file.split('/');
   for (let i = 1; i <= segments.length; i++) {
     const at = segments.slice(0, i).join('/');
@@ -81,11 +69,8 @@ function pathProblem(root, file) {
 
 /**
  * The app's `.github/ci.json`, with its file name on a JSON error.
- *
- * @param {string} root
- * @returns {Record<string, unknown>}
  */
-function settingsOf(root) {
+function settingsOf(root: string): Record<string, unknown> {
   try {
     return appSettings(root);
   } catch (error) {
@@ -95,13 +80,18 @@ function settingsOf(root) {
 }
 
 /**
- * @param {string} root the app's checkout
- * @param {string} [app] the app it is, when known
- * @param {Manifest} [manifest] this repo's manifest, unless a test brings its own
- * @param {string} [ciRoot] the checkout its sources are read from
- * @returns {string[]} what to print; throws on the first problem
+ * @param root the app's checkout
+ * @param app the app it is, when known
+ * @param manifest this repo's manifest, unless a test brings its own
+ * @param ciRoot the checkout its sources are read from
+ * @returns what to print; throws on the first problem
  */
-export function selftest(root, app, manifest = loadManifest(), ciRoot = CI_ROOT) {
+export function selftest(
+  root: string,
+  app?: string,
+  manifest: Manifest = loadManifest(),
+  ciRoot: string = CI_ROOT,
+): string[] {
   const files = app ? resolve(manifest, app) : manifest.files;
   const settings = settingsOf(root);
   const problems = files.flatMap(({ path: file, companions }) => [
@@ -113,8 +103,7 @@ export function selftest(root, app, manifest = loadManifest(), ciRoot = CI_ROOT)
   if (!app) {
     return [`sync: ${files.length} synced files (no app named, so every entry) fit this checkout.`];
   }
-  /** @param {string} file */
-  const readApp = (file) =>
+  const readApp = (file: string) =>
     lstatOrNull(path.join(root, file))?.isFile() ? readFileSync(path.join(root, file)) : null;
   const changes = changesFor(
     resolve(manifest, app),
@@ -130,13 +119,12 @@ export function selftest(root, app, manifest = loadManifest(), ciRoot = CI_ROOT)
 
 /**
  * Runs the self-test on the app at `argv[0]` and returns the exit code.
- *
- * @param {string[]} argv
- * @param {(line: string) => void} [log]
- * @param {Record<string, string | undefined>} [env]
- * @returns {number}
  */
-export function cli(argv, log = console.log, env = process.env) {
+export function cli(
+  argv: string[],
+  log: (line: string) => void = console.log,
+  env: Record<string, string | undefined> = process.env,
+): number {
   try {
     for (const line of selftest(path.resolve(argv[0] ?? '.'), appName(env))) log(line);
     return 0;

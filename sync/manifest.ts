@@ -53,19 +53,26 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SETTINGS_FILE } from '../lib/app.mjs';
 
-/** @typedef {{ key: string[], value: string }} Companion */
-/** @typedef {{ source: string, why: string }} Variant */
-/**
- * @typedef {object} Entry
- * @property {string} path where the app holds it
- * @property {string} source where this repo holds it
- * @property {string[]} apps
- * @property {Record<string, Variant>} variants by app
- * @property {Companion[]} companions
- */
-/** @typedef {{ source: string, why: string }} Unsynced */
-/** @typedef {{ files: Entry[], unsynced: Unsynced[] }} Manifest */
-/** @typedef {{ path: string, source: string, why: string | undefined, companions: Companion[] }} Resolved */
+export type Companion = { key: string[]; value: string };
+export type Variant = { source: string; why: string };
+export type Entry = {
+  /** where the app holds it */
+  path: string;
+  /** where this repo holds it */
+  source: string;
+  apps: string[];
+  /** by app */
+  variants: Record<string, Variant>;
+  companions: Companion[];
+};
+export type Unsynced = { source: string; why: string };
+export type Manifest = { files: Entry[]; unsynced: Unsynced[] };
+export type Resolved = {
+  path: string;
+  source: string;
+  why: string | undefined;
+  companions: Companion[];
+};
 
 /**
  * The apps that hold synced files: a copy of the apps in ci.yml's `Against`
@@ -80,26 +87,17 @@ const MANIFEST = 'sync/manifest.json';
 /** Keys that would reach an object's prototype when a companion is set. */
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
- */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/**
- * @param {unknown} value
- * @returns {value is string}
- */
-const isText = (value) => typeof value === 'string' && value.trim() !== '';
+const isText = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim() !== '';
 
 /**
  * What is wrong with a manifest path, or null: it must be relative, written
  * with `/`, and made of ordinary segments.
- *
- * @param {unknown} value
- * @returns {string | null}
  */
-export function pathProblem(value) {
+export function pathProblem(value: unknown): string | null {
   if (typeof value !== 'string' || value === '') return 'must be a non-empty string';
   if (value.includes('\\')) return 'must be written with "/" only';
   if (/[\p{Cc}\p{Cf}]/u.test(value))
@@ -116,38 +114,41 @@ export function pathProblem(value) {
 /**
  * Pushes a problem for each key of `value` that isn't in `known`, so a typo
  * (`variant`) is refused rather than ignored.
- *
- * @param {Record<string, unknown>} value
- * @param {string[]} known
- * @param {string} at
- * @param {string[]} problems
  */
-function unknownKeys(value, known, at, problems) {
+function unknownKeys(
+  value: Record<string, unknown>,
+  known: string[],
+  at: string,
+  problems: string[],
+) {
   for (const key of Object.keys(value)) {
     if (!known.includes(key)) problems.push(`${at}: unknown key "${key}"`);
   }
 }
 
 /**
- * @param {unknown} value
- * @param {string} at
- * @param {string[]} problems
- * @returns {boolean} whether it is a valid path
+ * @returns whether it is a valid path
  */
-function checkPath(value, at, problems) {
+function checkPath(value: unknown, at: string, problems: string[]): boolean {
   const problem = pathProblem(value);
   if (problem) problems.push(`${at} ${problem}`);
   return problem === null;
 }
 
 /**
- * @param {unknown} value
- * @param {string} at
- * @param {string[]} apps this file's apps, as far as they were valid
- * @param {string | undefined} source this file's canonical source
- * @param {string[]} problems
+ * @param value
+ * @param at
+ * @param apps this file's apps, as far as they were valid
+ * @param source this file's canonical source
+ * @param problems
  */
-function checkVariants(value, at, apps, source, problems) {
+function checkVariants(
+  value: unknown,
+  at: string,
+  apps: string[],
+  source: string | undefined,
+  problems: string[],
+) {
   if (!isObject(value)) return void problems.push(`${at} must be an object of app → variant`);
   for (const [app, variant] of Object.entries(value)) {
     const where = `${at}.${app}`;
@@ -164,12 +165,7 @@ function checkVariants(value, at, apps, source, problems) {
   }
 }
 
-/**
- * @param {unknown} value
- * @param {string} at
- * @param {string[]} problems
- */
-function checkCompanions(value, at, problems) {
+function checkCompanions(value: unknown, at: string, problems: string[]) {
   if (!Array.isArray(value)) return void problems.push(`${at} must be an array`);
   const seen = new Set();
   value.forEach((companion, i) => {
@@ -191,12 +187,7 @@ function checkCompanions(value, at, problems) {
   });
 }
 
-/**
- * @param {unknown} entry
- * @param {string} at
- * @param {string[]} problems
- */
-function checkEntry(entry, at, problems) {
+function checkEntry(entry: unknown, at: string, problems: string[]) {
   if (!isObject(entry)) return void problems.push(`${at} must be an object`);
   unknownKeys(entry, ['path', 'source', 'apps', 'variants', 'companions'], at, problems);
   if (checkPath(entry.path, `${at}.path`, problems) && entry.path === SETTINGS_FILE) {
@@ -206,8 +197,7 @@ function checkEntry(entry, at, problems) {
     checkPath(entry.source, `${at}.source`, problems) && typeof entry.source === 'string'
       ? entry.source
       : undefined;
-  /** @type {string[]} */
-  let apps = [];
+  let apps: string[] = [];
   if (!Array.isArray(entry.apps) || entry.apps.length === 0) {
     problems.push(`${at}.apps must be a non-empty array`);
   } else {
@@ -224,22 +214,16 @@ function checkEntry(entry, at, problems) {
 /**
  * Everything wrong with a parsed manifest, for any value at all: an empty
  * list means it is one. Never throws.
- *
- * @param {unknown} value
- * @returns {string[]}
  */
-export function manifestProblems(value) {
+export function manifestProblems(value: unknown): string[] {
   if (!isObject(value)) return ['the manifest must be an object'];
-  /** @type {string[]} */
-  const problems = [];
+  const problems: string[] = [];
   unknownKeys(value, ['files', 'unsynced'], 'manifest', problems);
   const { files, unsynced } = value;
   if (!Array.isArray(files)) problems.push('files must be an array');
   if (!Array.isArray(unsynced)) problems.push('unsynced must be an array');
-  /** @type {Map<string, string>} */
-  const paths = new Map();
-  /** @type {Set<string>} */
-  const carried = new Set();
+  const paths: Map<string, string> = new Map();
+  const carried: Set<string> = new Set();
   if (Array.isArray(files)) {
     files.forEach((entry, i) => {
       const at = `files[${i}]`;
@@ -282,22 +266,14 @@ export function manifestProblems(value) {
   return problems;
 }
 
-/**
- * @param {string[]} problems
- * @returns {Error}
- */
-const manifestError = (problems) =>
+const manifestError = (problems: string[]): Error =>
   new Error(`${MANIFEST}:\n${problems.map((problem) => `  - ${problem}`).join('\n')}`);
 
 /**
  * Parses and validates a manifest's text; optional parts get their empty value.
- *
- * @param {string} text
- * @returns {Manifest}
  */
-export function parseManifest(text) {
-  /** @type {unknown} */
-  let value;
+export function parseManifest(text: string): Manifest {
+  let value: unknown;
   try {
     value = JSON.parse(text);
   } catch (error) {
@@ -305,10 +281,10 @@ export function parseManifest(text) {
   }
   const problems = manifestProblems(value);
   if (problems.length > 0) throw manifestError(problems);
-  const { files, unsynced } =
-    /** @type {{ files: (Omit<Entry, 'variants' | 'companions'> & Partial<Entry>)[], unsynced: Unsynced[] }} */ (
-      value
-    );
+  const { files, unsynced } = value as {
+    files: (Omit<Entry, 'variants' | 'companions'> & Partial<Entry>)[];
+    unsynced: Unsynced[];
+  };
   return {
     files: files.map((entry) => ({ variants: {}, companions: [], ...entry })),
     unsynced,
@@ -317,10 +293,8 @@ export function parseManifest(text) {
 
 /**
  * What is at `file`, a link itself rather than what it points to, or null.
- *
- * @param {string} file
  */
-export function lstatOrNull(file) {
+export function lstatOrNull(file: string) {
   try {
     return lstatSync(file);
   } catch {
@@ -331,27 +305,19 @@ export function lstatOrNull(file) {
 /**
  * Whether a regular file is at `file` (not a folder, not a link: a link could
  * point outside the checkout).
- *
- * @param {string} file
  */
-const isFile = (file) => lstatOrNull(file)?.isFile() === true;
+const isFile = (file: string) => lstatOrNull(file)?.isFile() === true;
 
 /**
  * Reads this repo's manifest and checks it against the files it names: every
  * source exists, and a variant's bytes differ from the canonical's.
  *
- * @param {string} [root] this repo's checkout
- * @returns {Manifest}
+ * @param root this repo's checkout
  */
-export function loadManifest(root = CI_ROOT) {
+export function loadManifest(root: string = CI_ROOT): Manifest {
   const manifest = parseManifest(readFileSync(path.join(root, MANIFEST), 'utf8'));
-  /** @type {string[]} */
-  const problems = [];
-  /**
-   * @param {string} source
-   * @param {string} at
-   */
-  const exists = (source, at) => {
+  const problems: string[] = [];
+  const exists = (source: string, at: string) => {
     const found = isFile(path.join(root, source));
     if (!found) problems.push(`${at} "${source}" is not a file in jbhirsh/ci`);
     return found;
@@ -376,12 +342,8 @@ export function loadManifest(root = CI_ROOT) {
  * The files an app holds in step: for each, where the app keeps it, the
  * source of its content (the app's variant when it has one, with the reason),
  * and its companions.
- *
- * @param {Manifest} manifest
- * @param {string} app
- * @returns {Resolved[]}
  */
-export function resolve(manifest, app) {
+export function resolve(manifest: Manifest, app: string): Resolved[] {
   if (!APPS.includes(app)) throw new Error(`unknown app "${app}" (the apps: ${APPS.join(', ')})`);
   return manifest.files
     .filter((entry) => entry.apps.includes(app))
@@ -401,13 +363,11 @@ export function resolve(manifest, app) {
  * folder on the way to its key that the app already holds must be an object.
  * The last key may exist (it is never overwritten) or not.
  *
- * @param {Record<string, unknown>} settings the app's parsed ci.json
- * @param {string[]} key
- * @returns {string | null}
+ * @param settings the app's parsed ci.json
+ * @param key
  */
-export function companionProblem(settings, key) {
-  /** @type {unknown} */
-  let at = settings;
+export function companionProblem(settings: Record<string, unknown>, key: string[]): string | null {
+  let at: unknown = settings;
   for (const [i, segment] of key.slice(0, -1).entries()) {
     if (!isObject(at) || !Object.hasOwn(at, segment)) return null;
     at = at[segment];

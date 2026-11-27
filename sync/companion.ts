@@ -24,26 +24,21 @@
 import { isDeepStrictEqual } from 'node:util';
 import { importFromApp, SETTINGS_FILE } from '../lib/app.mjs';
 import { holds, lineDiff } from './plan.ts';
-
-/** @typedef {import('./manifest.ts').Companion} Companion */
+import type { Companion } from './manifest.ts';
 
 /**
- * An object in the text: where its closing brace is, where its last member's
- * value ends (null when it has none), and its members by key.
- *
- * @typedef {{ close: number, lastEnd: number | null, members: Map<string, Value> }} ObjectAt
- * @typedef {{ start: number, object: ObjectAt | null }} Value
+ * An object in the text: where its closing brace is, where its last member's value ends (null when
+ * it has none), and its members by key.
  */
+export type ObjectAt = { close: number; lastEnd: number | null; members: Map<string, Value> };
+
+export type Value = { start: number; object: ObjectAt | null };
 
 /**
  * Reads a JSON value from `text` at `at` (after whitespace), recording where
  * each object's parts are. Text that JSON.parse accepts is all it is given.
- *
- * @param {string} text
- * @param {{ i: number }} at
- * @returns {Value}
  */
-function readValue(text, at) {
+function readValue(text: string, at: { i: number }): Value {
   skip(text, at);
   const start = at.i;
   const char = text[at.i];
@@ -70,28 +65,25 @@ function readValue(text, at) {
 }
 
 /**
- * @param {string} text
- * @param {{ i: number }} at on the opening quote
+ * @param text
+ * @param at on the opening quote
  */
-function readString(text, at) {
+function readString(text: string, at: { i: number }) {
   const start = at.i;
   at.i++;
   while (text[at.i] !== '"') at.i += text[at.i] === '\\' ? 2 : 1;
   at.i++;
-  return /** @type {string} */ (JSON.parse(text.slice(start, at.i)));
+  return JSON.parse(text.slice(start, at.i)) as string;
 }
 
 /**
- * @param {string} text
- * @param {{ i: number }} at on the opening brace
- * @returns {ObjectAt}
+ * @param text
+ * @param at on the opening brace
  */
-function readObject(text, at) {
+function readObject(text: string, at: { i: number }): ObjectAt {
   at.i++;
-  /** @type {Map<string, Value>} */
-  const members = new Map();
-  /** @type {number | null} */
-  let lastEnd = null;
+  const members: Map<string, Value> = new Map();
+  let lastEnd: number | null = null;
   skip(text, at);
   if (text[at.i] === '}') return { close: at.i++, lastEnd, members };
   for (;;) {
@@ -109,21 +101,14 @@ function readObject(text, at) {
   }
 }
 
-/**
- * @param {string} text
- * @param {{ i: number }} at
- */
-function skip(text, at) {
+function skip(text: string, at: { i: number }) {
   while (at.i < text.length && /\s/.test(text[at.i])) at.i++;
 }
 
 /**
  * The indentation of the line `offset` is on.
- *
- * @param {string} text
- * @param {number} offset
  */
-function indentAt(text, offset) {
+function indentAt(text: string, offset: number) {
   const lineStart = text.lastIndexOf('\n', offset - 1) + 1;
   return /^[ \t]*/.exec(text.slice(lineStart))?.[0] ?? '';
 }
@@ -131,11 +116,11 @@ function indentAt(text, offset) {
 /**
  * A value as JSON, expanded with `step` per level, its first line unindented.
  *
- * @param {unknown} value
- * @param {string} indent the indentation of the line it starts on
- * @param {string} step
+ * @param value
+ * @param indent the indentation of the line it starts on
+ * @param step
  */
-const serialize = (value, indent, step) =>
+const serialize = (value: unknown, indent: string, step: string) =>
   JSON.stringify(value, null, step).replace(/\n/g, `\n${indent}`);
 
 /**
@@ -143,21 +128,19 @@ const serialize = (value, indent, step) =>
  * rest of its text is unchanged. An app with no ci.json is given '' and gets
  * a new file.
  *
- * @param {string} text the app's `.github/ci.json`, or ''
- * @param {Companion[]} companions
- * @returns {string}
+ * @param text the app's `.github/ci.json`, or ''
+ * @param companions
  */
-export function addCompanions(text, companions) {
+export function addCompanions(text: string, companions: Companion[]): string {
   let out = text.trim() === '' ? '{}\n' : text;
   for (const { key, value } of companions) {
-    /** @type {unknown} */
-    const parsed = JSON.parse(out);
+    const parsed: unknown = JSON.parse(out);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       throw new Error(`${SETTINGS_FILE} must hold an object`);
     }
-    if (holds(/** @type {Record<string, unknown>} */ (parsed), key)) continue;
+    if (holds(parsed as Record<string, unknown>, key)) continue;
     // The deepest object on the key's path that the text holds.
-    let object = /** @type {ObjectAt} */ (readValue(out, { i: 0 }).object);
+    let object = readValue(out, { i: 0 }).object as ObjectAt;
     let depth = 0;
     while (depth < key.length - 1) {
       const found = object.members.get(key[depth]);
@@ -171,8 +154,7 @@ export function addCompanions(text, companions) {
       object = found.object;
       depth++;
     }
-    /** @type {unknown} */
-    let member = value;
+    let member: unknown = value;
     for (const segment of key.slice(depth + 1).reverse()) member = { [segment]: member };
     const name = JSON.stringify(key[depth]);
     const closeIndent = indentAt(out, object.close);
@@ -204,12 +186,11 @@ export function addCompanions(text, companions) {
  * The settings text as the app's Prettier writes it (its own version and
  * config, as its format check reads them), from the app's node_modules.
  *
- * @param {string} text
- * @param {string} root the app's checkout, with its packages installed
- * @returns {Promise<string>}
+ * @param text
+ * @param root the app's checkout, with its packages installed
  */
-export async function formatSettings(text, root) {
-  const prettier = /** @type {typeof import('prettier')} */ (await importFromApp('prettier', root));
+export async function formatSettings(text: string, root: string): Promise<string> {
+  const prettier = (await importFromApp('prettier', root)) as typeof import('prettier');
   const filepath = `${root}/${SETTINGS_FILE}`;
   const options = (await prettier.resolveConfig(filepath)) ?? {};
   return prettier.format(text, { ...options, filepath });
@@ -217,16 +198,12 @@ export async function formatSettings(text, root) {
 
 /**
  * Whether a JSON text parses to an object, and to which.
- *
- * @param {string} text
- * @returns {Record<string, unknown> | null}
  */
-function objectOf(text) {
+function objectOf(text: string): Record<string, unknown> | null {
   try {
-    /** @type {unknown} */
-    const value = JSON.parse(text.trim() === '' ? '{}' : text);
+    const value: unknown = JSON.parse(text.trim() === '' ? '{}' : text);
     return typeof value === 'object' && value !== null && !Array.isArray(value)
-      ? /** @type {Record<string, unknown>} */ (value)
+      ? (value as Record<string, unknown>)
       : null;
   } catch {
     return null;
@@ -237,22 +214,19 @@ function objectOf(text) {
  * The guard's reading of a settings change: why `after` is not `before` with
  * exactly these companions' keys added, or [] when it is. Never throws.
  *
- * @param {string} before the app's `.github/ci.json` ('' when it has none)
- * @param {string} after what the sync PR holds
- * @param {Companion[]} companions
- * @returns {string[]}
+ * @param before the app's `.github/ci.json` ('' when it has none)
+ * @param after what the sync PR holds
+ * @param companions
  */
-export function settingsProblems(before, after, companions) {
+export function settingsProblems(before: string, after: string, companions: Companion[]): string[] {
   const old = objectOf(before);
   const now = objectOf(after);
   if (!old) return [`${SETTINGS_FILE} in the app is not a JSON object`];
   if (!now) return [`${SETTINGS_FILE} in the sync PR is not a JSON object`];
-  /** @type {Record<string, unknown>} */
-  const expected = structuredClone(old);
+  const expected: Record<string, unknown> = structuredClone(old);
   for (const { key, value } of companions) {
     if (holds(expected, key)) continue;
-    /** @type {Record<string, unknown>} */
-    let at = expected;
+    let at: Record<string, unknown> = expected;
     for (const segment of key.slice(0, -1)) {
       if (!Object.hasOwn(at, segment)) at[segment] = {};
       const next = at[segment];
@@ -261,12 +235,11 @@ export function settingsProblems(before, after, companions) {
           `${SETTINGS_FILE}: "${segment}" is not an object, so "${key.join('.')}" can't be set`,
         ];
       }
-      at = /** @type {Record<string, unknown>} */ (next);
+      at = next as Record<string, unknown>;
     }
-    at[/** @type {string} */ (key.at(-1))] = value;
+    at[key.at(-1) as string] = value;
   }
-  /** @type {string[]} */
-  const problems = [];
+  const problems: string[] = [];
   if (!isDeepStrictEqual(now, expected)) {
     problems.push(
       `${SETTINGS_FILE} in the sync PR changes more than the companion keys (${companions.map(({ key }) => key.join('.')).join(', ')})`,

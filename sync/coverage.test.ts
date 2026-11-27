@@ -5,15 +5,12 @@ import { parse } from 'yaml';
 import { describeWorkflow } from '../autofix/check-triggers.ts';
 import { lintGifCallers } from '../lint/gif-callers.mjs';
 import { APPS, CI_ROOT, loadManifest } from './manifest.ts';
+import type { Entry } from './manifest.ts';
 
-/** @param {string} file a path in this repo */
-const read = (file) => readFileSync(path.join(CI_ROOT, file), 'utf8');
+/** @param file a path in this repo */
+const read = (file: string) => readFileSync(path.join(CI_ROOT, file), 'utf8');
 
-/**
- * @param {string} dir
- * @returns {string[]}
- */
-const yml = (dir) =>
+const yml = (dir: string): string[] =>
   existsSync(path.join(CI_ROOT, dir))
     ? readdirSync(path.join(CI_ROOT, dir)).filter((f) => f.endsWith('.yml'))
     : [];
@@ -22,18 +19,16 @@ const yml = (dir) =>
  * Whether a workflow runs on `workflow_call`, in any form `on:` takes (a
  * name, a list or a mapping): the reusable ones an app calls at `@main`.
  *
- * @param {string} text the workflow
+ * @param text the workflow
  */
-const isReusable = (text) =>
+const isReusable = (text: string) =>
   describeWorkflow('x.yml', parse(text)).events.includes('workflow_call');
 
 /**
  * The files an app could copy or call: every `<tool>/callers/*.yml`, and
  * every reusable workflow.
- *
- * @returns {string[]}
  */
-function candidates() {
+function candidates(): string[] {
   const callers = readdirSync(CI_ROOT, { withFileTypes: true })
     .filter((d) => d.isDirectory() && d.name !== 'node_modules')
     .flatMap((d) => yml(`${d.name}/callers`).map((f) => `${d.name}/callers/${f}`));
@@ -94,11 +89,10 @@ describe('the manifest covers every canonical caller and reusable workflow', () 
  * the app's CI for it (it is neither in claude-autofix.yml's list nor exempt).
  * A variant is read too: it may be named differently.
  *
- * @param {import('./manifest.ts').Entry[]} files
- * @param {(source: string) => string} text a source's content
- * @returns {string[]}
+ * @param files
+ * @param text a source's content
  */
-function exemptionProblems(files, text) {
+function exemptionProblems(files: Entry[], text: (source: string) => string): string[] {
   return files
     .filter((entry) => entry.path.startsWith('.github/workflows/'))
     .flatMap((entry) =>
@@ -128,21 +122,19 @@ describe('a synced workflow that runs on a pull request carries its autofix exem
       'd.yml': 'name: D\non: push',
       'v.yml': 'name: Renamed\non: pull_request',
     };
-    /**
-     * @param {string} file
-     * @param {string} source
-     * @param {string[]} [exempt]
-     * @param {Record<string, { source: string, why: string }>} [variants]
-     */
-    const entry = (file, source, exempt, variants = {}) => ({
+    const entry = (
+      file: string,
+      source: string,
+      exempt?: string[],
+      variants: Record<string, { source: string; why: string }> = {},
+    ) => ({
       path: `.github/workflows/${file}`,
       source,
       apps: ['sift'],
       variants,
       companions: exempt ? [{ key: ['autofix', 'exempt', ...exempt], value: 'why' }] : [],
     });
-    const text = (/** @type {string} */ source) =>
-      texts[/** @type {keyof typeof texts} */ (source)];
+    const text = (source: string) => texts[source as keyof typeof texts];
     expect(
       exemptionProblems(
         [

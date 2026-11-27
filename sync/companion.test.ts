@@ -5,8 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { addCompanions, formatSettings, settingsProblems } from './companion.ts';
 
-/** @param {string[]} key */
-const companion = (key, value = 'its reason') => ({ key, value });
+const companion = (key: string[], value = 'its reason') => ({ key, value });
 const GIFS = companion(['autofix', 'exempt', 'PR GIFs'], 'records GIFs');
 
 /** An app's ci.json as the apps write it: objects expanded, short arrays on one line. */

@@ -6,7 +6,7 @@ import { writeFiles } from '../review/testApp.ts';
 import { CI_ROOT, loadManifest, parseManifest, resolve } from './manifest.ts';
 import { appName, cli, selftest } from './selftest.ts';
 
-const app = (/** @type {Record<string, string>} */ files) => {
+const app = (files: Record<string, string>) => {
   const root = mkdtempSync(path.join(tmpdir(), 'app-'));
   writeFiles(root, files);
   return root;
@@ -114,8 +114,7 @@ describe('selftest', () => {
 });
 
 describe("the self-test's report of what the next sync would change", () => {
-  /** @param {string} file */
-  const ours = (file) => readFileSync(path.join(CI_ROOT, file), 'utf8');
+  const ours = (file: string) => readFileSync(path.join(CI_ROOT, file), 'utf8');
   /** The files sift holds when in step: the canonical, or sift's variant. */
   const inStep = () =>
     Object.fromEntries(
@@ -140,8 +139,7 @@ describe("the self-test's report of what the next sync would change", () => {
 
 describe('cli', () => {
   it('prints the self-test and returns its exit code', () => {
-    /** @type {string[]} */
-    const out = [];
+    const out: string[] = [];
     expect(cli([app({})], (l) => out.push(l), { APP_NAME: 'sift' })).toBe(0);
     expect(out[0]).toBe('sync: sift holds 5 synced files; they fit this checkout.');
     expect(out[1]).toMatch(/^sync: sift: would open or update one PR .* with 5 commit\(s\):$/);

@@ -2,8 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
-/** @param {string} file */
-const doc = (file) => parse(readFileSync(new URL(file, import.meta.url), 'utf8'));
+const doc = (file: string) => parse(readFileSync(new URL(file, import.meta.url), 'utf8'));
 
 const canonical = doc('./callers/pr-description.yml');
 
