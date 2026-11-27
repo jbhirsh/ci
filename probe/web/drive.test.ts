@@ -10,7 +10,7 @@ const API = `${TARGET}api/graphql`;
 const GAMES = `${API}?operationName=Games&query=${encodeURIComponent('query Games { games }')}`;
 const SESSION = { url: API, method: 'POST', body: JSON.stringify({ operationName: 'Session' }) };
 const COLD =
-  'cold, loaded;dur=812.3, db-open;dur=40, field.games;dur=20.6;desc="Query.games";calls=1;start=1.4, total;dur=3400';
+  'cold, loaded;dur=812.3, db-open;dur=40, field.games;dur=20.6;desc="Query.games";calls=1;start=1.4, field.games.votes;dur=60;desc="Game.votes";calls=30;slowest=2.4;start=21;span=3.1, total;dur=3400';
 const WARM = 'total;dur=34.1';
 
 const settings = parseSettings({
@@ -105,6 +105,17 @@ describe('drive', () => {
         label: 'Query.games',
         calls: 1,
         atMs: 1.4,
+      },
+      {
+        name: 'games',
+        phase: 'field.games.votes',
+        start: 'cold',
+        ms: 60,
+        label: 'Game.votes',
+        calls: 30,
+        slowestMs: 2.4,
+        atMs: 21,
+        spanMs: 3.1,
       },
       { name: 'games', phase: 'total', start: 'cold', ms: 3400 },
       {

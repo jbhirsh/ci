@@ -26,6 +26,11 @@
 //     plus their `atMs`, or one after another in header order when the app
 //     sends no `start=`. With no `total`, the server's span is theirs, still
 //     ending when the headers arrived.
+// A part is drawn as long as its `spanMs` when it has one (a repeated
+// field's calls, from the first's start to the last's end, which may run
+// side by side), else its `ms`: a field's ms adds its calls up, and drawn
+// as one stretch it could run far past the server's own end. What's shown,
+// kept and compared stays `ms`.
 
 import { median } from '../probe/results.ts';
 import { formatServerTiming } from '../probe/server-timing.ts';
@@ -68,6 +73,7 @@ export type Summary = {
   calls?: number;
   slowestMs?: number;
   atMs?: number;
+  spanMs?: number;
   requestStartMs?: number;
   responseStartMs?: number;
 };
@@ -85,7 +91,14 @@ export function measureSlower(ms: number, typical: number | null, phase: string)
 }
 
 /** The optional numbers a summary carries, each the cold row's or the warm medians'. */
-const NUMBERS = ['calls', 'slowestMs', 'atMs', 'requestStartMs', 'responseStartMs'] as const;
+const NUMBERS = [
+  'calls',
+  'slowestMs',
+  'atMs',
+  'spanMs',
+  'requestStartMs',
+  'responseStartMs',
+] as const;
 
 /**
  * Each request's phases, cold and warm, in the order each was first seen
@@ -208,6 +221,9 @@ const TITLES: Record<string, string> = {
   'auth-init': 'Setting up sign-in',
 };
 
+/** How long a part is drawn: its calls' span when it has one, else its ms. */
+const drawnMs = (part: Summary) => part.spanMs ?? part.ms;
+
 /**
  * One start's parts of a request placed in time: the browser's from 0,
  * the server ending when the browser saw its headers, loading the code
@@ -228,13 +244,15 @@ function placed(rows: Summary[]): Map<string, Part> {
     if (r.phase === BROWSER || r.phase === TOTAL || r.phase === LOADED) continue;
     const at = r.atMs ?? next;
     inside.set(r.phase, at);
-    next = at + r.ms;
+    next = at + drawnMs(r);
   }
   const span =
     total?.ms ??
     Math.max(
       0,
-      ...rows.flatMap((r) => (inside.has(r.phase) ? [(inside.get(r.phase) ?? 0) + r.ms] : [])),
+      ...rows.flatMap((r) =>
+        inside.has(r.phase) ? [(inside.get(r.phase) ?? 0) + drawnMs(r)] : [],
+      ),
     );
   const server = end === undefined ? 0 : Math.max(0, end - span);
   const out = new Map<string, Part>();
@@ -341,6 +359,7 @@ export function rawEntry(part: Summary): string {
       calls: part.calls,
       slowest: round(part.slowestMs),
       start: round(part.atMs),
+      span: round(part.spanMs),
     },
   ]);
 }

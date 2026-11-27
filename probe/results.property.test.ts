@@ -15,6 +15,7 @@ const measurement = fc.record(
     calls: fc.nat(),
     slowestMs: ms,
     atMs: ms,
+    spanMs: ms,
     requestStartMs: ms,
     responseStartMs: ms,
   },
@@ -47,6 +48,7 @@ describe('the results format', () => {
         start: fc.oneof(fc.constantFrom('cold', 'warm'), fc.jsonValue()),
         ms: fc.oneof(fc.double(), fc.jsonValue()),
         calls: fc.oneof(fc.double(), fc.jsonValue()),
+        spanMs: fc.oneof(fc.double(), fc.jsonValue()),
       }),
     );
     const doc = fc.oneof(
@@ -59,7 +61,7 @@ describe('the results format', () => {
         for (const row of parsed.measurements) {
           expect(row.name).not.toBe('');
           expect(['cold', 'warm']).toContain(row.start);
-          for (const n of [row.ms, row.calls, row.slowestMs, row.atMs]) {
+          for (const n of [row.ms, row.calls, row.slowestMs, row.atMs, row.spanMs]) {
             if (n !== undefined) {
               expect(Number.isFinite(n)).toBe(true);
               expect(n).toBeGreaterThanOrEqual(0);

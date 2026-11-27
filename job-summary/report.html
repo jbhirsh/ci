@@ -2338,10 +2338,13 @@
         };
       }
       const mat = (n) => n[mmode];
+      // How long a bar is drawn: a repeated field's span, its calls from the
+      // first's start to the last's end, where ms adds them up.
+      const mlen = (v) => v.span ?? v.ms;
       // A bar's place on an axis from `from` to `to`, in percent, kept on it.
       const mplace = (v, from, to) => {
         const left = Math.min(100, Math.max(0, ((v.start - from) / (to - from || 1)) * 100));
-        const width = Math.min(100 - left, (v.ms / (to - from || 1)) * 100);
+        const width = Math.min(100 - left, (mlen(v) / (to - from || 1)) * 100);
         return `left:${left.toFixed(2)}%;width:${width.toFixed(2)}%`;
       };
       const mkind = (n, v) => (v?.slower ? 'seg-slow' : MKIND[n.kind]);
@@ -2385,7 +2388,7 @@
       // one, from its first part's start to its last one's end.
       function mspan(op, root) {
         const vs = root.key === 'browser' ? [mat(root)] : op.nodes.map(mat).filter(Boolean);
-        return [Math.min(...vs.map((v) => v.start)), Math.max(...vs.map((v) => v.start + v.ms))];
+        return [Math.min(...vs.map((v) => v.start)), Math.max(...vs.map((v) => v.start + mlen(v)))];
       }
       function mwhy(op, root) {
         const browser = root.key === 'browser';
@@ -2466,7 +2469,13 @@
           ['Usual', v.usual == null ? `needs 3 runs (has ${runsWith})` : mms(v.usual), ''],
           ['Change', ch.text, ch.cls],
           n.kind === 'field'
-            ? ['Calls', v.calls > 1 ? `${v.calls} · slowest ${mms(v.slowest)}` : '1', '']
+            ? [
+                'Calls',
+                v.calls > 1
+                  ? `${v.calls} · slowest ${mms(v.slowest)}${v.span == null ? '' : ` · over ${mms(v.span)}`}`
+                  : '1',
+                '',
+              ]
             : ['Started at', `${mms(v.start)} in`, ''],
         ];
         return `<div class="detail">${what ? `<p class="what">${what}</p>` : ''}<div class="stats">${stats

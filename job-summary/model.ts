@@ -142,6 +142,12 @@ export type MeasureValue = {
   calls: number;
   /** a field's slowest call (its ms for anything else) */
   slowest: number;
+  /**
+   * a repeated field's calls, from the first's start to the last's end, in
+   * ms: how long its bar is drawn, where ms adds the calls up. null when the
+   * app sent no span: the bar is ms long
+   */
+  span: number | null;
   /** its value in each of measurements.runs, null where a run didn't have it */
   past: (number | null)[];
   usual: number | null;
@@ -220,6 +226,7 @@ function measurements(
       start: part.at,
       calls: part.calls ?? 1,
       slowest: part.slowestMs ?? part.ms,
+      span: part.spanMs ?? null,
       past,
       ...measureTrend(part.ms, past, part.phase),
       raw: rawEntry(part),

@@ -43,8 +43,8 @@
 // hang limit.
 //
 // Each listed response becomes rows: one per `Server-Timing` entry with a
-// `dur` (a `field.<path>` entry keeps its `desc`, `calls` and `slowest`;
-// any entry its `start`), plus `browser`, the browser's own time for the
+// `dur` (a `field.<path>` entry keeps its `desc`, `calls`, `slowest` and
+// `span`; any entry its `start`), plus `browser`, the browser's own time for the
 // request (request.timing()'s responseEnd - requestStart). A response is
 // cold only when its `Server-Timing` carries the app's cold flag; the flag
 // is read from every response on the deployment, timed or not, and the
@@ -229,6 +229,7 @@ export async function drive({
       if (entry.calls !== undefined) row.calls = entry.calls;
       if (entry.slowest !== undefined) row.slowestMs = entry.slowest;
       if (entry.start !== undefined) row.atMs = entry.start;
+      if (entry.span !== undefined) row.spanMs = entry.span;
       measurements.push(row);
     }
     const failed = await response.finished();
