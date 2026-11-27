@@ -1,15 +1,15 @@
 name: PR GIFs, record
 description: >-
   Records a PR's before/after GIFs on this runner and uploads them as the
-  run's pr-gif artifact, one folder a scenario (gif/workflow.mjs's header
+  run's pr-gif artifact, one folder a scenario (gif/workflow.ts's header
   says how). For a web app it installs the app, the browsers and ffmpeg and
   runs cli.mjs once a scenario, building main and the checkout; for an app
-  whose CI records videos (sift) it runs videos.mjs, which waits for the
+  whose CI records videos (sift) it runs videos.ts, which waits for the
   PR's run, starts one on main for "before" and turns the videos into GIFs.
   The record job of pr-gif.yml, after a checkout of the PR's head; it holds
   no secret, since it runs the PR's code. Also pr-gif-attach.yml's "Make
   the GIFs" job for sift, after a checkout of the default branch: there it
-  runs only videos.mjs, on the videos the PR's CI run recorded.
+  runs only videos.ts, on the videos the PR's CI run recorded.
 
 inputs:
   pr:
@@ -63,7 +63,7 @@ runs:
     - name: Read the app's gif settings
       id: app
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/../workflow.mjs" source
+      run: node "$GITHUB_ACTION_PATH/../workflow.ts" source
 
     - name: Install the app's dependencies
       if: steps.app.outputs.source == 'web'
@@ -94,11 +94,11 @@ runs:
         AUTOMATIC: ${{ inputs.automatic }}
         HEAD_SHA: ${{ inputs.head }}
         AFTER_RUN: ${{ inputs.after-run }}
-        # Only videos.mjs reads through it; a web app's build and scenarios
+        # Only videos.ts reads through it; a web app's build and scenarios
         # are the PR's code, which gets no token.
         GH_TOKEN: ${{ steps.app.outputs.source == 'ci-videos' && inputs.github-token || '' }}
         APP_ROOT: ${{ github.workspace }}
-      run: node "$GITHUB_ACTION_PATH/../workflow.mjs" record
+      run: node "$GITHUB_ACTION_PATH/../workflow.ts" record
 
     # What did record, and pr-gif.json saying so, even when a scenario
     # failed: a run by hand's attach job then doesn't run; an automatic

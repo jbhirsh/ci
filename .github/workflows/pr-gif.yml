@@ -45,7 +45,7 @@
 #     output.
 #   - record (gif/record) checks out the PR's head and records each
 #     scenario, "before" from main and "after" from the head, as a run of
-#     the gif tool on the owner's machine does (cli.mjs; videos.mjs for
+#     the gif tool on the owner's machine does (cli.mjs; videos.ts for
 #     sift, from its CI's videos), and uploads the GIFs and pr-gif.json as
 #     the pr-gif artifact. It holds only the caller's Actions token. On
 #     pull_request, a newer push's recording cancels an older one's, whose
@@ -141,7 +141,7 @@ jobs:
     if: needs.changed.outputs.record == 'true'
     runs-on: ubuntu-latest
     # A web app's two builds and recordings take minutes; sift's waits for
-    # its PR's CI run and a run on main, as videos.mjs allows up to 3 hours.
+    # its PR's CI run and a run on main, as videos.ts allows up to 3 hours.
     timeout-minutes: 200
     concurrency:
       group: ${{ github.event_name == 'pull_request' && format('pr-gif-record-{0}-{1}', github.repository, needs.changed.outputs.pr) || format('pr-gif-record-{0}', github.run_id) }}
