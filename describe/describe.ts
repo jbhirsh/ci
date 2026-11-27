@@ -50,7 +50,7 @@
 // re-renders its section from the links its record keeps (record.ts), so no
 // new upload is needed.
 
-import { blocksFor } from '../lib/blocks.mjs';
+import { blocksFor } from '../lib/blocks.ts';
 
 /** The first line of an upload comment, for a bot and a commit. */
 export const uploadMarker = (bot: string, sha: string) => `<!-- describe-upload:${bot}:${sha} -->`;
@@ -61,7 +61,7 @@ export const blocks = blocksFor('describe', { named: 'a bot named', where: 'a de
 /** How many times a write is worked out again when the description moved. */
 const ATTEMPTS = 3;
 
-/** What a part's key may name: letters, digits, `.`, `_` and `-`, no `--`; a state is a file name, and blocks.mjs must take the key. */
+/** What a part's key may name: letters, digits, `.`, `_` and `-`, no `--`; a state is a file name, and blocks.ts must take the key. */
 export const isScreenState = (state: string) =>
   /^[A-Za-z0-9._-]+$/.test(state) && !state.includes('--');
 /** The line that starts a part in an upload's section. */
@@ -89,7 +89,7 @@ function partKey(line: string) {
   return m && parseKey(m[1]) ? m[1] : null;
 }
 
-/** Any tool's block marker (lib/blocks.mjs): `<!-- prefix:key -->` or `<!-- /prefix:key -->`. */
+/** Any tool's block marker (lib/blocks.ts): `<!-- prefix:key -->` or `<!-- /prefix:key -->`. */
 const ANY_MARKER = /<!-- \/?[a-z][a-z0-9-]*:[^\s<>]+ -->/;
 
 const UPLOAD = /^<!-- describe-upload:([a-z][a-z0-9-]{0,39}):([0-9a-f]{40}) -->/;

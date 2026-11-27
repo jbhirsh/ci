@@ -7,8 +7,8 @@
 
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appConfig } from '../lib/app.mjs';
-import { matches } from '../lib/match.mjs';
+import { appConfig } from '../lib/app.ts';
+import { matches } from '../lib/match.ts';
 import { isSource, readEntries, trackedFiles } from './check.ts';
 
 /**

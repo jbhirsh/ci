@@ -46,14 +46,14 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { attachToDescription } from '../lib/attach.mjs';
-import { ghApi } from '../lib/comment.mjs';
-import { ghIn } from '../lib/gh.mjs';
-import { pages, prTarget } from '../lib/github.mjs';
+import { attachToDescription } from '../lib/attach.ts';
+import { ghApi } from '../lib/comment.ts';
+import { ghIn } from '../lib/gh.ts';
+import { pages, prTarget } from '../lib/github.ts';
 import { chooseLevel, dropBlock, fill, ownBlock, placed, plain, putBlock } from './changes.ts';
 import { ENTRY_CHARS, hashOf, images, indexText, picture, readIndex } from './counts.ts';
-import type { Api } from '../lib/comment.mjs';
-import type { Command } from '../lib/gh.mjs';
+import type { Api } from '../lib/comment.ts';
+import type { Command } from '../lib/gh.ts';
 import type { Commit, Level } from './changes.ts';
 
 /** How many times a write is worked out again because the description moved under it. */

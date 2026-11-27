@@ -15,7 +15,7 @@
 
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { matches } from '../lib/match.mjs';
+import { matches } from '../lib/match.ts';
 import { readText } from './report.ts';
 import { gitIn, inMutateScope, scopeFor } from './scope.ts';
 import { readSettings, readStrykerConfig, wiringGlobs } from './settings.ts';

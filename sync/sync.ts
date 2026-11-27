@@ -87,9 +87,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { ghApi, statusOf } from '../lib/comment.mjs';
-import { SETTINGS_FILE } from '../lib/app.mjs';
-import { pages } from '../lib/github.mjs';
+import { ghApi, statusOf } from '../lib/comment.ts';
+import { SETTINGS_FILE } from '../lib/app.ts';
+import { pages } from '../lib/github.ts';
 import { problems as templateProblems } from '../pr-template/structure.ts';
 import { addCompanions, formatSettings, settingsProblems } from './companion.ts';
 import { APPS, CI_ROOT, loadManifest, resolve } from './manifest.ts';
@@ -108,7 +108,7 @@ import {
 } from './plan.ts';
 import type { Companion, Resolved } from './manifest.ts';
 import type { Change, Thread } from './plan.ts';
-import type { Api } from '../lib/comment.mjs';
+import type { Api } from '../lib/comment.ts';
 
 export type Graphql = (query: string, variables: Record<string, unknown>) => unknown;
 export type Git = (

@@ -13,17 +13,17 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput } from '../lib/actions.mjs';
-import { appConfig, appRoot } from '../lib/app.mjs';
-import { ghApi } from '../lib/comment.mjs';
-import { PIXELS } from '../lib/pixels.mjs';
+import { setOutput } from '../lib/actions.ts';
+import { appConfig, appRoot } from '../lib/app.ts';
+import { ghApi } from '../lib/comment.ts';
+import { PIXELS } from '../lib/pixels.ts';
 import { enable } from '../dependabot-merge/enable.ts';
 import { downloadShots } from './find.ts';
 import { review } from './review.ts';
 import { settings } from './settings.ts';
 import { CONTEXT, MAX_DESCRIPTION } from './status.ts';
 import type { Io, Target } from './review.ts';
-import type { Api } from '../lib/comment.mjs';
+import type { Api } from '../lib/comment.ts';
 
 /**
  * A matrix entry, checked: it comes from find.ts, but through the

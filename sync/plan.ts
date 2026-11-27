@@ -12,7 +12,7 @@
 // text, which a CRLF file counts as changed throughout.
 
 import { createHash } from 'node:crypto';
-import { newest } from '../lib/github.mjs';
+import { newest } from '../lib/github.ts';
 import type { Companion, Resolved } from './manifest.ts';
 
 /** The one branch every sync PR comes from, in every app. */

@@ -41,8 +41,8 @@
 // (where to read them). Step output `advisor`.
 
 import { pathToFileURL } from 'node:url';
-import { setOutput } from '../lib/actions.mjs';
-import { appRoot } from '../lib/app.mjs';
+import { setOutput } from '../lib/actions.ts';
+import { appRoot } from '../lib/app.ts';
 import {
   advisorSetting,
   checkEngine,

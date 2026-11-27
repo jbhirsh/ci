@@ -1,5 +1,5 @@
 // An app's settings for its PR GIFs: the `gif` key of its `.github/ci.json`
-// (lib/app.mjs's appConfig). Every setting has a default, so an app without
+// (lib/app.ts's appConfig). Every setting has a default, so an app without
 // the key gets a web recorder with these defaults.
 //
 //   source     "web" (default): the app is a web app, recorded in WebKit,
@@ -41,7 +41,7 @@
 //              scenariosInput, ringColor, width, fps }, read by videos.ts.
 
 import path from 'node:path';
-import { appConfig } from '../lib/app.mjs';
+import { appConfig } from '../lib/app.ts';
 
 export type BuildSettings = {
   mode: string | undefined;

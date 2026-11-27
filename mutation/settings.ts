@@ -50,8 +50,8 @@
 
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput } from '../lib/actions.mjs';
-import { appConfig, appRoot } from '../lib/app.mjs';
+import { setOutput } from '../lib/actions.ts';
+import { appConfig, appRoot } from '../lib/app.ts';
 import { isRecord, readText } from './report.ts';
 
 export type Settings = {

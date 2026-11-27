@@ -1,8 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PIXELS } from '../lib/pixels.mjs';
-import { testPng } from '../lib/test-pixels.mjs';
+import { PIXELS } from '../lib/pixels.ts';
+import { testPng } from '../lib/test-pixels.ts';
 import { blocks, SECTION, uploadMarker } from '../describe/describe.ts';
 import { recordLine } from './record.ts';
 import {

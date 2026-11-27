@@ -20,7 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appConfig, appRoot } from '../lib/app.mjs';
+import { appConfig, appRoot } from '../lib/app.ts';
 
 export const EXCLUDED_RULES = [
   // The apps track floating major action tags (@v7) for patch and minor

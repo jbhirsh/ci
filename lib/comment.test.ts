@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { AUTHOR, PAGES, findComment, ghApi, statusOf } from './comment.mjs';
+import { AUTHOR, PAGES, findComment, ghApi, statusOf } from './comment.ts';
 
 describe('statusOf', () => {
   it("reads an error's status, or the one gh's message names", () => {
@@ -17,7 +17,7 @@ describe('findComment', () => {
   const marker = '<!-- tool -->';
 
   it("finds the marked comment AUTHOR wrote, not anyone else's", () => {
-    /** @type {import('./comment.mjs').Api} */
+    /** @type {import('./comment.ts').Api} */
     const api = () => [
       { id: 1, body: `${marker} x`, user: { login: 'someone' } },
       { id: 2, body: 'other', user: { login: AUTHOR } },
@@ -32,7 +32,7 @@ describe('findComment', () => {
     /** @type {string[]} */
     const routes = [];
     const full = Array.from({ length: 100 }, (_, i) => ({ id: i, body: '', user: null }));
-    /** @type {import('./comment.mjs').Api} */
+    /** @type {import('./comment.ts').Api} */
     const api = (_method, route) => (routes.push(route), full);
     expect(findComment(api, 'o/r', 5, marker)).toBeNull();
     expect(routes).toHaveLength(PAGES);

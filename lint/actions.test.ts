@@ -279,7 +279,7 @@ describe('scriptsIn', () => {
     const run = [
       '# node old/gone.mjs, only a comment',
       'node pins/check.mjs',
-      'tests=$(node --no-warnings ci/lib/selftests.mjs) || exit 1',
+      'tests=$(node --no-warnings ci/lib/selftests.ts) || exit 1',
       'node --import ./hook.mjs "ci/lint/actions.ts" --app app',
       'node "$test" "$GITHUB_WORKSPACE/app"',
       'node -e "console.log(1)"',
@@ -291,7 +291,7 @@ describe('scriptsIn', () => {
     ].join('\n');
     expect(scriptsIn(run)).toEqual([
       'pins/check.mjs',
-      'ci/lib/selftests.mjs',
+      'ci/lib/selftests.ts',
       './hook.mjs',
       'ci/lint/actions.ts',
       'ci/*/selftest.{mjs,ts}',

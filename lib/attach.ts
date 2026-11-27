@@ -21,14 +21,14 @@
 // adds a file it attached but found no reference to as an image at the end
 // of the description (ci#144's V1), so a caller references each file once,
 // as a Markdown image. Needs gh ≥ 2.99 for a PR and 2.104 for an issue
-// (lib/gh.mjs), and a token that may attach: a person's, such as the apps'
+// (lib/gh.ts), and a token that may attach: a person's, such as the apps'
 // BOT_PR_TOKEN; GitHub refuses the Actions token ("attaching files requires
 // write access to the repository").
 
 import { rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-/** @typedef {import('./gh.mjs').Command} Command */
+/** @typedef {import('./gh.ts').Command} Command */
 
 /** The most files one `gh pr edit --attach` (or `gh issue edit`) takes, per gh's manual. */
 export const ATTACH_LIMIT = 50;
@@ -115,7 +115,7 @@ export function attachToDescription({
   const local = files.filter((file) => mine.includes(`](./${file})`));
   if (local.length > 0) {
     throw new Error(
-      `${prefix}: gh uploaded the ${noun}s but left ${local.join(', ')} referenced locally in #${pr}'s description: gh's --attach no longer rewrites references as lib/attach.mjs expects`,
+      `${prefix}: gh uploaded the ${noun}s but left ${local.join(', ')} referenced locally in #${pr}'s description: gh's --attach no longer rewrites references as lib/attach.ts expects`,
     );
   }
   log(

@@ -11,7 +11,7 @@
 //      lets attach): visual review's block becomes the record line and one
 //      Markdown image a picture, `![01](./01.png)`, and `gh pr edit
 //      --attach` (`gh issue edit`) uploads each and swaps its path for its
-//      link (lib/attach.mjs). gh rewrites only a Markdown image, never an
+//      link (lib/attach.ts). gh rewrites only a Markdown image, never an
 //      `<img src>`, and appends a file it found no reference to at the end
 //      of the body (ci#144's V1), so each file is referenced once;
 //   3. the read-back: every picture must now have its link, or the job fails;
@@ -46,14 +46,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { attachToDescription } from '../lib/attach.mjs';
-import { ghApi } from '../lib/comment.mjs';
-import { commandIn } from '../lib/gh.mjs';
+import { attachToDescription } from '../lib/attach.ts';
+import { ghApi } from '../lib/comment.ts';
+import { commandIn } from '../lib/gh.ts';
 import { blocks, place } from '../describe/describe.ts';
 import { BOT, assetLink, parseRecord, recordLine } from './record.ts';
 import type { Handoff } from './review.ts';
-import type { Api } from '../lib/comment.mjs';
-import type { Command } from '../lib/gh.mjs';
+import type { Api } from '../lib/comment.ts';
+import type { Command } from '../lib/gh.ts';
 
 /** A picture's file in the hand-off: `01.png` to `50.png`. */
 const PICTURE = /^\d{2}\.png$/;

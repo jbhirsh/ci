@@ -32,7 +32,7 @@
 //   "unmeasured": { "files": ["<glob>: <reason>", ...] }
 // Each entry names a glob of files the gate leaves out on purpose (generated
 // code, test support, a browser-only entry point) and why, a reason of a few
-// words (lib/reason.ts). Globs are lib/match.mjs's: a wildcard doesn't enter
+// words (lib/reason.ts). Globs are lib/match.ts's: a wildcard doesn't enter
 // a folder starting with a dot, so name such a path outright. With no key,
 // nothing is listed.
 //
@@ -48,8 +48,8 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appConfig, appRoot } from '../lib/app.mjs';
-import { matches } from '../lib/match.mjs';
+import { appConfig, appRoot } from '../lib/app.ts';
+import { matches } from '../lib/match.ts';
 import { isReason } from '../lib/reason.ts';
 
 /** Where the coverage run writes its report, from the app's root. */

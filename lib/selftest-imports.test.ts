@@ -1,4 +1,4 @@
-// The "Against <app>" jobs run every tool's self-test (lib/selftests.mjs
+// The "Against <app>" jobs run every tool's self-test (lib/selftests.ts
 // lists them, `selftest.mjs` or `selftest.ts`) after installing only this
 // repo's runtime dependencies (`npm ci --omit=dev`), so a module a self-test
 // loads, however indirectly, may import only node's built-ins, this repo's
@@ -16,14 +16,14 @@
 // import whose names are all marked `type` (`import { type X } from 'x'`)
 // still loads x: Node leaves `import {} from 'x'`, as TypeScript's
 // `verbatimModuleSyntax` does. It can't see a
-// specifier built at run time, `createRequire`, or lib/app.mjs's
+// specifier built at run time, `createRequire`, or lib/app.ts's
 // importFromApp, which loads from the app on purpose.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CI_ROOT } from '../sync/manifest.ts';
-import { findSelftests } from './selftests.mjs';
+import { findSelftests } from './selftests.ts';
 
 /** A static import or re-export, with what it imports (its clause). */
 const STATIC = /^\s*(?:import|export)\s(?:([^'";]*?)\sfrom\s)?\s*['"]([^'"]+)['"]/gm;

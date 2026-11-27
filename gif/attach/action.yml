@@ -86,15 +86,15 @@ runs:
         repository: ${{ github.repository }}
         github-token: ${{ inputs.github-token }}
 
-    # `--attach` came in gh 2.99 (lib/gh.mjs). The runner's image installs
+    # `--attach` came in gh 2.99 (lib/gh.ts). The runner's image installs
     # gh from GitHub's own apt source, so an image whose gh lags upgrades
     # from there, signed, rather than from a download.
     - name: A gh that can attach
       shell: bash
       run: |
-        node "$GITHUB_ACTION_PATH/../../lib/gh.mjs" check || {
+        node "$GITHUB_ACTION_PATH/../../lib/gh.ts" check || {
           sudo apt-get update -q && sudo apt-get install -y -q --only-upgrade gh
-          node "$GITHUB_ACTION_PATH/../../lib/gh.mjs" check
+          node "$GITHUB_ACTION_PATH/../../lib/gh.ts" check
         }
 
     - name: Attach the GIFs to the PR

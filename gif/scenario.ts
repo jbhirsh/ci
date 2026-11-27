@@ -42,7 +42,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { importFromApp } from '../lib/app.mjs';
+import { importFromApp } from '../lib/app.ts';
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);

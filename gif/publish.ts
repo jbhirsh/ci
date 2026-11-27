@@ -17,13 +17,13 @@
 // and rewrites the reference to it in place with the uploaded URL
 // (`https://github.com/user-attachments/assets/<id>`; tried in ci#33's
 // trial T1), so there is nothing to read back but a check that none is
-// left local (the markers are lib/blocks.mjs's, the upload
-// lib/attach.mjs's, both shared with pictures/). The description is read
+// left local (the markers are lib/blocks.ts's, the upload
+// lib/attach.ts's, both shared with pictures/). The description is read
 // just before each edit, so an edit made meanwhile by someone else is kept
 // unless it lands in those seconds.
 // The alt text's `GIF:` is what the review looks for as a picture of motion,
 // since the URL can't say what it holds. Markdown images can't take a width, so `cellWidth` doesn't apply
-// there. Needs gh ≥ 2.99 (lib/gh.mjs), and a token that may attach: a
+// there. Needs gh ≥ 2.99 (lib/gh.ts), and a token that may attach: a
 // person's, such as the apps' BOT_PR_TOKEN; GitHub refuses the Actions
 // token ("attaching files requires write access to the repository").
 //
@@ -41,10 +41,10 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { attachToDescription } from '../lib/attach.mjs';
-import { blocksFor } from '../lib/blocks.mjs';
-import { commandIn, ghIn } from '../lib/gh.mjs';
-import type { Command } from '../lib/gh.mjs';
+import { attachToDescription } from '../lib/attach.ts';
+import { blocksFor } from '../lib/blocks.ts';
+import { commandIn, ghIn } from '../lib/gh.ts';
+import type { Command } from '../lib/gh.ts';
 
 /** Over this, a PR description may not show a GIF. */
 export const GIF_WARN_BYTES = 5 * 1024 * 1024;
@@ -480,7 +480,7 @@ export class HeadMovedError extends Error {}
  *
  * @param options
  *   pr: its number; scenarios: each GIF as a path relative to `cwd`. gh must
- *   be one that can attach (lib/gh.mjs's checkGh, which the attach action
+ *   be one that can attach (lib/gh.ts's checkGh, which the attach action
  *   runs first).
  */
 export function attachToPr({

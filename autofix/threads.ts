@@ -16,7 +16,7 @@
 // and body); prints how many unresolved threads count.
 
 import { pathToFileURL } from 'node:url';
-import { readAll } from '../lib/actions.mjs';
+import { readAll } from '../lib/actions.ts';
 
 /** The hidden line on each of Claude Review's inline comments (review/tools.ts). */
 export const REVIEW_MARKER = '<!-- claude-review -->';

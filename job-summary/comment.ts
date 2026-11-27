@@ -29,11 +29,11 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { MAX_CHARS, findComment as findMarked, ghApi, statusOf } from '../lib/comment.mjs';
+import { MAX_CHARS, findComment as findMarked, ghApi, statusOf } from '../lib/comment.ts';
 import { artifactName } from './history.ts';
 import { cell } from './render.ts';
 import { pagesBase } from './report.ts';
-import type { Api } from '../lib/comment.mjs';
+import type { Api } from '../lib/comment.ts';
 
 /** Downloads a run's job-summary-* artifacts into a folder, throwing when there are none. */
 export type Download = (runId: string, dir: string) => void;
@@ -65,10 +65,10 @@ export type RunInfo = {
 
 /** The marker the comment starts with, to find it again. */
 export const MARKER = '<!-- job-reports -->';
-// Who posts it (lib/comment.mjs), the most it may hold, how many pages are
+// Who posts it (lib/comment.ts), the most it may hold, how many pages are
 // read looking for it, and the status of a failed call: shared with visual review's
 // table.
-export { AUTHOR, MAX_CHARS, PAGES, statusOf } from '../lib/comment.mjs';
+export { AUTHOR, MAX_CHARS, PAGES, statusOf } from '../lib/comment.ts';
 /** Where a section ends. */
 export const END = '<!-- job-reports:end -->';
 

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { testPng as png } from '../lib/test-pixels.mjs';
+import { testPng as png } from '../lib/test-pixels.ts';
 import { cli, selftest } from './selftest.ts';
 
 /**

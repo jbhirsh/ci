@@ -24,7 +24,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appSettings, SETTINGS_FILE } from '../lib/app.mjs';
+import { appSettings, SETTINGS_FILE } from '../lib/app.ts';
 import { APPS, CI_ROOT, companionProblem, loadManifest, lstatOrNull, resolve } from './manifest.ts';
 import { changesFor, report } from './plan.ts';
 import type { Manifest } from './manifest.ts';

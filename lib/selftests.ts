@@ -9,7 +9,7 @@
 // both extensions, and a self-test the list doesn't name (or of another
 // extension, which CI wouldn't run) each fail the job, naming the fix.
 //
-//   node lib/selftests.mjs   prints the self-tests to run, one a line,
+//   node lib/selftests.ts   prints the self-tests to run, one a line,
 //                            relative to this repo; exits 1 on a problem
 //
 // Node's built-ins only: the Against jobs install no devDependency.
@@ -40,7 +40,7 @@ export const TOOLS = [
 /** The extensions CI runs a self-test with. */
 export const EXTENSIONS = ['.mjs', '.ts'];
 
-const LIST = 'lib/selftests.mjs';
+const LIST = 'lib/selftests.ts';
 
 /**
  * Every `selftest.<ext>` under a folder (node_modules and dot folders

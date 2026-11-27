@@ -7,7 +7,7 @@
 // green check would let a PR that merges itself (a Dependabot bump, the
 // README screenshot bot's `bot/` branch, anything with auto-merge on)
 // merge unreviewed. One PR comment, marked MARKER and kept by AUTHOR
-// (lib/comment.mjs), says what wasn't reviewed, whether the subscription
+// (lib/comment.ts), says what wasn't reviewed, whether the subscription
 // retry ran, which limit stopped it and when that resets, and to re-run the
 // Claude Review job after then. A later stop updates it in place, and
 // `clear` (run once no pass stopped) deletes it. Posting is best-effort: a
@@ -30,9 +30,9 @@
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { summary } from '../lib/actions.mjs';
-import { findComment, ghApi } from '../lib/comment.mjs';
-import type { Api } from '../lib/comment.mjs';
+import { summary } from '../lib/actions.ts';
+import { findComment, ghApi } from '../lib/comment.ts';
+import type { Api } from '../lib/comment.ts';
 
 /** The hidden first line of the comment. */
 export const MARKER = '<!-- claude-review:stopped -->';

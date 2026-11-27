@@ -37,7 +37,7 @@
 #     branch: dispatch it again.
 #   - A pending run waits on the group, never on a timer, and nothing here
 #     waits on one: pictures/attach writes the table once the description
-#     links each picture, fetching none of them (lib/attach.mjs says why).
+#     links each picture, fetching none of them (lib/attach.ts says why).
 #   - run-name is "Pictures from <branch>": use a new branch name for each
 #     dispatch, so a session that lacks the dispatch's run id can find its
 #     run by name.

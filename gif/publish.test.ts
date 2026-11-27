@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
-import { ATTACH_LIMIT } from '../lib/attach.mjs';
+import { ATTACH_LIMIT } from '../lib/attach.ts';
 import {
   BRANCH_VERCEL_JSON,
   GIF_WARN_BYTES,

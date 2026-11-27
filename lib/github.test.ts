@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PAGES, newest, pages, prTarget, statusFrom } from './github.mjs';
+import { PAGES, newest, pages, prTarget, statusFrom } from './github.ts';
 
 describe('pages', () => {
   it('reads until a short page, adding the page to any query', () => {

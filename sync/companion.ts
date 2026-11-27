@@ -22,7 +22,7 @@
 // than an object (sync.ts reports it; the self-test catches it first).
 
 import { isDeepStrictEqual } from 'node:util';
-import { importFromApp, SETTINGS_FILE } from '../lib/app.mjs';
+import { importFromApp, SETTINGS_FILE } from '../lib/app.ts';
 import { holds, lineDiff } from './plan.ts';
 import type { Companion } from './manifest.ts';
 

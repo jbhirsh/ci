@@ -56,7 +56,7 @@ runs:
       run: echo "count=$(node "$GITHUB_ACTION_PATH/../attach.ts" pictures)" >> "$GITHUB_OUTPUT"
 
     # `--attach` came in gh 2.99 for a PR and by 2.104 for an issue
-    # (lib/gh.mjs). The runner's image installs gh from GitHub's own apt
+    # (lib/gh.ts). The runner's image installs gh from GitHub's own apt
     # source, so an image whose gh lags upgrades from there, signed, rather
     # than from a download. Only a hand-off with pictures uploads.
     - name: A gh that can attach
@@ -67,9 +67,9 @@ runs:
       run: |
         args=(check)
         if [ "$KIND" = issue ]; then args+=(--issue); fi
-        node "$GITHUB_ACTION_PATH/../../lib/gh.mjs" "${args[@]}" || {
+        node "$GITHUB_ACTION_PATH/../../lib/gh.ts" "${args[@]}" || {
           sudo apt-get update -q && sudo apt-get install -y -q --only-upgrade gh
-          node "$GITHUB_ACTION_PATH/../../lib/gh.mjs" "${args[@]}"
+          node "$GITHUB_ACTION_PATH/../../lib/gh.ts" "${args[@]}"
         }
 
     - name: Put the table in the description

@@ -1,5 +1,5 @@
 // An app's settings for the probe: the `probe` key of its `.github/ci.json`
-// (lib/app.mjs). With no key, the app doesn't use the probe. Read at the
+// (lib/app.ts). With no key, the app doesn't use the probe. Read at the
 // boundary: everything after trusts what parseSettings returns.
 //
 //   pages        the pages to load, at least one: { path, expect }, `path`
@@ -38,7 +38,7 @@
 //                limit in BoardGames' smoke test). Only ever a hang limit:
 //                the probe moves on when the event it waits for happens.
 
-import { appSettings, SETTINGS_FILE } from '../lib/app.mjs';
+import { appSettings, SETTINGS_FILE } from '../lib/app.ts';
 
 export interface RequestSpec {
   name: string;

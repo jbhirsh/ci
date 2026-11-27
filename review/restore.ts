@@ -20,7 +20,7 @@ import { execFileSync } from 'node:child_process';
 import { lstatSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appRoot } from '../lib/app.mjs';
+import { appRoot } from '../lib/app.ts';
 
 /**
  * Whether a repo path is Claude's: instructions or settings.

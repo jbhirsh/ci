@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pullOfRun } from './run-pr.mjs';
+import { pullOfRun } from './run-pr.ts';
 
 const REPO = 'jbhirsh/app';
 const SHA = 'a'.repeat(40);

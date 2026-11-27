@@ -13,7 +13,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appConfig } from '../lib/app.mjs';
+import { appConfig } from '../lib/app.ts';
 import { problems } from './structure.ts';
 
 const TEMPLATE = '.github/pull_request_template.md';

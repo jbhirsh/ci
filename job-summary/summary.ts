@@ -40,7 +40,7 @@ import { globSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput, summary } from '../lib/actions.mjs';
+import { setOutput, summary } from '../lib/actions.ts';
 import { artifactName, current, history } from './history.ts';
 import { parseJunit, settleReruns } from './junit.ts';
 import { buildModel, noteworthy, parts } from './model.ts';

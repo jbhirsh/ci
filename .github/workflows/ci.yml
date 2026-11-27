@@ -7,7 +7,7 @@
 #     file) and actionlint over its workflows.
 #   - Against <app>: the app's calls into this repo checked against what
 #     they call, and each tool's self-test (`<tool>/selftest.ts`, or .mjs, listed
-#     in lib/selftests.mjs) run
+#     in lib/selftests.ts) run
 #     against fog-and-frontier, sift and BoardGames as their `main` stands,
 #     with the app's dependencies installed, as the tools see them in the
 #     app's own CI. A tool an app doesn't use yet (no key in its
@@ -124,10 +124,10 @@ jobs:
         # (this repo's GITHUB_REPOSITORY is no app's).
         env:
           APP_NAME: ${{ matrix.app }}
-        # lib/selftests.mjs lists them, either extension, and fails when a
+        # lib/selftests.ts lists them, either extension, and fails when a
         # listed tool has none, so a self-test can't silently stop running.
         run: |
-          tests=$(node ci/lib/selftests.mjs) || exit 1
+          tests=$(node ci/lib/selftests.ts) || exit 1
           status=0
           for test in $tests; do
             echo "::group::$test"

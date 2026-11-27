@@ -53,7 +53,7 @@
 // publish.ts's attachToPr writes the tables into the description and
 // uploads, then reads it back: every reference rewritten, one link a GIF.
 // Nothing fetches the links: one can answer 404 for a moment after the edit
-// and goes live by itself (lib/attach.mjs).
+// and goes live by itself (lib/attach.ts).
 
 import { spawnSync } from 'node:child_process';
 import {
@@ -70,8 +70,8 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { appRoot } from '../lib/app.mjs';
-import { ATTACH_MAX_BYTES, attachmentLinksIn } from '../lib/attach.mjs';
+import { appRoot } from '../lib/app.ts';
+import { ATTACH_MAX_BYTES, attachmentLinksIn } from '../lib/attach.ts';
 import {
   HeadMovedError,
   attachToPr,

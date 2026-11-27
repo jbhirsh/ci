@@ -32,7 +32,7 @@
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appRoot } from '../lib/app.mjs';
+import { appRoot } from '../lib/app.ts';
 import { inRanges, parseReport, parseScope, readText, relativeName } from './report.ts';
 import type { Report } from './report.ts';
 

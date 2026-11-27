@@ -16,12 +16,12 @@
 // 1. The inputs and files are checked (inputs.ts, files.ts).
 // 2. The host's `pictures:<block>` block, in place of an earlier one, gets
 //    one `![caption](./file)` line a picture, and `gh pr edit --attach`
-//    uploads them (lib/attach.mjs, at most 50 an edit), each line's path
+//    uploads them (lib/attach.ts, at most 50 an edit), each line's path
 //    rewritten to its upload's URL.
 // 3. The host's description is read back, and its block must link exactly
 //    one attachment a file, in order: anything else stops the run. Nothing
 //    fetches the links: one can answer 404 for a moment after the edit and
-//    goes live by itself (lib/attach.mjs).
+//    goes live by itself (lib/attach.ts).
 // 4. The target's `pictures:<block>` block gets the `<img>` table
 //    (table.ts), with a plain `gh issue edit` or `gh pr edit --body-file`
 //    and no `--attach`, whichever the target is (the issues API sets
@@ -39,13 +39,13 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { attachToDescription, attachmentLinksIn } from '../lib/attach.mjs';
-import { blocksFor } from '../lib/blocks.mjs';
-import { ghIn } from '../lib/gh.mjs';
+import { attachToDescription, attachmentLinksIn } from '../lib/attach.ts';
+import { blocksFor } from '../lib/blocks.ts';
+import { ghIn } from '../lib/gh.ts';
 import { checkFiles } from './files.ts';
 import { parseInputs } from './inputs.ts';
 import { hostBlock, pictureTable } from './table.ts';
-import type { Command } from '../lib/gh.mjs';
+import type { Command } from '../lib/gh.ts';
 
 /** The blocks this tool keeps: `<!-- pictures:<block> -->`. */
 const blocks = blocksFor('pictures');

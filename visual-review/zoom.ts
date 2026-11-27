@@ -14,7 +14,7 @@
 //   - a place wider or taller than LARGE isn't zoomed, as a zoom would be
 //     no clearer than the diff: the table shows the diff picture itself.
 
-import type { Image } from '../lib/pixels.mjs';
+import type { Image } from '../lib/pixels.ts';
 
 /** Changed pixels this close (about) are one place. */
 const GAP = 8;

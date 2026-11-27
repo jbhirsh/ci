@@ -32,7 +32,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appRoot, importFromApp } from '../lib/app.mjs';
+import { appRoot, importFromApp } from '../lib/app.ts';
 import { autofixSettings } from './settings.ts';
 
 export const STUB = 'claude-autofix.yml';

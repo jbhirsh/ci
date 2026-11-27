@@ -14,9 +14,9 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput } from '../lib/actions.mjs';
-import { appConfig, appRoot } from '../lib/app.mjs';
-import { pick } from '../lib/match.mjs';
+import { setOutput } from '../lib/actions.ts';
+import { appConfig, appRoot } from '../lib/app.ts';
+import { pick } from '../lib/match.ts';
 import { settings } from './settings.ts';
 import type { Settings } from './settings.ts';
 

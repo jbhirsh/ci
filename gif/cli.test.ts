@@ -75,7 +75,7 @@ vi.mock('./publish.ts', async (actual) => ({
 vi.mock('./videos.ts', () => ({
   main: vi.fn((argv: string[]) => Promise.resolve(calls.push(`videos ${argv.join(' ')}`))),
 }));
-vi.mock('../lib/app.mjs', async (actual) => ({
+vi.mock('../lib/app.ts', async (actual) => ({
   ...(await actual()),
   importFromApp: vi.fn((name: string) => Promise.reject(new Error(`no ${name}`))),
   appPlaywright: vi.fn(() => Promise.resolve(fakes.playwright)),

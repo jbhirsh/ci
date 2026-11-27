@@ -40,8 +40,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput, summary } from '../lib/actions.mjs';
-import { appConfig, appRoot } from '../lib/app.mjs';
+import { setOutput, summary } from '../lib/actions.ts';
+import { appConfig, appRoot } from '../lib/app.ts';
 import { sync } from './issue.ts';
 import { jscpdFindings, knipFindings, lycheeFindings } from './report.ts';
 import { KNIP_CONFIG_LOCATIONS, suppressions, suppressionsMessage } from './suppressions.ts';

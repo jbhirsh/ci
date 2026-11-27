@@ -47,12 +47,12 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput } from '../lib/actions.mjs';
-import { ATTACH_MAX_BYTES } from '../lib/attach.mjs';
-import { ghApi, statusOf } from '../lib/comment.mjs';
+import { setOutput } from '../lib/actions.ts';
+import { ATTACH_MAX_BYTES } from '../lib/attach.ts';
+import { ghApi, statusOf } from '../lib/comment.ts';
 import { checkFiles } from './files.ts';
 import { parseFiles, parseInputs, parseRepo } from './inputs.ts';
-import type { Api } from '../lib/comment.mjs';
+import type { Api } from '../lib/comment.ts';
 import type { Picture } from './inputs.ts';
 
 /** The only branches the route reads and deletes. */

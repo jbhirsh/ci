@@ -21,8 +21,8 @@ import { createHash } from 'node:crypto';
 import { globSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput } from '../lib/actions.mjs';
-import { appRoot } from '../lib/app.mjs';
+import { setOutput } from '../lib/actions.ts';
+import { appRoot } from '../lib/app.ts';
 import { readSettings } from './settings.ts';
 
 /**

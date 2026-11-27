@@ -45,7 +45,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appRoot, requireFromApp } from '../lib/app.mjs';
+import { appRoot, requireFromApp } from '../lib/app.ts';
 import { parseJsonc } from './jsonc.ts';
 import type { CommentRange, Node } from 'typescript';
 

@@ -10,11 +10,11 @@
 // each action upgrades it from the runner's own apt source when this says
 // it's too old:
 //
-//   node lib/gh.mjs check           exits 1, saying what to install, unless gh can attach to a PR
-//   node lib/gh.mjs check --issue   the same for an issue (visual review's mockups only)
+//   node lib/gh.ts check           exits 1, saying what to install, unless gh can attach to a PR
+//   node lib/gh.ts check --issue   the same for an issue (visual review's mockups only)
 //
 // Also commandIn and ghIn, which run gh (or git) in a folder for the tools
-// that edit a description with it (lib/attach.mjs).
+// that edit a description with it (lib/attach.ts).
 
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -141,7 +141,7 @@ export function ghIn(cwd) {
 export function main(argv, { version, help, error = console.error } = {}) {
   const issue = argv[1] === '--issue';
   if (argv[0] !== 'check' || argv.length !== (issue ? 2 : 1)) {
-    error('usage: node lib/gh.mjs check [--issue]');
+    error('usage: node lib/gh.ts check [--issue]');
     return 2;
   }
   try {

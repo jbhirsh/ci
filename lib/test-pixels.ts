@@ -1,8 +1,8 @@
-// PNGs for the tests that compare screenshots (lib/pixels.mjs's users):
+// PNGs for the tests that compare screenshots (lib/pixels.ts's users):
 // real ones for pixelmatch and pngjs, and stand-ins that keep a test's
 // numbers readable. Not part of any tool.
 
-import { PIXELS } from './pixels.mjs';
+import { PIXELS } from './pixels.ts';
 
 /**
  * A real PNG `width`×`height`, white with its first `marked` pixels black.
@@ -19,7 +19,7 @@ export function testPng(width = 10, height = 10, marked = 0) {
  * Stand-in pixels: a "PNG" is JSON `{w, h, px}` (fakePng), and `match`
  * counts the positions where the lists differ, marking them in `out`.
  *
- * @type {import('./pixels.mjs').Pixels}
+ * @type {import('./pixels.ts').Pixels}
  */
 export const fakePixels = {
   read: (png) => {

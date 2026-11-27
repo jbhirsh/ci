@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { pairBaselines, stateOf } from './baselines.mjs';
+import { pairBaselines, stateOf } from './baselines.ts';
 
 // File names come from a pull request: any segment a path may hold, biased
 // toward the shapes baselines have.

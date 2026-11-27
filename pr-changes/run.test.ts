@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ghApi } from '../lib/comment.mjs';
+import { ghApi } from '../lib/comment.ts';
 import { hashOf, images, indexText, readIndex } from './counts.ts';
 import { putBlock } from './changes.ts';
 import {
@@ -12,11 +12,11 @@ import {
   pairsAt,
   uploadAllowed,
 } from './run.ts';
-import type { Api } from '../lib/comment.mjs';
+import type { Api } from '../lib/comment.ts';
 import type { Io } from './run.ts';
 
 // main reaches GitHub through ghApi (the real `gh`): the main test stubs it.
-vi.mock('../lib/comment.mjs', async (importOriginal) => ({
+vi.mock('../lib/comment.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   ghApi: vi.fn(),
 }));

@@ -47,7 +47,7 @@
 import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { appPlaywright, appRoot } from '../lib/app.mjs';
+import { appPlaywright, appRoot } from '../lib/app.ts';
 import { addBaseTree, build, git, serve, stopServers } from './build.ts';
 import { checkFfmpeg, framesToGif, sideBySide } from './ffmpeg.ts';
 import { click, drag, glide, scroll, swipe } from './moves.ts';

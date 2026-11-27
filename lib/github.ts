@@ -26,7 +26,7 @@ export const ACTIONS_BOT = 'github-actions[bot]';
 /**
  * Every page of a list.
  *
- * @param {import('./comment.mjs').Api} api
+ * @param {import('./comment.ts').Api} api
  * @param {string} route with or without a query; the page is added to it
  * @param {string} [key] the list's key when each page is an object
  *   (`workflow_runs`), else the page is the list
@@ -78,7 +78,7 @@ export function newest(runs) {
  * write can post one under any name, and a PR's own workflow can, so a
  * status counts only from the account that should have posted it.
  *
- * @param {import('./comment.mjs').Api} api
+ * @param {import('./comment.ts').Api} api
  * @param {string} repo
  * @param {string} sha
  * @param {string} context

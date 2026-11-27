@@ -25,7 +25,7 @@ import { copyFileSync, globSync, mkdirSync, mkdtempSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appConfig, appRoot } from '../lib/app.mjs';
+import { appConfig, appRoot } from '../lib/app.ts';
 import { mockupMayChange, settings } from '../visual-review/settings.ts';
 import type { Settings } from '../visual-review/settings.ts';
 
