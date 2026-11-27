@@ -4,49 +4,37 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { lintGifCallers } from './gif-callers.ts';
 
-/** @param {string} name */
-const canonical = (name) =>
+const canonical = (name: string) =>
   parse(readFileSync(new URL(`../gif/callers/${name}.yml`, import.meta.url), 'utf8'));
 const NAMES = new Set(['PR GIFs']);
 /**
  * A copy of a parsed workflow.
- *
- * @param {unknown} doc
- * @returns {Record<string, unknown>}
  */
-const copy = (doc) => structuredClone(/** @type {Record<string, unknown>} */ (doc));
+const copy = (doc: unknown): Record<string, unknown> =>
+  structuredClone(doc as Record<string, unknown>);
 
 /**
  * The object at a dotted path of a parsed workflow.
- *
- * @param {Record<string, unknown>} doc
- * @param {string} path
  */
-const at = (doc, path) =>
-  /** @type {Record<string, unknown>} */ (
-    path === ''
-      ? doc
-      : path
-          .split('.')
-          .reduce(
-            (o, k) => /** @type {Record<string, unknown>} */ (o)[k],
-            /** @type {unknown} */ (doc),
-          )
-  );
+const at = (doc: Record<string, unknown>, path: string) =>
+  (path === ''
+    ? doc
+    : path
+        .split('.')
+        .reduce((o, k) => (o as Record<string, unknown>)[k], doc as unknown)) as Record<
+    string,
+    unknown
+  >;
 /** Sets `path` (dotted; the last part is the key) to `value`. */
-const set = (
-  /** @type {Record<string, unknown>} */ doc,
-  /** @type {string} */ path,
-  /** @type {unknown} */ value,
-) => {
+const set = (doc: Record<string, unknown>, path: string, value: unknown) => {
   const parts = path.split('.');
-  const key = /** @type {string} */ (parts.pop());
+  const key = parts.pop() as string;
   at(doc, parts.join('.'))[key] = value;
 };
 /** Removes `path`. */
-const del = (/** @type {Record<string, unknown>} */ doc, /** @type {string} */ path) => {
+const del = (doc: Record<string, unknown>, path: string) => {
   const parts = path.split('.');
-  const key = /** @type {string} */ (parts.pop());
+  const key = parts.pop() as string;
   delete at(doc, parts.join('.'))[key];
 };
 
@@ -62,7 +50,7 @@ describe('the canonical callers', () => {
 });
 
 describe('the recording caller', () => {
-  const bad = (/** @type {(d: Record<string, unknown>) => void} */ change) => {
+  const bad = (change: (d: Record<string, unknown>) => void) => {
     const doc = copy(canonical('pr-gif'));
     change(doc);
     return lintGifCallers('f.yml', doc, NAMES).join('\n');
@@ -104,7 +92,7 @@ describe('the recording caller', () => {
 });
 
 describe('the attach caller', () => {
-  const bad = (/** @type {(d: Record<string, unknown>) => void} */ change, names = NAMES) => {
+  const bad = (change: (d: Record<string, unknown>) => void, names = NAMES) => {
     const doc = copy(canonical('pr-gif-attach'));
     change(doc);
     return lintGifCallers('f.yml', doc, names).join('\n');
@@ -192,11 +180,7 @@ describe('lintGifCallers, for any workflow', () => {
   it('never throws, and says nothing of one that calls no GIF workflow', () => {
     fc.assert(
       fc.property(fc.anything(), (doc) => {
-        const found = lintGifCallers(
-          'f.yml',
-          /** @type {Record<string, unknown>} */ (doc ?? {}),
-          NAMES,
-        );
+        const found = lintGifCallers('f.yml', (doc ?? {}) as Record<string, unknown>, NAMES);
         expect(Array.isArray(found)).toBe(true);
       }),
     );

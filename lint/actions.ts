@@ -45,52 +45,43 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parse } from 'yaml';
 import { lintGifCallers } from './gif-callers.ts';
 
-/** @typedef {Record<string, unknown>} Doc */
-/** @typedef {{ inputs: Map<string, boolean>, secrets: Map<string, boolean> | null }} Target */
+export type Doc = Record<string, unknown>;
+export type Target = { inputs: Map<string, boolean>; secrets: Map<string, boolean> | null };
 /**
- * This repo's files, as the path checks see them: whether a path (relative
- * to the repo's root, `/`-separated) is there, and what a glob matches.
- *
- * @typedef {{ exists: (file: string) => boolean, glob: (pattern: string) => string[] }} Tree
+ * This repo's files, as the path checks see them: whether a path (relative to the repo's root,
+ * `/`-separated) is there, and what a glob matches.
  */
+export type Tree = { exists: (file: string) => boolean; glob: (pattern: string) => string[] };
 
 const EXPRESSION = /\$\{\{([\s\S]*?)\}\}/g;
 const OWN = /^jbhirsh\/ci\/(.+?)@.+$/i;
 
-/** @param {unknown} value */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+const isObject = (value: unknown) =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Every `${{ }}` expression in a value, however deep.
- *
- * @param {unknown} value
- * @returns {string[]}
  */
-export function expressions(value) {
+export function expressions(value: unknown): string[] {
   if (typeof value === 'string') return [...value.matchAll(EXPRESSION)].map((m) => m[1]);
   if (Array.isArray(value)) return value.flatMap(expressions);
-  if (isObject(value)) return Object.values(/** @type {Doc} */ (value)).flatMap(expressions);
+  if (isObject(value)) return Object.values(value as Doc).flatMap(expressions);
   return [];
 }
 
 /**
  * The names an expression takes from a context (`inputs`, `steps`, …), not
  * counting a property of something else (`github.event.inputs.x`).
- *
- * @param {string} expression
- * @param {string} context
  */
-export function names(expression, context) {
+export function names(expression: string, context: string) {
   const re = new RegExp(`(?<![\\w.])${context}\\.([\\w-]+)`, 'g');
   return [...expression.matchAll(re)].map((m) => m[1]);
 }
 
 /**
  * The path a `uses:` names in this repo, or null for anything else.
- *
- * @param {unknown} uses
  */
-export function ownPath(uses) {
+export function ownPath(uses: unknown) {
   if (typeof uses !== 'string') return null;
   const match = OWN.exec(uses);
   return match ? match[1] : null;
@@ -114,8 +105,7 @@ const ACTION_PATH_EXPRESSION = /^\$\{\{\s*github\.action_path\s*\}\}((?:\/[^\s"'
 /** The characters that end a path in a shell line. */
 const PATH_TAIL = String.raw`((?:/(?:[^\s"'\`;|&()<>$\{\}]|\{[\w.,/*-]*\})*)?)`;
 
-/** @param {string} text */
-const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * The paths a value builds on an action's own folder, each with the text
@@ -124,11 +114,13 @@ const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * `${{ github.action_path }}/x`, and `$VAR/x` for each variable `vars` sets
  * to a path from the folder.
  *
- * @param {string} text
- * @param {Map<string, string>} [vars] a variable's name, and its path from the folder
- * @returns {{ token: string, path: string }[]}
+ * @param text
+ * @param vars a variable's name, and its path from the folder
  */
-export function actionPaths(text, vars = new Map()) {
+export function actionPaths(
+  text: string,
+  vars: Map<string, string> = new Map(),
+): { token: string; path: string }[] {
   const bases = new Map([['GITHUB_ACTION_PATH', ''], ...vars]);
   const names = [...bases.keys()].map(escape).join('|');
   const re = new RegExp(
@@ -165,14 +157,10 @@ const MODULE_FLAGS = new Set(['-r', '--require', '--import', '--loader', '--expe
 /**
  * A run line as the shell reads its words: comments, heredoc bodies and
  * quoted text holding a space (an echo's message) left out.
- *
- * @param {string} run
  */
-function shellText(run) {
-  /** @type {string[]} */
-  const lines = [];
-  /** @type {string | null} */
-  let heredoc = null;
+function shellText(run: string) {
+  const lines: string[] = [];
+  let heredoc: string | null = null;
   for (const line of run.split('\n')) {
     if (heredoc !== null) {
       if (line.trim() === heredoc) heredoc = null;
@@ -197,11 +185,8 @@ const NO_SCRIPT = new Set(['-e', '--eval', '-p', '--print', '-v', '--version', '
  * heredoc bodies and quoted text holding a space are left out; a word keeps
  * any `$` it holds, for the caller to skip, and `${{ github.workspace }}`
  * is read as `$GITHUB_WORKSPACE`.
- *
- * @param {string} run
- * @returns {string[]}
  */
-export function scriptsIn(run) {
+export function scriptsIn(run: string): string[] {
   const words = shellText(
     run
       // An expression is one word: the workspace's as the shell names it,
@@ -212,10 +197,8 @@ export function scriptsIn(run) {
     .split(/[\s;|&()<>]+/)
     .map((word) => word.replace(/\\$/, '').replace(/^["']+|["']+$/g, ''))
     .filter(Boolean);
-  /** @type {Set<string>} */
-  const found = new Set();
-  /** @param {string | undefined} word */
-  const add = (word) => {
+  const found: Set<string> = new Set();
+  const add = (word: string | undefined) => {
     if (word !== undefined && (word.includes('/') || SCRIPT.test(word))) found.add(word);
   };
   words.forEach((word, i) => {
@@ -236,12 +219,12 @@ export function scriptsIn(run) {
  * What's wrong with a path into this repo, or null: one that leaves the
  * repo, a glob matching nothing, a file or folder that isn't there.
  *
- * @param {string} where
- * @param {string} token the text that names it
- * @param {string} file the path from the repo's root
- * @param {Tree} tree
+ * @param where
+ * @param token the text that names it
+ * @param file the path from the repo's root
+ * @param tree
  */
-function missing(where, token, file, tree) {
+function missing(where: string, token: string, file: string, tree: Tree) {
   const normal = path.posix.normalize(file);
   if (normal === '..' || normal.startsWith('../'))
     return `${where}: ${token}: leaves this repo (${normal})`;
@@ -256,25 +239,29 @@ function missing(where, token, file, tree) {
 /**
  * Problems in one action.yml.
  *
- * @param {string} file its path from this repo's root
- * @param {unknown} doc
- * @param {(target: string) => boolean} exists
- * @param {Tree} tree
- * @returns {string[]}
+ * @param file its path from this repo's root
+ * @param doc
+ * @param exists
+ * @param tree
  */
-export function lintAction(file, doc, exists, tree) {
+export function lintAction(
+  file: string,
+  doc: unknown,
+  exists: (target: string) => boolean,
+  tree: Tree,
+): string[] {
   if (!isObject(doc)) return [`${file}: not a YAML mapping`];
-  const action = /** @type {Doc} */ (doc);
+  const action = doc as Doc;
   const errors = [];
   for (const key of ['name', 'description']) {
     if (typeof action[key] !== 'string') errors.push(`${file}: no ${key}`);
   }
   const described = [
     ['description', action.description],
-    ...Object.entries(isObject(action.inputs) ? /** @type {Doc} */ (action.inputs) : {}).map(
+    ...Object.entries(isObject(action.inputs) ? (action.inputs as Doc) : {}).map(
       ([name, input]) => [
         `input ${name}'s description`,
-        isObject(input) ? /** @type {Doc} */ (input).description : undefined,
+        isObject(input) ? (input as Doc).description : undefined,
       ],
     ),
   ];
@@ -283,17 +270,14 @@ export function lintAction(file, doc, exists, tree) {
       errors.push(`${file}: ${what} holds \${{ }}, which the runner evaluates; write it without`);
     }
   }
-  const runs = isObject(action.runs) ? /** @type {Doc} */ (action.runs) : {};
+  const runs = isObject(action.runs) ? (action.runs as Doc) : {};
   if (runs.using !== 'composite') errors.push(`${file}: runs.using must be composite`);
   const steps = Array.isArray(runs.steps) ? runs.steps : [];
   if (steps.length === 0) errors.push(`${file}: no steps`);
-  const inputs = new Set(
-    isObject(action.inputs) ? Object.keys(/** @type {Doc} */ (action.inputs)) : [],
-  );
-  /** @type {string[]} */
-  const ids = [];
-  steps.forEach((/** @type {unknown} */ raw, /** @type {number} */ i) => {
-    const step = isObject(raw) ? /** @type {Doc} */ (raw) : {};
+  const inputs = new Set(isObject(action.inputs) ? Object.keys(action.inputs as Doc) : []);
+  const ids: string[] = [];
+  steps.forEach((raw: unknown, i: number) => {
+    const step = isObject(raw) ? (raw as Doc) : {};
     const where = `${file}: step ${i + 1}${typeof step.name === 'string' ? ` (${step.name})` : ''}`;
     if ('run' in step && typeof step.shell !== 'string') errors.push(`${where}: run without shell`);
     if ('timeout-minutes' in step)
@@ -316,7 +300,7 @@ export function lintAction(file, doc, exists, tree) {
     if (typeof step.id === 'string') ids.push(step.id);
   });
   if (isObject(action.outputs)) {
-    for (const [name, output] of Object.entries(/** @type {Doc} */ (action.outputs))) {
+    for (const [name, output] of Object.entries(action.outputs as Doc)) {
       for (const expression of expressions(output)) {
         for (const id of names(expression, 'steps')) {
           if (!ids.includes(id))
@@ -333,26 +317,24 @@ export function lintAction(file, doc, exists, tree) {
  * its `run`, its `with` and its `env` (a variable set to one, as review's
  * `CI_DIR`, then counting where `run` uses it).
  *
- * @param {string} where
- * @param {string} dir the action's folder, from this repo's root
- * @param {Doc} step
- * @param {Tree} tree
+ * @param where
+ * @param dir the action's folder, from this repo's root
+ * @param step
+ * @param tree
  */
-function lintActionPaths(where, dir, step, tree) {
-  const env = isObject(step.env) ? /** @type {Doc} */ (step.env) : {};
-  /** @type {Map<string, string>} */
-  const vars = new Map();
+function lintActionPaths(where: string, dir: string, step: Doc, tree: Tree) {
+  const env = isObject(step.env) ? (step.env as Doc) : {};
+  const vars: Map<string, string> = new Map();
   for (const [name, value] of Object.entries(env)) {
     const match = ACTION_PATH_EXPRESSION.exec(String(value).trim());
     if (match) vars.set(name, match[1]);
   }
   const texts = [
     step.run,
-    ...Object.values(isObject(step.with) ? /** @type {Doc} */ (step.with) : {}),
+    ...Object.values(isObject(step.with) ? (step.with as Doc) : {}),
     ...Object.values(env),
   ];
-  /** @type {string[]} */
-  const errors = [];
+  const errors: string[] = [];
   for (const text of texts) {
     if (typeof text !== 'string') continue;
     for (const { token, path: rel } of actionPaths(text, vars)) {
@@ -366,49 +348,37 @@ function lintActionPaths(where, dir, step, tree) {
 /**
  * What a caller may pass an action or reusable workflow: each input, or
  * secret, and whether it's required with no default.
- *
- * @param {unknown} doc
- * @returns {Target | null}
  */
-export function targetOf(doc) {
+export function targetOf(doc: unknown): Target | null {
   if (!isObject(doc)) return null;
-  const d = /** @type {Doc} */ (doc);
-  /** @param {unknown} declared */
-  const table = (declared) =>
+  const d = doc as Doc;
+  const table = (declared: unknown) =>
     new Map(
-      Object.entries(isObject(declared) ? /** @type {Doc} */ (declared) : {}).map(
-        ([name, spec]) => {
-          const s = isObject(spec) ? /** @type {Doc} */ (spec) : {};
-          return [name, s.required === true && !('default' in s)];
-        },
-      ),
+      Object.entries(isObject(declared) ? (declared as Doc) : {}).map(([name, spec]) => {
+        const s = isObject(spec) ? (spec as Doc) : {};
+        return [name, s.required === true && !('default' in s)];
+      }),
     );
   if (isObject(d.runs)) return { inputs: table(d.inputs), secrets: null };
-  const on = isObject(d.on) ? /** @type {Doc} */ (d.on) : {};
+  const on = isObject(d.on) ? (d.on as Doc) : {};
   // `workflow_call:` with nothing under it (no inputs) parses as null.
   if (!('workflow_call' in on)) return null;
-  const call = isObject(on.workflow_call) ? /** @type {Doc} */ (on.workflow_call) : {};
+  const call = isObject(on.workflow_call) ? (on.workflow_call as Doc) : {};
   return { inputs: table(call.inputs), secrets: table(call.secrets) };
 }
 
 /**
  * Problems in what one `uses:` passes its target.
  *
- * @param {string} where
- * @param {Target} target
- * @param {unknown} given `with:`
- * @param {unknown} [secrets] `secrets:`, for a reusable workflow
+ * @param where
+ * @param target
+ * @param given `with:`
+ * @param secrets `secrets:`, for a reusable workflow
  */
-export function lintCall(where, target, given, secrets) {
-  /** @type {string[]} */
-  const errors = [];
-  /**
-   * @param {Map<string, boolean>} declared
-   * @param {unknown} passed
-   * @param {string} kind
-   */
-  const check = (declared, passed, kind) => {
-    const keys = Object.keys(isObject(passed) ? /** @type {Doc} */ (passed) : {});
+export function lintCall(where: string, target: Target, given: unknown, secrets?: unknown) {
+  const errors: string[] = [];
+  const check = (declared: Map<string, boolean>, passed: unknown, kind: string) => {
+    const keys = Object.keys(isObject(passed) ? (passed as Doc) : {});
     for (const key of keys)
       if (!declared.has(key)) errors.push(`${where}: passes undeclared ${kind} ${key}`);
     for (const [name, required] of declared) {
@@ -425,28 +395,27 @@ export function lintCall(where, target, given, secrets) {
  * Problems in one workflow: references into this repo that name nothing, and
  * calls that don't fit their target.
  *
- * @param {string} file
- * @param {unknown} doc
- * @param {(target: string) => Target | null} resolve
- * @param {Set<string> | null} [appNames] the names of the app's workflows, to
+ * @param file
+ * @param doc
+ * @param resolve
+ * @param appNames the names of the app's workflows, to
  *   check what a PR GIF attach caller waits for; null for this repo's own
- * @returns {string[]}
  */
-export function lintWorkflow(file, doc, resolve, appNames = null) {
+export function lintWorkflow(
+  file: string,
+  doc: unknown,
+  resolve: (target: string) => Target | null,
+  appNames: Set<string> | null = null,
+): string[] {
   if (!isObject(doc)) return [`${file}: not a YAML mapping`];
-  const jobs = isObject(/** @type {Doc} */ (doc).jobs)
-    ? /** @type {Doc} */ (/** @type {Doc} */ (doc).jobs)
-    : {};
-  /** @type {string[]} */
-  const errors = appNames ? lintGifCallers(file, /** @type {Doc} */ (doc), appNames) : [];
+  const jobs = isObject((doc as Doc).jobs) ? ((doc as Doc).jobs as Doc) : {};
+  const errors: string[] = appNames ? lintGifCallers(file, doc as Doc, appNames) : [];
   for (const [id, raw] of Object.entries(jobs)) {
-    const job = isObject(raw) ? /** @type {Doc} */ (raw) : {};
-    /** @type {[string, Doc][]} */
-    const calls = [[`${file}: job ${id}`, job]];
+    const job = isObject(raw) ? (raw as Doc) : {};
+    const calls: [string, Doc][] = [[`${file}: job ${id}`, job]];
     if (Array.isArray(job.steps)) {
-      job.steps.forEach((/** @type {unknown} */ step, /** @type {number} */ i) => {
-        if (isObject(step))
-          calls.push([`${file}: job ${id} step ${i + 1}`, /** @type {Doc} */ (step)]);
+      job.steps.forEach((step: unknown, i: number) => {
+        if (isObject(step)) calls.push([`${file}: job ${id} step ${i + 1}`, step as Doc]);
       });
     }
     for (const [where, call] of calls) {
@@ -465,10 +434,8 @@ const WORKSPACE = /^(?:\$GITHUB_WORKSPACE|\$\{GITHUB_WORKSPACE\})\//;
 
 /**
  * A path in the job's workspace (`.` for the workspace itself).
- *
- * @param {...string} parts
  */
-const inWorkspace = (...parts) => path.posix.normalize(path.posix.join(...parts));
+const inWorkspace = (...parts: string[]) => path.posix.normalize(path.posix.join(...parts));
 
 /**
  * Problems in the paths one of this repo's workflows names in it: each
@@ -476,43 +443,40 @@ const inWorkspace = (...parts) => path.posix.normalize(path.posix.join(...parts)
  * working directory, and each `uses: ./…`, a job's (a workflow of this repo)
  * or a step's (an action, wherever this repo's checkout put it).
  *
- * @param {string} file the workflow's path from this repo's root
- * @param {unknown} doc
- * @param {Tree} tree
- * @returns {string[]}
+ * @param file the workflow's path from this repo's root
+ * @param doc
+ * @param tree
  */
-export function lintScripts(file, doc, tree) {
+export function lintScripts(file: string, doc: unknown, tree: Tree): string[] {
   if (!isObject(doc)) return [];
-  const workflow = /** @type {Doc} */ (doc);
+  const workflow = doc as Doc;
   const on = workflow.on;
   // A reusable workflow's plain checkout is its caller's repo.
   const reusable =
     on === 'workflow_call' ||
     (Array.isArray(on) && on.includes('workflow_call')) ||
-    (isObject(on) && 'workflow_call' in /** @type {Doc} */ (on));
-  /** @param {unknown} defaults */
-  const workingDirectory = (defaults) => {
-    const run = isObject(defaults) ? /** @type {Doc} */ (defaults).run : undefined;
-    const dir = isObject(run) ? /** @type {Doc} */ (run)['working-directory'] : undefined;
+    (isObject(on) && 'workflow_call' in (on as Doc));
+  const workingDirectory = (defaults: unknown) => {
+    const run = isObject(defaults) ? (defaults as Doc).run : undefined;
+    const dir = isObject(run) ? (run as Doc)['working-directory'] : undefined;
     return typeof dir === 'string' ? dir : undefined;
   };
-  const jobs = isObject(workflow.jobs) ? /** @type {Doc} */ (workflow.jobs) : {};
-  /** @type {string[]} */
-  const errors = [];
+  const jobs = isObject(workflow.jobs) ? (workflow.jobs as Doc) : {};
+  const errors: string[] = [];
   for (const [id, raw] of Object.entries(jobs)) {
-    const job = isObject(raw) ? /** @type {Doc} */ (raw) : {};
+    const job = isObject(raw) ? (raw as Doc) : {};
     if (typeof job.uses === 'string' && job.uses.startsWith('./')) {
       const problem = missing(`${file}: job ${id}`, `uses ${job.uses}`, job.uses.slice(2), tree);
       if (problem) errors.push(problem);
     }
     const steps = (Array.isArray(job.steps) ? job.steps : []).map((step) =>
-      isObject(step) ? /** @type {Doc} */ (step) : {},
+      isObject(step) ? (step as Doc) : {},
     );
     // Where each checkout puts its repo, and whether it's this one.
     const checkouts = steps
       .filter((step) => typeof step.uses === 'string' && /^actions\/checkout@/.test(step.uses))
       .map((step) => {
-        const given = isObject(step.with) ? /** @type {Doc} */ (step.with) : {};
+        const given = isObject(step.with) ? (step.with as Doc) : {};
         const repository = given.repository;
         return {
           dir: inWorkspace(typeof given.path === 'string' ? given.path : '.'),
@@ -524,10 +488,8 @@ export function lintScripts(file, doc, tree) {
     /**
      * A workspace path's path in this repo, or null when no checkout of
      * this repo holds it.
-     *
-     * @param {string} at
      */
-    const inRepo = (at) => {
+    const inRepo = (at: string) => {
       const holder = checkouts.find(
         ({ dir }) => dir === '.' || at === dir || at.startsWith(`${dir}/`),
       );
@@ -537,8 +499,7 @@ export function lintScripts(file, doc, tree) {
     const jobDir = workingDirectory(job.defaults) ?? workingDirectory(workflow.defaults) ?? '.';
     steps.forEach((step, i) => {
       const where = `${file}: job ${id} step ${i + 1}${typeof step.name === 'string' ? ` (${step.name})` : ''}`;
-      /** @type {[string, string][]} what the step names, and its workspace path */
-      const named = [];
+      const named: [string, string][] = [];
       if (typeof step.uses === 'string' && step.uses.startsWith('./')) {
         named.push([`uses ${step.uses}`, `${inWorkspace(step.uses)}/action.yml`]);
       }
@@ -573,17 +534,14 @@ export function lintScripts(file, doc, tree) {
 
 /**
  * The files of a checkout, as the path checks read them.
- *
- * @param {string} root
- * @returns {Tree}
  */
-export function treeAt(root) {
+export function treeAt(root: string): Tree {
   return {
     exists: (file) => existsSync(path.join(root, file)),
     glob: (pattern) =>
       globSync(pattern, {
         cwd: root,
-        exclude: (/** @type {string} */ name) => name === 'node_modules',
+        exclude: (name: string) => name === 'node_modules',
       }),
   };
 }
@@ -591,12 +549,8 @@ export function treeAt(root) {
 /**
  * The YAML files under a folder, skipping node_modules and dot folders other
  * than .github.
- *
- * @param {string} dir
- * @param {(name: string) => boolean} keep
- * @returns {string[]}
  */
-function files(dir, keep) {
+function files(dir: string, keep: (name: string) => boolean): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
@@ -608,18 +562,16 @@ function files(dir, keep) {
   });
 }
 
-/** @param {string} file */
-const read = (file) => parse(readFileSync(file, 'utf8'));
+const read = (file: string) => parse(readFileSync(file, 'utf8'));
 
 /**
  * What a `jbhirsh/ci/<path>` reference names in a checkout of this repo: an
  * action's folder or a workflow file, or null. The sync lints the workflows
  * it is about to write with it (sync/sync.ts).
  *
- * @param {string} root this repo's checkout
- * @returns {(target: string) => Target | null}
+ * @param root this repo's checkout
  */
-export function targetsIn(root) {
+export function targetsIn(root: string): (target: string) => Target | null {
   return (target) => {
     const file = target.endsWith('.yml')
       ? path.join(root, target)
@@ -631,21 +583,19 @@ export function targetsIn(root) {
 /**
  * Lints this repo, and an app's workflows when given one.
  *
- * @param {string} root this repo's checkout
- * @param {string | null} app an app's checkout
+ * @param root this repo's checkout
+ * @param app an app's checkout
  */
-export function main(root, app) {
+export function main(root: string, app: string | null) {
   const resolve = targetsIn(root);
   const tree = treeAt(root);
-  /** @param {string} target */
-  const exists = (target) => resolve(target) !== null;
-  const rel = (/** @type {string} */ base, /** @type {string} */ file) => path.relative(base, file);
-  /** @type {string[]} */
-  const errors = [];
+  const exists = (target: string) => resolve(target) !== null;
+  const rel = (base: string, file: string) => path.relative(base, file);
+  const errors: string[] = [];
   for (const file of files(root, (name) => name === 'action.yml')) {
     errors.push(...lintAction(rel(root, file), read(file), exists, tree));
   }
-  const workflows = (/** @type {string} */ base) => {
+  const workflows = (base: string) => {
     const dir = path.join(base, '.github', 'workflows');
     return existsSync(dir) ? files(dir, (name) => /\.ya?ml$/.test(name)) : [];
   };
