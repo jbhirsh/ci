@@ -140,6 +140,18 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
   which shows the Plan comment, and the issues it references) before designing or
   implementing a feature: issues carry rationale the code doesn't.
 
+## Talking to the owner
+
+- **Hyperlink every ticket, PR, plan and comment you mention to the owner**, in chat, a
+  report or a summary (not in commits), every time and not only the first, including those in
+  a subagent's report you relay. Write `[repo#123](url)`: the repo name without the owner, the
+  URL with it ([ci#159](https://github.com/jbhirsh/ci/pull/159)); a bare `#123` is never
+  enough. A plan or a specific comment (a decision, a review, a Revisions row, a results
+  comment) gets its own deep link, never just the issue's:
+  - a comment: `.../issues/<n>#issuecomment-<id>`;
+  - a PR review or its comment: `#pullrequestreview-<id>` or `#discussion_r<id>`;
+  - a Revisions row: the Plan comment's link.
+
 ## Commits
 
 - **An imperative subject, a body saying why, and the `Co-Authored-By:` trailer.** One
