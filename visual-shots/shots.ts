@@ -27,6 +27,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig, appRoot } from '../lib/app.mjs';
 import { mockupMayChange, settings } from '../visual-review/settings.ts';
+import type { Settings } from '../visual-review/settings.ts';
 
 /** The manifest's file name, beside the shots. */
 export const MANIFEST = 'visual-shots.json';
@@ -35,26 +36,26 @@ export const MAX_PATCH_CHARS = 65_535;
 const SHA = /^[0-9a-f]{40}$/;
 const EVENTS = ['pull_request', 'push', 'workflow_dispatch'];
 
-/**
- * @typedef {object} Manifest
- * @property {1} version
- * @property {string} sha the commit the shots are of
- * @property {string} base for a PR, its merge ref's first parent; else `sha`
- * @property {string} event pull_request, push or workflow_dispatch
- * @property {number | null} mockupIssue a mockup's issue, else null
- */
+export type Manifest = {
+  version: 1;
+  /** the commit the shots are of */
+  sha: string;
+  /** for a PR, its merge ref's first parent; else `sha` */
+  base: string;
+  /** pull_request, push or workflow_dispatch */
+  event: string;
+  /** a mockup's issue, else null */
+  mockupIssue: number | null;
+};
 
 /**
  * The manifest, checked where it's read: it comes from an artifact a PR's
  * code wrote.
- *
- * @param {unknown} value
- * @returns {Manifest}
  */
-export function parseManifest(value) {
-  const m = /** @type {Record<string, unknown>} */ (
+export function parseManifest(value: unknown): Manifest {
+  const m = (
     typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {}
-  );
+  ) as Record<string, unknown>;
   const issue = m.mockupIssue ?? null;
   if (
     m.version !== 1 ||
@@ -73,16 +74,14 @@ export function parseManifest(value) {
     sha: m.sha,
     base: m.base,
     event: m.event,
-    mockupIssue: /** @type {number | null} */ (issue),
+    mockupIssue: issue as number | null,
   };
 }
 
 /**
  * A mockup's issue number from the dispatch input, checked: digits only.
- *
- * @param {string | undefined} text
  */
-export function mockupIssue(text) {
+export function mockupIssue(text: string | undefined) {
   if (text === undefined || text === '') return null;
   if (!/^[1-9]\d{0,9}$/.test(text)) throw new Error('mockup_issue must be an issue number');
   return Number(text);
@@ -91,10 +90,8 @@ export function mockupIssue(text) {
 /**
  * The patch a mockup dispatch passed, decoded: base64 only, and within a
  * dispatch's size.
- *
- * @param {string} text
  */
-export function decodePatch(text) {
+export function decodePatch(text: string) {
   const compact = text.replace(/\s+/g, '');
   if (compact.length > MAX_PATCH_CHARS) {
     throw new Error(
@@ -110,11 +107,18 @@ export function decodePatch(text) {
 /**
  * Why a patch mustn't be applied, or null when it may.
  *
- * @param {{ files: string[], summary: string, s: import('../visual-review/settings.ts').Settings }} options
- *   `files`: the paths `git apply --numstat -z` lists; `summary`: `git apply
- *   --summary`'s output
+ * @param options `files`: the paths `git apply --numstat -z` lists; `summary`:
+ *   `git apply --summary`'s output
  */
-export function patchProblem({ files, summary, s }) {
+export function patchProblem({
+  files,
+  summary,
+  s,
+}: {
+  files: string[];
+  summary: string;
+  s: Settings;
+}) {
   if (files.length === 0) return 'mockup_patch changes nothing';
   if (/\b(rename|copy) /.test(summary)) return 'mockup_patch renames or copies a file';
   if (/\bmode change\b|\bmode 120000\b|\bmode 100755\b/.test(summary)) {
@@ -131,13 +135,10 @@ export function patchProblem({ files, summary, s }) {
  * The paths `git apply --numstat -z` lists: `added\tdeleted\tpath\0`, or
  * for a rename `added\tdeleted\t\0old\0new\0` (both kept, so both are
  * checked).
- *
- * @param {string} out
  */
-export function numstatFiles(out) {
+export function numstatFiles(out: string) {
   const parts = out.split('\0');
-  /** @type {string[]} */
-  const files = [];
+  const files: string[] = [];
   for (let i = 0; i < parts.length; i++) {
     const m = /^(?:-|\d+)\t(?:-|\d+)\t(.*)$/s.exec(parts[i]);
     if (!m) continue;
@@ -151,10 +152,10 @@ export function numstatFiles(out) {
  * Every PNG under the folders, as sorted paths in the checkout. The folders
  * are git-ignored in take mode, so the file system is read, not git.
  *
- * @param {string} root
- * @param {string[]} folders globs
+ * @param root
+ * @param folders globs
  */
-export function shotsUnder(root, folders) {
+export function shotsUnder(root: string, folders: string[]) {
   const found = new Set(folders.flatMap((folder) => globSync(`${folder}/**/*.png`, { cwd: root })));
   return [...found].map((f) => f.split(path.sep).join('/')).sort();
 }
@@ -163,12 +164,9 @@ export function shotsUnder(root, folders) {
  * The commit the shots are of, and the one it's built on. A PR's run checks
  * out its merge commit: the PR's head is its second parent, main's head its
  * first. Any other run is of HEAD itself.
- *
- * @param {string} root
- * @param {string} event
  */
-export function commitsOf(root, event) {
-  const rev = (/** @type {string} */ r) =>
+export function commitsOf(root: string, event: string) {
+  const rev = (r: string) =>
     execFileSync('git', ['rev-parse', r], { cwd: root, encoding: 'utf8' }).trim();
   if (event !== 'pull_request') return { sha: rev('HEAD'), base: rev('HEAD') };
   try {
@@ -180,12 +178,11 @@ export function commitsOf(root, event) {
   }
 }
 
-/**
- * @param {string[]} argv
- * @param {Record<string, string | undefined>} env
- * @param {string} [root]
- */
-export function main(argv, env, root = appRoot()) {
+export function main(
+  argv: string[],
+  env: Record<string, string | undefined>,
+  root: string = appRoot(),
+) {
   const s = settings(appConfig('visual-review', root));
   if (!s)
     throw new Error('.github/ci.json has no visual-review key: visual-shots has nothing to do');
@@ -198,8 +195,7 @@ export function main(argv, env, root = appRoot()) {
       copyFileSync(path.join(root, file), path.join(out, file));
     }
     const event = env.GITHUB_EVENT_NAME ?? '';
-    /** @type {Manifest} */
-    const manifest = parseManifest({
+    const manifest: Manifest = parseManifest({
       version: 1,
       ...commitsOf(root, event),
       event,
@@ -225,8 +221,7 @@ export function main(argv, env, root = appRoot()) {
     const patch = decodePatch(env.MOCKUP_PATCH ?? '');
     const file = path.join(mkdtempSync(path.join(tmpdir(), 'mockup-')), 'mockup.patch');
     writeFileSync(file, patch);
-    const git = (/** @type {string[]} */ args) =>
-      execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+    const git = (args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
     git(['apply', '--check', file]);
     const problem = patchProblem({
       files: numstatFiles(git(['apply', '--numstat', '-z', file])),
