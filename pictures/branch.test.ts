@@ -11,7 +11,7 @@ import {
   parseNamedFiles,
   parseRouteInputs,
   readBranch,
-} from './branch.mjs';
+} from './branch.ts';
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 const REPO = 'jbhirsh/ci';
@@ -468,6 +468,6 @@ describe('main', () => {
   ])('prints usage for %j', (argv) => {
     const r = run(argv);
     expect(r.code).toBe(2);
-    expect(r.errors).toEqual(['usage: node pictures/branch.mjs name | fetch <dir> | delete']);
+    expect(r.errors).toEqual(['usage: node pictures/branch.ts name | fetch <dir> | delete']);
   });
 });

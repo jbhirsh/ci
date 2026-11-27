@@ -8,7 +8,7 @@ description: >-
   pictures/attach. Then it deletes the branch, on failure and cancel too,
   once its name was accepted. It needs only the Actions token with contents
   write: the person's token belongs in the Attach job alone.
-  pictures/branch.mjs's header says what each input is held to, and the
+  pictures/branch.ts's header says what each input is held to, and the
   trust model.
 
 inputs:
@@ -61,7 +61,7 @@ runs:
       shell: bash
       env:
         BRANCH: ${{ inputs.branch }}
-      run: node "$GITHUB_ACTION_PATH/../branch.mjs" name
+      run: node "$GITHUB_ACTION_PATH/../branch.ts" name
 
     - name: The inputs, and the named files
       shell: bash
@@ -75,7 +75,7 @@ runs:
         COLUMNS: ${{ inputs.columns }}
         WIDTH: ${{ inputs.width }}
         GH_TOKEN: ${{ inputs.github-token }}
-      run: node "$GITHUB_ACTION_PATH/../branch.mjs" fetch "$RUNNER_TEMP/pictures"
+      run: node "$GITHUB_ACTION_PATH/../branch.ts" fetch "$RUNNER_TEMP/pictures"
 
     - uses: actions/upload-artifact@v7
       with:
@@ -91,4 +91,4 @@ runs:
         REPO: ${{ github.repository }}
         BRANCH: ${{ steps.name.outputs.branch }}
         GH_TOKEN: ${{ inputs.github-token }}
-      run: node "$GITHUB_ACTION_PATH/../branch.mjs" delete
+      run: node "$GITHUB_ACTION_PATH/../branch.ts" delete

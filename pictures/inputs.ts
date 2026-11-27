@@ -6,7 +6,7 @@
 // should be. The token comes in as GH_TOKEN, for gh alone: it is never read
 // here, logged or parsed.
 //
-//   node pictures/inputs.mjs   exits 1 with the first refusal: the action's
+//   node pictures/inputs.ts   exits 1 with the first refusal: the action's
 //                              first step, so a bad input (an unset
 //                              PICTURES_HOST_PR) stops the job before it
 //                              downloads anything

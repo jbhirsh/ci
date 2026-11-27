@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ATTACH_MAX_BYTES } from '../lib/attach.mjs';
-import { checkFiles } from './files.mjs';
+import { checkFiles } from './files.ts';
 
 // Each type's first bytes, as a real file of it starts.
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');

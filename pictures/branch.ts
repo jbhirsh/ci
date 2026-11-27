@@ -6,10 +6,10 @@
 // workflow but can't upload a file, so this is how its own pictures (a
 // screenshot of GitHub's page, say) reach a description.
 //
-//   node pictures/branch.mjs name          checks BRANCH, sets the step output `branch`
-//   node pictures/branch.mjs fetch <dir>   checks every other input, then writes the
+//   node pictures/branch.ts name          checks BRANCH, sets the step output `branch`
+//   node pictures/branch.ts fetch <dir>   checks every other input, then writes the
 //                                          named files into <dir>, which must not exist
-//   node pictures/branch.mjs delete        deletes BRANCH (already gone is fine)
+//   node pictures/branch.ts delete        deletes BRANCH (already gone is fine)
 //
 // Every input comes from whoever dispatched the run, so each is checked here,
 // where it enters, and trusted after:
@@ -18,7 +18,7 @@
 //     ending in `.` or `.lock`), at most 100 characters: nothing else, so the
 //     delete can't reach `main` or any other branch, and no value is an
 //     option or another ref.
-//   - FILES is parseFiles' (pictures/inputs.mjs), with no segment starting
+//   - FILES is parseFiles' (pictures/inputs.ts), with no segment starting
 //     with `-` or `.` (upload-artifact leaves hidden files out).
 //   - HOST_PR and TARGET are numbers with nothing around them, as the run's
 //     concurrency group is named for HOST_PR as given (an empty HOST_PR says
@@ -32,7 +32,7 @@
 // executable) of at most the 10 MB GitHub attaches. ci is public and
 // upload-artifact follows links, so a link on the branch, checked out, could
 // put a runner's file in the artifact; read as a blob, it never becomes one.
-// checkFiles (pictures/files.mjs) then holds each to its picture type.
+// checkFiles (pictures/files.ts) then holds each to its picture type.
 //
 // The delete goes by the branch's name, not the commit read: a push to the
 // same branch after its tree was read is deleted with it, unread. GitHub has
@@ -50,11 +50,11 @@ import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { ATTACH_MAX_BYTES } from '../lib/attach.mjs';
 import { ghApi, statusOf } from '../lib/comment.mjs';
-import { checkFiles } from './files.mjs';
-import { parseFiles, parseInputs, parseRepo } from './inputs.mjs';
+import { checkFiles } from './files.ts';
+import { parseFiles, parseInputs, parseRepo } from './inputs.ts';
 
 /** @typedef {import('../lib/comment.mjs').Api} Api */
-/** @typedef {import('./inputs.mjs').Picture} Picture */
+/** @typedef {import('./inputs.ts').Picture} Picture */
 
 /** The only branches the route reads and deletes. */
 export const PREFIX = 'pictures/';
@@ -277,7 +277,7 @@ export function main(argv, context = {}) {
       (command === 'fetch' && dir !== undefined)
     );
   if (usage) {
-    error('usage: node pictures/branch.mjs name | fetch <dir> | delete');
+    error('usage: node pictures/branch.ts name | fetch <dir> | delete');
     return 2;
   }
   try {

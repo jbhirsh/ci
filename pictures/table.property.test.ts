@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { imageCell, pictureTable } from './table.mjs';
+import { imageCell, pictureTable } from './table.ts';
 
 // A caption is whatever the dispatcher typed: any text, and text built from
 // what could end a cell, a tag, an attribute, a line or the bold around it.

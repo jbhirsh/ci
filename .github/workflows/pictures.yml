@@ -22,7 +22,7 @@
 #
 # Trust, in plain words: the token is only in Attach, which runs none of a
 # PR's code or the session's files and checks nothing out, and every input
-# is checked where it enters (pictures/branch.mjs, pictures/inputs.mjs). That
+# is checked where it enters (pictures/branch.ts, pictures/inputs.ts). That
 # keeps a PR's code and a session's files away from the token. It does not
 # guard the token against anyone who can push to this repository:
 # BOT_PR_TOKEN is a plain repository secret, so any workflow on any pushed

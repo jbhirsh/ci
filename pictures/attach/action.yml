@@ -5,7 +5,7 @@ description: >-
   description, so a Claude session that can only dispatch workflows gets a
   plan's mockups into its issue (ci#60). gh uploads them to a host PR's
   description, the only place gh 2.99 can attach, then the table links
-  them into the target with a plain edit; pictures/cli.mjs's header says
+  them into the target with a plain edit; pictures/cli.ts's header says
   how. The job must run none of the app's code and check nothing out (it
   reads the artifact's files as bytes), so it alone holds the token. gh
   can't edit a description only if no one else has, so the job should
@@ -88,7 +88,7 @@ runs:
         BLOCK: ${{ inputs.block }}
         COLUMNS: ${{ inputs.columns }}
         WIDTH: ${{ inputs.width }}
-      run: node "$GITHUB_ACTION_PATH/../inputs.mjs"
+      run: node "$GITHUB_ACTION_PATH/../inputs.ts"
 
     - uses: actions/download-artifact@v8
       with:
@@ -123,4 +123,4 @@ runs:
         COLUMNS: ${{ inputs.columns }}
         WIDTH: ${{ inputs.width }}
         GH_TOKEN: ${{ inputs.token }}
-      run: node "$GITHUB_ACTION_PATH/../cli.mjs"
+      run: node "$GITHUB_ACTION_PATH/../cli.ts"

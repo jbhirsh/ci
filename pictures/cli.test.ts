@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ATTACH_LIMIT } from '../lib/attach.mjs';
-import { main } from './cli.mjs';
+import { main } from './cli.ts';
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 const ASSET = 'https://github.com/user-attachments/assets/';

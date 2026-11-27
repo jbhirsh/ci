@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { ARTIFACT } from './branch.mjs';
+import { ARTIFACT } from './branch.ts';
 
 /**
  * @typedef {object} Step
@@ -134,10 +134,10 @@ describe('pictures/from-branch', () => {
 
   it("checks the branch's name alone, first, and deletes the branch whatever fails after", () => {
     const named = steps.findIndex((s) => s.id === 'name');
-    const fetch = steps.findIndex((s) => s.run?.includes('branch.mjs" fetch'));
+    const fetch = steps.findIndex((s) => s.run?.includes('branch.ts" fetch'));
     const upload = steps.findIndex((s) => s.uses?.startsWith('actions/upload-artifact@'));
-    const del = steps.findIndex((s) => s.run?.includes('branch.mjs" delete'));
-    expect(steps[named].run).toContain('branch.mjs" name');
+    const del = steps.findIndex((s) => s.run?.includes('branch.ts" delete'));
+    expect(steps[named].run).toContain('branch.ts" name');
     expect(steps[named].env).toEqual({ BRANCH: '${{ inputs.branch }}' });
     expect([named < fetch, fetch < upload, upload < del]).toEqual([true, true, true]);
     expect(del).toBe(steps.length - 1);
