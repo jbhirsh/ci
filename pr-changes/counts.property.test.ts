@@ -1,8 +1,8 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { blocks } from './changes.mjs';
-import { images, indexText, isLink, pairText, picture, readIndex, SIZES, svg } from './counts.mjs';
-import { GLYPHS, SPACE, UNITS } from './glyphs.mjs';
+import { blocks } from './changes.ts';
+import { images, indexText, isLink, pairText, picture, readIndex, SIZES, svg } from './counts.ts';
+import { GLYPHS, SPACE, UNITS } from './glyphs.ts';
 
 const count = fc.integer({ min: 0, max: 1_000_000_000 });
 

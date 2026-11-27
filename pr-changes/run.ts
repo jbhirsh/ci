@@ -1,6 +1,6 @@
-// changes.mjs against GitHub: the PR's description and commits through the
+// changes.ts against GitHub: the PR's description and commits through the
 // REST API with the Actions token (GH_TOKEN), whose edits start no workflow,
-// and the pictures of the counts (counts.mjs) attached with a person's token
+// and the pictures of the counts (counts.ts) attached with a person's token
 // (UPLOAD_TOKEN), which GitHub requires for an attachment. The final write of
 // the description uses the person's token too, when there is one: an edit by
 // the Actions token starts no workflow, so the app's description check would
@@ -12,10 +12,10 @@
 // author's changes and is left out. Each commit's files come from its own
 // commit endpoint, a page of 100 at a time.
 //
-//   node run.mjs   (env: GH_TOKEN, GITHUB_REPOSITORY, NUMBER; optional:
+//   node run.ts   (env: GH_TOKEN, GITHUB_REPOSITORY, NUMBER; optional:
 //                   UPLOAD_TOKEN, TOKEN_LOGIN, EVENT_ACTION, SENDER)
 //
-// One run: pick the level the description fits at (changes.mjs chooseLevel);
+// One run: pick the level the description fits at (changes.ts chooseLevel);
 // for each pair of counts it needs, reuse a picture the description's index
 // names, after fetching its link signed out and comparing the bytes' hash
 // with the image it would draw (an index is the PR author's to edit, so it is
@@ -38,7 +38,7 @@
 //     and a link is used only in GitHub's attachment form;
 //   - at most MAX_PAIRS pairs are uploaded in a run;
 //   - nothing waits on a timer: a link is checked once, when reused.
-// (revisions-run.mjs, the Revisions table's step of the same action, may also
+// (revisions-run.ts, the Revisions table's step of the same action, may also
 // use the person's token, for the one description edit it builds. Neither edit
 // loops: the run it wakes is woken by the token's own account, finds the index
 // or nothing to upload, and writes nothing, as its description is already final.)
@@ -50,8 +50,8 @@ import { attachToDescription } from '../lib/attach.mjs';
 import { ghApi } from '../lib/comment.mjs';
 import { ghIn } from '../lib/gh.mjs';
 import { pages, prTarget } from '../lib/github.mjs';
-import { chooseLevel, dropBlock, fill, ownBlock, placed, plain, putBlock } from './changes.mjs';
-import { ENTRY_CHARS, hashOf, images, indexText, picture, readIndex } from './counts.mjs';
+import { chooseLevel, dropBlock, fill, ownBlock, placed, plain, putBlock } from './changes.ts';
+import { ENTRY_CHARS, hashOf, images, indexText, picture, readIndex } from './counts.ts';
 
 /** How many times a write is worked out again because the description moved under it. */
 const ATTEMPTS = 3;
@@ -69,7 +69,7 @@ const BLOCK_CHARS = 140;
  * @typedef {object} Io
  * @property {() => string} body the description
  * @property {(body: string) => void} write
- * @property {() => import('./changes.mjs').Commit[]} commits the PR's commits
+ * @property {() => import('./changes.ts').Commit[]} commits the PR's commits
  *   by someone other than a bot, oldest first, with their files
  * @property {(link: string, sha: string) => Promise<boolean>} verify whether
  *   the link, fetched signed out, answers with bytes that hash to `sha`
@@ -217,8 +217,8 @@ export function ghUpload({ repo, number, token, dir, view, log, run = ghIn(dir) 
 /**
  * The pairs of counts a description shows at a level, each once, in order.
  *
- * @param {readonly import('./changes.mjs').Commit[]} commits
- * @param {import('./changes.mjs').Level} level
+ * @param {readonly import('./changes.ts').Commit[]} commits
+ * @param {import('./changes.ts').Level} level
  * @returns {[number, number][]}
  */
 export function pairsAt(commits, level) {

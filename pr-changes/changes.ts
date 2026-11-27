@@ -13,7 +13,7 @@
 //
 // The counts (`+81 −37`) are green and red through a small picture of the
 // numbers, not text: GitHub strips HTML colour, and the GitHub app shows
-// math (`$\color…$`) as raw source (counts.mjs says what the pictures are
+// math (`$\color…$`) as raw source (counts.ts says what the pictures are
 // and why). This module doesn't know about images: it takes `pair(added,
 // removed)`, the markup of a pair, so it stays pure.
 //
@@ -35,7 +35,7 @@
 //     than hit GitHub's limit and fail the write;
 //   - the same inputs give the same description, so a rerun changes nothing.
 //
-// Pure: commits and a description in, a description out. run.mjs reads and
+// Pure: commits and a description in, a description out. run.ts reads and
 // writes GitHub.
 
 import { createHash } from 'node:crypto';

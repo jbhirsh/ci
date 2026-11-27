@@ -1,4 +1,4 @@
-// revisions.mjs against GitHub: when a PR's head has moved since its
+// revisions.ts against GitHub: when a PR's head has moved since its
 // Revisions last named it, add a revision (and, the first time, the blocks
 // with revision 1 for the head the PR opened at). Reads with the Actions token
 // (GH_TOKEN); the one write, the description with the revision in it, is made with
@@ -9,7 +9,7 @@
 // edit starts, which stays red until the author fills the new revision's row
 // (ci#140; the apps' PR description workflows cancel an older run per PR).
 //
-//   node revisions-run.mjs   (env: GH_TOKEN, GITHUB_REPOSITORY, NUMBER;
+//   node revisions-run.ts   (env: GH_TOKEN, GITHUB_REPOSITORY, NUMBER;
 //                             optional: UPLOAD_TOKEN, BEFORE)
 //
 // BEFORE is the head before a push (`github.event.before`), the only record
@@ -38,7 +38,7 @@
 //   - UPLOAD_TOKEN is taken out of the environment on start and reaches only
 //     the one PATCH whose body this tool built; every other call uses GH_TOKEN;
 //   - the repo and a sha come only from validated values, a commit subject
-//     only through `escape`, the author's cells only as revisions.mjs says.
+//     only through `escape`, the author's cells only as revisions.ts says.
 //
 // Without a token that may write, a PR that needs a row fails this job with
 // the reason (a fork's PR, which the caller deliberately gives none, only
@@ -48,7 +48,7 @@ import { pathToFileURL } from 'node:url';
 import { MAX_CHARS, ghApi } from '../lib/comment.mjs';
 import { PAGES, pages, prTarget } from '../lib/github.mjs';
 import { renderedLines, revisionsPair } from '../pr-template/body.ts';
-import { blocks, shielded } from './changes.mjs';
+import { blocks, shielded } from './changes.ts';
 import {
   FIRST_KNOWN,
   HISTORY_HEADS,
@@ -64,7 +64,7 @@ import {
   previousHead,
   rangeNote,
   withPair,
-} from './revisions.mjs';
+} from './revisions.ts';
 
 /** How many times the row is worked out again because the description moved under it. */
 const ATTEMPTS = 3;
@@ -99,7 +99,7 @@ const ATTEMPTS = 3;
  * @property {() => string} body
  * @property {() => Commit[]} commits every commit of the PR, oldest first
  * @property {(prev: string, head: string) => Compare | null} compare null when GitHub can't compare (the old head is gone)
- * @property {() => import('./revisions.mjs').TimelineEvent[]} timeline the PR's timeline events, oldest first
+ * @property {() => import('./revisions.ts').TimelineEvent[]} timeline the PR's timeline events, oldest first
  * @property {(body: string) => void} write with the person's token
  * @property {boolean} canWrite whether a person's token is at hand
  * @property {(line: string) => void} log
@@ -139,7 +139,7 @@ export function gitHubIo({ api, repo, number, token, log }) {
           c.parents.length > 1 || Boolean((c.author ?? c.committer)?.login.endsWith('[bot]')),
       })),
     timeline: () =>
-      /** @type {import('./revisions.mjs').TimelineEvent[]} */ (
+      /** @type {import('./revisions.ts').TimelineEvent[]} */ (
         pages(api, `repos/${repo}/issues/${number}/timeline`, undefined, () =>
           log(
             `::warning::pr-changes: the PR's timeline is longer than ${PAGES * 100} events: only the first are read, so the table may miss the latest heads`,
@@ -214,7 +214,7 @@ const message = (error) => (error instanceof Error ? error.message : String(erro
 
 /**
  * The table for a PR's first write, from GitHub's timeline of its heads
- * (revisions.mjs's header says what that gives): one revision per head, the
+ * (revisions.ts's header says what that gives): one revision per head, the
  * first and the latest HISTORY_HEADS - 1 at most, each with what changed from
  * the head before it where GitHub still has the commits, else REPLACED, or
  * null when the timeline names no earlier head (or can't be read), and the
@@ -222,12 +222,12 @@ const message = (error) => (error instanceof Error ? error.message : String(erro
  *
  * @param {Io} io
  * @param {string} body
- * @param {import('./revisions.mjs').Table} table the block as it is: empty of rows, with what the author typed in it
+ * @param {import('./revisions.ts').Table} table the block as it is: empty of rows, with what the author typed in it
  * @param {{ head: string, before: string }} where
- * @returns {import('./revisions.mjs').Table | null}
+ * @returns {import('./revisions.ts').Table | null}
  */
 function history(io, body, table, { head, before }) {
-  /** @type {import('./revisions.mjs').TimelineEvent[]} */
+  /** @type {import('./revisions.ts').TimelineEvent[]} */
   let events;
   try {
     events = io.timeline();

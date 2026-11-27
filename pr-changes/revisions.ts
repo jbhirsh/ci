@@ -109,7 +109,7 @@
 //    because of it stays too long: shorten it.
 //
 // The first write of a block rebuilds the heads before it from GitHub's
-// timeline of the PR (revisions-run.mjs reads it; `headChain` and `capChain`
+// timeline of the PR (revisions-run.ts reads it; `headChain` and `capChain`
 // decide which heads and which revisions). The timeline's `head_ref_force_pushed`
 // events each carry the head after a force-push, in order: those are the heads
 // a force-push made, and the only heads the record names. What it does not
@@ -130,10 +130,10 @@
 // A description with no revisions markers at all (an author, or a tool that
 // rewrote it, left the template's pair out) would never get a block, and
 // nothing would say so: `withPair` puts the empty pair back, so that the
-// first push that moves the head can write it (revisions-run.mjs says when it
+// first push that moves the head can write it (revisions-run.ts says when it
 // asks for one).
 //
-// Pure: texts in, texts out. revisions-run.mjs reads and writes GitHub.
+// Pure: texts in, texts out. revisions-run.ts reads and writes GitHub.
 
 import {
   htmlLeadBold,
@@ -146,7 +146,7 @@ import {
   TABLE_HEAD_LINE,
   TABLE_RULE_LINE,
 } from '../pr-template/body.ts';
-import { blocks, escape, ownBlock } from './changes.mjs';
+import { blocks, escape, ownBlock } from './changes.ts';
 
 /** The most characters the Revisions block holds. */
 export const REVISIONS_BUDGET = 12_000;

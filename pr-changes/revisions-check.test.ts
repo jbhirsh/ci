@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { bodyProblems } from '../pr-template/body.ts';
-import { revisions } from './revisions-run.mjs';
-import { parseTable } from './revisions.mjs';
+import { revisions } from './revisions-run.ts';
+import { parseTable } from './revisions.ts';
 
 const REPO = 'o/r';
 const A = 'a'.repeat(40);

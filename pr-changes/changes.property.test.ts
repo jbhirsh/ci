@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { BUDGET, escape, fill, renderChange } from './changes.mjs';
+import { BUDGET, escape, fill, renderChange } from './changes.ts';
 
 const WHERE = { repo: 'jbhirsh/app', number: 1, n: 1 };
 

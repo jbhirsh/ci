@@ -1,11 +1,11 @@
 // Self-test of the changes tool against an app's checkout:
-// `node pr-changes/selftest.mjs <app dir>`. An app whose PR template places
+// `node pr-changes/selftest.ts <app dir>`. An app whose PR template places
 // no change slot doesn't use the tool, and that's said, not failed. One that
 // does must see a slot filled in its own template without the rest of the
-// description moving (changes.mjs's header says the rules), so a template
+// description moving (changes.ts's header says the rules), so a template
 // edit that tore a slot, or put another tool's marker inside it, fails here
 // and not on a PR. A template with a `pr-changes:revisions` pair must also
-// get its Revisions table written (revisions.mjs), read back by the description
+// get its Revisions table written (revisions.ts), read back by the description
 // check as naming the PR's head and no other, asking only for the new
 // revision's row until it is filled (ci#140), and left alone by a second run.
 
@@ -13,8 +13,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { bodyProblems } from '../pr-template/body.ts';
-import { fill, ownBlock, placed } from './changes.mjs';
-import { revisions } from './revisions-run.mjs';
+import { fill, ownBlock, placed } from './changes.ts';
+import { revisions } from './revisions-run.ts';
 
 const TEMPLATE = '.github/pull_request_template.md';
 const SHA = 'a'.repeat(40);
@@ -31,7 +31,7 @@ function revisionsSelftest(template) {
   }
   const [opened, head] = ['b'.repeat(40), 'c'.repeat(40)];
   let body = template;
-  /** @type {import('./revisions-run.mjs').Io} */
+  /** @type {import('./revisions-run.ts').Io} */
   const io = {
     pull: () => ({
       state: 'open',

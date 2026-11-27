@@ -99,7 +99,7 @@ Claude Review runs on the Claude Agent SDK (`review/sdk.ts`). An app's settings 
 - **It runs on `pull_request_target`**, which runs the workflow as it is on the default branch, never the PR's copy, so it may hold `BOT_PR_TOKEN` (the apps' fine-grained token: attaching a file needs a person's token). That is safe because the job checks out and runs nothing from the PR: keep it that way. `pr-changes/action.yml`'s description lists the rules (no checkout, no cache, no PR text in a `run:` line or an expression, the token only on the attach call and the one Revisions edit). A change to the workflow takes effect once it is on the default branch.
 - **Its own concurrency group**, not PR GIFs' attach group (which visual review's attach job shares): GitHub keeps one pending run per group, so sharing would let each cancel the other's pending run.
 - **`autofix.exempt`:** the app's `.github/ci.json` needs its entry, or `autofix/check-triggers.mjs` fails the app's CI for a `pull_request_target` workflow: the sync adds it with the file (a companion in `sync/manifest.json`).
-- **Revisions:** the same action keeps the description's Revisions block (`pr-changes/revisions.mjs`'s header says the grammar and the rules).
+- **Revisions:** the same action keeps the description's Revisions block (`pr-changes/revisions.ts`'s header says the grammar and the rules).
   - **When it writes:**
     - A PR with one head gets nothing.
     - A description with no revisions marker at all gets the empty `<!-- pr-changes:revisions -->` pair back when a push moves the head: above the index block, or at the end ahead of a footer rule.

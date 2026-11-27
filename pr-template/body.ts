@@ -89,7 +89,7 @@ const EXAMPLE = /^ {0,3}\*\*Example:?\*\*/m;
  * How a Revisions row's first cell opens, with the head link `link` (a pattern
  * source that captures nothing but the link's own groups): the current row is
  * bold with a pointer, an older row plain, and a row an author took the pointer
- * or the bold off is read the same. The tool's parser (pr-changes/revisions.mjs)
+ * or the bold off is read the same. The tool's parser (pr-changes/revisions.ts)
  * and the check below build their patterns from these two (and `htmlLink` with
  * `htmlLeadBold` and `htmlLeadPlain` for the HTML table), so they accept the
  * same forms.
@@ -221,7 +221,7 @@ function currentRevision(description: string): { head: string; rows: string[] | 
  */
 const currentHead = (description: string) => currentRevision(description)?.head ?? null;
 
-/** The header, the rule and the empty row of a revision's table, the frame the changes tool writes (a trimmed line): not rows the author wrote. pr-changes/revisions.mjs reads the frame with these too. */
+/** The header, the rule and the empty row of a revision's table, the frame the changes tool writes (a trimmed line): not rows the author wrote. pr-changes/revisions.ts reads the frame with these too. */
 export const TABLE_HEAD_LINE = /^\|\s*What changed\s*\|\s*Why\s*\|$/i;
 export const TABLE_RULE_LINE = /^\|(?:\s*:?-{3,}:?\s*\|)+$/;
 export const TABLE_EMPTY_LINE = /^\|(?:\s*\|)+$/;

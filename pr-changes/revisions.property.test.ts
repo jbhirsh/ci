@@ -20,7 +20,7 @@ import {
   renderTable,
   summaryReader,
   withPair,
-} from './revisions.mjs';
+} from './revisions.ts';
 
 const REPO = 'o/r';
 // 1,000 runs a property; REVISIONS_FUZZ_RUNS and REVISIONS_FUZZ_SEED run the same properties

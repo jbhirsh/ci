@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blocks } from './changes.mjs';
+import { blocks } from './changes.ts';
 import {
   GREEN,
   hashOf,
@@ -13,8 +13,8 @@ import {
   SIZES,
   svg,
   WIDE,
-} from './counts.mjs';
-import { GLYPHS, RISE, SPACE, UNITS } from './glyphs.mjs';
+} from './counts.ts';
+import { GLYPHS, RISE, SPACE, UNITS } from './glyphs.ts';
 
 const LINK = 'https://github.com/user-attachments/assets/0123abcd-0000-1111-2222-333344445555';
 const LINK2 = 'https://github.com/user-attachments/assets/abcdef01-2222-3333-4444-555566667777';

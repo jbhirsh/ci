@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_CHARS } from '../lib/comment.mjs';
 import { bodyProblems } from '../pr-template/body.ts';
-import { gitHubIo, headingBefore, main, revisions } from './revisions-run.mjs';
-import { parseTable } from './revisions.mjs';
+import { gitHubIo, headingBefore, main, revisions } from './revisions-run.ts';
+import { parseTable } from './revisions.ts';
 
 const REPO = 'o/r';
 const A = 'a'.repeat(40);
@@ -23,7 +23,7 @@ const toFill = (/** @type {string} */ head) => [
 /**
  * A fake io: a description that writes replace, and a PR at a head.
  *
- * @param {Partial<Omit<import('./revisions-run.mjs').Io, 'body' | 'pull'>> & { body?: string, pull?: Partial<import('./revisions-run.mjs').Pull>, heads?: string[] }} [over]
+ * @param {Partial<Omit<import('./revisions-run.ts').Io, 'body' | 'pull'>> & { body?: string, pull?: Partial<import('./revisions-run.ts').Pull>, heads?: string[] }} [over]
  */
 function fake({ body: first, pull, heads: queued, ...over } = {}) {
   let body = first ?? BODY;
@@ -32,7 +32,7 @@ function fake({ body: first, pull, heads: queued, ...over } = {}) {
   const logs = [];
   /** @type {string[]} */
   const writes = [];
-  /** @type {import('./revisions-run.mjs').Io} */
+  /** @type {import('./revisions-run.ts').Io} */
   const io = {
     pull: () => ({
       state: 'open',
