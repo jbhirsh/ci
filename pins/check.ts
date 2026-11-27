@@ -49,7 +49,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appRoot } from '../lib/app.mjs';
+import { appRoot } from '../lib/app.ts';
 import { isReason, notes } from '../lib/reason.ts';
 
 export type Finding = { file: string; line: number; message: string };

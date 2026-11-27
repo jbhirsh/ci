@@ -6,7 +6,7 @@
 // for a synchronous caller), so it's the version the app already tests
 // with; a library only this repo's code imports (pixelmatch, pngjs) is this
 // repo's `dependencies`, installed by the action that needs it
-// (lib/pixels.mjs). A tool that installs one of the app's packages on its
+// (lib/pixels.ts). A tool that installs one of the app's packages on its
 // own, without the rest, reads the version the app's lockfile pins
 // (appPackageVersion), so it runs the release the app tests with.
 //

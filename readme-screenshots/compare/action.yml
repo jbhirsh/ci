@@ -25,7 +25,7 @@ runs:
         node-version: 24
 
     # pixelmatch and pngjs, from this repo's lockfile into the action's own
-    # checkout (lib/pixels.mjs): nothing in the app's workspace changes.
+    # checkout (lib/pixels.ts): nothing in the app's workspace changes.
     - name: Install the comparison's packages
       shell: bash
       run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."

@@ -21,8 +21,8 @@
 
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { summary } from '../lib/actions.mjs';
-import { appRoot } from '../lib/app.mjs';
+import { summary } from '../lib/actions.ts';
+import { appRoot } from '../lib/app.ts';
 import { counts, inRanges, parseReport, parseScope, readText, relativeName } from './report.ts';
 import { readSettings } from './settings.ts';
 import type { Report, Scope } from './report.ts';

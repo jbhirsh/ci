@@ -38,7 +38,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput } from '../lib/actions.mjs';
+import { setOutput } from '../lib/actions.ts';
 
 export type Fixer = 'ci' | 'review';
 

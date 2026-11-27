@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { globList, matchesAny, pick } from './match.mjs';
+import { globList, matchesAny, pick } from './match.ts';
 
 describe('globList', () => {
   it('takes a list of globs, or the fallback when absent', () => {

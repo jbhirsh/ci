@@ -13,9 +13,9 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { diff } from '../lib/pixels.mjs';
+import { diff } from '../lib/pixels.ts';
 import { lookAt } from './zoom.ts';
-import type { Pixels } from '../lib/pixels.mjs';
+import type { Pixels } from '../lib/pixels.ts';
 import type { Look } from './zoom.ts';
 
 /** The most a shot may weigh, as GitHub caps an attached image. */

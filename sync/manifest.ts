@@ -51,7 +51,7 @@
 import { lstatSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SETTINGS_FILE } from '../lib/app.mjs';
+import { SETTINGS_FILE } from '../lib/app.ts';
 
 export type Companion = { key: string[]; value: string };
 export type Variant = { source: string; why: string };

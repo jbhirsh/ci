@@ -16,7 +16,7 @@ Changing and testing a tool against an app is in `CONTRIBUTING.md`.
   comments say what it does and why.
 - **Runtime dependencies only for a library no app runs.** Scripts run from an app's checkout:
   a package the app runs itself (Prettier, Playwright, knip, Vite, jscpd) comes from the app,
-  through `importFromApp` in `lib/app.mjs`; a library only this repo's code imports (pixelmatch,
+  through `importFromApp` in `lib/app.ts`; a library only this repo's code imports (pixelmatch,
   pngjs) is this repo's `dependencies`, installed by the action that needs it from this repo's
   lockfile. A bump of one reaches all three apps without passing any app's CI, only this
   repo's tests and the self-tests against each app's checkout, so review it as a change to all
@@ -34,6 +34,6 @@ Changing and testing a tool against an app is in `CONTRIBUTING.md`.
   names. Secrets come in as inputs.
 - **Node 24 and the latest major of each action**, everywhere.
 - **A test beside each module** (`*.test.mjs` or `*.test.ts`, Vitest).
-- **Each test file's temp directory is removed when the file ends**: `lib/test-tmpdir.mjs`
+- **Each test file's temp directory is removed when the file ends**: `lib/test-tmpdir.ts`
   points `TMPDIR` at one of its own, so `tmpdir()` needs no cleanup; a child a test starts with
   an env of its own passes `TMPDIR` on, or what it writes stays in `/tmp`.

@@ -9,7 +9,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ATTACH_MAX_BYTES } from '../lib/attach.mjs';
+import { ATTACH_MAX_BYTES } from '../lib/attach.ts';
 import {
   attachmentLinks,
   automaticChange,

@@ -6,7 +6,7 @@
 // the probe yet, and that's said, not failed. With one, it checks that
 //   - the settings parse (settings.ts);
 //   - the app's lockfile pins Playwright, the release web/action.yml
-//     installs alone (lib/app.mjs's appPackageVersion);
+//     installs alone (lib/app.ts's appPackageVersion);
 //   - a workflow calls jbhirsh/ci/probe/web@.
 // The workflows are read as text: the self-test runs with this repo's
 // runtime packages only, which hold no YAML parser, and launches no
@@ -15,7 +15,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appPackageVersion } from '../lib/app.mjs';
+import { appPackageVersion } from '../lib/app.ts';
 import { loadSettings } from './settings.ts';
 import type { ProbeSettings } from './settings.ts';
 

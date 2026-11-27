@@ -9,20 +9,20 @@
 // Lists the replacements on stderr and sets the `changed` output to
 // them (space-separated). The README's folder itself is left alone: the job
 // holding the token writes them there (publish.ts). Pixels are compared
-// as lib/pixels.mjs says, with this repo's pixelmatch and pngjs.
+// as lib/pixels.ts says, with this repo's pixelmatch and pngjs.
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput } from '../lib/actions.mjs';
-import { appConfig, appRoot } from '../lib/app.mjs';
-import { diff, PIXELS } from '../lib/pixels.mjs';
+import { setOutput } from '../lib/actions.ts';
+import { appConfig, appRoot } from '../lib/app.ts';
+import { diff, PIXELS } from '../lib/pixels.ts';
 import { CHANGED_RATIO, isShotName, settings } from './settings.ts';
-import type { Pixels } from '../lib/pixels.mjs';
+import type { Pixels } from '../lib/pixels.ts';
 
 /**
  * The share of pixels that differ between two PNGs, or 1 when their sizes
- * differ (lib/pixels.mjs's diff).
+ * differ (lib/pixels.ts's diff).
  */
 export function diffRatio(a: Buffer, b: Buffer, pixels: Pixels) {
   return diff(a, b, pixels).ratio;

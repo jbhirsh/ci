@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_CHARS } from '../lib/comment.mjs';
+import { MAX_CHARS } from '../lib/comment.ts';
 import { bodyProblems } from '../pr-template/body.ts';
 import { gitHubIo, headingBefore, main, revisions } from './revisions-run.ts';
 import { parseTable } from './revisions.ts';
 import type { Io, Pull } from './revisions-run.ts';
-import type { Api } from '../lib/comment.mjs';
+import type { Api } from '../lib/comment.ts';
 
 const REPO = 'o/r';
 const A = 'a'.repeat(40);

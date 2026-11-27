@@ -2,8 +2,8 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { diff, PIXELS, readPng } from './pixels.mjs';
-import { fakePixels as pixels, fakePng as png, testPng } from './test-pixels.mjs';
+import { diff, PIXELS, readPng } from './pixels.ts';
+import { fakePixels as pixels, fakePng as png, testPng } from './test-pixels.ts';
 
 describe('diff', () => {
   it('gives the share of pixels that differ', () => {

@@ -7,7 +7,7 @@ import {
   ATTACH_MAX_BYTES,
   attachToDescription,
   attachmentLinksIn,
-} from './attach.mjs';
+} from './attach.ts';
 
 describe('the limits', () => {
   it("are gh's 50 files an edit and GitHub's 10 MB a file", () => {
@@ -38,7 +38,7 @@ describe('attachToDescription', () => {
   function fakeGh(body, opts = {}) {
     /** @type {string[][]} */
     const calls = [];
-    /** @type {import('./gh.mjs').Command} */
+    /** @type {import('./gh.ts').Command} */
     const gh = (args) => {
       calls.push(args);
       if (opts.fail) throw new Error('gh pr failed: too large');
@@ -163,7 +163,7 @@ describe('attachToDescription', () => {
     // An earlier run's leftover, before ---, isn't this run's to fix: a gh
     // that rewrites only the reference after it.
     let body = 'Old block: ![x](./a.png)\n---';
-    /** @type {import('./gh.mjs').Command} */
+    /** @type {import('./gh.ts').Command} */
     const gh = (args) => {
       const next = readFileSync(args[args.indexOf('--body-file') + 1], 'utf8');
       const at = next.indexOf('---');

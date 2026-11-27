@@ -16,8 +16,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { setOutput } from '../lib/actions.mjs';
-import { appRoot } from '../lib/app.mjs';
+import { setOutput } from '../lib/actions.ts';
+import { appRoot } from '../lib/app.ts';
 import { readPlan } from './carry.ts';
 import { reviewSettings } from './settings.ts';
 import { bullets, fill } from './template.ts';

@@ -28,8 +28,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput, summary } from '../lib/actions.mjs';
-import { appRoot } from '../lib/app.mjs';
+import { setOutput, summary } from '../lib/actions.ts';
+import { appRoot } from '../lib/app.ts';
 import { createGuard } from '../review/guard.ts';
 import { lastResult, oidcToken, report, stoppedBy } from '../review/sdk.ts';
 import type { Options } from '@anthropic-ai/claude-agent-sdk';

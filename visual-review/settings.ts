@@ -14,7 +14,7 @@
 //                edge difference (default 0.001, 0.1%): the table zooms in on
 //                where it is, in a fold, rather than showing the screen
 //   columns      how the shots pair into the table's rows, as
-//                lib/baselines.mjs's parseColumns reads them (BoardGames:
+//                lib/baselines.ts's parseColumns reads them (BoardGames:
 //                Phone and Desktop; sift: Light and Dark). None: a row per
 //                shot, named by its path
 //   mockupPaths  globs of the paths a mockup patch may change (src/**,
@@ -25,9 +25,9 @@
 // An app without the key doesn't use visual review, and every tool that
 // reads it (enable.ts's gate, the self-test) behaves as before it.
 
-import { matchesAny } from '../lib/match.mjs';
-import { parseColumns } from '../lib/baselines.mjs';
-import type { Column } from '../lib/baselines.mjs';
+import { matchesAny } from '../lib/match.ts';
+import { parseColumns } from '../lib/baselines.ts';
+import type { Column } from '../lib/baselines.ts';
 
 export type Settings = {
   workflow: string;

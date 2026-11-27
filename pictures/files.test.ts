@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, symlinkSync, truncateSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ATTACH_MAX_BYTES } from '../lib/attach.mjs';
+import { ATTACH_MAX_BYTES } from '../lib/attach.ts';
 import { checkFiles } from './files.ts';
 
 // Each type's first bytes, as a real file of it starts.

@@ -66,7 +66,7 @@
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { readAll } from '../lib/actions.mjs';
+import { readAll } from '../lib/actions.ts';
 
 /** Lockfiles and binaries may always be skipped, as the prompt allows. */
 const SKIPPABLE =
@@ -128,7 +128,7 @@ export type ToolCall = {
 /**
  * A glob (`*` within a folder, `**` across folders) as a regular expression
  * over a whole repo-relative path. It matches inside dot folders (`**` covers
- * `.github/`), which lib/match.mjs doesn't, so an app's review `skip` globs
+ * `.github/`), which lib/match.ts doesn't, so an app's review `skip` globs
  * keep their meaning: that's why review has its own.
  */
 export function globToRegExp(glob: string): RegExp {

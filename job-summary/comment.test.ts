@@ -19,7 +19,7 @@ import {
   pullRequestsOf,
   statusOf,
 } from './comment.ts';
-import type { Api } from '../lib/comment.mjs';
+import type { Api } from '../lib/comment.ts';
 import type { Download, Section } from './comment.ts';
 
 const REPO = 'jbhirsh/BoardGames';

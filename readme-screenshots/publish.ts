@@ -26,7 +26,7 @@ import { execFileSync } from 'node:child_process';
 import { copyFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appConfig, appRoot } from '../lib/app.mjs';
+import { appConfig, appRoot } from '../lib/app.ts';
 import { BRANCH, CHANGED_RATIO, isShotName, settings } from './settings.ts';
 
 const BOT = [

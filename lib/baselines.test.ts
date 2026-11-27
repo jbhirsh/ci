@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import path from 'node:path';
-import { columnOf, pairBaselines, stateOf } from './baselines.mjs';
+import { columnOf, pairBaselines, stateOf } from './baselines.ts';
 
 /**
  * An app's committed baselines, as they were when visual review replaced
@@ -22,7 +22,7 @@ function tracked(app) {
  *
  * @param {string} filename
  * @param {string} [status]
- * @returns {import('./baselines.mjs').Changed}
+ * @returns {import('./baselines.ts').Changed}
  */
 const change = (filename, status = 'modified') => ({
   before: status === 'added' ? null : filename,
@@ -41,7 +41,7 @@ const allChanged = (app) => tracked(app).map((filename) => change(filename));
 /**
  * The rows with a picture in every one of these columns.
  *
- * @param {import('./baselines.mjs').Row[]} rows
+ * @param {import('./baselines.ts').Row[]} rows
  * @param {string[]} labels
  */
 const whole = (rows, labels) => rows.filter((r) => labels.every((l) => r.cells[l]));

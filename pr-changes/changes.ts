@@ -39,7 +39,7 @@
 // writes GitHub.
 
 import { createHash } from 'node:crypto';
-import { blocksFor } from '../lib/blocks.mjs';
+import { blocksFor } from '../lib/blocks.ts';
 
 export const blocks = blocksFor('pr-changes', {
   named: 'a change numbered',

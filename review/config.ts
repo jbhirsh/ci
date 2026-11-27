@@ -13,7 +13,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { appConfig } from '../lib/app.mjs';
+import { appConfig } from '../lib/app.ts';
 
 /**
  * A file of the app as `ref` holds it (`origin/main`), or as the working

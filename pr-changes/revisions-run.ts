@@ -45,8 +45,8 @@
 // says so); the job is never a required check.
 
 import { pathToFileURL } from 'node:url';
-import { MAX_CHARS, ghApi } from '../lib/comment.mjs';
-import { PAGES, pages, prTarget } from '../lib/github.mjs';
+import { MAX_CHARS, ghApi } from '../lib/comment.ts';
+import { PAGES, pages, prTarget } from '../lib/github.ts';
 import { renderedLines, revisionsPair } from '../pr-template/body.ts';
 import { blocks, shielded } from './changes.ts';
 import {
@@ -65,7 +65,7 @@ import {
   rangeNote,
   withPair,
 } from './revisions.ts';
-import type { Api } from '../lib/comment.mjs';
+import type { Api } from '../lib/comment.ts';
 import type { Table, TimelineEvent } from './revisions.ts';
 
 /** How many times the row is worked out again because the description moved under it. */

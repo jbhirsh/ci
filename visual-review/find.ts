@@ -25,16 +25,16 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput } from '../lib/actions.mjs';
-import { appConfig, appRoot } from '../lib/app.mjs';
-import { ghApi } from '../lib/comment.mjs';
-import { newest, pages, statusFrom } from '../lib/github.mjs';
-import { pullOfRun } from '../lib/run-pr.mjs';
+import { setOutput } from '../lib/actions.ts';
+import { appConfig, appRoot } from '../lib/app.ts';
+import { ghApi } from '../lib/comment.ts';
+import { newest, pages, statusFrom } from '../lib/github.ts';
+import { pullOfRun } from '../lib/run-pr.ts';
 import { MANIFEST, parseManifest } from '../visual-shots/shots.ts';
 import { outsideOwnBlocks } from './record.ts';
 import { settings } from './settings.ts';
 import { CONTEXT } from './status.ts';
-import type { Api } from '../lib/comment.mjs';
+import type { Api } from '../lib/comment.ts';
 import type { Target } from './review.ts';
 
 /** The run, as far as this reads it. */

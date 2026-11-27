@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PIXELS as pixels } from '../lib/pixels.mjs';
-import { testPng } from '../lib/test-pixels.mjs';
+import { PIXELS as pixels } from '../lib/pixels.ts';
+import { testPng } from '../lib/test-pixels.ts';
 import { compareShots, isShotPath, MAX_SHOT_BYTES, shotsIn } from './compare.ts';
 
 /**

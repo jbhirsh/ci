@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { TOOLS, findSelftests } from './selftests.mjs';
+import { TOOLS, findSelftests } from './selftests.ts';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 /**
- * A checkout holding these files (empty), and lib/selftests.mjs itself.
+ * A checkout holding these files (empty), and lib/selftests.ts itself.
  *
  * @param {string[]} files
  */
@@ -27,7 +27,7 @@ function checkout(files) {
     writeFileSync(path.join(dir, file), '');
   }
   mkdirSync(path.join(dir, 'lib'), { recursive: true });
-  copyFileSync(path.join(root, 'lib', 'selftests.mjs'), path.join(dir, 'lib', 'selftests.mjs'));
+  copyFileSync(path.join(root, 'lib', 'selftests.ts'), path.join(dir, 'lib', 'selftests.ts'));
   return dir;
 }
 
@@ -63,9 +63,9 @@ describe('findSelftests', () => {
     expect(files).toEqual(['a/selftest.mjs', 'a/selftest.ts']);
     expect(problems).toEqual([
       'a: both a/selftest.mjs and a/selftest.ts: keep one',
-      'b: no selftest.mjs or selftest.ts, so CI would run no self-test for it: restore it, or take b out of TOOLS in lib/selftests.mjs',
+      'b: no selftest.mjs or selftest.ts, so CI would run no self-test for it: restore it, or take b out of TOOLS in lib/selftests.ts',
       "a/sub/selftest.ts: CI runs only a tool's own <tool>/selftest.mjs or .ts: move it there",
-      'c/selftest.mjs: c is not in TOOLS in lib/selftests.mjs: add it, so CI runs it',
+      'c/selftest.mjs: c is not in TOOLS in lib/selftests.ts: add it, so CI runs it',
       'd/selftest.mts: CI runs only selftest.mjs or selftest.ts: rename it',
     ]);
   });
@@ -74,7 +74,7 @@ describe('findSelftests', () => {
 describe('the command line, as CI runs it', () => {
   /** @param {string} dir */
   const run = (dir) =>
-    spawnSync(process.execPath, [path.join(dir, 'lib', 'selftests.mjs')], { encoding: 'utf8' });
+    spawnSync(process.execPath, [path.join(dir, 'lib', 'selftests.ts')], { encoding: 'utf8' });
 
   it('prints the self-tests to run', () => {
     const result = run(root);

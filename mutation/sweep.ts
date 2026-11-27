@@ -59,8 +59,8 @@
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput, summary } from '../lib/actions.mjs';
-import { appRoot } from '../lib/app.mjs';
+import { setOutput, summary } from '../lib/actions.ts';
+import { appRoot } from '../lib/app.ts';
 import { judge } from './gate.ts';
 import { allMutants, counts, parseReport, readText, relativeName } from './report.ts';
 import { gitIn, inMutateScope } from './scope.ts';

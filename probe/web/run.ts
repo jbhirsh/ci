@@ -28,8 +28,8 @@
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { setOutput, summary } from '../../lib/actions.mjs';
-import { appPackageVersion, appPlaywright, appRoot, SETTINGS_FILE } from '../../lib/app.mjs';
+import { setOutput, summary } from '../../lib/actions.ts';
+import { appPackageVersion, appPlaywright, appRoot, SETTINGS_FILE } from '../../lib/app.ts';
 import { hostMatches } from '../match.ts';
 import { writeResults } from '../results.ts';
 import { loadSettings } from '../settings.ts';

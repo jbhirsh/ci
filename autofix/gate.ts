@@ -32,7 +32,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { appRoot } from '../lib/app.mjs';
+import { appRoot } from '../lib/app.ts';
 import { autofixSettings } from './settings.ts';
 
 /** A workflow run as the REST API returns it, the fields read here. */

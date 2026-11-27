@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { AUTHOR } from '../lib/comment.mjs';
+import { AUTHOR } from '../lib/comment.ts';
 import { MARKER, commentBody, limitOf, main, reason, stopFrom } from './stopped.ts';
-import type { Api } from '../lib/comment.mjs';
+import type { Api } from '../lib/comment.ts';
 import type { Stop } from './stopped.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

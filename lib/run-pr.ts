@@ -29,7 +29,7 @@
  *
  * @param {Run} run
  * @param {string} repo owner/name
- * @param {import('./comment.mjs').Api} api
+ * @param {import('./comment.ts').Api} api
  * @returns {{ pull: Pull } | { why: string }}
  */
 export function pullOfRun(run, repo, api) {

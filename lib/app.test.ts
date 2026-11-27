@@ -11,7 +11,7 @@ import {
   importFromApp,
   lockedVersion,
   requireFromApp,
-} from './app.mjs';
+} from './app.ts';
 
 const roots = /** @type {string[]} */ ([]);
 function fakeApp(/** @type {string | undefined} */ ciJson) {

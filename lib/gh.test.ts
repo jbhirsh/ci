@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { MIN_GH, MIN_GH_ISSUE, checkGh, commandIn, ghIn, ghVersion, main } from './gh.mjs';
+import { MIN_GH, MIN_GH_ISSUE, checkGh, commandIn, ghIn, ghVersion, main } from './gh.ts';
 
 describe('ghVersion', () => {
   it("reads gh's first line", () => {
@@ -160,7 +160,7 @@ describe('main, the command line', () => {
     expect(main([], { error: (l) => errors.push(l) })).toBe(2);
     expect(main(['check', 'x'], { error: (l) => errors.push(l) })).toBe(2);
     expect(main(['check', '--issue', 'x'], { error: (l) => errors.push(l) })).toBe(2);
-    expect(errors).toEqual(Array(3).fill('usage: node lib/gh.mjs check [--issue]'));
+    expect(errors).toEqual(Array(3).fill('usage: node lib/gh.ts check [--issue]'));
   });
 
   it('checks for an issue with --issue', () => {
@@ -177,7 +177,7 @@ describe('main, the command line', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'fake-gh-'));
     writeFileSync(path.join(dir, 'gh'), '#!/bin/sh\necho "gh version 2.89.0 (2026-03-26)"\n');
     chmodSync(path.join(dir, 'gh'), 0o755);
-    const script = path.join(import.meta.dirname, 'gh.mjs');
+    const script = path.join(import.meta.dirname, 'gh.ts');
     const env = { ...process.env, PATH: `${dir}${path.delimiter}${process.env.PATH}` };
     const old = spawnSync(process.execPath, [script, 'check'], { env, encoding: 'utf8' });
     expect(old.status).toBe(1);

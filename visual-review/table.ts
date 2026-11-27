@@ -21,7 +21,7 @@
 // change and the leftovers in the bot's block alike have one header.
 //
 // A row is a screen in one of the app's `columns` (phone and desktop, light
-// and dark), paired by lib/baselines.mjs's rules. A shot no column takes gets
+// and dark), paired by lib/baselines.ts's rules. A shot no column takes gets
 // a row of its own, named by its path.
 //
 // The pictures are GitHub attachments, uploaded into the description by
@@ -33,10 +33,10 @@
 
 import path from 'node:path';
 import { isScreenState, partMarker } from '../describe/describe.ts';
-import { pairBaselines } from '../lib/baselines.mjs';
+import { pairBaselines } from '../lib/baselines.ts';
 import { WHERE_WIDTH, zoomWidth } from './zoom.ts';
 import type { Change } from './compare.ts';
-import type { Column } from '../lib/baselines.mjs';
+import type { Column } from '../lib/baselines.ts';
 import type { Look } from './zoom.ts';
 
 /**

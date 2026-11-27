@@ -7,7 +7,7 @@
 
 import { closeSync, openSync, readSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { ATTACH_MAX_BYTES } from '../lib/attach.mjs';
+import { ATTACH_MAX_BYTES } from '../lib/attach.ts';
 import type { Picture } from './inputs.ts';
 
 /** Each type's extensions and the bytes its files start with. */

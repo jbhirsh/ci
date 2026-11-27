@@ -115,15 +115,15 @@ runs:
         node-version: 24
         package-manager-cache: false
 
-    # `--attach` came in gh 2.99 (lib/gh.mjs). The runner's image installs gh
+    # `--attach` came in gh 2.99 (lib/gh.ts). The runner's image installs gh
     # from GitHub's own apt source, so an image whose gh lags upgrades from it.
     - name: A gh that can attach
       if: inputs.token != ''
       shell: bash
       run: |
-        node "$GITHUB_ACTION_PATH/../lib/gh.mjs" check || {
+        node "$GITHUB_ACTION_PATH/../lib/gh.ts" check || {
           sudo apt-get update -q && sudo apt-get install -y -q --only-upgrade gh
-          node "$GITHUB_ACTION_PATH/../lib/gh.mjs" check
+          node "$GITHUB_ACTION_PATH/../lib/gh.ts" check
         }
 
     # The account the token posts as, so a run woken by an edit from that account

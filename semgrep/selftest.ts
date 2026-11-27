@@ -6,7 +6,7 @@
 
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appConfig } from '../lib/app.mjs';
+import { appConfig } from '../lib/app.ts';
 import { missingPaths, semgrepArgs, settings } from './scan.ts';
 
 /**

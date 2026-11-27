@@ -25,7 +25,7 @@ import {
   SECRET,
 } from './sync.ts';
 import { loadManifest, resolve } from './manifest.ts';
-import type { Api } from '../lib/comment.mjs';
+import type { Api } from '../lib/comment.ts';
 import type { Git, Graphql } from './sync.ts';
 
 const CI_SHA = 'abcdef0123456789abcdef0123456789abcdef01';

@@ -11,7 +11,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appConfig } from '../lib/app.mjs';
+import { appConfig } from '../lib/app.ts';
 import { main, settings, spawn as realSpawn } from './run.ts';
 import type { Spawn } from './run.ts';
 

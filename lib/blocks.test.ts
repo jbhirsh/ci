@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blocksFor } from './blocks.mjs';
+import { blocksFor } from './blocks.ts';
 
 describe('blocksFor', () => {
   const pictures = blocksFor('pictures');

@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { lockedVersion } from './app.mjs';
+import { lockedVersion } from './app.ts';
 
 // Any lockfile JSON at all: arbitrary values, and ones shaped like a
 // lockfile with arbitrary entries where Playwright's would be.

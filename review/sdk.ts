@@ -68,8 +68,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { setOutput, summary } from '../lib/actions.mjs';
-import { appRoot } from '../lib/app.mjs';
+import { setOutput, summary } from '../lib/actions.ts';
+import { appRoot } from '../lib/app.ts';
 import { createGuard } from './guard.ts';
 import { github } from './github.ts';
 import * as tools from './tools.ts';

@@ -14,7 +14,7 @@
 // GitHub nothing and says "false".
 
 import { pathToFileURL } from 'node:url';
-import { setOutput } from '../lib/actions.mjs';
+import { setOutput } from '../lib/actions.ts';
 import { github } from './github.ts';
 import type { Fetch } from './github.ts';
 

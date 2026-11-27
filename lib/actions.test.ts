@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Readable } from 'node:stream';
-import { readAll, setOutput, summary } from './actions.mjs';
+import { readAll, setOutput, summary } from './actions.ts';
 
 afterEach(() => {
   delete process.env.GITHUB_OUTPUT;
