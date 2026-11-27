@@ -1,0 +1,98 @@
+name: Performance probe, web
+description: >-
+  Measures how fast a deployment of a web app answers, cold and warm, phase
+  by phase (ci#151): loads the pages the app's `probe` settings list
+  (probe/settings.ts) in WebKit, Safari's engine, through the Playwright
+  release the app's lockfile pins, and reads each listed API response's
+  Server-Timing phases and the browser's own time for it (drive.ts). Writes
+  one results file (probe/results.ts), named by the `results` output, and a
+  cold/warm table in the job summary. It fails only when measuring breaks (a
+  listed response with no Server-Timing, not 2xx, never made, or aborted),
+  never on a slow number. Run after a checkout of the deployment's commit,
+  for the app's settings and lockfile; it installs only Playwright, not the
+  app's packages, and waits on events only, never on timers.
+
+inputs:
+  url:
+    description: The deployment's URL, such as the deployment_status event's environment_url.
+    required: true
+  environment:
+    description: >-
+      "production" (the default) sends only GET and HEAD requests and the
+      app's `probe.reads`; "preview" also sends its `probe.previewSafe`
+      writes. Every other request that would write is aborted.
+    default: production
+  bypass-secret:
+    description: >-
+      Vercel's Protection Bypass for Automation secret, for a protected
+      preview. No browser request carries it: each load sends it once, over
+      https, in a request of its own to the deployment's root that has
+      Vercel set its bypass cookie (x-vercel-set-bypass-cookie), and the
+      browser sends that host-only cookie to the deployment alone. A url
+      that isn't https, or whose host doesn't match the app's
+      `probe.hosts`, fails the probe at once. None by default.
+    default: ""
+
+outputs:
+  results:
+    description: >-
+      The results file's path, set before the probe runs, so a later
+      job-summary step finds what it wrote even when it fails.
+    value: ${{ steps.out.outputs.results }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        # Nothing here is cached: the deployment's code is checked out
+        # beside a secret, and an app's `packageManager` field would
+        # otherwise turn setup-node's automatic caching on.
+        package-manager-cache: false
+
+    - name: Name the results file
+      id: out
+      shell: bash
+      env:
+        RESULTS: ${{ runner.temp }}/probe/results.json
+      run: echo "results=$RESULTS" >> "$GITHUB_OUTPUT"
+
+    - name: Read the app's Playwright release
+      id: playwright
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/run.ts" version
+
+    # Only Playwright, at the app's release, into the runner's temp folder:
+    # the app's other packages would take about a minute more, and none of
+    # their install scripts run.
+    - name: Install Playwright and WebKit
+      shell: bash
+      env:
+        DIR: ${{ runner.temp }}/probe-playwright
+        VERSION: ${{ steps.playwright.outputs.version }}
+      run: |
+        mkdir -p "$DIR"
+        cd "$DIR"
+        echo '{"private": true}' > package.json
+        npm install --no-save --ignore-scripts --no-audit --no-fund "playwright@$VERSION"
+        npx playwright install --with-deps webkit
+
+    # Before Node starts, so the log hides the secret wherever it might
+    # appear: GitHub's documented way to mask a value, in the shell.
+    - name: Hide the bypass secret in the log
+      if: ${{ inputs.bypass-secret != '' }}
+      shell: bash
+      env:
+        SECRET: ${{ inputs.bypass-secret }}
+      run: echo "::add-mask::$SECRET"
+
+    - name: Probe
+      shell: bash
+      env:
+        PROBE_URL: ${{ inputs.url }}
+        PROBE_ENVIRONMENT: ${{ inputs.environment }}
+        PROBE_SECRET: ${{ inputs.bypass-secret }}
+        PROBE_RESULTS: ${{ steps.out.outputs.results }}
+        PROBE_PLAYWRIGHT: ${{ runner.temp }}/probe-playwright
+      run: node "$GITHUB_ACTION_PATH/run.ts"

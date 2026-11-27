@@ -8,6 +8,9 @@ const JS = ['**/*.mjs', '**/*.js', '**/*.cjs'];
 /** The TypeScript files Node runs by stripping their types. */
 const TS = ['**/*.ts'];
 
+const NO_TIMERS =
+  'No fixed-time waits in the probe: wait on the event (waitForResponse, finished(), goto) instead.';
+
 export default [
   { ignores: ['node_modules/', 'coverage/'] },
   js.configs.recommended,
@@ -37,6 +40,41 @@ export default [
       'jsdoc/require-property-description': 'off',
       // A blank line between a block's description and its tags, as the apps write them.
       'jsdoc/tag-lines': ['warn', 'any', { startLines: 1 }],
+    },
+  },
+  // The probe waits on events and conditions only, never on a timer (ci#58,
+  // ci#151): a fixed wait is a guess, too short a flaky number, too long a
+  // held runner. Playwright's waits with a `timeout` are only a hang limit.
+  // Its files of either extension, tests included.
+  {
+    files: ['probe/**/*.ts', 'probe/**/*.mjs'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        ...['setTimeout', 'setInterval'].map((name) => ({ name, message: NO_TIMERS })),
+      ],
+      'no-restricted-properties': [
+        'error',
+        { property: 'waitForTimeout', message: NO_TIMERS },
+        { object: 'globalThis', property: 'setTimeout', message: NO_TIMERS },
+        { object: 'globalThis', property: 'setInterval', message: NO_TIMERS },
+      ],
+      // `import('node:timers/promises')`, which no-restricted-imports doesn't read.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportExpression[source.value=/^(node:)?timers(\\u002Fpromises)?$/]',
+          message: NO_TIMERS,
+        },
+      ],
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: ['node:timers', 'node:timers/promises', 'timers', 'timers/promises'].map(
+            (name) => ({ name, message: NO_TIMERS }),
+          ),
+        },
+      ],
     },
   },
 ];
