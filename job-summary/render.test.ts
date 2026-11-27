@@ -10,13 +10,13 @@ import {
   render,
   section,
   verdict,
-} from './render.mjs';
+} from './render.ts';
 
 /**
  * A test in a model.
  *
- * @param {Partial<import('./model.mjs').ModelTest>} over
- * @returns {import('./model.mjs').ModelTest}
+ * @param {Partial<import('./model.ts').ModelTest>} over
+ * @returns {import('./model.ts').ModelTest}
  */
 const mt = (over) => ({
   name: 'T',
@@ -42,8 +42,8 @@ const mt = (over) => ({
 /**
  * A model, with what a test changes.
  *
- * @param {Partial<import('./model.mjs').Model>} [over]
- * @returns {import('./model.mjs').Model}
+ * @param {Partial<import('./model.ts').Model>} [over]
+ * @returns {import('./model.ts').Model}
  */
 const model = (over = {}) => ({
   repo: 'jbhirsh/sift',

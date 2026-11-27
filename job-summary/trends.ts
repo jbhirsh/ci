@@ -1,6 +1,6 @@
 // How this run of a job compares with its recent runs, for job-summary
-// (summary.mjs): each step's and test's usual time, which are slower than
-// usual, and which tests are flaky. Pure: the runs come from history.mjs.
+// (summary.ts): each step's and test's usual time, which are slower than
+// usual, and which tests are flaky. Pure: the runs come from history.ts.
 //
 // "Usual" is the median of the earlier runs, the job's or step's over the
 // runs that passed (a failed run stops early, or spends minutes collecting
@@ -11,13 +11,13 @@
 // that kept a record of their tests, it passed on a re-run, failed and
 // passed on the same commit, or changed result FLIPS times while its file
 // stayed the same: a change of result on a commit that edited the test is
-// the edit's doing (source.mjs says which commits did), and one broken by a
+// the edit's doing (source.ts says which commits did), and one broken by a
 // commit and fixed by the next is not flaky, nor one that fails from this
 // run on.
 
-/** @typedef {import('./junit.mjs').TestCase} TestCase */
-/** @typedef {import('./history.mjs').Step} Step */
-/** @typedef {import('./history.mjs').PastRun} PastRun */
+/** @typedef {import('./junit.ts').TestCase} TestCase */
+/** @typedef {import('./history.ts').Step} Step */
+/** @typedef {import('./history.ts').PastRun} PastRun */
 
 /** The fewest earlier times that make a usual time. */
 export const MIN_SAMPLES = 3;
@@ -117,7 +117,7 @@ export function slower(seconds, typical, floor = SLOWER_SECONDS) {
  * name the same test, which the run reads as its first try's result and
  * time, or "passed on re-run". Order is kept.
  *
- * @param {TestCase[]} cases with re-runs settled (junit.mjs settleReruns)
+ * @param {TestCase[]} cases with re-runs settled (junit.ts settleReruns)
  * @returns {TestCase[]}
  */
 export function byTest(cases) {
@@ -198,7 +198,7 @@ export function stepTrends(rows, past, now = Date.now()) {
  * @param {string} [sha] this run's commit
  * @param {(Set<string> | null)[]} [changed] the files each run's commit
  *   changed since the run before it, oldest run first and this one last
- *   (source.mjs changedFiles); null where that isn't known
+ *   (source.ts changedFiles); null where that isn't known
  * @param {(test: TestCase) => string} [pathOf] a test's file
  * @returns {Map<string, TestTrend>}
  */

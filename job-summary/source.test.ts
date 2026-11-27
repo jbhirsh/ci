@@ -8,10 +8,10 @@ import {
   testLine,
   testPath,
   trackedFiles,
-} from './source.mjs';
+} from './source.ts';
 
 const FILES = [
-  'job-summary/render.test.mjs',
+  'job-summary/render.test.ts',
   'e2e/home.spec.ts',
   'e2e/phone/home.spec.ts',
   '.maestro/19_swipe.yaml',
@@ -33,8 +33,8 @@ describe('testPath', () => {
     expect(testPath({ source: './.maestro/19_swipe.yaml', suite: 'Swipe' }, FILES)).toBe(
       '.maestro/19_swipe.yaml',
     );
-    expect(testPath({ source: '', suite: 'job-summary/render.test.mjs' }, FILES)).toBe(
-      'job-summary/render.test.mjs',
+    expect(testPath({ source: '', suite: 'job-summary/render.test.ts' }, FILES)).toBe(
+      'job-summary/render.test.ts',
     );
     expect(testPath({ source: '', suite: 'phone/home.spec.ts' }, FILES)).toBe(
       'e2e/phone/home.spec.ts',
@@ -66,8 +66,8 @@ describe('failureLine', () => {
   it("reads the line a failure's stack points at in the test's file", () => {
     expect(
       failureLine(
-        'AssertionError\n ❯ job-summary/render.test.mjs:142:18',
-        'job-summary/render.test.mjs',
+        'AssertionError\n ❯ job-summary/render.test.ts:142:18',
+        'job-summary/render.test.ts',
       ),
     ).toBe(142);
     expect(failureLine('at Object.<anonymous> (a.b.test.mjs:9:1)', 'x/a.b.test.mjs')).toBe(9);
@@ -112,13 +112,13 @@ describe('snippet', () => {
 describe('locate', () => {
   /** @type {Record<string, string>} */
   const files = {
-    'job-summary/render.test.mjs':
+    'job-summary/render.test.ts':
       "describe('r', () => {\n  it('draws', () => {\n    expect(1).toBe(2);\n  });\n});",
     '.maestro/19_swipe.yaml': 'appId: x\n---\n- launchApp',
   };
   /**
-   * @param {Partial<import('./junit.mjs').TestCase> & { name: string, title: string }} t
-   * @returns {import('./junit.mjs').TestCase & { title: string }}
+   * @param {Partial<import('./junit.ts').TestCase> & { name: string, title: string }} t
+   * @returns {import('./junit.ts').TestCase & { title: string }}
    */
   const tc = (t) => ({
     seconds: 1,
@@ -137,8 +137,8 @@ describe('locate', () => {
         tc({
           name: 'r › draws',
           title: 'draws',
-          suite: 'job-summary/render.test.mjs',
-          detail: 'x\n ❯ job-summary/render.test.mjs:3:5',
+          suite: 'job-summary/render.test.ts',
+          detail: 'x\n ❯ job-summary/render.test.ts:3:5',
         }),
         tc({ name: 'Swipe', title: 'Swipe', source: '.maestro/19_swipe.yaml' }),
         tc({ name: 'gone', title: 'gone', suite: 'gone.test.mjs' }),
@@ -151,7 +151,7 @@ describe('locate', () => {
       },
     );
     expect(found.get('r › draws')).toEqual({
-      path: 'job-summary/render.test.mjs',
+      path: 'job-summary/render.test.ts',
       line: 2,
       code: [
         [2, "  it('draws', () => {", false],

@@ -5,20 +5,20 @@
 // job (action.yml), with `if: !cancelled()`.
 //
 // This file gathers; the others do the rest. The job's steps and its earlier
-// runs come from the Actions API (history.mjs), which needs `actions: read`.
-// Its tests come from JUnit XML (junit.mjs: Maestro's, Playwright's,
+// runs come from the Actions API (history.ts), which needs `actions: read`.
+// Its tests come from JUnit XML (junit.ts: Maestro's, Playwright's,
 // Vitest's), as many reports as the patterns match: a suite and its re-runs
 // (sift's <flow>.retry.xml), never two suites, which could share a test's
-// name. source.mjs finds each test in the checkout, and which commits
-// between the runs changed it; model.mjs puts it all together (trends.mjs
-// compares the runs); render.mjs writes the summary's Markdown and
-// report.mjs the report page. Both the page and a small record of this run
+// name. source.ts finds each test in the checkout, and which commits
+// between the runs changed it; model.ts puts it all together (trends.ts
+// compares the runs); render.ts writes the summary's Markdown and
+// report.ts the report page. Both the page and a small record of this run
 // (its tests and the job's time so far, which later runs read back: the
 // Actions API keeps a run's step times but not its tests) go in one folder
 // (`dir` output) that action.yml uploads as the job's artifact, for
 // job-reports.yml to put on the repository's GitHub Pages; so does the
-// job's section of the pull request's comment (section.md, render.mjs
-// section), which job-reports.yml's comment job (comment.mjs) puts in the
+// job's section of the pull request's comment (section.md, render.ts
+// section), which job-reports.yml's comment job (comment.ts) puts in the
 // one comment it keeps on the PR, as only it may write that comment.
 //
 // It never fails the job: action.yml's steps continue on error, a lookup
@@ -29,7 +29,7 @@
 // LOAD: sift's own scripts write them) or else from what job-summary/note
 // and job-summary/sample-load left in RUNNER_TEMP (telemetry.mjs).
 //
-//   node summary.mjs   (env: JOB; JUNIT (patterns, one per line), NOUN,
+//   node summary.ts   (env: JOB; JUNIT (patterns, one per line), NOUN,
 //                       NOTES (a JSON file), LOAD (a CSV file), SETTLE,
 //                       REPORT_BASE, all optional; GITHUB_REPOSITORY,
 //                       GITHUB_WORKFLOW, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT,
@@ -41,19 +41,19 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput, summary } from '../lib/actions.mjs';
-import { artifactName, current, history } from './history.mjs';
-import { parseJunit, settleReruns } from './junit.mjs';
-import { buildModel, noteworthy, parts } from './model.mjs';
-import { render, section } from './render.mjs';
-import { pagesBase, report, reportUrl } from './report.mjs';
-import { changedFiles, locate, realGit, trackedFiles } from './source.mjs';
+import { artifactName, current, history } from './history.ts';
+import { parseJunit, settleReruns } from './junit.ts';
+import { buildModel, noteworthy, parts } from './model.ts';
+import { render, section } from './render.ts';
+import { pagesBase, report, reportUrl } from './report.ts';
+import { changedFiles, locate, realGit, trackedFiles } from './source.ts';
 import { telemetryFiles } from './telemetry.mjs';
-import { byTest, jobSeconds, stepRows } from './trends.mjs';
+import { byTest, jobSeconds, stepRows } from './trends.ts';
 
-/** @typedef {import('./history.mjs').Gh} Gh */
-/** @typedef {import('./junit.mjs').TestCase} TestCase */
-/** @typedef {import('./source.mjs').Git} Git */
-/** @typedef {import('./model.mjs').Sample} Sample */
+/** @typedef {import('./history.ts').Gh} Gh */
+/** @typedef {import('./junit.ts').TestCase} TestCase */
+/** @typedef {import('./source.ts').Git} Git */
+/** @typedef {import('./model.ts').Sample} Sample */
 
 /** How many earlier runs are compared. */
 export const HISTORY = 9;
@@ -100,7 +100,7 @@ export function readTests(patterns, read, glob) {
 }
 
 /**
- * The record of a run that later runs read back (history.mjs parseRecord):
+ * The record of a run that later runs read back (history.ts parseRecord):
  * its tests (null without reports), and the job's time so far, which later
  * runs compare theirs with, as both stop at the summary (a job's end
  * includes its summary's downloads and the post-job steps).
@@ -228,11 +228,11 @@ export function build(env, gh, io = {}) {
   const settle = Number(env.SETTLE);
 
   let problem = '';
-  /** @type {import('./history.mjs').Run | null} */
+  /** @type {import('./history.ts').Run | null} */
   let run = null;
-  /** @type {import('./history.mjs').Job | null} */
+  /** @type {import('./history.ts').Job | null} */
   let thisJob = null;
-  /** @type {import('./history.mjs').PastRun[]} */
+  /** @type {import('./history.ts').PastRun[]} */
   let past = [];
   // One time limit for reading the history and asking git about it.
   const until = clock() + HISTORY_MS;

@@ -9,7 +9,7 @@ import {
   parseRecord,
   pastJob,
   pastRuns,
-} from './history.mjs';
+} from './history.ts';
 
 const env = { GITHUB_REPOSITORY: 'jbhirsh/sift', GITHUB_RUN_ID: '42', GITHUB_RUN_ATTEMPT: '' };
 
@@ -19,7 +19,7 @@ const env = { GITHUB_REPOSITORY: 'jbhirsh/sift', GITHUB_RUN_ID: '42', GITHUB_RUN
  * @param {number} id
  * @param {string | null} branch
  * @param {string} created
- * @returns {import('./history.mjs').Run}
+ * @returns {import('./history.ts').Run}
  */
 const run = (id, branch, created) => ({
   id,
@@ -36,7 +36,7 @@ const run = (id, branch, created) => ({
  *
  * @param {Record<string, unknown>} answers
  * @param {string[][]} [calls]
- * @returns {import('./history.mjs').Gh}
+ * @returns {import('./history.ts').Gh}
  */
 const fakeGh =
   (answers, calls = []) =>

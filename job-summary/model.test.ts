@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { buildModel, noteworthy, parts } from './model.mjs';
+import { buildModel, noteworthy, parts } from './model.ts';
 
 const T0 = Date.parse('2026-10-29T10:00:00Z');
 /** @param {number} s seconds after T0 */
 const at = (s) => new Date(T0 + s * 1000).toISOString();
 
 /**
- * A test case as junit.mjs reads it.
+ * A test case as junit.ts reads it.
  *
- * @param {Partial<import('./junit.mjs').TestCase>} over
- * @returns {import('./junit.mjs').TestCase}
+ * @param {Partial<import('./junit.ts').TestCase>} over
+ * @returns {import('./junit.ts').TestCase}
  */
 const tc = (over) => ({
   name: 'T',
@@ -28,13 +28,13 @@ describe('parts', () => {
     expect(
       parts(
         tc({
-          name: 'job-summary/render.test.mjs › render › links > the report',
-          suite: 'job-summary/render.test.mjs',
+          name: 'job-summary/render.test.ts › render › links > the report',
+          suite: 'job-summary/render.test.ts',
         }),
       ),
     ).toEqual({
       folder: 'job-summary/',
-      file: 'render.test.mjs',
+      file: 'render.test.ts',
       block: 'render › links',
       title: 'the report',
     });
@@ -69,9 +69,9 @@ describe('parts', () => {
  *
  * @param {number} id
  * @param {string} conclusion
- * @param {import('./history.mjs').PastRun['tests']} tests
+ * @param {import('./history.ts').PastRun['tests']} tests
  * @param {number | null} [seconds]
- * @returns {import('./history.mjs').PastRun}
+ * @returns {import('./history.ts').PastRun}
  */
 const pastRun = (id, conclusion, tests, seconds = null) => ({
   run: {
@@ -98,8 +98,8 @@ const pastRun = (id, conclusion, tests, seconds = null) => ({
 /**
  * A model's input, with what a test changes.
  *
- * @param {Partial<import('./model.mjs').Input>} over
- * @returns {import('./model.mjs').Input}
+ * @param {Partial<import('./model.ts').Input>} over
+ * @returns {import('./model.ts').Input}
  */
 const input = (over = {}) => ({
   repo: 'jbhirsh/ci',
@@ -287,7 +287,7 @@ describe('noteworthy', () => {
     const base = buildModel(input());
     const one = base.tests?.[0];
     if (!one) throw new Error('no test');
-    /** @type {[string, import('./junit.mjs').TestCase['result'], boolean, boolean][]} */
+    /** @type {[string, import('./junit.ts').TestCase['result'], boolean, boolean][]} */
     const cases = [
       ['a', 'failed', false, false],
       ['b', 'passed on re-run', false, false],

@@ -5,7 +5,7 @@ description: >-
   which the shared job-reports.yml workflow publishes on the repository's
   GitHub Pages once the run finishes, and the summary links to; that
   workflow also puts every job's verdict in one comment on the pull
-  request (summary.mjs says how). The job's last step, with `if: !cancelled()`, so
+  request (summary.ts says how). The job's last step, with `if: !cancelled()`, so
   it runs after a failure; the job needs `actions: read`, for its steps and
   earlier runs. It never fails the job.
 
@@ -78,10 +78,10 @@ runs:
         LOAD: ${{ inputs.load }}
         SETTLE: ${{ inputs.settle }}
         REPORT_BASE: ${{ inputs.report-base }}
-      run: node "$GITHUB_ACTION_PATH/summary.mjs"
+      run: node "$GITHUB_ACTION_PATH/summary.ts"
 
     # The report page, and this run's tests for later runs to compare with
-    # (history.mjs), in one artifact. A re-run of the job replaces its first
+    # (history.ts), in one artifact. A re-run of the job replaces its first
     # attempt's.
     - name: Keep this run's report and tests
       if: steps.summary.outputs.dir != ''

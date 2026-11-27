@@ -1,5 +1,5 @@
-// JUnit XML, read for job-summary (summary.mjs): each test's name, time,
-// result, where it is (its suite and file attributes, which source.mjs turns
+// JUnit XML, read for job-summary (summary.ts): each test's name, time,
+// result, where it is (its suite and file attributes, which source.ts turns
 // into a path) and, for a failure, its message. A test retried within one
 // report is read from Surefire's elements, which Playwright's reporter writes
 // with its `includeRetries` option (off by default; or

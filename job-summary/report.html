@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Job report</title>
-    <!-- jbhirsh/ci job-summary's report page. report.mjs writes the run's model
-     (model.mjs) into its script, as a value; the page loads nothing else. -->
+    <!-- jbhirsh/ci job-summary's report page. report.ts writes the run's model
+     (model.ts) into its script, as a value; the page loads nothing else. -->
     <style>
       /* Layout: one working column like a CI log page; summary strip, then charts, then the test tree. */
       :root {
@@ -1004,8 +1004,8 @@
 
     <script>
       // job-summary's report page (jbhirsh/ci, job-summary/report.html): one
-      // job's run beside its recent runs. Its data is the value report.mjs
-      // writes in place of the marker below (model.mjs); everything here
+      // job's run beside its recent runs. Its data is the value report.ts
+      // writes in place of the marker below (model.ts); everything here
       // only draws it, escaping every piece of text it writes as HTML.
       const data = /* __REPORT_DATA__ */ null;
       const N = data.runs.length;

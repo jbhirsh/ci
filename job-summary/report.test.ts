@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
-import { pagesBase, report, reportUrl, scriptJson, template } from './report.mjs';
+import { pagesBase, report, reportUrl, scriptJson, template } from './report.ts';
 
 /**
  * jsdom, which ships no types: the part of it these tests use.
@@ -14,7 +14,7 @@ const { JSDOM } = createRequire(import.meta.url)('jsdom');
 /**
  * A model with one of everything the page draws.
  *
- * @returns {import('./model.mjs').Model}
+ * @returns {import('./model.ts').Model}
  */
 const model = () => ({
   repo: 'jbhirsh/ci',
@@ -146,7 +146,7 @@ function el(w, selector) {
 /**
  * The report page, run in jsdom.
  *
- * @param {import('./model.mjs').Model} m
+ * @param {import('./model.ts').Model} m
  */
 function open(m) {
   const dom = new JSDOM(report(m), {

@@ -11,7 +11,7 @@ import {
   readTests,
   record,
   reportFiles,
-} from './summary.mjs';
+} from './summary.ts';
 
 const T0 = Date.parse('2026-10-29T10:00:00Z');
 /** @param {number} s seconds after T0 */
@@ -39,7 +39,7 @@ const thisRun = {
  * A fake gh: this run, its jobs, and no earlier runs unless given.
  *
  * @param {Record<string, unknown>} [more]
- * @returns {import('./history.mjs').Gh}
+ * @returns {import('./history.ts').Gh}
  */
 const fakeGh =
   (more = {}) =>
@@ -82,7 +82,7 @@ const files = {
   'a/x.test.mjs':
     "describe('x', () => {\n  it('reads it', () => {\n    expect(1).toBe(2);\n  });\n});",
 };
-/** @type {import('./source.mjs').Git} */
+/** @type {import('./source.ts').Git} */
 const git = (args) => {
   if (args[0] === 'ls-files') return 'a/x.test.mjs\n';
   if (args[0] === 'diff') return '';
@@ -114,7 +114,7 @@ describe('reportFiles', () => {
   });
 
   it('globs the real file system by default', () => {
-    expect(reportFiles('job-summary/summary.mjs')).toEqual(['job-summary/summary.mjs']);
+    expect(reportFiles('job-summary/summary.ts')).toEqual(['job-summary/summary.ts']);
   });
 });
 
@@ -185,7 +185,7 @@ describe('record', () => {
  * The model a built report carries.
  *
  * @param {string | null} page
- * @returns {import('./model.mjs').Model}
+ * @returns {import('./model.ts').Model}
  */
 const modelOf = (page) => {
   const m = (page ?? '').match(/const data = (.*);<\/script>/s);

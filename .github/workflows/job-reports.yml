@@ -26,7 +26,7 @@
 # be served from the repository's own site. Nor is Dependabot's, whose token
 # can't push or comment. Publishes that overlap don't lose each other's
 # reports: each pushes with a lease and tries again on the branch as it
-# found it (publish.mjs). This repository's own CI calls it the same way.
+# found it (publish.ts). This repository's own CI calls it the same way.
 #
 # Permissions: GitHub won't start a reusable workflow whose jobs ask for
 # more than the caller grants (the run fails at startup, with no jobs), and
@@ -60,7 +60,7 @@ jobs:
         with:
           run-id: ${{ github.event.workflow_run.id || github.run_id }}
 
-  # The pull request's comment (comment.mjs), after the reports it links to
+  # The pull request's comment (comment.ts), after the reports it links to
   # are up. Its own job, so only it takes turns: runs for one branch write
   # the comment one at a time, each reading it again just before writing.
   # GitHub keeps one waiting job per group and cancels an older waiting one

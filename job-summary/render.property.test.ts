@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { cell, duration } from './render.mjs';
+import { cell, duration } from './render.ts';
 
 describe('cell, for any text', () => {
   it('is one line with no unescaped bar', () => {

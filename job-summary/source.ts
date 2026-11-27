@@ -1,14 +1,14 @@
-// Where each test is, read for job-summary's report (summary.mjs): its file
+// Where each test is, read for job-summary's report (summary.ts): its file
 // and line, so its name can link to it on GitHub, a snippet of its code for
 // the tests worth reading (failed, slower, flaky), and which commits between
 // the job's recent runs changed its file, so a test whose result changed
-// because it was edited isn't called flaky (trends.mjs). The job has the
+// because it was edited isn't called flaky (trends.ts). The job has the
 // repository checked out; anything that can't be found leaves that part
 // out, never an error.
 
 import { execFileSync } from 'node:child_process';
 
-/** @typedef {import('./junit.mjs').TestCase} TestCase */
+/** @typedef {import('./junit.ts').TestCase} TestCase */
 /** @typedef {(args: string[]) => string} Git */
 
 /** How many lines a snippet shows at most. */
@@ -80,7 +80,7 @@ export function testLine(lines, title) {
 
 /**
  * The line a failure points at in the test's file, from its message's
- * stack (`render.test.mjs:142:18`), or 0 when it names none.
+ * stack (`render.test.ts:142:18`), or 0 when it names none.
  *
  * @param {string} detail
  * @param {string} path

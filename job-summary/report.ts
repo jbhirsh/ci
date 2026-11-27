@@ -1,15 +1,15 @@
 // The report page for one job's run: report.html with the run's model
-// (model.mjs) written into its script as a value, so the page is one file
-// that loads nothing else. job-reports.yml (publish.mjs) puts it on the
+// (model.ts) written into its script as a value, so the page is one file
+// that loads nothing else. job-reports.yml (publish.ts) puts it on the
 // repository's GitHub Pages, where the run's summary links to it.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** @typedef {import('./model.mjs').Model} Model */
+/** @typedef {import('./model.ts').Model} Model */
 
-/** How many days of reports the Pages site keeps (publish.mjs prunes older). */
+/** How many days of reports the Pages site keeps (publish.ts prunes older). */
 export const KEEP_DAYS = 30;
 
 // The marker in the page's script the model replaces: a value in the script
@@ -58,7 +58,7 @@ export function report(model, page = template()) {
  *
  * @param {string} base the site's address, e.g. https://jbhirsh.github.io/sift
  * @param {number | string} runId
- * @param {string} artifact the job's artifact name (history.mjs artifactName)
+ * @param {string} artifact the job's artifact name (history.ts artifactName)
  */
 export function reportUrl(base, runId, artifact) {
   return `${base.replace(/\/+$/, '')}/runs/${runId}/${artifact.replace(/^job-summary-/, '')}/`;
