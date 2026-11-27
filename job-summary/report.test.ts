@@ -481,6 +481,37 @@ describe('the measurements card', () => {
       if (m.start === 'warm') expect(w.document.getElementById(`measure-${k}`)).not.toBeNull();
   });
 
+  it('draws a repeated field as long as its calls spanned, saying so beside its calls', () => {
+    const rows: Measurement[] = [
+      { name: 'games', phase: 'browser', start: 'warm', ms: 200, responseStartMs: 150 },
+      { name: 'games', phase: 'total', start: 'warm', ms: 100 },
+      {
+        name: 'games',
+        phase: 'field.games.wishlist.votes',
+        label: 'Game.votes',
+        start: 'warm',
+        ms: 60,
+        calls: 30,
+        slowestMs: 2.4,
+        atMs: 21,
+        spanMs: 3.1,
+      },
+    ];
+    const w = open({ ...model(), measurements: measured('games', rows) });
+    el(w, '#measures button.sum').click();
+    const row = () => el(w, '#measures .wrow[data-sel*="votes"]');
+    // Inside the server, on its 100 ms: from 21 for 3.1, not for 60.
+    expect(row().querySelector<HTMLElement>('.wbar')?.getAttribute('style')).toBe(
+      'left:21.00%;width:3.10%',
+    );
+    expect(row().querySelector('.wval')?.textContent).toBe('60ms');
+    row().click();
+    expect(el(w, '#measures .detail').textContent).toContain('30 · slowest 2.4ms · over 3.1ms');
+    expect(el(w, '#measures .detail pre').textContent).toBe(
+      'field.games.wishlist.votes;dur=60;desc="Game.votes";calls=30;slowest=2.4;start=21;span=3.1',
+    );
+  });
+
   it('says how much more a part took when its usual is 0ms, never Infinity times', () => {
     const chip = (ms: number) => {
       const rows: Measurement[] = [{ name: 'games', phase: 'browser', start: 'warm', ms }];

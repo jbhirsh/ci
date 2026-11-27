@@ -24,6 +24,28 @@ describe('parseServerTiming', () => {
     ]);
   });
 
+  it("reads a repeated field's span, its wall-clock time from first call to last", () => {
+    expect(
+      parseServerTiming(
+        'field.games.wishlist.votes;dur=60;desc="Game.votes";calls=30;slowest=2.4;start=21;span=3.1',
+      ),
+    ).toEqual([
+      {
+        name: 'field.games.wishlist.votes',
+        dur: 60,
+        desc: 'Game.votes',
+        calls: 30,
+        slowest: 2.4,
+        start: 21,
+        span: 3.1,
+      },
+    ]);
+    expect(parseServerTiming('f;dur=6;span=-1, g;dur=6;span=x')).toEqual([
+      { name: 'f', dur: 6 },
+      { name: 'g', dur: 6 },
+    ]);
+  });
+
   it('keeps commas and semicolons inside a quoted desc, and its escapes', () => {
     expect(parseServerTiming('a;desc="x, y; \\"z\\"";dur=1, b;dur=2')).toEqual([
       { name: 'a', desc: 'x, y; "z"', dur: 1 },
@@ -81,8 +103,8 @@ describe('formatServerTiming', () => {
     expect(
       formatServerTiming([
         { name: 'cold' },
-        { name: 'f', dur: 1, desc: 'a "b"', calls: 2, slowest: 0.5, start: 3 },
+        { name: 'f', dur: 1, desc: 'a "b"', calls: 2, slowest: 0.5, start: 3, span: 0.8 },
       ]),
-    ).toBe('cold, f;dur=1;desc="a \\"b\\"";calls=2;slowest=0.5;start=3');
+    ).toBe('cold, f;dur=1;desc="a \\"b\\"";calls=2;slowest=0.5;start=3;span=0.8');
   });
 });

@@ -244,6 +244,25 @@ describe('requests', () => {
     ]);
   });
 
+  it('draws a repeated field for its span, not its calls added up', () => {
+    // 30 calls of 2 ms, side by side: 60 ms added up, over 3.1 ms from 21.
+    const votes = { name: 'a', phase: 'field.v', start: 'warm', ms: 60, calls: 30, atMs: 21 };
+    const rows = (more: Partial<Measurement>): Measurement[] => [
+      { ...votes, start: 'warm', ...more },
+      // Sent with no start: drawn where the one before it ends.
+      { name: 'a', phase: 'field.w', start: 'warm', ms: 2 },
+    ];
+    const drawn = (more: Partial<Measurement>) => {
+      const [a] = requests(rows(more));
+      return a.parts.map((p) => p.warm?.at);
+    };
+    expect(drawn({ spanMs: 3.1 })).toEqual([21, 24.1]);
+    // Its value stays the calls added up.
+    expect(requests(rows({ spanMs: 3.1 }))[0].parts[0].warm?.ms).toBe(60);
+    // Without a span, it's drawn as long as its ms.
+    expect(drawn({})).toEqual([21, 81]);
+  });
+
   it('nests fields by path, siblings in the order first seen, whatever the header order', () => {
     const field = (path: string): Measurement => ({
       name: 'a',
@@ -286,6 +305,19 @@ describe('rawEntry', () => {
       'field.games.bgg;dur=8.9;desc="Games.bgg";calls=1;start=22.2',
     );
     expect(raw('db-open')).toBe('db-open;dur=40');
+    expect(
+      rawEntry({
+        name: 'a',
+        phase: 'field.v',
+        start: 'warm',
+        ms: 60,
+        label: 'Game.votes',
+        calls: 30,
+        slowestMs: 2.4,
+        atMs: 21,
+        spanMs: 3.1,
+      }),
+    ).toBe('field.v;dur=60;desc="Game.votes";calls=30;slowest=2.4;start=21;span=3.1');
     expect(raw('browser')).toBe('');
     expect(rawEntry({ name: 'a', phase: 'total', start: 'warm', ms: 1 / 3 })).toBe(
       'total;dur=0.33',

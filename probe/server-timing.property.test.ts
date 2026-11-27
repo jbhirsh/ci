@@ -14,6 +14,7 @@ const entry = fc.record(
     calls: fc.nat(),
     slowest: ms,
     start: ms,
+    span: ms,
   },
   { requiredKeys: ['name'] },
 );
@@ -24,7 +25,21 @@ const headerish = fc.oneof(
     .array(
       fc.oneof(
         token,
-        fc.constantFrom(',', ';', '=', '"', '\\', ' ', 'dur', 'desc', 'cold', '-1', '1.5', 'NaN'),
+        fc.constantFrom(
+          ',',
+          ';',
+          '=',
+          '"',
+          '\\',
+          ' ',
+          'dur',
+          'desc',
+          'span',
+          'cold',
+          '-1',
+          '1.5',
+          'NaN',
+        ),
       ),
     )
     .map((parts) => parts.join('')),
@@ -36,7 +51,7 @@ describe('parseServerTiming, for any input', () => {
       fc.property(headerish, (text) => {
         for (const e of parseServerTiming(text)) {
           expect(e.name).toMatch(TOKEN);
-          for (const n of [e.dur, e.calls, e.slowest, e.start]) {
+          for (const n of [e.dur, e.calls, e.slowest, e.start, e.span]) {
             if (n !== undefined) {
               expect(Number.isFinite(n)).toBe(true);
               expect(n).toBeGreaterThanOrEqual(0);

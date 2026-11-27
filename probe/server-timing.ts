@@ -9,7 +9,9 @@
 //   desc     a label (`Query.games` for a field);
 //   calls    how many times a field ran;
 //   slowest  a field's slowest call, in ms;
-//   start    when the entry started, in ms from the handler's start.
+//   start    when the entry started, in ms from the handler's start;
+//   span     a repeated field's wall-clock span, in ms: its last call's end
+//            less its first call's start, where `dur` adds its calls up.
 // A number that isn't finite and at least 0 is left out, as if it weren't
 // sent, so a row is never negative or NaN. An entry with no `dur` (the
 // `cold` flag) still counts as an entry: it's how hasEntry finds the flag.
@@ -26,13 +28,14 @@ export interface TimingEntry {
   calls?: number;
   slowest?: number;
   start?: number;
+  span?: number;
 }
 
 /** RFC 9110's token characters. */
 const TOKEN_CHAR = /[!#$%&'*+.^_`|~0-9A-Za-z-]/;
 /** A plain decimal number, with an exponent if any: no sign, hex or Infinity. */
 const NUMBER = /^(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
-const NUMERIC = ['dur', 'calls', 'slowest', 'start'] as const;
+const NUMERIC = ['dur', 'calls', 'slowest', 'start', 'span'] as const;
 type Numeric = (typeof NUMERIC)[number];
 
 /** A parameter's value as a number of at least 0, or undefined. */
@@ -165,6 +168,7 @@ export function formatServerTiming(entries: TimingEntry[]): string {
       if (entry.calls !== undefined) out += `;calls=${entry.calls}`;
       if (entry.slowest !== undefined) out += `;slowest=${entry.slowest}`;
       if (entry.start !== undefined) out += `;start=${entry.start}`;
+      if (entry.span !== undefined) out += `;span=${entry.span}`;
       return out;
     })
     .join(', ');

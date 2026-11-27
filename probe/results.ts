@@ -18,6 +18,10 @@
 //                   slowestMs        a field's slowest call
 //                   atMs             when the entry started, in ms from the
 //                                    handler's start (its `start`)
+//                   spanMs           a repeated field's wall-clock span, its
+//                                    first call's start to its last call's
+//                                    end (its `span`), where ms adds the
+//                                    calls up
 //                   requestStartMs,  a browser row's request and response
 //                   responseStartMs  starts, in ms from the request's start
 //                 Every number is finite and at least 0.
@@ -41,6 +45,7 @@ export interface Measurement {
   calls?: number;
   slowestMs?: number;
   atMs?: number;
+  spanMs?: number;
   requestStartMs?: number;
   responseStartMs?: number;
 }
@@ -55,7 +60,14 @@ export interface Results {
 }
 
 /** The optional numbers a row may carry, in the order they're written. */
-const NUMBERS = ['calls', 'slowestMs', 'atMs', 'requestStartMs', 'responseStartMs'] as const;
+const NUMBERS = [
+  'calls',
+  'slowestMs',
+  'atMs',
+  'spanMs',
+  'requestStartMs',
+  'responseStartMs',
+] as const;
 
 const amount = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0;

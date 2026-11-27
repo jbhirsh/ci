@@ -12,8 +12,13 @@
 //                ("games"); `path` the exact path, with no query string;
 //                `method` (any when absent) and `operation`, the GraphQL
 //                operation name (from the query string or the JSON body),
-//                narrow it. A listed request the page doesn't make, or
-//                answers with no `Server-Timing`, fails the probe.
+//                narrow it. Only a request a page `expect`s is waited for
+//                and timed: one it doesn't make within `timeout`, or
+//                answers with no `Server-Timing` entry with a `dur`, fails
+//                the probe. A request listed here but expected by no page
+//                is never timed: it only gives the cold note its name when
+//                its response carries the cold flag, and fails the probe
+//                when it's a write that's aborted (`reads` below).
 //   reads        non-GET requests that only read, sent in both
 //                environments: { method, path, operation }. Every other
 //                non-GET, non-HEAD request to the deployment is aborted
