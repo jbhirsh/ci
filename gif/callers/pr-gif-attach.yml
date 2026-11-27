@@ -1,7 +1,7 @@
 # The caller every app copies to .github/workflows/pr-gif-attach.yml
 # (ci#92). `workflows:` names the workflow whose pull_request run records
 # ("PR GIFs", pr-gif.yml; sift: its CI, "CI", with `actions: write` on the
-# job). lint/actions.mjs checks every app's copy (gif-callers.mjs).
+# job). lint/actions.ts checks every app's copy (gif-callers.ts).
 name: PR GIFs attach
 
 # Attaches the GIFs a PR's PR GIFs run (pr-gif.yml, on pull_request)

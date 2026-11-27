@@ -2,7 +2,7 @@
 # any of them (they call these tools at @main). So a PR here has to pass two
 # gates before it merges:
 #   - Check: this repo's own commit messages (commits/, as the apps run
-#     it), lint (with lint/actions.mjs over every action.yml, which
+#     it), lint (with lint/actions.ts over every action.yml, which
 #     actionlint never reads), formatting, types, tests (80% lines per
 #     file) and actionlint over its workflows.
 #   - Against <app>: the app's calls into this repo checked against what
@@ -141,4 +141,4 @@ jobs:
         working-directory: ci
       - name: The app's calls into this repo fit what they call
         if: ${{ !cancelled() }}
-        run: node ci/lint/actions.mjs --app app
+        run: node ci/lint/actions.ts --app app

@@ -1,5 +1,5 @@
 // Rules for an app's callers of jbhirsh/ci's PR GIF workflows (ci#92), run by
-// lint/actions.mjs on every workflow of an app ("Against <app>") whose job
+// lint/actions.ts on every workflow of an app ("Against <app>") whose job
 // uses `pr-gif.yml` or `pr-gif-attach.yml`, found by what it `uses`, never by
 // its file name. gif/callers/ holds the shape every app's copy takes (the
 // sync keeps the copies in step, sync/manifest.json, with sift's and fog's

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { describeWorkflow } from '../autofix/check-triggers.ts';
-import { lintGifCallers } from '../lint/gif-callers.mjs';
+import { lintGifCallers } from '../lint/gif-callers.ts';
 import { APPS, CI_ROOT, loadManifest } from './manifest.ts';
 import type { Entry } from './manifest.ts';
 
