@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { lintGifCallers } from './gif-callers.mjs';
+import { lintGifCallers } from './gif-callers.ts';
 
 /** @param {string} name */
 const canonical = (name) =>

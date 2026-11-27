@@ -3,8 +3,8 @@
 # caller, which a PR can't change, and in a run of its own, so the token
 # that may attach (BOT_PR_TOKEN) is never in a run holding the PR's code.
 # An app calls it from a pr-gif-attach.yml of its own, copied from
-# gif/callers/pr-gif-attach.yml (lint/actions.mjs holds every copy to the
-# rules in lint/gif-callers.mjs: ci#92), woken by the
+# gif/callers/pr-gif-attach.yml (lint/actions.ts holds every copy to the
+# rules in lint/gif-callers.ts: ci#92), woken by the
 # workflow whose pull_request run records: "PR GIFs" (pr-gif.yml) for a web
 # app, its CI ("CI") for an app whose CI records videos (sift):
 #

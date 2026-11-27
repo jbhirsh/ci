@@ -1,8 +1,8 @@
 # A PR's before/after GIFs, recorded in Actions and attached to the PR as
 # GitHub attachments (github.com/user-attachments/assets/…), so nothing goes
 # in git and no pictures branch is needed (ci#33). An app calls it from a
-# pr-gif.yml of its own, copied from gif/callers/pr-gif.yml (lint/actions.mjs
-# holds every copy to the rules in lint/gif-callers.mjs: ci#92): on each push
+# pr-gif.yml of its own, copied from gif/callers/pr-gif.yml (lint/actions.ts
+# holds every copy to the rules in lint/gif-callers.ts: ci#92): on each push
 # to a PR, to record the GIF scenarios the PR adds or changes (ci#49), and by hand (or through the Actions API,
 # as a Claude session can) for any scenario, side by side or after only:
 #

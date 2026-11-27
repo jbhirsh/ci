@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { actionPaths, scriptsIn } from './actions.mjs';
+import { actionPaths, scriptsIn } from './actions.ts';
 
 describe('actionPaths', () => {
   it('never throws, and each path it finds is written in the text', () => {

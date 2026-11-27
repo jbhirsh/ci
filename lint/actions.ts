@@ -4,8 +4,8 @@
 // action.yml, the unit tests run the scripts but not the YAML that wires
 // them, and nothing runs an action until it's on main.
 //
-//   node lint/actions.mjs              this repo's action.yml files and workflows
-//   node lint/actions.mjs --app <dir>  also every call an app's workflows make
+//   node lint/actions.ts              this repo's action.yml files and workflows
+//   node lint/actions.ts --app <dir>  also every call an app's workflows make
 //                                      into this repo (CI's "Against <app>")
 //
 // An action must be composite, every `run` step must say its `shell`, and no
@@ -19,7 +19,7 @@
 // reference must name an action or workflow here. A caller may pass only
 // inputs (and, to a workflow, secrets) the target declares, and must pass
 // every required one that has no default. An app's calls of the PR GIF
-// workflows also meet lint/gif-callers.mjs's rules.
+// workflows also meet lint/gif-callers.ts's rules.
 //
 // Every path into this repo a step names must be here, so a renamed or
 // moved script fails the PR that moves it rather than every app's job after
@@ -43,7 +43,7 @@ import { existsSync, globSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parse } from 'yaml';
-import { lintGifCallers } from './gif-callers.mjs';
+import { lintGifCallers } from './gif-callers.ts';
 
 /** @typedef {Record<string, unknown>} Doc */
 /** @typedef {{ inputs: Map<string, boolean>, secrets: Map<string, boolean> | null }} Target */

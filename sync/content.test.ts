@@ -1,8 +1,8 @@
 // The workflows the sync writes into each app, linted here, in this repo's
-// CI, rather than by the sync as it runs: lint/actions.mjs reads YAML, and the
+// CI, rather than by the sync as it runs: lint/actions.ts reads YAML, and the
 // sync imports no package, so its jobs install none. The sync runs only from
 // a commit whose CI passed (sync.ts's check), so a synced workflow that
-// fails here never reaches an app. The Against jobs' `lint/actions.mjs --app`
+// fails here never reaches an app. The Against jobs' `lint/actions.ts --app`
 // still lints each app's copies as they stand.
 
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -11,7 +11,7 @@ import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { lintWorkflow, targetsIn } from '../lint/actions.mjs';
+import { lintWorkflow, targetsIn } from '../lint/actions.ts';
 import { writeFiles } from '../review/testApp.ts';
 import { APPS, CI_ROOT, loadManifest, resolve } from './manifest.ts';
 
@@ -22,7 +22,7 @@ import { APPS, CI_ROOT, loadManifest, resolve } from './manifest.ts';
 const OWN_WORKFLOWS = { sift: ['CI'] } as Record<string, string[]>;
 
 /**
- * What lint/actions.mjs finds wrong with the workflows an app would hold.
+ * What lint/actions.ts finds wrong with the workflows an app would hold.
  */
 function lintSynced(ciRoot: string, app: string) {
   const docs = resolve(loadManifest(ciRoot), app)

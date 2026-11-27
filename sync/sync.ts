@@ -153,7 +153,7 @@ function shaOf(value: string | undefined, name: string) {
 /**
  * What is wrong with the files the sync would write, before any is written:
  * the template's shape (structure.ts). The workflows it writes are linted
- * by this repo's CI instead (sync/content.test.ts, with lint/actions.mjs),
+ * by this repo's CI instead (sync/content.test.ts, with lint/actions.ts),
  * which must have passed on the commit before the sync runs: that lint reads
  * YAML, and the sync imports no package, so its jobs install none.
  */

@@ -1,6 +1,6 @@
 # The caller a web app copies to .github/workflows/pr-gif.yml (ci#92); a
-# comment for each app-specific line says what to change. lint/actions.mjs
-# holds every app's copy to its rules (gif-callers.mjs), so a copy that puts
+# comment for each app-specific line says what to change. lint/actions.ts
+# holds every app's copy to its rules (gif-callers.ts), so a copy that puts
 # the upload token in a run of the PR's code, or wakes nothing, fails this
 # repo's "Against <app>" job. sift records in its CI instead: its copy is the
 # dispatch half only (`workflow_dispatch`, no `pull_request`), with

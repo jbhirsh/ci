@@ -25,7 +25,7 @@ import {
   scriptsIn,
   targetOf,
   treeAt,
-} from './actions.mjs';
+} from './actions.ts';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const always = () => true;
@@ -285,7 +285,7 @@ describe('scriptsIn', () => {
       '# node old/gone.mjs, only a comment',
       'node pins/check.mjs',
       'tests=$(node --no-warnings ci/lib/selftests.mjs) || exit 1',
-      'node --import ./hook.mjs "ci/lint/actions.mjs" --app app',
+      'node --import ./hook.mjs "ci/lint/actions.ts" --app app',
       'node "$test" "$GITHUB_WORKSPACE/app"',
       'node -e "console.log(1)"',
       'node --version',
@@ -298,7 +298,7 @@ describe('scriptsIn', () => {
       'pins/check.mjs',
       'ci/lib/selftests.mjs',
       './hook.mjs',
-      'ci/lint/actions.mjs',
+      'ci/lint/actions.ts',
       'ci/*/selftest.{mjs,ts}',
       'check.mjs',
     ]);
@@ -377,7 +377,7 @@ describe("lintAction's paths", () => {
 describe('lintScripts', () => {
   const tree = treeOf([
     'pins/check.mjs',
-    'lint/actions.mjs',
+    'lint/actions.ts',
     'a/selftest.mjs',
     'commits/action.yml',
     'sync/prepare/action.yml',
@@ -400,7 +400,7 @@ describe('lintScripts', () => {
               checkout(),
               { uses: './commits' },
               { run: 'node pins/check.mjs' },
-              { run: 'node actions.mjs', 'working-directory': 'lint' },
+              { run: 'node actions.ts', 'working-directory': 'lint' },
             ],
           },
           nested: {
@@ -409,7 +409,7 @@ describe('lintScripts', () => {
               checkout({ path: 'ci' }),
               checkout({ repository: 'jbhirsh/${{ matrix.app }}', path: 'app' }),
               { uses: './ci/sync/prepare' },
-              { run: 'node lint/actions.mjs --app ../app' },
+              { run: 'node lint/actions.ts --app ../app' },
               { run: 'for t in */selftest.mjs; do node "$t"; done' },
               { run: 'node "$GITHUB_WORKSPACE/ci/pins/check.mjs"', 'working-directory': 'app' },
               {
@@ -451,7 +451,7 @@ describe('lintScripts', () => {
   it('leaves a path after a cd, or from an absolute working directory, unchecked', () => {
     const steps = [
       checkout(),
-      { run: 'cd lint && node actions.mjs' },
+      { run: 'cd lint && node actions.ts' },
       { run: 'node gone.mjs', 'working-directory': '/tmp' },
     ];
     expect(lint({ on: 'push', jobs: { a: { steps } } })).toEqual([]);
@@ -488,7 +488,7 @@ describe('lintScripts', () => {
 describe('treeAt', () => {
   it('reads files and globs from a checkout, never node_modules', () => {
     const tree = treeAt(root);
-    expect(tree.exists('lint/actions.mjs')).toBe(true);
+    expect(tree.exists('lint/actions.ts')).toBe(true);
     expect(tree.exists('lint/gone.mjs')).toBe(false);
     expect(tree.glob('*/selftest.{mjs,ts}')).toContain('sync/selftest.ts');
     expect(tree.glob('**/node_modules/**/*.mjs')).toEqual([]);
