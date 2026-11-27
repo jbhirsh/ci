@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EXCLUDED_RULES, main, missingPaths, semgrepArgs, settings } from './scan.mjs';
-import { cli, selftest } from './selftest.mjs';
+import { EXCLUDED_RULES, main, missingPaths, semgrepArgs, settings } from './scan.ts';
+import { cli, selftest } from './selftest.ts';
 
 function app(/** @type {unknown} */ semgrep) {
   const root = mkdtempSync(path.join(tmpdir(), 'semgrep-'));

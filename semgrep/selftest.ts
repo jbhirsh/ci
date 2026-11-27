@@ -1,5 +1,5 @@
 // Self-test of the Semgrep gate against an app's checkout:
-// `node semgrep/selftest.mjs <app dir>`. Checks the app's `semgrep`
+// `node semgrep/selftest.ts <app dir>`. Checks the app's `semgrep`
 // settings parse and name paths that exist, and prints the command the gate
 // would run. Semgrep itself isn't run: it's a Python tool the action
 // installs, and its registry rules change from week to week.
@@ -7,7 +7,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
-import { missingPaths, semgrepArgs, settings } from './scan.mjs';
+import { missingPaths, semgrepArgs, settings } from './scan.ts';
 
 /**
  * @param {string} root
