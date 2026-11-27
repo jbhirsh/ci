@@ -294,6 +294,20 @@ describe('parseTable, the details blocks', () => {
     const t = parseTable(`${block(A)}\n\nnotes (current)\n- x`, REPO);
     expect(t.rest).toEqual([`notes (current${Z})`, '- x']);
   });
+
+  it('reads a 64 KB hostile summary line in linear time', () => {
+    // Spaces after `· ` and text after `</summary>`: the one pattern this replaced was cubic on it,
+    // about 2 s at 2 KB and 17 s at 4 KB, so hours here, past the test timeout, which only ends a
+    // hang (there is no clock to compare with). The scan takes milliseconds.
+    const spaces = ' '.repeat(65_000);
+    const hostile = `<details><summary>${ahref(A)} · ${spaces}</summary>x\n</details>`;
+    expect(parseTable(hostile, REPO).rows).toEqual([]);
+    const closed = parseTable(
+      `<details><summary>${ahref(A)} · ${spaces}a${spaces}</summary>`,
+      REPO,
+    );
+    expect(closed.rows.map((r) => r.note)).toEqual(['a']);
+  });
 });
 
 describe('parseTable, the shapes of earlier PRs', () => {
