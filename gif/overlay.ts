@@ -36,6 +36,7 @@ export const LAYER_ID = 'pr-gif-pointer';
 export const OVERLAY_SCRIPT = `
 (() => {
 const keyLabel = ${keyLabel.toString()};
+const ARROW = 'M4 2 L4 20 L9 15.5 L12.5 22.5 L15.5 21 L12 14 L19 14 Z';
 const start = () => {
   if (document.getElementById('${LAYER_ID}')) return;
   window.__prGifMoves = [];
@@ -45,8 +46,11 @@ const start = () => {
   layer.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:none;overflow:hidden';
   const arrow = document.createElement('div');
   arrow.dataset.prGif = 'arrow';
-  arrow.innerHTML = '<svg width="26" height="26" viewBox="0 0 24 24"><path d="M4 2 L4 20 L9 15.5 L12.5 22.5 L15.5 21 L12 14 L19 14 Z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
-  arrow.style.cssText = 'position:absolute;left:-60px;top:-60px;margin:-3px 0 0 -5px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))';
+  // Its shadow is a path of the SVG's own, never a CSS filter: WebKit's
+  // screencast sends only what a repaint changed, and a filtered element
+  // moving leaves its old paint in every frame after (a trail of arrows).
+  arrow.innerHTML = '<svg width="26" height="26" viewBox="0 0 24 24" overflow="visible"><path d="' + ARROW + '" transform="translate(0 1)" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="3" stroke-linejoin="round"/><path d="' + ARROW + '" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+  arrow.style.cssText = 'position:absolute;left:-60px;top:-60px;margin:-3px 0 0 -5px';
   const ring = document.createElement('div');
   ring.dataset.prGif = 'ring';
   ring.style.cssText = 'position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;box-sizing:border-box;border-radius:50%;border:3px solid #e11d48;background:rgba(225,29,72,.18);opacity:0;transform:scale(.4)';
