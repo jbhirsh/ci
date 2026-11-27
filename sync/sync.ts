@@ -564,11 +564,14 @@ function tokenEnv(token: string): Record<string, string> {
   };
 }
 
+/** What a failed command printed to stderr, or '' when it printed nothing. */
+const stderrOf = (error: unknown) => String((error as { stderr?: unknown })?.stderr ?? '');
+
 /**
  * The text of a failed command, for matching what git said.
  */
 const said = (error: unknown) =>
-  `${error instanceof Error ? error.message : String(error)}\n${String((error as { stderr?: unknown })?.stderr ?? '')}`;
+  `${error instanceof Error ? error.message : String(error)}\n${stderrOf(error)}`;
 
 /**
  * The refusals GitHub gives when a PR could merge now, so auto-merge has
@@ -778,7 +781,12 @@ function build({
       { env: tokenEnv(token) },
     );
   } catch (error) {
-    const text = said(error);
+    // What git printed, never the error's message: that starts with the
+    // whole command line, whose two SHAs hold "403" about one push in 55.
+    // Git's stderr names the pushed SHA too (" ! [rejected] <sha> -> …"), so
+    // a refusal is matched in git's own words for it: "Permission to … denied",
+    // "The requested URL returned error: 403", "Authentication failed".
+    const text = stderrOf(error);
     if (/refusing to allow .*workflow/i.test(text)) {
       throw new Error(
         `${SECRET} lacks the Workflows permission on jbhirsh/${app}, which a push of a ` +
@@ -786,7 +794,9 @@ function build({
         { cause: error },
       );
     }
-    if (/denied|403|Authentication failed|could not read Username/i.test(text)) {
+    if (
+      /\bdenied\b|returned error: 403\b|Authentication failed|could not read Username/i.test(text)
+    ) {
       throw new Error(
         `${SECRET} can't push to jbhirsh/${app}: give the token ${TOKEN_NEEDS} on it. Nothing was pushed.`,
         { cause: error },
