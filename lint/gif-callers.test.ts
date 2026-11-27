@@ -250,3 +250,27 @@ describe('lintGifCallers, for any workflow', () => {
     );
   });
 });
+
+describe("this repo's own callers", () => {
+  const own = (file: string) =>
+    parse(readFileSync(new URL(`../.github/workflows/${file}`, import.meta.url), 'utf8')) as Record<
+      string,
+      unknown
+    >;
+
+  // gifs.yml and gifs-attach.yml are gif/callers/'s copies (ci#176): only
+  // their header comments differ, which parsing drops.
+  it.each([
+    ['gifs.yml', 'pr-gif'],
+    ['gifs-attach.yml', 'pr-gif-attach'],
+  ])('%s has the name, triggers and jobs of gif/callers/%s.yml', (file, caller) => {
+    const { name, on, jobs, permissions } = own(file);
+    const template = canonical(caller) as Record<string, unknown>;
+    expect({ name, on, jobs, permissions }).toEqual({
+      name: template.name,
+      on: template.on,
+      jobs: template.jobs,
+      permissions: template.permissions,
+    });
+  });
+});
