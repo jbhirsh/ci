@@ -14,7 +14,7 @@ import {
   rangeNote,
   renderTable,
   withPair,
-} from './revisions.mjs';
+} from './revisions.ts';
 
 const REPO = 'o/r';
 const A = 'a'.repeat(40);
@@ -83,7 +83,7 @@ const block = (
     '',
     '</details>',
   ].join('\n');
-/** @param {Partial<import('./revisions.mjs').Row> & { sha: string, rev: number }} r */
+/** @param {Partial<import('./revisions.ts').Row> & { sha: string, rev: number }} r */
 const revision = (r) => ({
   current: false,
   prev: null,

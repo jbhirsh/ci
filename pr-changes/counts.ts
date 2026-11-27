@@ -3,11 +3,11 @@
 // colour, shows a diff block's colour only in a block, and the app shows
 // math (`$\color…$`) as raw source, so what survives everywhere is an image
 // of the coloured numbers: transparent background, +N in green and −N in
-// red, the digits drawn as shapes (glyphs.mjs), since an image can't load a
+// red, the digits drawn as shapes (glyphs.ts), since an image can't load a
 // font. Two sizes of each pair: 14px for screens 768px wide and up, and 12px
 // lifted 1px everywhere else (the app included), shown with one `<picture>`;
 // the lift is in the image, as GitHub strips `style`. The alt text is the
-// plain `+81 −37`. Pure: numbers in, text out; run.mjs attaches the files.
+// plain `+81 −37`. Pure: numbers in, text out; run.ts attaches the files.
 //
 // Contrast is about 4.3:1 on GitHub's light and dark themes (3.4:1 dark
 // dimmed); the + and − carry the meaning without the colour.
@@ -16,12 +16,12 @@
 // reuse an image instead of attaching it again: a hidden comment between
 // `<!-- pr-changes:index -->` markers mapping each image's content hash to
 // its link. The description is the PR author's to edit, so an index entry is
-// only a claim: run.mjs fetches the link and compares the bytes' hash before
+// only a claim: run.ts fetches the link and compares the bytes' hash before
 // trusting it, and every link must have GitHub's attachment form (isLink).
 
 import { createHash } from 'node:crypto';
-import { ownBlock } from './changes.mjs';
-import { GLYPHS, RISE, SPACE, UNITS } from './glyphs.mjs';
+import { ownBlock } from './changes.ts';
+import { GLYPHS, RISE, SPACE, UNITS } from './glyphs.ts';
 
 /** The colours, as the owner picked them. */
 export const GREEN = '#3d874d';

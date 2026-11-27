@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { DIP, GLYPHS, RISE, SPACE, UNITS } from './glyphs.mjs';
+import { DIP, GLYPHS, RISE, SPACE, UNITS } from './glyphs.ts';
 
 describe('the glyph table', () => {
   it('holds exactly the twelve characters of a count', () => {

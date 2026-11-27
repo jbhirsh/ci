@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ghApi } from '../lib/comment.mjs';
-import { hashOf, images, indexText, readIndex } from './counts.mjs';
-import { putBlock } from './changes.mjs';
+import { hashOf, images, indexText, readIndex } from './counts.ts';
+import { putBlock } from './changes.ts';
 import {
   changes,
   fetchVerify,
@@ -11,7 +11,7 @@ import {
   MAX_PAIRS,
   pairsAt,
   uploadAllowed,
-} from './run.mjs';
+} from './run.ts';
 
 // main reaches GitHub through ghApi (the real `gh`): the main test stubs it.
 vi.mock('../lib/comment.mjs', async (importOriginal) => ({
@@ -173,7 +173,7 @@ function fakeIo({
     subject: `Change ${i + 1}`,
     files: fs.map(([path, added, removed]) => ({ path, added, removed })),
   }));
-  /** @type {import('./run.mjs').Io} */
+  /** @type {import('./run.ts').Io} */
   const io = {
     body: () => state.body,
     write: (b) => {

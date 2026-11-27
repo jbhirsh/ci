@@ -1,6 +1,6 @@
 name: PR changes
 description: >-
-  Fills a PR description's change slots from its commits (changes.mjs's
+  Fills a PR description's change slots from its commits (changes.ts's
   header says the rules): under Changes the author places an empty
   `<!-- pr-changes:change:N -->` pair for each change, and the Nth commit by
   someone other than a bot (or a merge) goes in it: a title line (the
@@ -8,7 +8,7 @@ description: >-
   its files, each linked to its diff. The author writes only why, in
   bullets under the pair; there is no heading to write. The line
   counts are small coloured pictures, so they read in the GitHub app as well
-  as on the web (counts.mjs says what and why); run.mjs's header says how
+  as on the web (counts.ts says what and why); run.ts's header says how
   they are attached. When the slots and the commits differ in number it writes
   a warning line into every slot (and a workflow warning), so no stale commit
   stays.
@@ -65,14 +65,14 @@ description: >-
   token once, so the fill is not lost (the check may then stay red until the
   description is edited).
 
-  It also keeps the Revisions table (`revisions`, below; revisions.mjs says
+  It also keeps the Revisions table (`revisions`, below; revisions.ts says
   the rules): once a push or a force-push has moved the PR's head, it adds a
   row for the new head inside the description's `<!-- pr-changes:revisions -->`
   pair (with `## Revisions` and row 1 for the head the PR opened at, the first
   time); a PR with one head gets nothing. A description with no revisions marker
   at all (rewritten without the template's pair) gets the empty pair back first,
   when a push has moved the head. The first write of a table lists the heads
-  before it from the PR's timeline (read with the Actions token; revisions.mjs
+  before it from the PR's timeline (read with the Actions token; revisions.ts
   says what that gives, and what it does not). The row is written after the change
   slots, with the person's token (`token`), because an edit by the Actions
   token starts no workflow: the description check, which reads the current
@@ -148,7 +148,7 @@ runs:
         EVENT_ACTION: ${{ github.event.action }}
         SENDER: ${{ github.event.sender.login }}
         NUMBER: ${{ inputs.number }}
-      run: node "$GITHUB_ACTION_PATH/run.mjs"
+      run: node "$GITHUB_ACTION_PATH/run.ts"
 
     # After the slots, so the one edit event the description check sees carries
     # the finished description. `!cancelled()`: a failed fill doesn't skip it.
@@ -160,4 +160,4 @@ runs:
         UPLOAD_TOKEN: ${{ inputs.token }}
         BEFORE: ${{ github.event.before }}
         NUMBER: ${{ inputs.number }}
-      run: node "$GITHUB_ACTION_PATH/revisions-run.mjs"
+      run: node "$GITHUB_ACTION_PATH/revisions-run.ts"

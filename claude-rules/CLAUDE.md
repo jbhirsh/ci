@@ -98,7 +98,7 @@ Bug fixes and chores skip the ticket and the plan. Every PR still gets the revie
   `pr-gif`) and the `pr-changes:index` block: the tools fill only inside them, and a
   description rewritten without them gets no table.
 - **After every push, wait for `PR changes`, then write that push's Revisions rows.** A
-  push adds a revision to the description's Revisions block (`pr-changes/revisions.mjs`'s
+  push adds a revision to the description's Revisions block (`pr-changes/revisions.ts`'s
   header has the grammar).
   - Wait for the PR's `PR changes` run to end, then fill the current revision's table: one
     row for each change, in plain words and never a commit's subject. A rebase is a change

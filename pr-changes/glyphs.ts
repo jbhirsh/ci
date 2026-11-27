@@ -2,7 +2,7 @@
 // Sans, GitHub's typeface: an SVG shown as an image can't load a font, and
 // text left in it would take whatever the viewer's system has, so the shapes
 // are drawn here and the font isn't needed. Constants, made once (ci#100):
-// `counts.mjs` scales them, and the test holds a checksum of the table, so an
+// `counts.ts` scales them, and the test holds a checksum of the table, so an
 // edit is deliberate.
 //
 // Each `d` is a path in the font's own units (1000 to the em), y down, the

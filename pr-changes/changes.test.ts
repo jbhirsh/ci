@@ -9,7 +9,7 @@ import {
   placed,
   putBlock,
   renderChange,
-} from './changes.mjs';
+} from './changes.ts';
 
 const WHERE = { repo: 'jbhirsh/app', number: 7, n: 1 };
 const SHA = 'abcdef0123456789abcdef0123456789abcdef01';
@@ -232,7 +232,7 @@ describe('chooseLevel', () => {
   /**
    * How much text to put in the description so that `level` just fits.
    *
-   * @param {import('./changes.mjs').Level} level
+   * @param {import('./changes.ts').Level} level
    */
   const padFor = (level) =>
     BUDGET - renderChange(many(150), { ...WHERE, level, pair: stand }).length - slot(1).length - 2;

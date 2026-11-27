@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { writeFiles } from '../review/testApp.ts';
-import { cli, selftest } from './selftest.mjs';
+import { cli, selftest } from './selftest.ts';
 
 const master = readFileSync(
   new URL('../.github/pull_request_template.md', import.meta.url),
@@ -40,7 +40,7 @@ describe('selftest', () => {
       bodyProblems: (/** @type {string} */ body, /** @type {string} */ sha) => check(body, sha),
     }));
     try {
-      const fresh = (await import('./selftest.mjs')).selftest;
+      const fresh = (await import('./selftest.ts')).selftest;
       // A check that accepts the placeholder.
       expect(() => fresh(app({ [TEMPLATE]: master }))).toThrow(
         /ask only for the new revision's row/,
