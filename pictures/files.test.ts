@@ -13,10 +13,8 @@ const GIF89 = Buffer.from('GIF89a\x01\x00\x01\x00', 'latin1');
 
 /**
  * A folder holding these files.
- *
- * @param {Record<string, Buffer | string>} files
  */
-function folder(files) {
+function folder(files: Record<string, Buffer | string>) {
   const dir = mkdtempSync(path.join(tmpdir(), 'pictures-files-'));
   for (const [name, bytes] of Object.entries(files)) {
     mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
@@ -25,8 +23,7 @@ function folder(files) {
   return dir;
 }
 
-/** @param {string} p */
-const named = (p) => ({ path: p, caption: p });
+const named = (p: string) => ({ path: p, caption: p });
 
 describe('checkFiles', () => {
   it('passes a PNG, a JPEG and each GIF, whatever the case of their extension', () => {

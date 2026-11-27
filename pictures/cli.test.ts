@@ -4,16 +4,15 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ATTACH_LIMIT } from '../lib/attach.mjs';
 import { main } from './cli.ts';
+import type { Command } from '../lib/gh.mjs';
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 const ASSET = 'https://github.com/user-attachments/assets/';
 
 /**
  * The artifact's folder, holding these PNGs.
- *
- * @param {readonly string[]} names
  */
-function artifact(names) {
+function artifact(names: readonly string[]) {
   const dir = mkdtempSync(path.join(tmpdir(), 'pictures-cli-'));
   for (const name of names) {
     mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
@@ -26,24 +25,22 @@ function artifact(names) {
  * A fake gh over a repository's issues and PRs (their descriptions), which
  * `--attach` rewrites as gh's manual says: each local reference to an
  * attached file becomes its URL. Records every call.
- *
- * @param {Record<string, { pr: boolean; body: string }>} posts
- * @param {{ keepLocal?: boolean; failAttach?: boolean; extraLink?: boolean }} [opts]
  */
-function fakeGh(posts, opts = {}) {
-  /** @type {string[][]} */
-  const calls = [];
+function fakeGh(
+  posts: Record<string, { pr: boolean; body: string }>,
+  opts: { keepLocal?: boolean; failAttach?: boolean; extraLink?: boolean } = {},
+) {
+  const calls: string[][] = [];
   let uploads = 0;
-  /** @type {import('../lib/gh.mjs').Command} */
-  const gh = (args) => {
+  const gh: Command = (args) => {
     calls.push(args);
-    const ok = (/** @type {unknown} */ value) => ({
+    const ok = (value: unknown) => ({
       status: 0,
       stdout: value === undefined ? '' : `${JSON.stringify(value)}\n`,
       stderr: '',
     });
     if (args[0] === 'api') {
-      const n = /** @type {string} */ (args[1].split('/').at(-1));
+      const n = args[1].split('/').at(-1) as string;
       const post = posts[n];
       if (!post) throw new Error('gh api failed: HTTP 404: Not Found');
       return ok({
@@ -82,24 +79,18 @@ const env = {
 
 /**
  * Runs main with every link answering at once.
- *
- * @param {Record<string, string | undefined>} values
- * @param {string} cwd
- * @param {ReturnType<typeof fakeGh>} fake
  */
-async function run(values, cwd, fake) {
-  /** @type {string[]} */
-  const logs = [];
-  /** @type {string[]} */
-  const fetched = [];
-  const fetch = /** @type {typeof globalThis.fetch} */ (
-    /** @type {unknown} */ (
-      async (/** @type {string} */ link) => {
-        fetched.push(link);
-        return new Response('PNG', { status: 200 });
-      }
-    )
-  );
+async function run(
+  values: Record<string, string | undefined>,
+  cwd: string,
+  fake: ReturnType<typeof fakeGh>,
+) {
+  const logs: string[] = [];
+  const fetched: string[] = [];
+  const fetch = (async (link: string) => {
+    fetched.push(link);
+    return new Response('PNG', { status: 200 });
+  }) as unknown as typeof globalThis.fetch;
   const url = await main({
     env: values,
     cwd,
@@ -111,8 +102,7 @@ async function run(values, cwd, fake) {
   return { url, logs, fetched };
 }
 
-/** @param {string[][]} calls */
-const verbs = (calls) =>
+const verbs = (calls: string[][]) =>
   calls.map((c) => (c[0] === 'api' ? `api ${c[1]}` : c.slice(0, 3).join(' ')));
 
 describe('main', () => {
@@ -240,8 +230,7 @@ describe('main', () => {
     // A host whose block went missing meanwhile links none.
     const gone = posts();
     const fake = fakeGh(gone);
-    /** @type {import('../lib/gh.mjs').Command} */
-    const gh = (args, options) => {
+    const gh: Command = (args, options) => {
       const out = fake.gh(args, options);
       if (args[1] === 'edit') gone[240].body = 'Someone else’s edit.';
       return out;
@@ -256,8 +245,7 @@ describe('main', () => {
     // Another block, left by a run that failed, still references light.png locally.
     const leftover = '<!-- pictures:old -->\n![light.png](./light.png)\n<!-- /pictures:old -->';
     const posts = { 240: { pr: true, body: leftover }, 222: { pr: false, body: '' } };
-    /** @type {import('../lib/gh.mjs').Command} */
-    const gh = (args, options) => {
+    const gh: Command = (args, options) => {
       const fake = fakeGh(posts);
       if (args[1] !== 'edit' || !args.includes('--attach')) return fake.gh(args, options);
       // gh rewrites the references in this run's block, past the leftover.

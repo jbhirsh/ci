@@ -8,58 +8,49 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { ARTIFACT } from './branch.ts';
 
-/**
- * @typedef {object} Step
- * @property {string} [id]
- * @property {string} [name]
- * @property {string} [uses]
- * @property {string} [run]
- * @property {string} [shell]
- * @property {string} [if]
- * @property {Record<string, string>} [with]
- * @property {Record<string, string>} [env]
- */
+type Step = {
+  id?: string;
+  name?: string;
+  uses?: string;
+  run?: string;
+  shell?: string;
+  if?: string;
+  with?: Record<string, string>;
+  env?: Record<string, string>;
+};
 
-/**
- * @typedef {object} Job
- * @property {string} [needs]
- * @property {Record<string, string>} [permissions]
- * @property {Step[]} steps
- */
+type Job = {
+  needs?: string;
+  permissions?: Record<string, string>;
+  steps: Step[];
+};
 
-/**
- * @typedef {object} Workflow
- * @property {{ workflow_dispatch: { inputs: Record<string, { default?: string }> } }} on
- * @property {Record<string, string>} permissions
- * @property {string} run-name
- * @property {{ group: string; 'cancel-in-progress': boolean }} concurrency
- * @property {Record<string, Job & { concurrency?: { group: string } }>} jobs
- */
+type Workflow = {
+  on: { workflow_dispatch: { inputs: Record<string, { default?: string }> } };
+  permissions: Record<string, string>;
+  'run-name': string;
+  concurrency: { group: string; 'cancel-in-progress': boolean };
+  jobs: Record<string, Job & { concurrency?: { group: string } }>;
+};
 
-/**
- * @typedef {object} Action
- * @property {Record<string, { default?: string }>} inputs
- * @property {{ steps: Step[] }} runs
- */
+type Action = {
+  inputs: Record<string, { default?: string }>;
+  runs: { steps: Step[] };
+};
 
 /**
  * A file's text and parsed YAML.
  *
- * @template T
- * @param {string} file relative to the repo's root
- * @returns {{ text: string; doc: T }}
+ * @param file relative to the repo's root
  */
-function read(file) {
+function read<T>(file: string): { text: string; doc: T } {
   const text = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
   return { text, doc: parse(text) };
 }
 
-/** @type {{ text: string; doc: Workflow }} */
-const workflow = read('.github/workflows/pictures.yml');
-/** @type {{ text: string; doc: Action }} */
-const action = read('pictures/from-branch/action.yml');
-/** @type {{ text: string; doc: Workflow }} */
-const gifAttach = read('.github/workflows/pr-gif-attach.yml');
+const workflow: { text: string; doc: Workflow } = read('.github/workflows/pictures.yml');
+const action: { text: string; doc: Action } = read('pictures/from-branch/action.yml');
+const gifAttach: { text: string; doc: Workflow } = read('.github/workflows/pr-gif-attach.yml');
 const jobs = workflow.doc.jobs;
 const steps = action.doc.runs.steps;
 const HOST = '${{ inputs.host-pr || vars.PICTURES_HOST_PR }}';

@@ -52,9 +52,8 @@ import { ATTACH_MAX_BYTES } from '../lib/attach.mjs';
 import { ghApi, statusOf } from '../lib/comment.mjs';
 import { checkFiles } from './files.ts';
 import { parseFiles, parseInputs, parseRepo } from './inputs.ts';
-
-/** @typedef {import('../lib/comment.mjs').Api} Api */
-/** @typedef {import('./inputs.ts').Picture} Picture */
+import type { Api } from '../lib/comment.mjs';
+import type { Picture } from './inputs.ts';
 
 /** The only branches the route reads and deletes. */
 export const PREFIX = 'pictures/';
@@ -67,10 +66,8 @@ export const ARTIFACT = 'pictures';
 
 /**
  * BRANCH, exactly as given: `pictures/<name>`, or a `pictures: …` refusal.
- *
- * @param {string | undefined} value
  */
-export function parseBranch(value) {
+export function parseBranch(value: string | undefined) {
   const branch = value ?? '';
   const name = branch.startsWith(PREFIX) ? branch.slice(PREFIX.length) : '';
   if (
@@ -92,11 +89,8 @@ export function parseBranch(value) {
  * FILES, as parseFiles reads it, with no segment that starts with `-` (an
  * option, wherever a path is passed on) or `.` (a hidden file, which
  * upload-artifact leaves out).
- *
- * @param {string | undefined} value
- * @returns {Picture[]}
  */
-export function parseNamedFiles(value) {
+export function parseNamedFiles(value: string | undefined): Picture[] {
   const files = parseFiles(value);
   for (const { path: file } of files) {
     if (file.split('/').some((s) => s.startsWith('-') || s.startsWith('.'))) {
@@ -111,10 +105,8 @@ export function parseNamedFiles(value) {
 /**
  * Every input but BRANCH, checked as pictures/attach will check it, before
  * anything is read.
- *
- * @param {Record<string, string | undefined>} env
  */
-export function parseRouteInputs(env) {
+export function parseRouteInputs(env: Record<string, string | undefined>) {
   const host = env.HOST_PR ?? '';
   if (host.trim() === '') {
     throw new Error(
@@ -139,28 +131,22 @@ export function parseRouteInputs(env) {
   return { ...inputs, files };
 }
 
-/**
- * @typedef {object} TreeEntry One entry of a recursive tree.
- * @property {string} path
- * @property {string} mode
- * @property {string} type
- * @property {string} sha
- * @property {number} [size]
- */
+/** One entry of a recursive tree. */
+export type TreeEntry = {
+  path: string;
+  mode: string;
+  type: string;
+  sha: string;
+  size?: number;
+};
 
 /**
  * The branch's tree, read through the API at `refs/heads/<branch>`.
- *
- * @param {Api} api
- * @param {string} repo
- * @param {string} branch
- * @returns {Map<string, TreeEntry>}
  */
-function treeOf(api, repo, branch) {
-  /** @type {{ ref?: string; object?: { type?: string; sha?: string } }} */
-  let ref;
+function treeOf(api: Api, repo: string, branch: string): Map<string, TreeEntry> {
+  let ref: { ref?: string; object?: { type?: string; sha?: string } };
   try {
-    ref = /** @type {typeof ref} */ (api('GET', `repos/${repo}/git/ref/heads/${branch}`));
+    ref = api('GET', `repos/${repo}/git/ref/heads/${branch}`) as typeof ref;
   } catch (error) {
     if (statusOf(error) === 404) {
       throw new Error(`pictures: ${repo} has no branch ${branch}: push it before dispatching`, {
@@ -172,12 +158,13 @@ function treeOf(api, repo, branch) {
   if (ref?.ref !== `refs/heads/${branch}` || ref.object?.type !== 'commit') {
     throw new Error(`pictures: refs/heads/${branch} isn't a branch's commit`);
   }
-  const commit = /** @type {{ tree: { sha: string } }} */ (
-    api('GET', `repos/${repo}/git/commits/${ref.object.sha}`)
-  );
-  const tree = /** @type {{ tree: TreeEntry[]; truncated: boolean }} */ (
-    api('GET', `repos/${repo}/git/trees/${commit.tree.sha}?recursive=1`)
-  );
+  const commit = api('GET', `repos/${repo}/git/commits/${ref.object.sha}`) as {
+    tree: { sha: string };
+  };
+  const tree = api('GET', `repos/${repo}/git/trees/${commit.tree.sha}?recursive=1`) as {
+    tree: TreeEntry[];
+    truncated: boolean;
+  };
   if (tree.truncated) {
     throw new Error(`pictures: ${branch} holds too many files to read: push only the pictures`);
   }
@@ -187,13 +174,22 @@ function treeOf(api, repo, branch) {
 /**
  * Writes the named files from the branch into `dir`, a folder that must not
  * exist yet, then checks them as pictures.
- *
- * @param {{ api: Api; repo: string; branch: string; files: readonly Picture[]; dir: string }} options
  */
-export function readBranch({ api, repo, branch, files, dir }) {
+export function readBranch({
+  api,
+  repo,
+  branch,
+  files,
+  dir,
+}: {
+  api: Api;
+  repo: string;
+  branch: string;
+  files: readonly Picture[];
+  dir: string;
+}) {
   const entries = treeOf(api, repo, branch);
-  /** @type {Array<{ file: string; entry: TreeEntry }>} */
-  const named = [];
+  const named: Array<{ file: string; entry: TreeEntry }> = [];
   for (const { path: file } of files) {
     const entry = entries.get(file);
     if (!entry) throw new Error(`pictures: ${branch} has no ${file}`);
@@ -211,9 +207,10 @@ export function readBranch({ api, repo, branch, files, dir }) {
   }
   mkdirSync(dir);
   for (const { file, entry } of named) {
-    const blob = /** @type {{ content: string; encoding: string }} */ (
-      api('GET', `repos/${repo}/git/blobs/${entry.sha}`)
-    );
+    const blob = api('GET', `repos/${repo}/git/blobs/${entry.sha}`) as {
+      content: string;
+      encoding: string;
+    };
     const bytes = Buffer.from(blob.content, 'base64');
     if (blob.encoding !== 'base64' || bytes.length !== entry.size) {
       throw new Error(`pictures: ${file}'s blob didn't come back whole`);
@@ -229,10 +226,18 @@ export function readBranch({ api, repo, branch, files, dir }) {
  * Deletes the branch; one already gone (a run redone) is no failure. GitHub
  * answers 422 for a delete it refuses too (a ruleset), so only its "Reference
  * does not exist" counts as gone.
- *
- * @param {{ api: Api; repo: string; branch: string; log: (line: string) => void }} options
  */
-export function deleteBranch({ api, repo, branch, log }) {
+export function deleteBranch({
+  api,
+  repo,
+  branch,
+  log,
+}: {
+  api: Api;
+  repo: string;
+  branch: string;
+  log: (line: string) => void;
+}) {
   try {
     api('DELETE', `repos/${repo}/git/refs/heads/${branch}`);
     log(`pictures: deleted ${branch}`);
@@ -245,22 +250,19 @@ export function deleteBranch({ api, repo, branch, log }) {
   }
 }
 
-/**
- * @typedef {object} Context What main is handed, for tests.
- * @property {Record<string, string | undefined>} [env]
- * @property {Api} [api]
- * @property {(name: string, value: string) => void} [output]
- * @property {(line: string) => void} [log]
- * @property {(line: string) => void} [error]
- */
+/** What main is handed, for tests. */
+export type Context = {
+  env?: Record<string, string | undefined>;
+  api?: Api;
+  output?: (name: string, value: string) => void;
+  log?: (line: string) => void;
+  error?: (line: string) => void;
+};
 
 /**
  * The command line; returns its exit code.
- *
- * @param {readonly string[]} argv
- * @param {Context} [context]
  */
-export function main(argv, context = {}) {
+export function main(argv: readonly string[], context: Context = {}) {
   const {
     env = process.env,
     api = ghApi,
@@ -289,7 +291,7 @@ export function main(argv, context = {}) {
       deleteBranch({ api, repo, branch, log });
     } else {
       const { repo, files } = parseRouteInputs(env);
-      readBranch({ api, repo, branch, files, dir: /** @type {string} */ (dir) });
+      readBranch({ api, repo, branch, files, dir: dir as string });
       log(`pictures: ${files.length} picture(s) from ${branch}`);
     }
     return 0;

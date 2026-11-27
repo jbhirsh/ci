@@ -14,24 +14,33 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-/**
- * @typedef {object} Picture One file to attach, as FILES names it.
- * @property {string} path relative to the artifact's folder, with `/`
- * @property {string} caption its header and alt text in the table
- */
+/** One file to attach, as FILES names it. */
+export type Picture = {
+  /** relative to the artifact's folder, with `/` */
+  path: string;
+  /** its header and alt text in the table */
+  caption: string;
+};
 
-/**
- * @typedef {object} Inputs
- * @property {string} repo owner/name
- * @property {string} target the issue's or PR's number the table goes in
- * @property {string} hostPr the PR whose description the files upload to
- * @property {string} runId the run whose artifact holds the files
- * @property {string} artifact
- * @property {Picture[]} files in the order the table shows them
- * @property {string} block the marker's name, in the host's and the target's descriptions
- * @property {number} columns the table's width in pictures
- * @property {number} width each picture's, in pixels
- */
+export type Inputs = {
+  /** owner/name */
+  repo: string;
+  /** the issue's or PR's number the table goes in */
+  target: string;
+  /** the PR whose description the files upload to */
+  hostPr: string;
+  /** the run whose artifact holds the files */
+  runId: string;
+  artifact: string;
+  /** in the order the table shows them */
+  files: Picture[];
+  /** the marker's name, in the host's and the target's descriptions */
+  block: string;
+  /** the table's width in pictures */
+  columns: number;
+  /** each picture's, in pixels */
+  width: number;
+};
 
 const NUMBER = /^[1-9]\d*$/;
 
@@ -40,12 +49,8 @@ const PATH = /^[\w.-]+(?:\/[\w.-]+)*$/;
 
 /**
  * A positive number given as `name`, as a string.
- *
- * @param {string} name
- * @param {string | undefined} value
- * @param {string} what
  */
-function number(name, value, what) {
+function number(name: string, value: string | undefined, what: string) {
   const text = (value ?? '').trim();
   if (!NUMBER.test(text)) throw new Error(`pictures: ${name} is ${what}, not "${value ?? ''}"`);
   return text;
@@ -53,14 +58,14 @@ function number(name, value, what) {
 
 /**
  * A whole number from `min` to `max`, or `fallback` when empty.
- *
- * @param {string} name
- * @param {string | undefined} value
- * @param {number} fallback
- * @param {number} min
- * @param {number} max
  */
-function within(name, value, fallback, min, max) {
+function within(
+  name: string,
+  value: string | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+) {
   const text = (value ?? '').trim();
   if (text === '') return fallback;
   const n = NUMBER.test(text) ? Number(text) : NaN;
@@ -74,10 +79,8 @@ function within(name, value, fallback, min, max) {
  * The block's name, as pr-gif's scenario names are: a word character, then
  * word characters, `.` or `-`, never `--`, which would end the marker's
  * HTML comment.
- *
- * @param {string | undefined} value
  */
-export function parseBlock(value) {
+export function parseBlock(value: string | undefined) {
   const name = (value ?? '').trim();
   if (!/^\w[\w.-]*$/.test(name) || name.includes('--')) {
     throw new Error(
@@ -93,13 +96,9 @@ export function parseBlock(value) {
  * to the artifact's folder and stays in it: no leading `/`, no `..` anywhere,
  * no `.` segment, no NUL, only plain name characters (it goes into a Markdown
  * link, where a space or `)` would end it).
- *
- * @param {string | undefined} value
- * @returns {Picture[]}
  */
-export function parseFiles(value) {
-  /** @type {Picture[]} */
-  const files = [];
+export function parseFiles(value: string | undefined): Picture[] {
+  const files: Picture[] = [];
   for (const line of (value ?? '').split(/\r\n|\r|\n/)) {
     if (line.trim() === '') continue;
     const bar = line.indexOf('|');
@@ -122,10 +121,8 @@ export function parseFiles(value) {
 
 /**
  * REPO: owner/name.
- *
- * @param {string | undefined} value
  */
-export function parseRepo(value) {
+export function parseRepo(value: string | undefined) {
   const repo = (value ?? '').trim();
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
     throw new Error(`pictures: REPO is owner/name, not "${value ?? ''}"`);
@@ -135,11 +132,8 @@ export function parseRepo(value) {
 
 /**
  * Every input, from the environment.
- *
- * @param {Record<string, string | undefined>} env
- * @returns {Inputs}
  */
-export function parseInputs(env) {
+export function parseInputs(env: Record<string, string | undefined>): Inputs {
   const repo = parseRepo(env.REPO);
   const artifact = (env.ARTIFACT ?? '').trim();
   if (!/^\w[\w.-]*$/.test(artifact)) {

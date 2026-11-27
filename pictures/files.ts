@@ -8,8 +8,7 @@
 import { closeSync, openSync, readSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { ATTACH_MAX_BYTES } from '../lib/attach.mjs';
-
-/** @typedef {import('./inputs.ts').Picture} Picture */
+import type { Picture } from './inputs.ts';
 
 /** Each type's extensions and the bytes its files start with. */
 const TYPES = [
@@ -20,11 +19,8 @@ const TYPES = [
 
 /**
  * The file's first `n` bytes (fewer for a shorter file).
- *
- * @param {string} file
- * @param {number} n
  */
-function head(file, n) {
+function head(file: string, n: number) {
   const bytes = Buffer.alloc(n);
   const fd = openSync(file, 'r');
   try {
@@ -38,15 +34,14 @@ function head(file, n) {
  * Throws unless every picture is a PNG, JPEG or GIF file inside `dir`, of at
  * most ATTACH_MAX_BYTES.
  *
- * @param {string} dir the artifact's folder
- * @param {readonly Picture[]} files
+ * @param dir the artifact's folder
+ * @param files
  */
-export function checkFiles(dir, files) {
+export function checkFiles(dir: string, files: readonly Picture[]) {
   const root = realpathSync(dir);
   for (const { path: file } of files) {
     const local = path.join(root, file);
-    /** @type {string} */
-    let real;
+    let real: string;
     try {
       real = realpathSync(local);
     } catch {

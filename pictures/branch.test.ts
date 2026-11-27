@@ -12,29 +12,36 @@ import {
   parseRouteInputs,
   readBranch,
 } from './branch.ts';
+import type { Api } from '../lib/comment.mjs';
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 const REPO = 'jbhirsh/ci';
 const BRANCH = 'pictures/ci-132-revisions';
 
-/**
- * @typedef {object} Entry A file on the fake branch.
- * @property {Buffer} [bytes]
- * @property {string} [mode]
- * @property {string} [type]
- * @property {number} [size] what the tree says, when not the bytes' length
- */
+/** A file on the fake branch. */
+type Entry = {
+  bytes?: Buffer;
+  mode?: string;
+  type?: string;
+  /** what the tree says, when not the bytes' length */
+  size?: number;
+};
 
 /**
  * A fake REST API over one branch's tree and blobs, recording each call.
- *
- * @param {Record<string, Entry>} files
- * @param {{ branch?: string; truncated?: boolean; ref?: unknown; blob?: (sha: string) => unknown; del?: () => unknown }} [options]
  */
-function fakeApi(files, options = {}) {
+function fakeApi(
+  files: Record<string, Entry>,
+  options: {
+    branch?: string;
+    truncated?: boolean;
+    ref?: unknown;
+    blob?: (sha: string) => unknown;
+    del?: () => unknown;
+  } = {},
+) {
   const { branch = BRANCH, truncated = false } = options;
-  /** @type {string[]} */
-  const calls = [];
+  const calls: string[] = [];
   const entries = Object.entries(files).map(([p, e], i) => ({
     path: p,
     mode: e.mode ?? '100644',
@@ -42,8 +49,7 @@ function fakeApi(files, options = {}) {
     sha: `sha${i}`,
     size: e.size ?? e.bytes?.length,
   }));
-  /** @type {import('../lib/comment.mjs').Api} */
-  const api = (method, route) => {
+  const api: Api = (method, route) => {
     calls.push(`${method} ${route}`);
     if (method === 'DELETE') return options.del ? options.del() : null;
     if (route === `repos/${REPO}/git/ref/heads/${branch}`) {
@@ -57,7 +63,7 @@ function fakeApi(files, options = {}) {
     const blob = /^repos\/jbhirsh\/ci\/git\/blobs\/sha(\d+)$/.exec(route);
     if (blob) {
       if (options.blob) return options.blob(`sha${blob[1]}`);
-      const bytes = /** @type {Buffer} */ (Object.values(files)[Number(blob[1])].bytes);
+      const bytes = Object.values(files)[Number(blob[1])].bytes as Buffer;
       return { content: bytes.toString('base64'), encoding: 'base64' };
     }
     throw new Error(`unexpected ${method} ${route}`);
@@ -68,8 +74,7 @@ function fakeApi(files, options = {}) {
 /** A path for a folder that doesn't exist yet. */
 const freshDir = () => path.join(mkdtempSync(path.join(tmpdir(), 'pictures-branch-')), 'out');
 
-/** @param {string} p */
-const named = (p) => ({ path: p, caption: p });
+const named = (p: string) => ({ path: p, caption: p });
 
 describe('parseBranch', () => {
   it('takes pictures/<name> exactly as given', () => {
@@ -217,23 +222,22 @@ describe('readBranch', () => {
 
   /**
    * Runs readBranch on one named file; returns its error and whether any blob was read.
-   *
-   * @param {Record<string, Entry>} files
-   * @param {string} name
-   * @param {Parameters<typeof fakeApi>[1]} [options]
    */
-  function refusal(files, name, options) {
+  function refusal(
+    files: Record<string, Entry>,
+    name: string,
+    options?: Parameters<typeof fakeApi>[1],
+  ) {
     const { api, calls } = fakeApi(files, options);
     const dir = freshDir();
-    /** @type {unknown} */
-    let error;
+    let error: unknown;
     try {
       readBranch({ api, repo: REPO, branch: BRANCH, files: [named(name)], dir });
     } catch (e) {
       error = e;
     }
     expect(error).toBeInstanceOf(Error);
-    const message = /** @type {Error} */ (error).message;
+    const message = (error as Error).message;
     expect(message).toMatch(/^pictures: /);
     return { message, blobs: calls.some((c) => c.includes('/git/blobs/')), dir };
   }
@@ -317,8 +321,7 @@ describe('readBranch', () => {
   });
 
   it('passes on an API failure other than a missing branch', () => {
-    /** @type {import('../lib/comment.mjs').Api} */
-    const api = () => {
+    const api: Api = () => {
       throw Object.assign(new Error('gh: Server Error (HTTP 500)'), { status: 500 });
     };
     expect(() =>
@@ -338,8 +341,7 @@ describe('readBranch', () => {
 describe('deleteBranch', () => {
   it('deletes refs/heads/<branch>', () => {
     const { api, calls } = fakeApi({});
-    /** @type {string[]} */
-    const lines = [];
+    const lines: string[] = [];
     deleteBranch({ api, repo: REPO, branch: BRANCH, log: (l) => lines.push(l) });
     expect(calls).toEqual([`DELETE repos/${REPO}/git/refs/heads/${BRANCH}`]);
     expect(lines).toEqual([`pictures: deleted ${BRANCH}`]);
@@ -349,8 +351,7 @@ describe('deleteBranch', () => {
     const del = () => {
       throw Object.assign(new Error(`gh: Reference does not exist (HTTP ${status})`), { status });
     };
-    /** @type {string[]} */
-    const lines = [];
+    const lines: string[] = [];
     deleteBranch({
       api: fakeApi({}, { del }).api,
       repo: REPO,
@@ -390,17 +391,14 @@ describe('main', () => {
     GITHUB_RUN_ID: '99',
   };
 
-  /**
-   * @param {string[]} argv
-   * @param {Record<string, string | undefined>} [over]
-   * @param {Parameters<typeof fakeApi>[1]} [options]
-   */
-  function run(argv, over = {}, options) {
+  function run(
+    argv: string[],
+    over: Record<string, string | undefined> = {},
+    options?: Parameters<typeof fakeApi>[1],
+  ) {
     const { api, calls } = fakeApi({ 'a.png': { bytes: PNG } }, options);
-    /** @type {string[]} */
-    const out = [];
-    /** @type {string[]} */
-    const errors = [];
+    const out: string[] = [];
+    const errors: string[] = [];
     const code = main(argv, {
       env: { ...env, ...over },
       api,

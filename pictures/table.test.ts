@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cellText, escapeCaption, hostBlock, imageCell, pictureTable } from './table.ts';
 
-const url = (/** @type {number} */ i) => `https://github.com/user-attachments/assets/id-${i}`;
+const url = (i: number) => `https://github.com/user-attachments/assets/id-${i}`;
 
 describe('hostBlock', () => {
   it("references each picture by its local path, for gh's --attach to rewrite, captions left out", () => {
@@ -50,7 +50,7 @@ describe('imageCell', () => {
 });
 
 describe('pictureTable', () => {
-  const pictures = (/** @type {number} */ n) =>
+  const pictures = (n: number) =>
     Array.from({ length: n }, (_, i) => ({ url: url(i), caption: `Shot ${i}` }));
 
   it('puts two side by side under their captions, as the plan showed', () => {
