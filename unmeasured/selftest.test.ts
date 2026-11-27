@@ -42,8 +42,7 @@ describe('selftest, on a glob that matches nothing', () => {
 
 describe('cli', () => {
   it("passes on an app it can read, and fails one whose setting it can't", () => {
-    /** @type {string[]} */
-    const out = [];
+    const out: string[] = [];
     expect(cli([testApp({})], (l) => out.push(l))).toBe(0);
     expect(out).toEqual(['unmeasured: 0 source files, 0 listed globs.']);
     const bad = testApp({ '.github/ci.json': '{"unmeasured": {"files": 1}}' });
