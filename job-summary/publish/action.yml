@@ -19,6 +19,15 @@ inputs:
     description: A token that can read the run's artifacts and push the job-reports branch.
     default: ${{ github.token }}
 
+outputs:
+  branch:
+    description: >-
+      On deployment_status, the run's branch, read from the API:
+      job-reports.yml's comment job keys its concurrency group on it, as
+      such a run's github.head_ref is empty and its deployment's ref is a
+      commit. Empty on any other event.
+    value: ${{ steps.branch.outputs.branch }}
+
 runs:
   using: composite
   steps:
@@ -34,3 +43,18 @@ runs:
         RUN_ID: ${{ inputs.run-id }}
         KEEP_DAYS: ${{ inputs.keep-days }}
       run: node "$GITHUB_ACTION_PATH/../publish.ts"
+
+    # The run's branch, for the comment job's turn-taking (job-reports.yml),
+    # only on deployment_status: every other event names its branch itself.
+    # A failure to read it shows, as the step fails.
+    - name: Read the run's branch
+      id: branch
+      if: github.event_name == 'deployment_status'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        RUN_ID: ${{ inputs.run-id }}
+        REPO: ${{ github.repository }}
+      run: |
+        branch=$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.head_branch // ""')
+        echo "branch=$branch" >> "$GITHUB_OUTPUT"
