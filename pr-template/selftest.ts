@@ -1,8 +1,8 @@
 // Self-test of the shared PR template against an app's checkout:
-// `node pr-template/selftest.mjs <app dir>`. Every app uses the shared
+// `node pr-template/selftest.ts <app dir>`. Every app uses the shared
 // template (the check of a PR's description has no setting to turn it off):
 // it must hold, in `.github/pull_request_template.md`, a template of
-// the shared shape (structure.mjs), and use visual review, since that is
+// the shared shape (structure.ts), and use visual review, since that is
 // what decides whether a screen changed once the box is gone. The master
 // is this repo's own template, `.github/pull_request_template.md`, which the
 // sync (sync/manifest.json) carries into each app byte for byte. Only the
@@ -14,7 +14,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appConfig } from '../lib/app.mjs';
-import { problems } from './structure.mjs';
+import { problems } from './structure.ts';
 
 const TEMPLATE = '.github/pull_request_template.md';
 

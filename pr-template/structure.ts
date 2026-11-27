@@ -9,7 +9,7 @@
 //     (`describe:visual-review`), and the pairs the changes tool writes
 //     (`pr-changes:change:1`, `pr-changes:revisions`);
 //   - no picture outside a comment: a stray example would pass for evidence.
-// A PR's own description is held to the same headings by body.mjs, with its
+// A PR's own description is held to the same headings by body.ts, with its
 // tools' blocks filled in and the placeholders gone.
 
 /**

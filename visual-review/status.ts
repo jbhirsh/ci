@@ -12,7 +12,7 @@
 //   - turned on before that: failure, until it's turned off and on again.
 // Visual review alone decides whether a screen changed. Whether the
 // description has the shared shape is the description check's job
-// (pr-template/check-body.mjs), never read here.
+// (pr-template/check-body.ts), never read here.
 //
 // Each result has a fingerprint, a short hash of what changed (the screens'
 // names and their "after" pictures), and the time it was first shown. Both

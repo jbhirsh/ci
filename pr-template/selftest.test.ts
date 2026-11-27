@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { writeFiles } from '../review/testApp.ts';
-import { cli, selftest } from './selftest.mjs';
+import { cli, selftest } from './selftest.ts';
 
 const master = readFileSync(
   new URL('../.github/pull_request_template.md', import.meta.url),

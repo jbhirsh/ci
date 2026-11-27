@@ -1,7 +1,7 @@
 name: PR description
 description: >-
-  Holds a pull request's description to the shared shape (check-body.mjs
-  and body.mjs say what passes): goal, changes and each change's title,
+  Holds a pull request's description to the shared shape (check-body.ts
+  and body.ts say what passes): goal, changes and each change's title,
   commit and files (its filled tool block, or a commit link), the plan table, Revisions' current revision naming the head, with a filled row, and, once a
   push has moved the head, the marker pair the changes tool writes it in. It
   reads only the pull request's event, so the job needs no checkout and no
@@ -30,4 +30,4 @@ runs:
         PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         PR_ACTION: ${{ github.event.action }}
-      run: node "$GITHUB_ACTION_PATH/check-body.mjs"
+      run: node "$GITHUB_ACTION_PATH/check-body.ts"

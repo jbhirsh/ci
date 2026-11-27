@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bodyProblems } from '../pr-template/body.mjs';
+import { bodyProblems } from '../pr-template/body.ts';
 import {
   HISTORY_HEADS,
   REVISIONS_BUDGET,

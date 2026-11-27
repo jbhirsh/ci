@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_CHARS } from '../lib/comment.mjs';
-import { bodyProblems } from '../pr-template/body.mjs';
+import { bodyProblems } from '../pr-template/body.ts';
 import { gitHubIo, headingBefore, main, revisions } from './revisions-run.mjs';
 import { parseTable } from './revisions.mjs';
 

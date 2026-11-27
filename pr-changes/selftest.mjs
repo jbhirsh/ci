@@ -12,7 +12,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { bodyProblems } from '../pr-template/body.mjs';
+import { bodyProblems } from '../pr-template/body.ts';
 import { fill, ownBlock, placed } from './changes.mjs';
 import { revisions } from './revisions-run.mjs';
 

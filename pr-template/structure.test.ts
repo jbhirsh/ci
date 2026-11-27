@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { HEADINGS, PAIRS, problems, visibleText } from './structure.mjs';
+import { HEADINGS, PAIRS, problems, visibleText } from './structure.ts';
 
 const master = readFileSync(
   new URL('../.github/pull_request_template.md', import.meta.url),

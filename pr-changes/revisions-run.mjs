@@ -47,7 +47,7 @@
 import { pathToFileURL } from 'node:url';
 import { MAX_CHARS, ghApi } from '../lib/comment.mjs';
 import { PAGES, pages, prTarget } from '../lib/github.mjs';
-import { renderedLines, revisionsPair } from '../pr-template/body.mjs';
+import { renderedLines, revisionsPair } from '../pr-template/body.ts';
 import { blocks, shielded } from './changes.mjs';
 import {
   FIRST_KNOWN,

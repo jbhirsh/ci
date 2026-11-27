@@ -6,7 +6,7 @@ import {
   htmlLeadPlain,
   htmlLink,
   revisionsPair,
-} from '../pr-template/body.mjs';
+} from '../pr-template/body.ts';
 import {
   REVISIONS_BUDGET,
   addRevision,

@@ -41,7 +41,7 @@ pins and actionlint) and `Against fog-and-frontier`, `Against sift` and `Against
 (each tool's self-test against that app's `main`, with its dependencies installed), and
 `PR description` (a PR's description held to the shared shape, as in the apps, including the
 Revisions marker pair once a push has moved the PR's head, and a filled row in its current revision;
-`.github/workflows/pr-description.yml` and `pr-template/body.mjs`'s header say how). `.github/workflows/ci.yml` says what the others run.
+`.github/workflows/pr-description.yml` and `pr-template/body.ts`'s header say how). `.github/workflows/ci.yml` says what the others run.
 
 ## The shared Claude rules
 

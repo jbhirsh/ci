@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { main, report, run } from './check-body.mjs';
+import { main, report, run } from './check-body.ts';
 
 const BAD = '## Goal\n\nOnly this.';
 const GOOD =

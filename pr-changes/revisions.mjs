@@ -2,7 +2,7 @@
 // (its head moved, by a push or a force-push), the tool writes `## Revisions`
 // and, for each revision, newest first, a `<details>` block between
 // `<!-- pr-changes:revisions -->` markers; until then it writes nothing. The
-// description check (pr-template/body.mjs) reads the revision whose summary
+// description check (pr-template/body.ts) reads the revision whose summary
 // says `(current)` and requires the head link in it to name the PR's head.
 //
 //   <details open>
@@ -44,7 +44,7 @@
 // The check reads the summary's head link to find the current revision (a table row the
 // author wrote can say anything, `(current)` included, and never makes a revision current),
 // then the current revision's rows: it fails until one has both cells filled
-// (pr-template/body.mjs says when a cell is). The placeholder written here is what it fails
+// (pr-template/body.ts says when a cell is). The placeholder written here is what it fails
 // on, until the author replaces it (ci#140).
 //
 // Older shapes are still read, and written back in this one by the next write
@@ -145,7 +145,7 @@ import {
   TABLE_EMPTY_LINE,
   TABLE_HEAD_LINE,
   TABLE_RULE_LINE,
-} from '../pr-template/body.mjs';
+} from '../pr-template/body.ts';
 import { blocks, escape, ownBlock } from './changes.mjs';
 
 /** The most characters the Revisions block holds. */
@@ -439,7 +439,7 @@ const FRAME =
 const MORE = /^[ \t]*<tr>\s*<td\b[^>]*>([\s\S]*?)<\/td>\s*<\/tr>[ \t]*$/;
 // The header and the rule of a Markdown table of two columns, which the tool writes again, and the
 // row of a revision that has none yet (no cell holds anything): TABLE_HEAD_LINE, TABLE_RULE_LINE and
-// TABLE_EMPTY_LINE, from pr-template/body.mjs, so that the check reads the same frame.
+// TABLE_EMPTY_LINE, from pr-template/body.ts, so that the check reads the same frame.
 /** A line of an old Markdown table's frame (its header and its rule), which the tool no longer writes. */
 const OLD_FRAME_LINE = /^\|\s*(?:Rev|What changed)\s*\|/;
 
