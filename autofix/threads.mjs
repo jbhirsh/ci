@@ -5,7 +5,7 @@
 //   - the Claude GitHub App's (claude[bot]: Claude Review's threads from
 //     before it left claude-code-action), or
 //   - github-actions[bot]'s carrying REVIEW_MARKER (Claude Review on the
-//     Agent SDK, which posts with the job's token, review/tools.mjs). Only a
+//     Agent SDK, which posts with the job's token, review/tools.ts). Only a
 //     workflow run with write access posts as github-actions[bot], and the
 //     app's other workflows (job reports, visual review) never write the marker;
 //     or
@@ -18,7 +18,7 @@
 import { pathToFileURL } from 'node:url';
 import { readAll } from '../lib/actions.mjs';
 
-/** The hidden line on each of Claude Review's inline comments (review/tools.mjs). */
+/** The hidden line on each of Claude Review's inline comments (review/tools.ts). */
 export const REVIEW_MARKER = '<!-- claude-review -->';
 
 /**

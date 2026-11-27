@@ -2,7 +2,7 @@ import { mkdtempSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { testApp, writeFiles } from '../review/testApp.mjs';
+import { testApp, writeFiles } from '../review/testApp.ts';
 import {
   REPORT,
   classify,

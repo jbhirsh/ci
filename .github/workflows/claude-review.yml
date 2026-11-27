@@ -46,6 +46,6 @@ jobs:
           anthropic_service_account_id: svac_01UZj2itXNdhewkTjp9Wv6YG
           anthropic_workspace_id: wrkspc_01GbH32ibMELoz7yNtpC8bB6
           # The owner's Claude subscription, which a pass the API refuses for
-          # credit or a limit is retried on (review/sdk.mjs). An Actions and a
+          # credit or a limit is retried on (review/sdk.ts). An Actions and a
           # Dependabot secret, since Dependabot's PRs see only the latter.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

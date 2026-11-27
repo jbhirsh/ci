@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { writeFiles } from '../review/testApp.mjs';
+import { writeFiles } from '../review/testApp.ts';
 import { CI_ROOT, loadManifest, parseManifest, resolve } from './manifest.mjs';
 import { appName, cli, selftest } from './selftest.mjs';
 

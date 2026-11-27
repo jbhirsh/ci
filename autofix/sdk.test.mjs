@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { fakeFetch } from '../review/fakeFetch.mjs';
+import { fakeFetch } from '../review/fakeFetch.ts';
 import { ALLOWED, TOOLS, allowedCommand, fixerEnv, main } from './sdk.mjs';
 
 const OIDC = 'https://oidc.example/token?x=1';

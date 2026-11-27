@@ -17,7 +17,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appRoot } from '../lib/app.mjs';
-import { bullets, fill } from '../review/template.mjs';
+import { bullets, fill } from '../review/template.ts';
 import { autofixSettings } from './settings.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

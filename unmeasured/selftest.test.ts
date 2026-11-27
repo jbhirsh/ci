@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { testApp } from '../review/testApp.mjs';
+import { testApp } from '../review/testApp.ts';
 import { cli, selftest } from './selftest.ts';
 
 describe('selftest', () => {
