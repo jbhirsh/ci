@@ -27,8 +27,7 @@
 
 import { rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-
-/** @typedef {import('./gh.ts').Command} Command */
+import type { Command } from './gh.ts';
 
 /** The most files one `gh pr edit --attach` (or `gh issue edit`) takes, per gh's manual. */
 export const ATTACH_LIMIT = 50;
@@ -38,10 +37,8 @@ export const ATTACH_MAX_BYTES = 10 * 1024 * 1024;
 
 /**
  * The attachment links in a span of a description, in order.
- *
- * @param {string} text
  */
-export function attachmentLinksIn(text) {
+export function attachmentLinksIn(text: string) {
   return [...text.matchAll(/https:\/\/github\.com\/user-attachments\/assets\/[\w-]+/g)].map(
     (m) => m[0],
   );
@@ -55,7 +52,7 @@ export function attachmentLinksIn(text) {
  * nothing to attach, it edits once if `body` differs from `was`, and not at
  * all if not.
  *
- * @param {{ repo: string; pr: string; kind?: 'pr' | 'issue'; cwd: string; files: readonly string[]; was: string; body: string; view: () => string; gh: Command; prefix: string; noun: string; log: (line: string) => void; span?: (body: string) => string }} options
+ * @param options
  *   files: paths relative to `cwd`, where gh runs, each referenced in
  *   `body` as `](./<file>)`; was: the description `body` was made from;
  *   prefix: the tool's, starting each line it logs or throws; noun: what a
@@ -77,6 +74,20 @@ export function attachToDescription({
   noun,
   log,
   span = (text) => text,
+}: {
+  repo: string;
+  pr: string;
+  kind?: 'pr' | 'issue';
+  cwd: string;
+  files: readonly string[];
+  was: string;
+  body: string;
+  view: () => string;
+  gh: Command;
+  prefix: string;
+  noun: string;
+  log: (line: string) => void;
+  span?: (body: string) => string;
 }) {
   if (files.length === 0 && body === was) {
     log(`${prefix}: #${pr}'s description needs no change`);

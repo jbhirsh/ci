@@ -12,12 +12,11 @@ import path from 'node:path';
 /**
  * A list of globs from an app's settings, checked.
  *
- * @param {unknown} value
- * @param {string} name the setting, for the error
- * @param {string[]} fallback when the setting is absent
- * @returns {string[]}
+ * @param value
+ * @param name the setting, for the error
+ * @param fallback when the setting is absent
  */
-export function globList(value, name, fallback) {
+export function globList(value: unknown, name: string, fallback: string[]): string[] {
   if (value === undefined) return fallback;
   if (!Array.isArray(value) || !value.every((g) => typeof g === 'string' && g !== '')) {
     throw new Error(`.github/ci.json: ${name} must be a list of globs`);
@@ -28,30 +27,29 @@ export function globList(value, name, fallback) {
 /**
  * Whether `file` matches the glob.
  *
- * @param {string} file a repository path, with forward slashes
- * @param {string} glob
+ * @param file a repository path, with forward slashes
+ * @param glob
  */
-export function matches(file, glob) {
+export function matches(file: string, glob: string) {
   return path.posix.matchesGlob(file, glob);
 }
 
 /**
  * Whether `file` matches any of the globs.
  *
- * @param {string} file a repository path, with forward slashes
- * @param {string[]} globs
+ * @param file a repository path, with forward slashes
+ * @param globs
  */
-export function matchesAny(file, globs) {
+export function matchesAny(file: string, globs: string[]) {
   return globs.some((glob) => matches(file, glob));
 }
 
 /**
  * The files that match `include` and not `exclude`, in order.
- *
- * @param {string[]} files
- * @param {{ include: string[], exclude: string[] }} globs
- * @returns {string[]}
  */
-export function pick(files, { include, exclude }) {
+export function pick(
+  files: string[],
+  { include, exclude }: { include: string[]; exclude: string[] },
+): string[] {
   return files.filter((file) => matchesAny(file, include) && !matchesAny(file, exclude));
 }

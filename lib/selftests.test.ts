@@ -8,18 +8,15 @@ import { TOOLS, findSelftests } from './selftests.ts';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-/** @type {string[]} */
-const made = [];
+const made: string[] = [];
 afterEach(() => {
   for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 /**
  * A checkout holding these files (empty), and lib/selftests.ts itself.
- *
- * @param {string[]} files
  */
-function checkout(files) {
+function checkout(files: string[]) {
   const dir = mkdtempSync(path.join(tmpdir(), 'selftests-'));
   made.push(dir);
   for (const file of files) {
@@ -72,8 +69,7 @@ describe('findSelftests', () => {
 });
 
 describe('the command line, as CI runs it', () => {
-  /** @param {string} dir */
-  const run = (dir) =>
+  const run = (dir: string) =>
     spawnSync(process.execPath, [path.join(dir, 'lib', 'selftests.ts')], { encoding: 'utf8' });
 
   it('prints the self-tests to run', () => {

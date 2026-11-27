@@ -45,9 +45,9 @@ describe('blocks, for any description', () => {
       fc.property(body, key, block, block, (text, k, b1, b2) => {
         const once = ours.write(text, k, b1);
         const twice = ours.write(once, k, b2);
-        const at = /** @type {{ from: number; to: number }} */ (ours.find(once, k));
+        const at = ours.find(once, k) as { from: number; to: number };
         expect(twice.slice(0, at.from)).toBe(once.slice(0, at.from));
-        const after = /** @type {{ from: number; to: number }} */ (ours.find(twice, k));
+        const after = ours.find(twice, k) as { from: number; to: number };
         expect(twice.slice(after.to)).toBe(once.slice(at.to));
       }),
     );
@@ -59,7 +59,7 @@ describe('blocks, for any description', () => {
         // A block of ours around one of theirs would take it along when replaced.
         fc.pre(ours.find(text, k) === null);
         const before = theirs.keys(text).map((t) => {
-          const f = /** @type {{ from: number; to: number }} */ (theirs.find(text, t));
+          const f = theirs.find(text, t) as { from: number; to: number };
           return text.slice(f.from, f.to);
         });
         const after = ours.write(text, k, b);

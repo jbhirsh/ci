@@ -2,16 +2,15 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { columnOf, pairBaselines, stateOf } from './baselines.ts';
+import type { Changed, Row } from './baselines.ts';
 
 /**
  * An app's committed baselines, as they were when visual review replaced
  * them, beside this test (`git ls-files` of their folders: BoardGames at
  * 7fb4c0e, fog-and-frontier at 2d41396, sift at 2f0a653): realistic names
  * for the columns to pair.
- *
- * @param {string} app
  */
-function tracked(app) {
+function tracked(app: string) {
   return readFileSync(new URL(`./fixtures/baselines-${app}.txt`, import.meta.url), 'utf8')
     .split('\n')
     .filter(Boolean);
@@ -19,12 +18,8 @@ function tracked(app) {
 
 /**
  * A shot as a changed entry, in its own folder.
- *
- * @param {string} filename
- * @param {string} [status]
- * @returns {import('./baselines.ts').Changed}
  */
-const change = (filename, status = 'modified') => ({
+const change = (filename: string, status = 'modified'): Changed => ({
   before: status === 'added' ? null : filename,
   after: status === 'removed' ? null : filename,
   status,
@@ -33,18 +28,14 @@ const change = (filename, status = 'modified') => ({
 
 /**
  * Every shot of an app, as a PR that rewrote them all would list them.
- *
- * @param {string} app
  */
-const allChanged = (app) => tracked(app).map((filename) => change(filename));
+const allChanged = (app: string) => tracked(app).map((filename) => change(filename));
 
 /**
  * The rows with a picture in every one of these columns.
- *
- * @param {import('./baselines.ts').Row[]} rows
- * @param {string[]} labels
  */
-const whole = (rows, labels) => rows.filter((r) => labels.every((l) => r.cells[l]));
+const whole = (rows: Row[], labels: string[]) =>
+  rows.filter((r) => labels.every((l) => r.cells[l]));
 
 describe('stateOf', () => {
   it('matches anchored at both ends', () => {

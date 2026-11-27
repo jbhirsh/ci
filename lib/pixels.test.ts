@@ -36,7 +36,7 @@ describe('PIXELS', () => {
     const real = PIXELS;
     expect(diff(testPng(), testPng(10, 10, 10), real).ratio).toBe(0.1);
     const { image } = diff(testPng(2, 1), testPng(2, 1, 1), real, { withImage: true });
-    expect(real.read(/** @type {Buffer} */ (image))).toMatchObject({ width: 2, height: 1 });
+    expect(real.read(image as Buffer)).toMatchObject({ width: 2, height: 1 });
   });
 });
 

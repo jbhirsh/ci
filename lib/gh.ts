@@ -28,22 +28,16 @@ export const MIN_GH_ISSUE = '2.104.0';
 
 /**
  * A version's numbers from `gh --version`'s first line, or null.
- *
- * @param {string} text
- * @returns {[number, number, number] | null}
  */
-export function ghVersion(text) {
+export function ghVersion(text: string): [number, number, number] | null {
   const m = /gh version (\d+)\.(\d+)\.(\d+)/.exec(text);
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
 }
 
 /**
  * Whether `have` is at least `want`.
- *
- * @param {readonly number[]} have
- * @param {readonly number[]} want
  */
-function atLeast(have, want) {
+function atLeast(have: readonly number[], want: readonly number[]) {
   for (let i = 0; i < want.length; i++) {
     if (have[i] !== want[i]) return have[i] > want[i];
   }
@@ -55,11 +49,14 @@ function atLeast(have, want) {
  * `issue`, unless it is MIN_GH_ISSUE or newer and `gh issue edit --help`
  * lists `--attach`.
  *
- * @param {() => string} [version] what `gh --version` prints
- * @param {{ issue?: boolean; help?: () => string }} [options] help: what
+ * @param version what `gh --version` prints
+ * @param options help: what
  *   `gh issue edit --help` prints
  */
-export function checkGh(version = ghVersionText, { issue = false, help = issueEditHelp } = {}) {
+export function checkGh(
+  version: () => string = ghVersionText,
+  { issue = false, help = issueEditHelp }: { issue?: boolean; help?: () => string } = {},
+) {
   let text = '';
   try {
     text = version();
@@ -68,7 +65,7 @@ export function checkGh(version = ghVersionText, { issue = false, help = issueEd
   }
   const have = ghVersion(text);
   const floor = issue ? MIN_GH_ISSUE : MIN_GH;
-  const want = /** @type {[number, number, number]} */ (ghVersion(`gh version ${floor}`));
+  const want = ghVersion(`gh version ${floor}`) as [number, number, number];
   const shows = have ? `yours is ${have.join('.')}` : 'none found';
   const install = issue
     ? `install gh ≥ ${floor.replace(/\.0$/, '')}, which can attach files to an issue`
@@ -95,20 +92,17 @@ function ghVersionText() {
   return result.stdout ?? '';
 }
 
-/**
- * @typedef {(args: string[], options?: { env?: Record<string, string | undefined>; allowFail?: boolean }) => { status: number | null; stdout: string; stderr: string }} Command
- *   Runs a command in a folder with these arguments.
- */
+/** Runs a command in a folder with these arguments. */
+export type Command = (
+  args: string[],
+  options?: { env?: Record<string, string | undefined>; allowFail?: boolean },
+) => { status: number | null; stdout: string; stderr: string };
 
 /**
  * A command run in `cwd`, returning what it printed; a failure throws
  * unless `allowFail`.
- *
- * @param {string} command
- * @param {string} cwd
- * @returns {Command}
  */
-export function commandIn(command, cwd) {
+export function commandIn(command: string, cwd: string): Command {
   return (args, { env, allowFail = false } = {}) => {
     const result = spawnSync(command, args, { cwd, encoding: 'utf8', env });
     const out = { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
@@ -124,21 +118,22 @@ export function commandIn(command, cwd) {
 /**
  * gh in `cwd`, returning what it printed; a failure throws unless
  * `allowFail`.
- *
- * @param {string} cwd
- * @returns {Command}
  */
-export function ghIn(cwd) {
+export function ghIn(cwd: string): Command {
   return commandIn('gh', cwd);
 }
 
 /**
  * The command line; returns its exit code.
- *
- * @param {readonly string[]} argv
- * @param {{ version?: () => string; help?: () => string; error?: (line: string) => void }} [context]
  */
-export function main(argv, { version, help, error = console.error } = {}) {
+export function main(
+  argv: readonly string[],
+  {
+    version,
+    help,
+    error = console.error,
+  }: { version?: () => string; help?: () => string; error?: (line: string) => void } = {},
+) {
   const issue = argv[1] === '--issue';
   if (argv[0] !== 'check' || argv.length !== (issue ? 2 : 1)) {
     error('usage: node lib/gh.ts check [--issue]');
