@@ -10,6 +10,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { problems } from './check.ts';
+import type { Commit } from './check.ts';
 
 /** How far back to read. */
 export const DEPTH = 200;
@@ -17,11 +18,8 @@ export const DEPTH = 200;
 /**
  * The checkout's last commits, as the check sees them. `git log` names no
  * GitHub login, so Dependabot is recognised by its author name.
- *
- * @param {string} root
- * @returns {import('./check.ts').Commit[]}
  */
-export function gitCommits(root) {
+export function gitCommits(root: string): Commit[] {
   const out = execFileSync('git', ['log', `-n${DEPTH}`, '--format=%h%x00%P%x00%an%x00%B%x1e'], {
     cwd: root,
     encoding: 'utf8',
@@ -46,11 +44,8 @@ export function gitCommits(root) {
 /**
  * Runs the rules over the app's history and returns what to print; throws
  * when the history can't be read.
- *
- * @param {string} root
- * @returns {string[]}
  */
-export function selftest(root) {
+export function selftest(root: string): string[] {
   const commits = gitCommits(root);
   if (commits.length === 0) throw new Error(`no commits in ${root}`);
   const flagged = commits.filter((commit) => problems(commit).length > 0);
@@ -62,12 +57,8 @@ export function selftest(root) {
 
 /**
  * Runs the self-test on the app at `argv[0]` and returns the exit code.
- *
- * @param {string[]} argv
- * @param {(line: string) => void} [log]
- * @returns {number}
  */
-export function cli(argv, log = console.log) {
+export function cli(argv: string[], log: (line: string) => void = console.log): number {
   try {
     for (const line of selftest(path.resolve(argv[0] ?? '.'))) log(line);
     return 0;

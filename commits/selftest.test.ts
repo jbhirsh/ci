@@ -6,10 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { cli, gitCommits, selftest } from './selftest.ts';
 
 /** A throwaway repository holding these commits, oldest first. */
-function repo(/** @type {{ message: string, author?: string }[]} */ commits) {
+function repo(commits: { message: string; author?: string }[]) {
   const root = mkdtempSync(path.join(tmpdir(), 'commits-'));
-  const git = (/** @type {string[]} */ ...args) =>
-    execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
   git('init', '-q');
   for (const { message, author = 'Someone' } of commits) {
     git(
@@ -55,7 +54,7 @@ describe('selftest', () => {
 
 describe('cli', () => {
   it('prints the self-test and returns its exit code', () => {
-    const lines = /** @type {string[]} */ ([]);
+    const lines = [] as string[];
     expect(cli([repo([{ message: 'Good\n\nBody.' }])], (l) => lines.push(l))).toBe(0);
     expect(cli([repo([])], (l) => lines.push(l))).toBe(1);
     expect(lines.at(-1)).toMatch(/^commits self-test failed: /);

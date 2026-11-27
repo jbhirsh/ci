@@ -3,8 +3,7 @@ import { annotations, body, main, parseCommit, prCommits, problems } from './che
 
 const TRAILERS = 'Co-Authored-By: Claude <noreply@anthropic.com>';
 
-/** @param {string} message */
-const commit = (message, { login = 'me', parents = 1 } = {}) => ({
+const commit = (message: string, { login = 'me', parents = 1 } = {}) => ({
   sha: 'abc1234',
   login,
   parents,
@@ -169,9 +168,8 @@ describe('parseCommit', () => {
 
 describe('prCommits', () => {
   it("pages through the PR's commits", () => {
-    /** @type {string[][]} */
-    const calls = [];
-    const run = (/** @type {string[]} */ args) => {
+    const calls: string[][] = [];
+    const run = (args: string[]) => {
       calls.push(args);
       return '{"sha":"a","login":"x","parents":1,"message":"A"}\n\n{"sha":"b","login":"y","parents":2,"message":"B"}\n';
     };
@@ -183,20 +181,20 @@ describe('prCommits', () => {
 describe('main', () => {
   const env = { GITHUB_REPOSITORY: 'o/r', PR_NUMBER: '5' };
   const api =
-    (/** @type {string[]} */ ...messages) =>
+    (...messages: string[]) =>
     () =>
       messages
         .map((message) => JSON.stringify({ sha: 'a', login: 'me', parents: 1, message }))
         .join('\n');
 
   it('passes when every message does', () => {
-    const lines = /** @type {string[]} */ ([]);
+    const lines = [] as string[];
     expect(main(env, api('Good\n\nBody.'), (l) => lines.push(l))).toBe(0);
     expect(lines).toEqual(['All commit messages pass.']);
   });
 
   it('fails with an annotation per problem and how to fix it', () => {
-    const lines = /** @type {string[]} */ ([]);
+    const lines = [] as string[];
     expect(main(env, api('WIP'), (l) => lines.push(l))).toBe(1);
     expect(lines).toHaveLength(3);
     expect(lines.at(-1)).toContain('git rebase -i origin/main');

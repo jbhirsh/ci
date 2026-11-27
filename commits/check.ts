@@ -23,15 +23,17 @@
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-/**
- * One commit as the check reads it.
- *
- * @typedef {object} Commit
- * @property {string} sha the short SHA, for the annotation
- * @property {string} login the author's GitHub login ('' when GitHub knows none)
- * @property {number} parents how many parents it has
- * @property {string} message the whole message
- */
+/** One commit as the check reads it. */
+export type Commit = {
+  /** the short SHA, for the annotation */
+  sha: string;
+  /** the author's GitHub login ('' when GitHub knows none) */
+  login: string;
+  /** how many parents it has */
+  parents: number;
+  /** the whole message */
+  message: string;
+};
 
 const SQUASH_ME = /^((fixup|squash|amend)!|(wip|oops)([^a-z]|$))/i;
 /**
@@ -54,11 +56,8 @@ const KNOWN_TRAILER = /^(co-authored-by|signed-off-by|claude-session): /;
  * trailers when every line is "Key: value" and either it follows a body
  * paragraph or it names a known trailer, so a body line that happens to read
  * "Why: ..." still counts as body.
- *
- * @param {string} message
- * @returns {string}
  */
-export function body(message) {
+export function body(message: string): string {
   const rest = message.split('\n').slice(2).join('\n');
   const paragraphs = rest.split(/\n{2,}/).filter((p) => p.replace(/\n/g, '') !== '');
   const last = paragraphs.at(-1);
@@ -74,16 +73,12 @@ export function body(message) {
 /**
  * What's wrong with one commit's message: nothing for Dependabot's, and for
  * a merge commit only that it is one.
- *
- * @param {Commit} commit
- * @returns {string[]}
  */
-export function problems(commit) {
+export function problems(commit: Commit): string[] {
   if (commit.login === 'dependabot[bot]') return [];
   if (commit.parents > 1) return ['merge commit. Rebase onto main instead of merging it in.'];
   const [subject = '', second = ''] = commit.message.split('\n');
-  /** @type {string[]} */
-  const found = [];
+  const found: string[] = [];
   // Characters, not UTF-16 units: an emoji is one.
   const length = [...subject].length;
   if (length > 72) found.push(`subject is ${length} characters; the limit is 72.`);
@@ -101,11 +96,8 @@ export function problems(commit) {
 
 /**
  * The GitHub annotations for every problem in these commits.
- *
- * @param {Commit[]} commits
- * @returns {string[]}
  */
-export function annotations(commits) {
+export function annotations(commits: Commit[]): string[] {
   return commits.flatMap((commit) => {
     const subject = commit.message.split('\n')[0];
     return problems(commit).map(
@@ -117,13 +109,10 @@ export function annotations(commits) {
 /**
  * Reads one line of `gh api … --jq '.[] | {…} | @json'` output.
  *
- * @param {string} line
- * @returns {Commit}
  */
-export function parseCommit(line) {
-  /** @type {unknown} */
-  const value = JSON.parse(line);
-  const record = /** @type {Record<string, unknown>} */ (value);
+export function parseCommit(line: string): Commit {
+  const value: unknown = JSON.parse(line);
+  const record = value as Record<string, unknown>;
   if (
     typeof record?.sha !== 'string' ||
     typeof record.login !== 'string' ||
@@ -143,13 +132,8 @@ export function parseCommit(line) {
 /**
  * The PR's commits, read through `gh` (`run` takes gh's arguments and
  * returns its stdout). Paginated, so a long PR is read whole.
- *
- * @param {string} repo
- * @param {string} pr
- * @param {(args: string[]) => string} run
- * @returns {Commit[]}
  */
-export function prCommits(repo, pr, run) {
+export function prCommits(repo: string, pr: string, run: (args: string[]) => string): Commit[] {
   const out = run([
     'api',
     '--paginate',
@@ -165,12 +149,12 @@ export function prCommits(repo, pr, run) {
 
 /**
  * Runs the check and returns the exit code, printing as it goes.
- *
- * @param {Record<string, string | undefined>} env
- * @param {(args: string[]) => string} run
- * @param {(line: string) => void} [print]
  */
-export function main(env, run, print = console.log) {
+export function main(
+  env: Record<string, string | undefined>,
+  run: (args: string[]) => string,
+  print: (line: string) => void = console.log,
+) {
   const { GITHUB_REPOSITORY: repo, PR_NUMBER: pr } = env;
   if (!repo || !pr) throw new Error('GITHUB_REPOSITORY and PR_NUMBER are needed');
   const errors = annotations(prCommits(repo, pr, run));
@@ -184,7 +168,7 @@ export function main(env, run, print = console.log) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const gh = (/** @type {string[]} */ args) =>
+  const gh = (args: string[]) =>
     execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   process.exitCode = main(process.env, gh);
 }
