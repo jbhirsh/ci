@@ -4,7 +4,7 @@ import { selftest } from './selftest.ts';
 
 // Workflows written as JSON, which is YAML, so JSON.parse can stand in for
 // the app's YAML parser.
-const workflow = (/** @type {unknown} */ doc) => JSON.stringify(doc);
+const workflow = (doc: unknown) => JSON.stringify(doc);
 const STUB = {
   name: 'Claude Auto-Fix PR Comments',
   on: { workflow_run: { workflows: ['CI', 'Claude Review'], types: ['completed'] } },

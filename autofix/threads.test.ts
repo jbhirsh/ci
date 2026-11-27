@@ -2,13 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { REVIEW_MARKER, countThreads, counts } from './threads.ts';
 
-/**
- * @param {string} typename
- * @param {string} login
- * @param {string} [body]
- * @param {boolean} [isResolved]
- */
-const thread = (typename, login, body = 'Fix this.', isResolved = false) => ({
+const thread = (typename: string, login: string, body = 'Fix this.', isResolved = false) => ({
   isResolved,
   comments: { nodes: [{ body, author: { __typename: typename, login } }] },
 });

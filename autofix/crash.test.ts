@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { crashed, failedBody, main, markerFor, releasedBody } from './crash.ts';
+import type { Io } from './crash.ts';
 
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 const NEW = 'fedcba9876543210fedcba9876543210fedcba98';
@@ -65,16 +66,16 @@ describe('failedBody', () => {
   });
 });
 
-/**
- * @param {{ head?: string, file?: string | null, comments?: { id: number, user: string, body: string }[] }} [over]
- */
-function fakeIo(over = {}) {
-  /** @type {Record<string, string>} */
-  const outputs = {};
-  /** @type {string[]} */
-  const calls = [];
-  /** @type {import('./crash.ts').Io} */
-  const io = {
+function fakeIo(
+  over: {
+    head?: string;
+    file?: string | null;
+    comments?: { id: number; user: string; body: string }[];
+  } = {},
+) {
+  const outputs: Record<string, string> = {};
+  const calls: string[] = [];
+  const io: Io = {
     head: () => over.head ?? SHA,
     read: (file) => {
       calls.push(`read ${file}`);

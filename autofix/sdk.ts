@@ -32,6 +32,8 @@ import { setOutput, summary } from '../lib/actions.mjs';
 import { appRoot } from '../lib/app.mjs';
 import { createGuard } from '../review/guard.ts';
 import { lastResult, oidcToken, report, stoppedBy } from '../review/sdk.ts';
+import type { Options } from '@anthropic-ai/claude-agent-sdk';
+import type { Fetch } from '../review/github.ts';
 
 /** The tools the fixer has: claude-code-action's, plus the web. */
 export const TOOLS = [
@@ -80,11 +82,8 @@ const WITHHELD =
 /**
  * Whether a Bash command starts one of the allowed programs, as
  * `Bash(git:*)` and the like allowed: its first word only.
- *
- * @param {unknown} command
- * @returns {boolean}
  */
-export function allowedCommand(command) {
+export function allowedCommand(command: unknown): boolean {
   if (typeof command !== 'string') return false;
   const first = command.trim().split(/\s+/)[0] ?? '';
   return PROGRAMS.has(first);
@@ -93,14 +92,12 @@ export function allowedCommand(command) {
 /**
  * The fixer's environment: the job's, less the runner's own tokens, plus
  * the sign-in file and the SDK's folder.
- *
- * @param {Record<string, string | undefined>} env
- * @param {{ tokenFile: string | null, configDir: string }} files
- * @returns {Record<string, string>}
  */
-export function fixerEnv(env, { tokenFile, configDir }) {
-  /** @type {Record<string, string>} */
-  const out = {};
+export function fixerEnv(
+  env: Record<string, string | undefined>,
+  { tokenFile, configDir }: { tokenFile: string | null; configDir: string },
+): Record<string, string> {
+  const out: Record<string, string> = {};
   for (const [name, value] of Object.entries(env)) {
     if (value !== undefined && !WITHHELD.test(name)) out[name] = value;
   }
@@ -112,11 +109,18 @@ export function fixerEnv(env, { tokenFile, configDir }) {
 
 /**
  * The SDK's query options for one pass.
- *
- * @param {{ cwd: string, advisor: string | null, env: Record<string, string>, guard: ReturnType<typeof createGuard> }} run
- * @returns {import('@anthropic-ai/claude-agent-sdk').Options}
  */
-export function queryOptions({ cwd, advisor, env, guard }) {
+export function queryOptions({
+  cwd,
+  advisor,
+  env,
+  guard,
+}: {
+  cwd: string;
+  advisor: string | null;
+  env: Record<string, string>;
+  guard: ReturnType<typeof createGuard>;
+}): Options {
   return {
     model: 'sonnet',
     ...(advisor ? { settings: { advisorModel: advisor } } : {}),
@@ -133,11 +137,9 @@ export function queryOptions({ cwd, advisor, env, guard }) {
         {
           hooks: [
             async (input) => {
-              const { tool_name, tool_input } =
-                /** @type {{ tool_name: string, tool_input: unknown }} */ (input);
-              const args = /** @type {Record<string, unknown>} */ (tool_input ?? {});
-              /** @type {string | null} */
-              let refused = null;
+              const { tool_name, tool_input } = input as { tool_name: string; tool_input: unknown };
+              const args = (tool_input ?? {}) as Record<string, unknown>;
+              let refused: string | null = null;
               if (tool_name === 'Bash' && !allowedCommand(args.command)) {
                 refused = `Bash may run only ${[...PROGRAMS].join(', ')}`;
               } else if (tool_name === 'WebSearch' || tool_name === 'WebFetch') {
@@ -161,13 +163,15 @@ export function queryOptions({ cwd, advisor, env, guard }) {
         {
           hooks: [
             async (input) => {
-              const { tool_name, tool_response } =
-                /** @type {{ tool_name: string, tool_response: unknown }} */ (input);
+              const { tool_name, tool_response } = input as {
+                tool_name: string;
+                tool_response: unknown;
+              };
               // The pages it may open: from search results, and from what gh
               // shows of the PR (its description, a changelog link). Not from
               // other commands' output, which the fixer can make print any
               // URL.
-              const { tool_input } = /** @type {{ tool_input?: { command?: unknown } }} */ (input);
+              const { tool_input } = input as { tool_input?: { command?: unknown } };
               // gh alone: `gh x && echo <url>` would print a URL of its choosing.
               const fromGh =
                 tool_name === 'Bash' &&
@@ -184,18 +188,24 @@ export function queryOptions({ cwd, advisor, env, guard }) {
 
 /**
  * Runs one pass. Returns its outputs and whether it finished.
- *
- * @param {Record<string, string | undefined>} env
- * @param {{ sdk?: typeof import('@anthropic-ai/claude-agent-sdk'), fetchImpl?: import('../review/github.ts').Fetch, root?: string }} [deps]
- * @returns {Promise<{ executionFile: string, stopped: 'credit' | 'limit' | null, finished: boolean, report: string }>}
  */
-export async function main(env, deps = {}) {
-  const fetchImpl =
-    deps.fetchImpl ??
-    /** @type {import('../review/github.ts').Fetch} */ (/** @type {unknown} */ (fetch));
+export async function main(
+  env: Record<string, string | undefined>,
+  deps: {
+    sdk?: typeof import('@anthropic-ai/claude-agent-sdk');
+    fetchImpl?: Fetch;
+    root?: string;
+  } = {},
+): Promise<{
+  executionFile: string;
+  stopped: 'credit' | 'limit' | null;
+  finished: boolean;
+  report: string;
+}> {
+  const fetchImpl = deps.fetchImpl ?? (fetch as unknown as Fetch);
   const sdk = deps.sdk ?? (await import('@anthropic-ai/claude-agent-sdk'));
   const root = deps.root ?? appRoot();
-  const need = (/** @type {string} */ name) => {
+  const need = (name: string) => {
     const value = env[name];
     if (!value) throw new Error(`${name} is not set`);
     return value;
@@ -218,8 +228,7 @@ export async function main(env, deps = {}) {
     guard: createGuard({ roots: [root], cwd: root }),
   });
 
-  /** @type {unknown[]} */
-  const messages = [];
+  const messages: unknown[] = [];
   let failure = '';
   try {
     for await (const message of sdk.query({ prompt: need('PROMPT'), options }))

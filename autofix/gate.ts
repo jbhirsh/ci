@@ -35,26 +35,23 @@ import { pathToFileURL } from 'node:url';
 import { appRoot } from '../lib/app.mjs';
 import { autofixSettings } from './settings.ts';
 
-/**
- * A workflow run as the REST API returns it, the fields read here.
- *
- * @typedef {object} Run
- * @property {number} id
- * @property {string} name the workflow's `name:`
- * @property {string} path e.g. `.github/workflows/ci.yml`
- * @property {string} event
- * @property {string} status
- * @property {string | null} conclusion
- */
+/** A workflow run as the REST API returns it, the fields read here. */
+export type Run = {
+  id: number;
+  /** the workflow's `name:` */
+  name: string;
+  /** e.g. `.github/workflows/ci.yml` */
+  path: string;
+  event: string;
+  status: string;
+  conclusion: string | null;
+};
 
 /**
  * The stub's repo-relative path, from `github.workflow_ref`
  * (`owner/repo/.github/workflows/claude-autofix.yml@refs/heads/main`).
- *
- * @param {string} ref
- * @returns {string}
  */
-export function workflowPath(ref) {
+export function workflowPath(ref: string): string {
   const match = /^[^/@]+\/[^/@]+\/(\.github\/workflows\/[^@]+)@/.exec(ref);
   if (!match) throw new Error(`not a workflow ref: ${ref}`);
   return match[1];
@@ -64,22 +61,19 @@ export function workflowPath(ref) {
  * Workflow runs from the API's JSON: a page (`{ workflow_runs }`), or the
  * array of pages `gh api --paginate --slurp` prints. Throws on anything
  * else, and on a run missing a field this module reads.
- *
- * @param {unknown} json
- * @returns {Run[]}
  */
-export function runsFromApi(json) {
+export function runsFromApi(json: unknown): Run[] {
   const pages = Array.isArray(json) ? json : [json];
   return pages.flatMap((page) => {
     const runs =
       typeof page === 'object' && page !== null
-        ? /** @type {Record<string, unknown>} */ (page).workflow_runs
+        ? (page as Record<string, unknown>).workflow_runs
         : undefined;
     if (!Array.isArray(runs)) throw new Error('expected a page of workflow runs');
     return runs.map((run) => {
       if (typeof run !== 'object' || run === null)
         throw new Error('a workflow run must be an object');
-      const r = /** @type {Record<string, unknown>} */ (run);
+      const r = run as Record<string, unknown>;
       const conclusion = r.conclusion;
       if (
         typeof r.id !== 'number' ||
@@ -97,7 +91,7 @@ export function runsFromApi(json) {
         path: r.path,
         event: r.event,
         status: r.status,
-        conclusion: /** @type {string | null} */ (conclusion),
+        conclusion: conclusion as string | null,
       };
     });
   });
@@ -106,14 +100,9 @@ export function runsFromApi(json) {
 /**
  * The latest `pull_request` run of each workflow, keyed by `key` (its name
  * or its file).
- *
- * @param {Run[]} runs
- * @param {(run: Run) => string} key
- * @returns {Map<string, Run>}
  */
-export function latestRuns(runs, key) {
-  /** @type {Map<string, Run>} */
-  const latest = new Map();
+export function latestRuns(runs: Run[], key: (run: Run) => string): Map<string, Run> {
+  const latest: Map<string, Run> = new Map();
   for (const run of runs) {
     if (run.event !== 'pull_request') continue;
     const k = key(run);
@@ -128,12 +117,13 @@ export function latestRuns(runs, key) {
  * finished, by name, leaving out autofix's own (by its file) and the
  * exempt ones. Empty means the CI fixer may go.
  *
- * @param {Run[]} runs the head's runs
- * @param {{ self: string, exempt: string[] }} skip `self`: autofix's
- *   workflow file; `exempt`: workflow names
- * @returns {string[]}
+ * @param runs the head's runs
+ * @param skip `self`: autofix's workflow file; `exempt`: workflow names
  */
-export function pendingWorkflows(runs, { self, exempt }) {
+export function pendingWorkflows(
+  runs: Run[],
+  { self, exempt }: { self: string; exempt: string[] },
+): string[] {
   const counted = runs.filter((run) => run.path !== self && !exempt.includes(run.name));
   return [...latestRuns(counted, (run) => run.path).values()]
     .filter((run) => run.status !== 'completed')
@@ -146,11 +136,10 @@ export function pendingWorkflows(runs, { self, exempt }) {
  * completed/success (no run counts as not green), each with its state.
  * Empty means the review fixer may go.
  *
- * @param {Run[]} runs the head's runs
- * @param {string[]} files e.g. `ci.yml`
- * @returns {string[]}
+ * @param runs the head's runs
+ * @param files e.g. `ci.yml`
  */
-export function notGreen(runs, files) {
+export function notGreen(runs: Run[], files: string[]): string[] {
   const latest = latestRuns(runs, (run) => run.path.replace(/^.*\//, ''));
   return files.flatMap((file) => {
     const run = latest.get(file);
@@ -160,12 +149,7 @@ export function notGreen(runs, files) {
   });
 }
 
-/**
- * @param {string} name
- * @param {Record<string, string | undefined>} env
- * @returns {string}
- */
-function required(name, env) {
+function required(name: string, env: Record<string, string | undefined>): string {
   const value = env[name];
   if (!value) throw new Error(`${name} is not set`);
   return value;
@@ -173,20 +157,18 @@ function required(name, env) {
 
 /**
  * The CLI, minus process handling and the API call.
- *
- * @param {string[]} args
- * @param {Record<string, string | undefined>} env
- * @param {{ root: string, fetchRuns: (repo: string, sha: string) => unknown }} io
- * @returns {string}
  */
-export function main(args, env, { root, fetchRuns }) {
+export function main(
+  args: string[],
+  env: Record<string, string | undefined>,
+  { root, fetchRuns }: { root: string; fetchRuns: (repo: string, sha: string) => unknown },
+): string {
   const [mode, ...files] = args;
   if (mode !== 'pending' && mode !== 'green') {
     throw new Error('usage: gate.ts pending | gate.ts green <workflow file>...');
   }
   if (mode === 'green' && files.length === 0) throw new Error('green needs workflow files');
-  /** @type {{ self: string, exempt: string[] }} */
-  let skip = { self: '', exempt: [] };
+  let skip: { self: string; exempt: string[] } = { self: '', exempt: [] };
   if (mode === 'pending') {
     const ref = `origin/${env.BASE_REF || 'main'}`;
     skip = {
@@ -205,8 +187,7 @@ export function main(args, env, { root, fetchRuns }) {
 
 /* c8 ignore start: the CLI's lines, run by action.yml */
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  /** @type {(repo: string, sha: string) => unknown} */
-  const fetchRuns = (repo, sha) =>
+  const fetchRuns: (repo: string, sha: string) => unknown = (repo, sha) =>
     JSON.parse(
       execFileSync(
         'gh',

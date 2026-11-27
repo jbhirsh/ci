@@ -13,25 +13,16 @@ const oidc = fakeFetch({
   ],
 });
 
-/**
- * Anything the fake SDK was handed, read loosely.
- *
- * @typedef {{ [key: string]: Loose } & ((...args: unknown[]) => Promise<Loose>)} Loose
- */
+/** Anything the fake SDK was handed, read loosely. */
+type Loose = { [key: string]: Loose } & ((...args: unknown[]) => Promise<Loose>);
 
-/**
- * @param {unknown[]} messages
- * @param {{ throws?: string }} [behaviour]
- */
-function fakeSdk(messages, behaviour = {}) {
-  /** @type {{ options?: Loose, prompt?: string }} */
-  const seen = {};
+function fakeSdk(messages: unknown[], behaviour: { throws?: string } = {}) {
+  const seen: { options?: Loose; prompt?: string } = {};
   const sdk = {
     /**
-     * @param {{ prompt: string, options: Loose }} args
      * @yields {unknown} each message
      */
-    query: async function* ({ prompt, options }) {
+    query: async function* ({ prompt, options }: { prompt: string; options: Loose }) {
       seen.prompt = prompt;
       seen.options = options;
       if (behaviour.throws) throw new Error(behaviour.throws);
@@ -39,9 +30,7 @@ function fakeSdk(messages, behaviour = {}) {
     },
   };
   return {
-    sdk: /** @type {typeof import('@anthropic-ai/claude-agent-sdk')} */ (
-      /** @type {unknown} */ (sdk)
-    ),
+    sdk: sdk as unknown as typeof import('@anthropic-ai/claude-agent-sdk'),
     seen,
   };
 }
@@ -54,8 +43,7 @@ const success = {
   total_cost_usd: 0.2,
 };
 
-/** @param {Record<string, string>} [over] */
-const env = (over = {}) => ({
+const env = (over: Record<string, string> = {}) => ({
   RUNNER_TEMP: mkdtempSync(path.join(tmpdir(), 'autofix-sdk-')),
   PROMPT: 'Fix CI.',
   GH_TOKEN: 'github_pat_bot',
@@ -78,7 +66,7 @@ describe('main', () => {
       success,
     ]);
     expect(out.report).toContain('Claude autofix (SDK): success, 9 turns, $0.200.');
-    const o = /** @type {Loose} */ (seen.options);
+    const o = seen.options as Loose;
     expect(o).toMatchObject({
       model: 'sonnet',
       settings: { advisorModel: 'opus' },
@@ -105,7 +93,7 @@ describe('main', () => {
   it('holds Bash to its programs and the web to the guard', async () => {
     const { sdk, seen } = fakeSdk([success]);
     await main(env(), { sdk, fetchImpl: oidc, root: '/app' });
-    const o = /** @type {Loose} */ (seen.options);
+    const o = seen.options as Loose;
     const pre = o.hooks.PreToolUse[0].hooks[0];
     const post = o.hooks.PostToolUse[0].hooks[0];
     const deny = { hookSpecificOutput: { permissionDecision: 'deny' } };
@@ -158,7 +146,7 @@ describe('main', () => {
   it('signs in with a key instead, and needs the bot token', async () => {
     const { sdk, seen } = fakeSdk([success]);
     await main(env({ ANTHROPIC_API_KEY: 'sk' }), { sdk, fetchImpl: fakeFetch({}), root: '/app' });
-    expect(/** @type {Loose} */ (seen.options).env.ANTHROPIC_IDENTITY_TOKEN_FILE).toBeUndefined();
+    expect((seen.options as Loose).env.ANTHROPIC_IDENTITY_TOKEN_FILE).toBeUndefined();
     await expect(
       main(env({ GH_TOKEN: '' }), { sdk, fetchImpl: oidc, root: '/app' }),
     ).rejects.toThrow('GH_TOKEN is not set');

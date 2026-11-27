@@ -5,7 +5,7 @@ import { crashed, markerFor, releasedBody } from './crash.ts';
 // The execution file is whatever the fixer's pass left, and the comment
 // body whatever the API returns: anything at all, as far as these know.
 const sha = fc.stringMatching(/^[0-9a-f]{40}$/);
-const fixer = fc.constantFrom(/** @type {const} */ ('ci'), /** @type {const} */ ('review'));
+const fixer = fc.constantFrom('ci' as const, 'review' as const);
 
 describe('crashed', () => {
   it('never throws, on any text or any JSON', () => {

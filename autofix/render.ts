@@ -19,26 +19,29 @@ import { setOutput } from '../lib/actions.mjs';
 import { appRoot } from '../lib/app.mjs';
 import { bullets, fill } from '../review/template.ts';
 import { autofixSettings } from './settings.ts';
+import type { AutofixSettings } from './settings.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/** @typedef {'ci-fix' | 'review-fix'} Fixer */
+export type Fixer = 'ci-fix' | 'review-fix';
 
-/**
- * @param {Fixer} fixer
- * @returns {string}
- */
-export function template(fixer) {
+export function template(fixer: Fixer): string {
   return readFileSync(path.join(HERE, `${fixer}.md`), 'utf8');
 }
 
-/**
- * @param {Fixer} fixer
- * @param {import('./settings.ts').AutofixSettings} settings
- * @param {{ repo: string, pr: string, base: string, repoDir: string, branch?: string, head?: string, failedChecks?: string }} run
- * @returns {string}
- */
-export function renderPrompt(fixer, settings, run) {
+export function renderPrompt(
+  fixer: Fixer,
+  settings: AutofixSettings,
+  run: {
+    repo: string;
+    pr: string;
+    base: string;
+    repoDir: string;
+    branch?: string;
+    head?: string;
+    failedChecks?: string;
+  },
+): string {
   const [owner, name] = run.repo.split('/');
   return fill(template(fixer), {
     repo: run.repo,
@@ -55,12 +58,7 @@ export function renderPrompt(fixer, settings, run) {
   });
 }
 
-/**
- * @param {string} name
- * @param {Record<string, string | undefined>} env
- * @returns {string}
- */
-function required(name, env) {
+function required(name: string, env: Record<string, string | undefined>): string {
   const value = env[name];
   if (!value) throw new Error(`${name} is not set`);
   return value;
@@ -68,13 +66,12 @@ function required(name, env) {
 
 /**
  * The CLI, minus process handling.
- *
- * @param {string | undefined} fixer
- * @param {Record<string, string | undefined>} env
- * @param {string} root
- * @returns {string}
  */
-export function main(fixer, env, root) {
+export function main(
+  fixer: string | undefined,
+  env: Record<string, string | undefined>,
+  root: string,
+): string {
   if (fixer !== 'ci-fix' && fixer !== 'review-fix') {
     throw new Error('usage: render.ts ci-fix|review-fix');
   }

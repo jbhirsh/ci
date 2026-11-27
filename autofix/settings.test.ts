@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { testApp } from '../review/testApp.ts';
 import { autofixSettings, DEFAULT_CANNOT_RUN, DEFAULT_CHECKS } from './settings.ts';
 
-const app = (/** @type {unknown} */ autofix) =>
-  testApp({ '.github/ci.json': JSON.stringify({ autofix }) });
+const app = (autofix: unknown) => testApp({ '.github/ci.json': JSON.stringify({ autofix }) });
 
 describe('autofixSettings', () => {
   it('defaults when the app has no key', () => {

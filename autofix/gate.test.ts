@@ -1,21 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from '../review/testApp.ts';
-import {
-  latestRuns,
-  main,
-  notGreen,
-  pendingWorkflows,
-  runsFromApi,
-  workflowPath,
-} from './gate.ts';
+import { latestRuns, main, notGreen, pendingWorkflows, runsFromApi, workflowPath } from './gate.ts';
+import type { Run } from './gate.ts';
 
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 
-/**
- * @param {Partial<import('./gate.ts').Run>} over
- * @returns {import('./gate.ts').Run}
- */
-function run(over) {
+function run(over: Partial<Run>): Run {
   return {
     id: 1,
     name: 'CI',
@@ -155,8 +145,7 @@ describe('main', () => {
     const root = testApp({
       '.github/ci.json': JSON.stringify({ autofix: { exempt: { 'PR pictures': 'pictures' } } }),
     });
-    /** @type {string[]} */
-    const asked = [];
+    const asked: string[] = [];
     const out = main(['pending'], env, {
       root,
       fetchRuns: (repo, sha) => {
