@@ -24,6 +24,9 @@ node <tool>/selftest.ts ../BoardGames
 The GIF tool runs as the apps run it, `node gif/cli.mjs <scenario>`: `gif/cli.ts` only exports its
 `main`.
 
+This repo records its job-summary report page the same way (ci#176), from scenarios in
+`job-summary/gif/scenarios/`: `node gif/cli.mjs job-summary/gif/scenarios/<scenario>.ts`.
+
 The probe runs against a deployment rather than a checkout (`probe/web/run.ts`'s header lists
 its inputs; WebKit comes from `npx playwright install --with-deps webkit`):
 
