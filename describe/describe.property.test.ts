@@ -54,12 +54,12 @@ describe('withSections, for any description', () => {
 });
 
 describe('withSections, for a section in parts and any description of slots', () => {
-  const upload = (/** @type {string} */ section) =>
+  const upload = (section: string) =>
     new Map([['visual-review', { id: 1, nodeId: 'N', bot: 'visual-review', sha: A, section }]]);
 
   it('never throws, shows each screen once, and writing twice changes nothing', () => {
     // Markers of every kind in any order: whole, torn, nested, overlapping, doubled.
-    const marker = (/** @type {string} */ state, /** @type {boolean} */ start) =>
+    const marker = (state: string, start: boolean) =>
       start
         ? `<!-- describe:visual-review:${state} -->`
         : `<!-- /describe:visual-review:${state} -->`;
@@ -121,9 +121,10 @@ describe('withSections, for a section in parts and any description of slots', ()
           const heading = out.indexOf('HEAD0X');
           states.forEach((s, i) => {
             const at = out.indexOf(`SCREEN${i}X`);
-            const { from, to } = /** @type {{ from: number, to: number }} */ (
-              blocks.find(out, `visual-review:${s}`) ?? { from: -1, to: -1 }
-            );
+            const { from, to } = (blocks.find(out, `visual-review:${s}`) ?? {
+              from: -1,
+              to: -1,
+            }) as { from: number; to: number };
             if (slotted[i]) {
               expect(at).toBeGreaterThan(from);
               expect(at).toBeLessThan(to);
@@ -150,7 +151,7 @@ describe('withSections, for a section in parts and any description of slots', ()
 });
 
 describe('withSections, for tables in parts and any slots', () => {
-  const upload = (/** @type {string} */ section) =>
+  const upload = (section: string) =>
     new Map([['visual-review', { id: 1, nodeId: 'N', bot: 'visual-review', sha: A, section }]]);
   const HB = '| BIG | b |\n|---|---|';
   const HM = '| MINOR | m |\n|---|---|';

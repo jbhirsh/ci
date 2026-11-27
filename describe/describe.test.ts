@@ -16,14 +16,8 @@ const IMG = 'https://github.com/user-attachments/assets/0123abcd-0000-1111-2222-
 
 /**
  * An upload comment.
- *
- * @param {number} id
- * @param {string} bot
- * @param {string} sha
- * @param {string} section
- * @param {string} [login]
  */
-const upload = (id, bot, sha, section, login = BOT) => ({
+const upload = (id: number, bot: string, sha: string, section: string, login: string = BOT) => ({
   id,
   node_id: `N${id}`,
   user: { login },
@@ -59,7 +53,7 @@ group('parseUpload', () => {
 });
 
 /** One bot's section, as withSections takes it. */
-const one = (/** @type {string} */ section, bot = 'visual-review') => new Map([[bot, { section }]]);
+const one = (section: string, bot = 'visual-review') => new Map([[bot, { section }]]);
 
 group('withSections', () => {
   it("writes each bot's block and leaves the rest of the description", () => {
@@ -79,17 +73,16 @@ group('place', () => {
   /**
    * A fake GitHub holding a description that may change under it.
    *
-   * @param {string[]} reads what each read of the description returns
+   * @param reads what each read of the description returns
    */
-  const io = (reads) => {
-    /** @type {string[]} */
-    const written = [];
+  const io = (reads: string[]) => {
+    const written: string[] = [];
     let i = 0;
     return {
       written,
       io: {
         body: () => reads[Math.min(i++, reads.length - 1)],
-        write: (/** @type {string} */ b) => written.push(b),
+        write: (b: string) => written.push(b),
         log: () => {},
       },
     };
@@ -132,10 +125,10 @@ group('place', () => {
 /**
  * A section in parts: the heading, then a part a state, then the rest.
  *
- * @param {Record<string, string>} screens text by state
- * @param {string} [rest]
+ * @param screens text by state
+ * @param rest
  */
-const parts = (screens, rest) =>
+const parts = (screens: Record<string, string>, rest?: string) =>
   [
     partMarker('head'),
     'HEAD',
@@ -146,10 +139,9 @@ const parts = (screens, rest) =>
     ]),
     ...(rest === undefined ? [] : ['', partMarker('rest'), rest]),
   ].join('\n');
-const slot = (/** @type {string} */ state, inner = '') =>
+const slot = (state: string, inner = '') =>
   `<!-- describe:visual-review:${state} -->${inner ? `\n${inner}\n` : '\n'}<!-- /describe:visual-review:${state} -->`;
-/** @param {string} section */
-const written = (section, body = '') => withSections(body, one(section));
+const written = (section: string, body = '') => withSections(body, one(section));
 
 group('a section in parts', () => {
   it('is read with its part lines left out, and refused with any other marker of ours', () => {
@@ -307,9 +299,8 @@ group('parseUpload, for the links a section may hold', () => {
 });
 
 group('withSections, for the table parts', () => {
-  const part = (/** @type {string} */ key, /** @type {string} */ text) =>
-    `${partMarker(key)}\n${text}`;
-  const write = (/** @type {string} */ body, /** @type {string[]} */ parts) =>
+  const part = (key: string, text: string) => `${partMarker(key)}\n${text}`;
+  const write = (body: string, parts: string[]) =>
     withSections(
       body,
       new Map([

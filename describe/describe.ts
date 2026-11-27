@@ -53,8 +53,7 @@
 import { blocksFor } from '../lib/blocks.mjs';
 
 /** The first line of an upload comment, for a bot and a commit. */
-export const uploadMarker = (/** @type {string} */ bot, /** @type {string} */ sha) =>
-  `<!-- describe-upload:${bot}:${sha} -->`;
+export const uploadMarker = (bot: string, sha: string) => `<!-- describe-upload:${bot}:${sha} -->`;
 /** Where the finished section starts in an upload comment. */
 export const SECTION = '<!-- describe-section -->';
 /** The sections' markers in the description. */
@@ -63,20 +62,17 @@ export const blocks = blocksFor('describe', { named: 'a bot named', where: 'a de
 const ATTEMPTS = 3;
 
 /** What a part's key may name: letters, digits, `.`, `_` and `-`, no `--`; a state is a file name, and blocks.mjs must take the key. */
-export const isScreenState = (/** @type {string} */ state) =>
+export const isScreenState = (state: string) =>
   /^[A-Za-z0-9._-]+$/.test(state) && !state.includes('--');
 /** The line that starts a part in an upload's section. */
-export const partMarker = (/** @type {string} */ key) => `<!-- describe-part:${key} -->`;
+export const partMarker = (key: string) => `<!-- describe-part:${key} -->`;
 const PART = /^<!-- describe-part:([^\s<>]+) -->$/;
 
 /**
  * What a part key says: its kind and, for a screen's, its state; null when
  * it isn't one describe knows (a state it can't name included).
- *
- * @param {string} key
- * @returns {{ kind: string, state?: string } | null}
  */
-function parseKey(key) {
+function parseKey(key: string): { kind: string; state?: string } | null {
   if (['head', 'rest', 'big', 'minor', 'header:big', 'header:minor'].includes(key)) {
     return { kind: key };
   }
@@ -87,10 +83,8 @@ function parseKey(key) {
 
 /**
  * The key a line starts a part with, or null when it isn't a part line.
- *
- * @param {string} line
  */
-function partKey(line) {
+function partKey(line: string) {
   const m = PART.exec(line.trimEnd());
   return m && parseKey(m[1]) ? m[1] : null;
 }
@@ -103,26 +97,21 @@ const ATTACHMENT = /^https:\/\/github\.com\/user-attachments\/assets\/[0-9a-f-]{
 /** A commit's page: a section may link the commit it was compared with. */
 const COMMIT = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/commit\/[0-9a-f]{40}$/;
 
-/**
- * A comment, as far as this reads it.
- *
- * @typedef {{ id: number, node_id: string, body?: string | null,
- *   user?: { login?: string } | null }} Comment
- */
+/** A comment, as far as this reads it. */
+export type Comment = {
+  id: number;
+  node_id: string;
+  body?: string | null;
+  user?: { login?: string } | null;
+};
 
-/**
- * An upload comment that counts.
- *
- * @typedef {{ id: number, nodeId: string, bot: string, sha: string,
- *   section: string }} Upload
- */
+/** An upload comment that counts. */
+export type Upload = { id: number; nodeId: string; bot: string; sha: string; section: string };
 
 /**
  * Every link or picture source in a section.
- *
- * @param {string} text
  */
-function urlsIn(text) {
+function urlsIn(text: string) {
   return [
     ...[...text.matchAll(/\]\(([^)\s]*)/g)].map((m) => m[1]),
     ...[...text.matchAll(/\b(?:src|href)="([^"]*)"/g)].map((m) => m[1]),
@@ -133,11 +122,10 @@ function urlsIn(text) {
 /**
  * The upload a comment is, or null when it doesn't count.
  *
- * @param {Comment} comment
- * @param {string} login BOT_PR_TOKEN's account
- * @returns {Upload | null}
+ * @param comment
+ * @param login BOT_PR_TOKEN's account
  */
-export function parseUpload(comment, login) {
+export function parseUpload(comment: Comment, login: string): Upload | null {
   if (comment.user?.login !== login) return null;
   const body = comment.body ?? '';
   const m = UPLOAD.exec(body);
@@ -158,19 +146,17 @@ export function parseUpload(comment, login) {
 
 /**
  * A section's parts, in order, or null when it has no part line.
- *
- * @param {string} section
- * @returns {{ key: string, kind: string, state?: string, text: string }[] | null}
  */
-function partsOf(section) {
-  /** @type {{ key: string, kind: string, state?: string, lines: string[] }[]} */
-  const parts = [];
+function partsOf(
+  section: string,
+): { key: string; kind: string; state?: string; text: string }[] | null {
+  const parts: { key: string; kind: string; state?: string; lines: string[] }[] = [];
   let any = false;
   for (const line of section.split('\n')) {
     const key = partKey(line);
     if (key !== null) {
       any = true;
-      const { kind, state } = /** @type {{ kind: string, state?: string }} */ (parseKey(key));
+      const { kind, state } = parseKey(key) as { kind: string; state?: string };
       // A part named twice reads as two, and a slot takes both.
       parts.push({ key, kind, state, lines: [] });
     } else if (parts.length > 0) parts[parts.length - 1].lines.push(line);
@@ -193,22 +179,17 @@ function partsOf(section) {
  * no marker and no one's block, so the next run reads the same slots; a
  * doubled, nested, torn or overlapping one, or one around a block, is left
  * as the author wrote it.
- *
- * @param {string} body
- * @param {string} bot
- * @returns {Set<string>}
  */
-function placedSlots(body, bot) {
+function placedSlots(body: string, bot: string): Set<string> {
   const marks = [
     ...body.matchAll(new RegExp(`<!-- (/?)describe:${bot}(?::([^\\s<>]+))? -->`, 'g')),
   ].map((m) => ({
     end: m[1] === '/',
     state: m[2],
-    from: /** @type {number} */ (m.index),
-    to: /** @type {number} */ (m.index) + m[0].length,
+    from: m.index as number,
+    to: (m.index as number) + m[0].length,
   }));
-  /** @type {Set<string>} */
-  const placed = new Set();
+  const placed: Set<string> = new Set();
   marks.forEach((mark, i) => {
     const { state } = mark;
     if (mark.end || state === undefined || !isScreenState(state)) return;
@@ -222,22 +203,16 @@ function placedSlots(body, bot) {
 
 /**
  * A table from its header and the rows of the parts that make it.
- *
- * @param {string} header
- * @param {string[]} rows
  */
-const table = (header, rows) => (rows.length > 0 ? `${header}\n${rows.join('\n')}` : '');
+const table = (header: string, rows: string[]) =>
+  rows.length > 0 ? `${header}\n${rows.join('\n')}` : '';
 
 /**
  * The description with one bot's section in it.
- *
- * @param {string} body
- * @param {string} bot
- * @param {string} section
  */
-function writeSection(body, bot, section) {
+function writeSection(body: string, bot: string, section: string) {
   const parts = partsOf(section) ?? [];
-  const has = (/** @type {string} */ kind) => parts.find((p) => p.kind === kind)?.text ?? '';
+  const has = (kind: string) => parts.find((p) => p.kind === kind)?.text ?? '';
   // The block is emptied first, and the slots that count are read from what
   // is left: writing it later can't destroy a marker that made a slot not
   // count, which would make the next run decide differently.
@@ -245,10 +220,8 @@ function writeSection(body, bot, section) {
   const slots = placedSlots(out, bot);
   /**
    * The tables of one screen, or of the screens no slot took.
-   *
-   * @param {(p: { state?: string }) => boolean} takes
    */
-  const tables = (takes) => ({
+  const tables = (takes: (p: { state?: string }) => boolean) => ({
     big: table(
       has('header:big'),
       parts.filter((p) => p.kind === 'big' && takes(p)).map((p) => p.text),
@@ -284,7 +257,7 @@ function writeSection(body, bot, section) {
       .filter(
         (p) =>
           ['head', 'rest'].includes(p.kind) ||
-          (p.kind === 'screen' && !slots.has(/** @type {string} */ (p.state))),
+          (p.kind === 'screen' && !slots.has(p.state as string)),
       )
       .map((p) => p.text),
     waiting,
@@ -301,10 +274,10 @@ function writeSection(body, bot, section) {
 /**
  * The description with each bot's section in it.
  *
- * @param {string} body
- * @param {ReadonlyMap<string, { section: string }>} sections by bot
+ * @param body
+ * @param sections by bot
  */
-export function withSections(body, sections) {
+export function withSections(body: string, sections: ReadonlyMap<string, { section: string }>) {
   let out = body;
   for (const [bot, { section }] of [...sections].sort(([a], [b]) => (a < b ? -1 : 1))) {
     out = writeSection(out, bot, section);
@@ -312,26 +285,31 @@ export function withSections(body, sections) {
   return out;
 }
 
-/**
- * What place needs from GitHub.
- *
- * @typedef {object} Io
- * @property {() => string} body the description, read now
- * @property {(body: string) => void} write sets it (the Actions token)
- * @property {(line: string) => void} log
- */
+/** What place needs from GitHub. */
+export type Io = {
+  /** the description, read now */
+  body: () => string;
+  /** sets it (the Actions token) */
+  write: (body: string) => void;
+  log: (line: string) => void;
+};
 
 /**
  * Writes a bot's section into the description, each part in its slot.
  * Returns whether the description changed.
  *
- * @param {Io} io
- * @param {string} bot
- * @param {string} section
- * @param {(body: string) => string} [tidy] applied to the description as read,
+ * @param io
+ * @param bot
+ * @param section
+ * @param tidy applied to the description as read,
  *   before the section goes in (attach.mjs drops what gh appended)
  */
-export function place(io, bot, section, tidy = (body) => body) {
+export function place(
+  io: Io,
+  bot: string,
+  section: string,
+  tidy: (body: string) => string = (body) => body,
+) {
   const sections = new Map([[bot, { section }]]);
   for (let attempt = 1; ; attempt++) {
     const before = io.body();
