@@ -9,12 +9,8 @@ const CWD = '/home/runner/work/sift/sift';
 
 /**
  * A mutant spanning lines `start` to `end`, with `status`.
- *
- * @param {number} start
- * @param {number} end
- * @param {string} [status]
  */
-const at = (start, end, status = 'Killed') => ({
+const at = (start: number, end: number, status = 'Killed') => ({
   status,
   location: { start: { line: start }, end: { line: end } },
 });
@@ -109,11 +105,7 @@ describe('judge', () => {
 });
 
 describe('main', () => {
-  /**
-   * @param {unknown} ci
-   * @param {unknown} [mutation]
-   */
-  function app(ci, mutation) {
+  function app(ci: unknown, mutation?: unknown) {
     const root = mkdtempSync(path.join(tmpdir(), 'gate-'));
     mkdirSync(path.join(root, '.github'));
     writeFileSync(path.join(root, '.github', 'ci.json'), JSON.stringify(ci));

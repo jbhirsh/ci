@@ -4,8 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cacheKeys, filesHash, main } from './cache.ts';
 
-/** @param {Record<string, string>} files */
-function dir(files) {
+function dir(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), 'cache-'));
   for (const [name, text] of Object.entries(files)) {
     mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
@@ -58,8 +57,7 @@ describe('filesHash', () => {
 });
 
 describe('main', () => {
-  /** @param {unknown} ci */
-  const app = (ci) => dir({ '.github/ci.json': JSON.stringify(ci), lock: 'x' });
+  const app = (ci: unknown) => dir({ '.github/ci.json': JSON.stringify(ci), lock: 'x' });
 
   it("writes this run's key and the restore keys", () => {
     const out = path.join(mkdtempSync(path.join(tmpdir(), 'cache-out-')), 'out');

@@ -34,20 +34,15 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appRoot } from '../lib/app.mjs';
 import { inRanges, parseReport, parseScope, readText, relativeName } from './report.ts';
-
-/** @typedef {import('./report.ts').Report} Report */
+import type { Report } from './report.ts';
 
 /**
  * Which end lines (1-based) stay where they were when Stryker diffs the
  * earlier copy of a file with the file now: those the file reads the same
  * up to in both, whatever the line endings, provided the file now doesn't
  * repeat that start further down.
- *
- * @param {string} before
- * @param {string} now
- * @returns {(end: number) => boolean}
  */
-export function staysPut(before, now) {
+export function staysPut(before: string, now: string): (end: number) => boolean {
   const old = before.split(/\r?\n/);
   const text = now.replace(/\r\n/g, '\n');
   const current = text.split('\n');
@@ -68,16 +63,19 @@ export function staysPut(before, now) {
  * line range keeps a mutant only where it stays put between the report's
  * source and `read`'s text (null when the file can't be read).
  *
- * @param {Report} report
- * @param {string[]} scope
- * @param {string} cwd
- * @param {(file: string) => string | null} [read] a file's text now, by its scope name
- * @returns {Report}
+ * @param report
+ * @param scope
+ * @param cwd
+ * @param read a file's text now, by its scope name
  */
-export function narrow(report, scope, cwd, read = (file) => readText(path.resolve(cwd, file))) {
+export function narrow(
+  report: Report,
+  scope: string[],
+  cwd: string,
+  read: (file: string) => string | null = (file) => readText(path.resolve(cwd, file)),
+): Report {
   const wanted = parseScope(scope, cwd);
-  /** @type {NonNullable<Report['files']>} */
-  const files = {};
+  const files: NonNullable<Report['files']> = {};
   for (const [name, file] of Object.entries(report.files ?? {})) {
     const key = relativeName(name, cwd);
     if (!wanted.has(key)) continue;
@@ -107,13 +105,13 @@ export function narrow(report, scope, cwd, read = (file) => readText(path.resolv
  * Narrows the file in place. A missing file is left missing (Stryker then
  * runs every mutant); one that won't parse is deleted for the same result,
  * since Stryker would stop on it instead.
- *
- * @param {string} file
- * @param {string[]} scope
- * @param {string} cwd
- * @param {(line: string) => void} [log]
  */
-export function narrowFile(file, scope, cwd, log = console.log) {
+export function narrowFile(
+  file: string,
+  scope: string[],
+  cwd: string,
+  log: (line: string) => void = console.log,
+) {
   if (!existsSync(file)) {
     log(`No incremental file at ${file}: every mutant in scope will run.`);
     return;
@@ -133,11 +131,8 @@ export function narrowFile(file, scope, cwd, log = console.log) {
 
 /**
  * The command line: `<file> <scope>`. Returns the exit code.
- *
- * @param {string[]} args
- * @param {string} [cwd]
  */
-export function main(args, cwd = appRoot()) {
+export function main(args: string[], cwd: string = appRoot()) {
   const [file, scope] = args;
   if (!file || scope === undefined) {
     console.error('Usage: narrow.ts <incremental file> <comma-separated files or file:lines>');

@@ -65,34 +65,22 @@ import { judge } from './gate.ts';
 import { allMutants, counts, parseReport, readText, relativeName } from './report.ts';
 import { gitIn, inMutateScope } from './scope.ts';
 import { breakThreshold, readSettings, readStrykerConfig } from './settings.ts';
+import type { Counts, Mutant, Report, Test } from './report.ts';
 
-/**
- * @typedef {import('./report.ts').Report} Report
- * @typedef {import('./report.ts').Mutant} Mutant
- * @typedef {import('./report.ts').Test} Test
- * @typedef {import('./report.ts').Counts} Counts
- * @typedef {{ files: string[], weight: number }} Shard
- */
+export type Shard = { files: string[]; weight: number };
 
 /**
  * What testing one mutant took: one run, plus each test covering it.
- *
- * @param {Mutant} mutant
  */
-export function mutantWeight(mutant) {
+export function mutantWeight(mutant: Mutant) {
   return mutant.status === 'Ignored' ? 0 : 1 + (mutant.coveredBy?.length ?? 0);
 }
 
 /**
  * Each file's weight in a set of results, by cwd-relative name.
- *
- * @param {Report} report
- * @param {string} cwd
- * @returns {Map<string, number>}
  */
-export function reportWeights(report, cwd) {
-  /** @type {Map<string, number>} */
-  const weights = new Map();
+export function reportWeights(report: Report, cwd: string): Map<string, number> {
+  const weights: Map<string, number> = new Map();
   for (const [name, file] of Object.entries(report.files ?? {})) {
     const weight = (file.mutants ?? []).reduce((sum, m) => sum + mutantWeight(m), 0);
     weights.set(relativeName(name, cwd), weight);
@@ -103,13 +91,12 @@ export function reportWeights(report, cwd) {
 /**
  * Each file's weight: its weight in `known` when there is one, else its line
  * count at the weight per line of the files `known` has (1 with none).
- *
- * @param {string[]} files
- * @param {(file: string) => number} lines
- * @param {Map<string, number>} known
- * @returns {Map<string, number>}
  */
-export function fileWeights(files, lines, known) {
+export function fileWeights(
+  files: string[],
+  lines: (file: string) => number,
+  known: Map<string, number>,
+): Map<string, number> {
   let weight = 0;
   let knownLines = 0;
   for (const file of files) {
@@ -125,16 +112,11 @@ export function fileWeights(files, lines, known) {
 /**
  * The files in at most `count` shards of near-equal weight (never an empty
  * one), each shard's files in path order.
- *
- * @param {Map<string, number>} weights
- * @param {number} count
- * @returns {Shard[]}
  */
-export function splitShards(weights, count) {
-  const weightOf = (/** @type {string} */ file) => weights.get(file) ?? 0;
+export function splitShards(weights: Map<string, number>, count: number): Shard[] {
+  const weightOf = (file: string) => weights.get(file) ?? 0;
   const order = [...weights.keys()].sort((a, b) => weightOf(b) - weightOf(a) || (a < b ? -1 : 1));
-  /** @type {Shard[]} */
-  const shards = Array.from({ length: Math.min(count, order.length) }, () => ({
+  const shards: Shard[] = Array.from({ length: Math.min(count, order.length) }, () => ({
     files: [],
     weight: 0,
   }));
@@ -152,11 +134,22 @@ export function splitShards(weights, count) {
 
 /**
  * The split for the tracked files, the `mutate` globs and the last results.
- *
- * @param {{ tracked: string[], mutate: string[], results: Report | null,
- *   lines: (file: string) => number, count: number, cwd: string }} args
  */
-export function plan({ tracked, mutate, results, lines, count, cwd }) {
+export function plan({
+  tracked,
+  mutate,
+  results,
+  lines,
+  count,
+  cwd,
+}: {
+  tracked: string[];
+  mutate: string[];
+  results: Report | null;
+  lines: (file: string) => number;
+  count: number;
+  cwd: string;
+}) {
   const files = tracked.filter((file) => inMutateScope(file, mutate)).sort();
   // No file means no shard, and GitHub fails an empty matrix with a message
   // that names neither the globs nor this repo: say what's wrong here.
@@ -172,20 +165,15 @@ export function plan({ tracked, mutate, results, lines, count, cwd }) {
 
 /**
  * A GitHub Actions job matrix with one entry per shard.
- *
- * @param {Shard[]} shards
  */
-export function shardMatrix(shards) {
+export function shardMatrix(shards: Shard[]) {
   return { include: shards.map(({ files }, i) => ({ shard: i + 1, mutate: files.join(',') })) };
 }
 
 /**
  * The split as a Markdown table.
- *
- * @param {Shard[]} shards
- * @param {boolean} fromResults
  */
-export function shardTable(shards, fromResults) {
+export function shardTable(shards: Shard[], fromResults: boolean) {
   const unit = fromResults ? 'mutants plus covering tests, last results' : 'lines';
   const rows = shards.map(({ files, weight }, i) => `| ${i + 1} | ${files.length} | ${weight} |`);
   return [`| Shard | Files | Weight (${unit}) |`, '| --- | --- | --- |', ...rows, ''].join('\n');
@@ -193,10 +181,8 @@ export function shardTable(shards, fromResults) {
 
 /**
  * The Stryker config for one shard: no break threshold.
- *
- * @param {Record<string, unknown>} config
  */
-export function shardConfig(config) {
+export function shardConfig(config: Record<string, unknown>) {
   const thresholds =
     typeof config.thresholds === 'object' && config.thresholds !== null ? config.thresholds : {};
   return { ...config, thresholds: { ...thresholds, break: null } };
@@ -204,12 +190,8 @@ export function shardConfig(config) {
 
 /**
  * The key Stryker's incremental mode knows a test by across runs.
- *
- * @param {string} fileName
- * @param {Test} test
- * @param {string} cwd
  */
-export function testKey(fileName, test, cwd) {
+export function testKey(fileName: string, test: Test, cwd: string) {
   const start = test.location?.start;
   return `${relativeName(fileName, cwd)}@${start?.line ?? 0}:${start?.column ?? 0}\n${test.name}`;
 }
@@ -217,23 +199,18 @@ export function testKey(fileName, test, cwd) {
 /**
  * The shards' results as one, tests numbered once across them, with the
  * config's whole scope and thresholds. Throws on a file in two shards.
- *
- * @param {Report[]} reports
- * @param {{ mutate: string[], thresholds: Record<string, unknown> }} config
- * @param {string} cwd
- * @returns {Report}
  */
-export function mergeReports(reports, config, cwd) {
-  /** @type {NonNullable<Report['files']>} */
-  const files = {};
-  /** @type {NonNullable<Report['testFiles']>} */
-  const testFiles = {};
+export function mergeReports(
+  reports: Report[],
+  config: { mutate: string[]; thresholds: Record<string, unknown> },
+  cwd: string,
+): Report {
+  const files: NonNullable<Report['files']> = {};
+  const testFiles: NonNullable<Report['testFiles']> = {};
   const seen = new Set();
-  /** @type {Map<string, string>} */
-  const ids = new Map();
+  const ids: Map<string, string> = new Map();
   for (const report of reports) {
-    /** @type {Map<string, string>} */
-    const local = new Map();
+    const local: Map<string, string> = new Map();
     for (const [fileName, testFile] of Object.entries(report.testFiles ?? {})) {
       const merged = (testFiles[fileName] ??= { ...testFile, tests: [] });
       for (const test of testFile.tests ?? []) {
@@ -247,7 +224,7 @@ export function mergeReports(reports, config, cwd) {
         local.set(test.id, id);
       }
     }
-    const renumber = (/** @type {string[] | undefined} */ list) =>
+    const renumber = (list: string[] | undefined) =>
       list?.map((id) => local.get(id)).filter((id) => id !== undefined);
     for (const [fileName, file] of Object.entries(report.files ?? {})) {
       const name = relativeName(fileName, cwd);
@@ -276,11 +253,20 @@ export function mergeReports(reports, config, cwd) {
 /**
  * The verdict on a merge: whether it's complete, whether it passes, and the
  * summary to show.
- *
- * @param {{ found: number, expected: number, counts: Counts, breakAt: number | null,
- *   perFile?: { pass: boolean, lines: string[] } | null }} args
  */
-export function verdict({ found, expected, counts: c, breakAt, perFile = null }) {
+export function verdict({
+  found,
+  expected,
+  counts: c,
+  breakAt,
+  perFile = null,
+}: {
+  found: number;
+  expected: number;
+  counts: Counts;
+  breakAt: number | null;
+  perFile?: { pass: boolean; lines: string[] } | null;
+}) {
   const complete = found === expected;
   const score = c.score === null ? 'none' : `${c.score.toFixed(2)}%`;
   const lines = [
@@ -317,10 +303,8 @@ export function verdict({ found, expected, counts: c, breakAt, perFile = null })
 
 /**
  * The shard directories in `dir`, sorted, or none when it can't be read.
- *
- * @param {string} dir
  */
-function shardDirs(dir) {
+function shardDirs(dir: string) {
   try {
     return readdirSync(dir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
@@ -333,17 +317,13 @@ function shardDirs(dir) {
 
 /**
  * Writes `text` to `file`, making its directory first.
- *
- * @param {string} file
- * @param {string} text
  */
-function write(file, text) {
+function write(file: string, text: string) {
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, text);
 }
 
-/** @param {string | undefined} text */
-const positive = (text) => {
+const positive = (text: string | undefined) => {
   const n = Number(text);
   return Number.isInteger(n) && n > 0 ? n : null;
 };
@@ -352,15 +332,12 @@ const USAGE = 'Usage: sweep.ts plan [results] | config <out> | merge <dir> <coun
 
 /**
  * The command line. Returns the exit code.
- *
- * @param {string[]} args
- * @param {string} [root]
  */
-export function main(args, root = appRoot()) {
+export function main(args: string[], root: string = appRoot()) {
   const [command, ...rest] = args;
   const settings = readSettings(root);
   const config = readStrykerConfig(settings, root);
-  const at = (/** @type {string} */ file) => path.resolve(root, file);
+  const at = (file: string) => path.resolve(root, file);
   if (command === 'plan') {
     const tracked = gitIn(root)('ls-files', '-z').split('\0').filter(Boolean);
     const { shards, fromResults } = plan({
@@ -386,8 +363,7 @@ export function main(args, root = appRoot()) {
   }
   const expected = positive(rest[1]);
   if (command === 'merge' && rest[0] && expected !== null && rest[2]) {
-    /** @type {Report[]} */
-    const reports = [];
+    const reports: Report[] = [];
     for (const shard of shardDirs(at(rest[0]))) {
       const report = parseReport(
         readText(path.join(at(rest[0]), shard, 'stryker-incremental.json')),

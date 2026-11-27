@@ -24,7 +24,7 @@ describe('subjects', () => {
       .map(([dirs, name, extension]) => [...dirs, name + extension].join('/'));
     fc.assert(
       fc.property(file, fc.uniqueArray(file), (changed, present) => {
-        const exists = (/** @type {string} */ f) => present.includes(f);
+        const exists = (f: string) => present.includes(f);
         const found = subjects(changed, exists);
         if (!/\.test\.[cm]?[jt]sx?$/.test(changed)) {
           expect(found).toEqual([changed]);

@@ -54,24 +54,21 @@ import { setOutput } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
 import { isRecord, readText } from './report.ts';
 
-/**
- * @typedef {{
- *   strykerConfig: string,
- *   wiring: string[],
- *   smoke: string[],
- *   testSubjects: boolean,
- *   formatCheck: boolean,
- *   perFileThreshold: number | null,
- *   nodeOptions: string,
- *   install: string,
- *   cache: { prefix: string, restoreMain: boolean, restartOn: string[] },
- *   push: { timeoutMinutes: number },
- *   sweep: { shards: number, timeoutMinutes: number },
- * }} Settings
- */
+export type Settings = {
+  strykerConfig: string;
+  wiring: string[];
+  smoke: string[];
+  testSubjects: boolean;
+  formatCheck: boolean;
+  perFileThreshold: number | null;
+  nodeOptions: string;
+  install: string;
+  cache: { prefix: string; restoreMain: boolean; restartOn: string[] };
+  push: { timeoutMinutes: number };
+  sweep: { shards: number; timeoutMinutes: number };
+};
 
-/** @returns {Settings} */
-export function defaults() {
+export function defaults(): Settings {
   return {
     strykerConfig: 'stryker.config.json',
     wiring: ['package.json', 'package-lock.json', 'patches/**', '.github/workflows/mutation.yml'],
@@ -87,24 +84,20 @@ export function defaults() {
   };
 }
 
-/** @param {unknown} value */
-const isStrings = (value) => Array.isArray(value) && value.every((v) => typeof v === 'string');
-/** @param {unknown} value */
-const isPositive = (value) => Number.isInteger(value) && Number(value) > 0;
+const isStrings = (value: unknown) =>
+  Array.isArray(value) && value.every((v) => typeof v === 'string');
+const isPositive = (value: unknown) => Number.isInteger(value) && Number(value) > 0;
 
 /**
  * Checks one section's keys against the defaults' types, returning the merged
  * section. Throws naming the key on anything unknown or mistyped.
- *
- * @template {Record<string, unknown>} T
- * @param {Record<string, unknown>} given
- * @param {T} base
- * @param {string} where
- * @returns {T}
  */
-function merge(given, base, where) {
-  /** @type {Record<string, unknown>} */
-  const out = { ...base };
+function merge<T extends Record<string, unknown>>(
+  given: Record<string, unknown>,
+  base: T,
+  where: string,
+): T {
+  const out: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(given)) {
     const name = `${where}${key}`;
     if (!(key in base)) throw new Error(`mutation: unknown setting "${name}"`);
@@ -126,56 +119,48 @@ function merge(given, base, where) {
     }
     out[key] = value;
   }
-  return /** @type {T} */ (out);
+  return out as T;
 }
 
 /**
  * The app's settings: its `mutation` section over the defaults.
- *
- * @param {Record<string, unknown>} section
- * @returns {Settings}
  */
-export function parseSettings(section) {
+export function parseSettings(section: Record<string, unknown>): Settings {
   return merge(section, defaults(), '');
 }
 
 /**
  * The app's settings, read from its checkout.
- *
- * @param {string} [root]
- * @returns {Settings}
  */
-export function readSettings(root = appRoot()) {
+export function readSettings(root: string = appRoot()): Settings {
   return parseSettings(appConfig('mutation', root));
 }
 
 /**
  * The files Stryker's setup rests on: the settings' list, plus the Stryker
  * config and `.github/ci.json`, which always count.
- *
- * @param {Settings} settings
  */
-export function wiringGlobs(settings) {
+export function wiringGlobs(settings: Settings) {
   return [settings.strykerConfig, '.github/ci.json', ...settings.wiring];
 }
 
-/**
- * @typedef {{ mutate: string[], thresholds: Record<string, unknown>,
- *   reporters: string[], raw: Record<string, unknown> }} StrykerConfig
- */
+export type StrykerConfig = {
+  mutate: string[];
+  thresholds: Record<string, unknown>;
+  reporters: string[];
+  raw: Record<string, unknown>;
+};
 
 /**
  * A Stryker config's text, checked for what the scripts read: a `mutate`
  * list of globs, and the thresholds and reporters when present.
- *
- * @param {string | null} text
- * @param {string} [name]
- * @returns {StrykerConfig}
  */
-export function parseStrykerConfig(text, name = 'stryker.config.json') {
+export function parseStrykerConfig(
+  text: string | null,
+  name = 'stryker.config.json',
+): StrykerConfig {
   if (text === null) throw new Error(`${name} not found`);
-  /** @type {unknown} */
-  let raw;
+  let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
@@ -186,20 +171,17 @@ export function parseStrykerConfig(text, name = 'stryker.config.json') {
   const thresholds = isRecord(raw.thresholds) ? raw.thresholds : {};
   const reporters = isStrings(raw.reporters) ? raw.reporters : [];
   return {
-    mutate: /** @type {string[]} */ (raw.mutate),
+    mutate: raw.mutate as string[],
     thresholds,
-    reporters: /** @type {string[]} */ (reporters),
+    reporters: reporters as string[],
     raw,
   };
 }
 
 /**
  * The app's Stryker config.
- *
- * @param {Settings} settings
- * @param {string} [root]
  */
-export function readStrykerConfig(settings, root = appRoot()) {
+export function readStrykerConfig(settings: Settings, root: string = appRoot()) {
   return parseStrykerConfig(
     readText(path.join(root, settings.strykerConfig)),
     settings.strykerConfig,
@@ -208,20 +190,16 @@ export function readStrykerConfig(settings, root = appRoot()) {
 
 /**
  * Stryker's `thresholds.break`, or null when it has none.
- *
- * @param {StrykerConfig} config
  */
-export function breakThreshold(config) {
+export function breakThreshold(config: StrykerConfig) {
   const value = config.thresholds.break;
   return typeof value === 'number' ? value : null;
 }
 
 /**
  * Writes the settings the composite actions' steps read as outputs.
- *
- * @param {string} [root]
  */
-export function main(root = appRoot()) {
+export function main(root: string = appRoot()) {
   const settings = readSettings(root);
   setOutput('stryker-config', settings.strykerConfig);
   setOutput('node-options', settings.nodeOptions);

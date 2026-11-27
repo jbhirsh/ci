@@ -25,25 +25,16 @@ import { summary } from '../lib/actions.mjs';
 import { appRoot } from '../lib/app.mjs';
 import { counts, inRanges, parseReport, parseScope, readText, relativeName } from './report.ts';
 import { readSettings } from './settings.ts';
+import type { Report, Scope } from './report.ts';
 
-/**
- * @typedef {import('./report.ts').Report} Report
- * @typedef {import('./report.ts').Scope} Scope
- * @typedef {{ file: string, score: number | null }} FileScore
- */
+export type FileScore = { file: string; score: number | null };
 
 /**
  * Each scored file's score, lowest first, files without one last. With a
  * scope, only the files it names count, each on its named lines.
- *
- * @param {Report} report
- * @param {Scope | null} scope
- * @param {string} cwd
- * @returns {FileScore[]}
  */
-export function fileScores(report, scope, cwd) {
-  /** @type {FileScore[]} */
-  const scores = [];
+export function fileScores(report: Report, scope: Scope | null, cwd: string): FileScore[] {
+  const scores: FileScore[] = [];
   for (const [file, data] of Object.entries(report.files ?? {})) {
     const name = relativeName(file, cwd);
     if (scope && !scope.has(name)) continue;
@@ -54,29 +45,21 @@ export function fileScores(report, scope, cwd) {
       score: counts(ranges ? mutants.filter((m) => inRanges(m, ranges)) : mutants).score,
     });
   }
-  const rank = (/** @type {number | null} */ s) => s ?? Infinity;
+  const rank = (s: number | null) => s ?? Infinity;
   return scores.sort((a, b) => rank(a.score) - rank(b.score));
 }
 
 /**
  * The scored files below `threshold`.
- *
- * @param {FileScore[]} scores
- * @param {number} threshold
  */
-export function failures(scores, threshold) {
+export function failures(scores: FileScore[], threshold: number) {
   return scores.filter((s) => s.score !== null && s.score < threshold);
 }
 
 /**
  * The gate's verdict on a report: the lines to print and whether it passes.
- *
- * @param {Report} report
- * @param {Scope | null} scope
- * @param {number} threshold
- * @param {string} cwd
  */
-export function judge(report, scope, threshold, cwd) {
+export function judge(report: Report, scope: Scope | null, threshold: number, cwd: string) {
   const scores = fileScores(report, scope, cwd);
   const failed = failures(scores, threshold);
   const where = scope ? 'in its changed lines ' : '';
@@ -101,12 +84,12 @@ export function judge(report, scope, threshold, cwd) {
 
 /**
  * The command line: `[report]`. Returns the exit code.
- *
- * @param {string[]} args
- * @param {string} [root]
- * @param {Record<string, string | undefined>} [env]
  */
-export function main(args, root = appRoot(), env = process.env) {
+export function main(
+  args: string[],
+  root: string = appRoot(),
+  env: Record<string, string | undefined> = process.env,
+) {
   const threshold = readSettings(root).perFileThreshold;
   if (threshold === null) {
     console.log('No per-file threshold set (mutation.perFileThreshold): nothing to gate.');
