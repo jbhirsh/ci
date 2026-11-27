@@ -20,6 +20,7 @@ import {
   buildEnv,
   freePort,
   git,
+  namesPort,
   remoteBranch,
   serve,
   stopServers,
@@ -29,8 +30,12 @@ import type { ChildProcess } from 'node:child_process';
 const temp = () => mkdtempSync(path.join(tmpdir(), 'gif-build-'));
 
 // An app whose Vite is a stand-in: `build` writes what it was asked into
-// outDir, `preview` answers on its port (or, with GIF_FAKE_PREVIEW set,
-// exits, or never listens).
+// outDir, `preview` listens on its port and then prints the line naming its
+// address, as Vite does. GIF_FAKE_PREVIEW picks another preview: `colour`
+// prints the line as Vite does in CI, its port in its own colour, and in two
+// writes; `chatty`, after the line, writes 1 MB to stdout, more than a pipe
+// holds, and answers only once all of it has been read; `missing` answers
+// 404; `exit` exits with 3; `silent` listens but never says so.
 function fakeApp() {
   const root = temp();
   mkdirSync(path.join(root, 'node_modules', 'vite', 'bin'), { recursive: true });
@@ -40,15 +45,31 @@ function fakeApp() {
 import { createServer } from 'node:http';
 const [command, ...args] = process.argv.slice(2);
 const value = (flag) => args[args.indexOf(flag) + 1];
+const mode = process.env.GIF_FAKE_PREVIEW;
 if (command === 'build') {
   mkdirSync(value('--outDir'), { recursive: true });
   writeFileSync(value('--outDir') + '/built.json', JSON.stringify({ args, cwd: process.cwd(), env: process.env.GIF_TEST_ENV ?? null, gone: process.env.GIF_TEST_GONE ?? null }));
-} else if (process.env.GIF_FAKE_PREVIEW === 'exit') {
+} else if (mode === 'exit') {
   process.exit(3);
-} else if (process.env.GIF_FAKE_PREVIEW === 'silent') {
-  setTimeout(() => {}, 60_000);
 } else {
-  createServer((_, res) => res.end('ok')).listen(Number(value('--port')), value('--host'));
+  const host = value('--host');
+  const port = value('--port');
+  let flushed;
+  const read = new Promise((done) => (flushed = done));
+  createServer((_, res) => {
+    if (mode === 'missing') res.statusCode = 404;
+    read.then(() => res.end('ok'));
+  }).listen(Number(port), host, () => {
+    if (mode === 'silent') return;
+    if (mode === 'colour') {
+      process.stdout.write('  \\x1b[32m➜\\x1b[39m  \\x1b[1mLocal\\x1b[22m:   \\x1b[36mhttp://' + host + ':');
+      setTimeout(() => process.stdout.write('\\x1b[1m' + port + '\\x1b[22m/\\x1b[39m\\n'), 0);
+    } else {
+      process.stdout.write('  ➜  Local:   http://' + host + ':' + port + '/\\n');
+    }
+    if (mode === 'chatty') process.stdout.write('x'.repeat(1024 * 1024) + '\\n', flushed);
+    else flushed();
+  });
 }
 `,
   );
@@ -147,8 +168,34 @@ describe('freePort', () => {
   });
 });
 
+describe('namesPort', () => {
+  const line =
+    '  \x1b[32m➜\x1b[39m  \x1b[1mLocal\x1b[22m:   \x1b[36mhttp://127.0.0.1:\x1b[1m4173\x1b[22m/\x1b[39m\n';
+
+  it("finds Vite's line for the port, through its colour codes and whatever host it names", () => {
+    expect(namesPort(line, 4173)).toBe(true);
+    expect(namesPort('  ➜  Local:   http://localhost:4173/\n', 4173)).toBe(true);
+    expect(namesPort('  ➜  Network: http://[::1]:4173/\n', 4173)).toBe(true);
+    expect(namesPort('  ➜  Local:   https://localhost:4173/\n', 4173)).toBe(true);
+  });
+
+  it('waits for the whole line, and for its own port', () => {
+    // Each prefix of the line, as the pipe may cut it, until the slash after the port.
+    const end = line.indexOf('/\x1b[39m');
+    for (let at = 0; at <= end; at++) expect(namesPort(line.slice(0, at), 4173)).toBe(false);
+    expect(namesPort(line.slice(0, end + 1), 4173)).toBe(true);
+    expect(namesPort(line, 417)).toBe(false);
+    expect(namesPort(line, 41730)).toBe(false);
+    expect(namesPort('port 4173 is in use, trying another one\n', 4173)).toBe(false);
+  });
+});
+
 describe('serve and stopServers', () => {
-  it('serves a build until stopped, resolving once it answers', async () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('serves a build until stopped, resolving once Vite names its address', async () => {
     const root = fakeApp();
     const servers: ChildProcess[] = [];
     const origin = await serve({ root, outDir: 'dist', host: '127.0.0.1', servers });
@@ -162,19 +209,60 @@ describe('serve and stopServers', () => {
     await stopServers([server]);
   });
 
-  it('says so when the server exits, or never answers', async () => {
+  it("reads the line through Vite's colour codes, however it is split", async () => {
+    const root = fakeApp();
+    const servers: ChildProcess[] = [];
+    process.env.GIF_FAKE_PREVIEW = 'colour';
+    const origin = await serve({ root, outDir: 'dist', host: 'localhost', servers });
+    expect(origin).toMatch(/^http:\/\/localhost:\d+$/);
+    expect(await (await fetch(origin)).text()).toBe('ok');
+    await stopServers(servers);
+  });
+
+  it('keeps reading what the server prints, so a full pipe never stalls it', async () => {
+    const root = fakeApp();
+    const servers: ChildProcess[] = [];
+    process.env.GIF_FAKE_PREVIEW = 'chatty';
+    const origin = await serve({ root, outDir: 'dist', host: '127.0.0.1', servers });
+    expect(await (await fetch(origin)).text()).toBe('ok');
+    await stopServers(servers);
+  });
+
+  it("fails when the page at Vite's address doesn't answer", async () => {
+    const root = fakeApp();
+    const servers: ChildProcess[] = [];
+    process.env.GIF_FAKE_PREVIEW = 'missing';
+    await expect(serve({ root, outDir: 'dist', host: '127.0.0.1', servers })).rejects.toThrow(
+      /^vite preview answered 404 on http:\/\/127\.0\.0\.1:\d+$/,
+    );
+    await stopServers(servers);
+  });
+
+  it('fails at once when the server exits, with its exit code', async () => {
     const root = fakeApp();
     const servers: ChildProcess[] = [];
     process.env.GIF_FAKE_PREVIEW = 'exit';
     await expect(serve({ root, outDir: 'dist', host: '127.0.0.1', servers })).rejects.toThrow(
       'vite preview exited with 3',
     );
+  });
+
+  it('fails at the hang limit when the server never says it is listening', async () => {
+    const root = fakeApp();
+    const servers: ChildProcess[] = [];
     process.env.GIF_FAKE_PREVIEW = 'silent';
-    await expect(
-      serve({ root, outDir: 'dist', host: '127.0.0.1', servers, timeoutMs: 300 }),
-    ).rejects.toThrow("vite preview didn't answer on http://127.0.0.1:");
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    // serve sets its limit once it has a port: wait for that timer, not any.
+    const before = vi.getTimerCount();
+    const served = serve({ root, outDir: 'dist', host: '127.0.0.1', servers, timeoutMs: 30_000 });
+    const failed = expect(served).rejects.toThrow(
+      "vite preview didn't say it was listening on http://127.0.0.1:",
+    );
+    await vi.waitUntil(() => vi.getTimerCount() > before);
+    vi.advanceTimersByTime(30_000);
+    await failed;
     await stopServers(servers);
-  }, 15_000);
+  });
 });
 
 // A repository with one commit on main, pushed to an origin beside it. Built

@@ -9,6 +9,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { symlinkSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import type { BuildSettings } from './settings.ts';
 import type { ChildProcess } from 'node:child_process';
 
@@ -119,9 +120,24 @@ export function freePort(host = '127.0.0.1'): Promise<number> {
 }
 
 /**
+ * Whether what `vite preview` has printed so far names an address on `port`:
+ * its Local or Network line, once its colour codes are stripped (in CI they
+ * split the port from the host). Matched on the port, not the host, since
+ * Vite may name the host otherwise than it was given (0.0.0.0 as localhost,
+ * localhost as 127.0.0.1 under another DNS order).
+ */
+export function namesPort(printed: string, port: number) {
+  return new RegExp(`\\bhttps?://[^\\s/]+:${port}/`).test(stripVTControlCharacters(printed));
+}
+
+/**
  * Serves `outDir` with `vite preview` on a free port of `host` (the process
- * goes in `servers`, for stopServers), and resolves with its origin once it
- * answers.
+ * goes in `servers`, for stopServers), and resolves with its origin once Vite
+ * prints the line naming its address, which it does only once it is
+ * listening, and the page there answers. Rejects at once if the process
+ * exits or fails first, and after `timeoutMs` if Vite never says so: a limit
+ * on a hang, never the way it succeeds. Its output goes on being read after
+ * that line, so a full pipe never stalls the server.
  */
 export async function serve({
   root,
@@ -150,21 +166,45 @@ export async function serve({
       '--host',
       host,
     ],
-    { cwd: root, stdio: ['ignore', 'ignore', 'inherit'] },
+    { cwd: root, stdio: ['ignore', 'pipe', 'inherit'] },
   );
   servers.push(server);
   const origin = `http://${host}:${port}`;
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    if (server.exitCode !== null) throw new Error(`vite preview exited with ${server.exitCode}`);
-    try {
-      if ((await fetch(origin)).ok) return origin;
-    } catch {
-      // Not listening yet.
-    }
-    if (Date.now() > deadline) throw new Error(`vite preview didn't answer on ${origin}`);
-    await new Promise((wait) => setTimeout(wait, 200));
-  }
+  await new Promise<void>((done, failed) => {
+    let printed = '';
+    const settle = (error?: Error) => {
+      clearTimeout(hung);
+      server.stdout.off('data', read);
+      server.stdout.resume();
+      server.off('exit', exited);
+      server.off('error', settle);
+      if (error) failed(error);
+      else done();
+    };
+    const read = (chunk: string) => {
+      printed += chunk;
+      if (namesPort(printed, port)) settle();
+    };
+    const exited = (code: number | null, signal: NodeJS.Signals | null) =>
+      settle(new Error(`vite preview exited with ${code ?? signal}`));
+    const hung = setTimeout(
+      () =>
+        settle(
+          new Error(
+            `vite preview didn't say it was listening on ${origin} within ${timeoutMs / 1000} s`,
+          ),
+        ),
+      timeoutMs,
+    );
+    server.stdout.setEncoding('utf8');
+    server.stdout.on('data', read);
+    server.once('exit', exited);
+    server.once('error', settle);
+  });
+  const page = await fetch(origin);
+  await page.body?.cancel();
+  if (!page.ok) throw new Error(`vite preview answered ${page.status} on ${origin}`);
+  return origin;
 }
 
 /**
