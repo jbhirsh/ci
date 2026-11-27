@@ -8,7 +8,7 @@ import {
   SECTION,
   uploadMarker,
   withSections,
-} from './describe.mjs';
+} from './describe.ts';
 
 const BOT = 'jbhirsh';
 const A = 'a'.repeat(40);

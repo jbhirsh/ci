@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blocks } from '../describe/describe.mjs';
+import { blocks } from '../describe/describe.ts';
 import { assetLink, BOT, outsideOwnBlocks, parseRecord, recordLine } from './record.mjs';
 
 /** @type {import('./record.mjs').Record} */

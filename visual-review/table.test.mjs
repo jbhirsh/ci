@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseUpload, SECTION, uploadMarker, withSections } from '../describe/describe.mjs';
+import { parseUpload, SECTION, uploadMarker, withSections } from '../describe/describe.ts';
 import { isMinor, keyOf, lines, pick, renderTable, share, summary } from './table.mjs';
 
 const columns = [

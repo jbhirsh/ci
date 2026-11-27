@@ -39,7 +39,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { newest, pages, statusFrom } from '../lib/github.mjs';
-import { parseUpload } from '../describe/describe.mjs';
+import { parseUpload } from '../describe/describe.ts';
 import { parseManifest, MANIFEST } from '../visual-shots/shots.mjs';
 import { compareShots } from './compare.mjs';
 import { BOT, assetLink, parseRecord } from './record.mjs';
@@ -99,7 +99,7 @@ export { BOT };
 
 /**
  * The shape of an upload's section. It goes up whenever the section's form
- * changes (table.mjs, describe/describe.mjs), so a PR whose last upload is
+ * changes (table.mjs, describe/describe.ts), so a PR whose last upload is
  * the old form gets one new upload in the new form, though its pictures
  * didn't change: the fingerprint alone would leave it as it was. 4: the
  * pictures in the description, no upload comment (ci#144).
@@ -221,7 +221,7 @@ function pullFacts(io, number) {
 function uploads(io, number) {
   return pages(io.api, `repos/${io.repo}/issues/${number}/comments`).flatMap((c) => {
     const upload = parseUpload(
-      /** @type {import('../describe/describe.mjs').Comment} */ (c),
+      /** @type {import('../describe/describe.ts').Comment} */ (c),
       io.uploader,
     );
     return upload && upload.bot === BOT ? [upload] : [];

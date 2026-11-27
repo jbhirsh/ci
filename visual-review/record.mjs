@@ -26,7 +26,7 @@
 // by the text, never by who edited, as BOT_PR_TOKEN is the owner's account.
 // A slot added or removed is an author's edit, and is reviewed.
 
-import { blocks } from '../describe/describe.mjs';
+import { blocks } from '../describe/describe.ts';
 
 /** The bot's name in its description block and slots. */
 export const BOT = 'visual-review';
