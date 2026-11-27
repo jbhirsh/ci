@@ -2,7 +2,7 @@ name: README screenshots, publish
 description: >-
   Opens, refreshes or closes the one bot PR from bot/readme-screenshots, or
   brings it up to date with main, from what the capture job found
-  (publish.mjs's header says when each happens and what the PR says). The
+  (publish.ts's header says when each happens and what the PR says). The
   only step of the app's publishing job, which needs contents and
   pull-requests write and runs no npm; the capture job (decide, the app's
   own capture, then compare) runs with a read-only token.
@@ -63,4 +63,4 @@ runs:
         SHOTS: ${{ runner.temp }}/readme-screenshots
         SOURCE_PR: ${{ inputs.source-pr }}
         RUN_URL: ${{ inputs.run-url }}
-      run: node "$GITHUB_ACTION_PATH/publish.mjs"
+      run: node "$GITHUB_ACTION_PATH/publish.ts"

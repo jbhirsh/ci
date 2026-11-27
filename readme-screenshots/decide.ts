@@ -1,11 +1,11 @@
 // Whether to retake the README's screenshots on this push to main: when a
-// file they show (settings.mjs: `shows`, less `ignore`) changed since the
+// file they show (settings.ts: `shows`, less `ignore`) changed since the
 // last successful run of this workflow, or the run was started by hand,
 // or there's no successful run to count from (or its commit is gone from
 // history). Counting from the last successful run, not the push's parent,
 // means a UI push whose run a later push cancelled is still caught.
 //
-//   node decide.mjs        sets the `capture` output to true or false
+//   node decide.ts        sets the `capture` output to true or false
 //
 // Runs in the app's checkout, which needs its whole history (fetch-depth
 // 0). Reads the last successful run with `gh` (GH_TOKEN with actions read),
@@ -17,7 +17,7 @@ import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
 import { pick } from '../lib/match.mjs';
-import { settings } from './settings.mjs';
+import { settings } from './settings.ts';
 
 /**
  * The workflow file a run belongs to, from GITHUB_WORKFLOW_REF
@@ -35,7 +35,7 @@ export function workflowFile(ref) {
  * The verdict, and why.
  *
  * @param {{ event: string, since: string | null, changed: string[] | null,
- *   settings: import('./settings.mjs').Settings }} input
+ *   settings: import('./settings.ts').Settings }} input
  *   `since` is the last successful run's commit; `changed` the files changed
  *   since it (null when that commit isn't in the history)
  * @returns {{ capture: boolean, reason: string, shown: string[] }}

@@ -1,14 +1,14 @@
 // Which freshly taken README screenshots replace the README's: each PNG in
 // <fresh dir> is compared with its namesake in the app's screenshots folder
-// (settings.mjs: `dir`) and copied to <out dir> when it's new, a different
+// (settings.ts: `dir`) and copied to <out dir> when it's new, a different
 // size, or more than CHANGED_RATIO of its pixels differ, so anti-aliasing
 // noise between runs never opens a PR.
 //
-//   node compare.mjs <fresh dir> <out dir>
+//   node compare.ts <fresh dir> <out dir>
 //
 // Lists the replacements on stderr and sets the `changed` output to
 // them (space-separated). The README's folder itself is left alone: the job
-// holding the token writes them there (publish.mjs). Pixels are compared
+// holding the token writes them there (publish.ts). Pixels are compared
 // as lib/pixels.mjs says, with this repo's pixelmatch and pngjs.
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
@@ -17,7 +17,7 @@ import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
 import { diff, PIXELS } from '../lib/pixels.mjs';
-import { CHANGED_RATIO, isShotName, settings } from './settings.mjs';
+import { CHANGED_RATIO, isShotName, settings } from './settings.ts';
 
 /** @typedef {import('../lib/pixels.mjs').Pixels} Pixels */
 
@@ -76,7 +76,7 @@ export function compare({ fresh, docs, out, pixels }) {
  */
 export async function main(argv, root = appRoot()) {
   const [fresh, out] = argv;
-  if (!fresh || !out) throw new Error('usage: compare.mjs <fresh dir> <out dir>');
+  if (!fresh || !out) throw new Error('usage: compare.ts <fresh dir> <out dir>');
   const { dir } = settings(appConfig('readme-screenshots', root));
   const replaced = compare({
     fresh: path.resolve(fresh),

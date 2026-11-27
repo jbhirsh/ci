@@ -1,6 +1,6 @@
 name: README screenshots, compare
 description: >-
-  Compares freshly taken README screenshots with the README's (compare.mjs's
+  Compares freshly taken README screenshots with the README's (compare.ts's
   header says how) and hands the ones that changed to the publishing job as
   the `readme-screenshots` artifact. The last step of the app's capture job,
   which wrote the fresh shots, named as the README names them, to one
@@ -35,7 +35,7 @@ runs:
       shell: bash
       env:
         FRESH: ${{ inputs.fresh }}
-      run: node "$GITHUB_ACTION_PATH/../compare.mjs" "$FRESH" "$RUNNER_TEMP/readme-screenshots"
+      run: node "$GITHUB_ACTION_PATH/../compare.ts" "$FRESH" "$RUNNER_TEMP/readme-screenshots"
 
     - uses: actions/upload-artifact@v7
       if: steps.compare.outputs.changed != ''

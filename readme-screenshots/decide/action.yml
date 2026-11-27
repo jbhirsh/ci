@@ -1,7 +1,7 @@
 name: README screenshots, decide
 description: >-
   Says whether a push to main should retake the README's screenshots: when
-  what they show changed since this workflow's last finished run (decide.mjs's
+  what they show changed since this workflow's last finished run (decide.ts's
   header has the rules; the app's `readme-screenshots` settings in
   .github/ci.json say what they show). A step of the app's capture job, after
   its checkout, which needs the whole history (fetch-depth 0). The job needs
@@ -29,4 +29,4 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
-      run: node "$GITHUB_ACTION_PATH/../decide.mjs"
+      run: node "$GITHUB_ACTION_PATH/../decide.ts"

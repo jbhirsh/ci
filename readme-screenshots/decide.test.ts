@@ -2,8 +2,8 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { changedSince, decide, main, workflowFile } from './decide.mjs';
-import { settings } from './settings.mjs';
+import { changedSince, decide, main, workflowFile } from './decide.ts';
+import { settings } from './settings.ts';
 
 // Outputs print instead of reaching the real job's, should these run in Actions.
 beforeEach(() => {

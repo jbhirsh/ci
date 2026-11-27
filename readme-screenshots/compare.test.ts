@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakePixels as pixels, fakePng as png, testPng } from '../lib/test-pixels.mjs';
-import { compare, diffRatio, main, shouldReplace } from './compare.mjs';
+import { compare, diffRatio, main, shouldReplace } from './compare.ts';
 
 // Outputs print instead of reaching the real job's, should these run in Actions.
 beforeEach(() => {
