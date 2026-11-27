@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decide, enable } from './enable.mjs';
+import { decide, enable } from './enable.ts';
 
 const PR = {
   state: 'OPEN',

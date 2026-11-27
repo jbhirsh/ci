@@ -8,7 +8,7 @@ description: >-
   checkout of the app's default branch, for its settings, never the PR's:
   it reads the shots only as bytes from the runs' artifacts. It writes
   nothing with BOT_PR_TOKEN. The job needs actions read, contents write
-  (enable.mjs turns Dependabot's auto-merge on), statuses, pull-requests
+  (enable.ts turns Dependabot's auto-merge on), statuses, pull-requests
   and issues write, and a concurrency group per PR so its status writes
   take turns.
 

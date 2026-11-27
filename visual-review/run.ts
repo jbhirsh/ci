@@ -17,7 +17,7 @@ import { setOutput } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
 import { ghApi } from '../lib/comment.mjs';
 import { PIXELS } from '../lib/pixels.mjs';
-import { enable } from '../dependabot-merge/enable.mjs';
+import { enable } from '../dependabot-merge/enable.ts';
 import { downloadShots } from './find.ts';
 import { review } from './review.ts';
 import { settings } from './settings.ts';

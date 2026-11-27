@@ -29,7 +29,7 @@
 # it up) is tried once more in the same job, straight away; one that ran
 # and failed isn't, but says so on the PR (crash.mjs).
 # Before either, on a Dependabot npm bump, it turns auto-merge on, once
-# per PR (../dependabot-merge/enable.mjs), whatever its labels say: a run
+# per PR (../dependabot-merge/enable.ts), whatever its labels say: a run
 # here puts no check on the PR, where a workflow of its own would.
 # Nothing polls or waits: the completions are the clock.
 # Each fixer proves its fix before pushing with the app's own commands, the
@@ -63,7 +63,7 @@ description: >-
   Fixes a bot's PR: mechanical breakage when a dependency bump fails a
   check, and the review threads Claude Review or the owner left once the
   build is green. It also turns auto-merge on for a Dependabot npm bump,
-  once (../dependabot-merge/enable.mjs).
+  once (../dependabot-merge/enable.ts).
 
 inputs:
   anthropic_api_key:
@@ -179,7 +179,7 @@ runs:
     # completes, rather than in a workflow on the PR, whose job would show
     # as a skipped check on every other PR. Once per PR, and before the
     # no-auto-fix label is read: that label stops fixes, not merging
-    # (../dependabot-merge/enable.mjs says when it acts). A convenience, so
+    # (../dependabot-merge/enable.ts says when it acts). A convenience, so
     # neither step failing (auto-merge off in the repo's settings, an API
     # error) stops the fixers below.
     - uses: actions/setup-node@v7
@@ -195,7 +195,7 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github_token }}
         PR_NUMBER: ${{ steps.pr.outputs.number }}
-      run: node "$GITHUB_ACTION_PATH/../dependabot-merge/enable.mjs"
+      run: node "$GITHUB_ACTION_PATH/../dependabot-merge/enable.ts"
 
     - uses: actions/checkout@v7
       if: steps.pr.outputs.skip == 'false'

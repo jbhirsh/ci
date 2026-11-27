@@ -23,7 +23,7 @@
 //                visual-shots/mockup/action.yml
 //
 // An app without the key doesn't use visual review, and every tool that
-// reads it (enable.mjs's gate, the self-test) behaves as before it.
+// reads it (enable.ts's gate, the self-test) behaves as before it.
 
 import { matchesAny } from '../lib/match.mjs';
 import { parseColumns } from '../lib/baselines.mjs';
