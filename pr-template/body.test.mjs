@@ -385,6 +385,17 @@ describe('renderedLines', () => {
     bodyProblems(`${GOOD}\n${'<!-- pr-gif:a -->\n'.repeat(5000)}`);
     expect(bodyProblems(`## a${' '.repeat(400000)}b`)).toHaveLength(2);
   });
+
+  it('reads a body of unclosed tool markers, or of unclosed inline comments, as text a reader sees', () => {
+    // At the 64 KB limit. Not a speed test: each searched the rest of the body for its end before
+    // ci#157, about 0.25 s and 0.8 s here, which the hang limit can't tell from linear work. The
+    // differential property test in body.property.test.mjs holds the result to those scans.
+    const markers = Array.from({ length: 5000 }, (_, n) => `<!-- x:${n} -->`).join('\n');
+    // Each is an HTML comment as well, which a reader doesn't see.
+    expect(renderedLines(markers)).toEqual(Array(5000).fill(''));
+    const comments = 'a <!-- '.repeat(9000);
+    expect(renderedLines(comments)).toEqual([comments]);
+  });
 });
 
 describe("the template's Example", () => {
