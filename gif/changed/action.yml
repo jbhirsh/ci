@@ -5,7 +5,7 @@ description: >-
   adds or changes (from its merge base with the base: every push re-records
   them all), as the outputs the record job reads; a run by hand passes its
   inputs through, to record. It runs none of the PR's code: git, and the
-  app's .github/ci.json read as data (gif/workflow.mjs's header says how).
+  app's .github/ci.json read as data (gif/workflow.ts's header says how).
 
 inputs:
   pr:
@@ -57,4 +57,4 @@ runs:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         APP_ROOT: ${{ github.workspace }}
-      run: node "$GITHUB_ACTION_PATH/../workflow.mjs" changed
+      run: node "$GITHUB_ACTION_PATH/../workflow.ts" changed

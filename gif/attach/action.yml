@@ -3,7 +3,7 @@ description: >-
   Attaches the GIFs the record job left in the run's pr-gif artifact to the
   PR: each scenario's table goes into its description between markers,
   and gh uploads each GIF and links it there, labelled "GIF:" for the
-  review; then each link is checked until it answers (gif/workflow.mjs's
+  review; then each link is checked until it answers (gif/workflow.ts's
   header says how). The attach job of pr-gif.yml (a run by hand) and of
   pr-gif-attach.yml (automatic, on workflow_run). It runs none of the PR's
   code and checks nothing out, so it alone holds the token.
@@ -68,7 +68,7 @@ runs:
         path: pr-gif
 
     # An automatic run's recording may have left no artifact (a build that
-    # failed first): workflow.mjs then marks its scenarios not updated.
+    # failed first): workflow.ts then marks its scenarios not updated.
     - uses: actions/download-artifact@v8
       if: inputs.automatic == 'true' && inputs.record == 'true' && inputs.run-id == ''
       continue-on-error: true
@@ -107,4 +107,4 @@ runs:
         HEAD_SHA: ${{ inputs.head-sha }}
         SCENARIOS: ${{ inputs.scenarios }}
         RUN_URL: ${{ inputs.run-url }}
-      run: node "$GITHUB_ACTION_PATH/../workflow.mjs" attach
+      run: node "$GITHUB_ACTION_PATH/../workflow.ts" attach

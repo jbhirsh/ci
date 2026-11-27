@@ -37,7 +37,7 @@
 #   - make (gif/record), sift only: the GIFs from the videos the CI run
 #     recorded ("after") and from a gifs-only run it starts on main
 #     ("before", at the same commit's flows), for the changed scenarios
-#     only, uploaded as this run's pr-gif artifact. It runs ci's videos.mjs
+#     only, uploaded as this run's pr-gif artifact. It runs ci's videos.ts
 #     and ffmpeg, none of the PR's code, and holds the Actions token
 #     (actions write), never BOT_PR_TOKEN. A newer push's cancels it; the
 #     run it started on main finishes unused. That run plays the PR's flows
@@ -45,7 +45,7 @@
 #     a branch of this repository: whoever can push one can already run
 #     code here. Never for a fork's.
 #   - attach (gif/attach), with BOT_PR_TOKEN and no checkout: reads the
-#     pr-gif artifact as data (gif/workflow.mjs), checks it is this PR's at
+#     pr-gif artifact as data (gif/workflow.ts), checks it is this PR's at
 #     the commit checked, attaches what recorded, marks the failed
 #     scenarios' earlier blocks "Not updated", drops the automatic blocks of
 #     scenarios the PR no longer changes (also on a PR that changes none,
@@ -104,7 +104,7 @@ jobs:
     needs: check
     if: needs.check.outputs.go == 'true' && needs.check.outputs.record == 'true' && needs.check.outputs.artifact-run == ''
     runs-on: ubuntu-latest
-    # Waits on the gifs-only run it starts on main, which videos.mjs allows
+    # Waits on the gifs-only run it starts on main, which videos.ts allows
     # up to 3 hours.
     timeout-minutes: 200
     # The caller's grant, which is sift's (actions write, to start the run on
@@ -114,7 +114,7 @@ jobs:
       group: pr-gif-make-${{ github.repository }}-${{ needs.check.outputs.pr }}
       cancel-in-progress: true
     steps:
-      # The default branch: videos.mjs reads its settings and origin. The
+      # The default branch: videos.ts reads its settings and origin. The
       # PR's flows are played on the app's CI, never here.
       - uses: actions/checkout@v7
         with:

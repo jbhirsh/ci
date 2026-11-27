@@ -7,7 +7,7 @@ description: >-
   a pull_request run that ended success or failure, not a fork's, for the
   PR's current head; and which scenarios the PR's whole diff changes. It
   sets the PR GIFs commit status a recording starts with (pending), or a
-  fork's PR gets (gif/workflow.mjs's header says how).
+  fork's PR gets (gif/workflow.ts's header says how).
 
 inputs:
   github-token:
@@ -55,4 +55,4 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         APP_ROOT: ${{ github.workspace }}
-      run: node "$GITHUB_ACTION_PATH/../workflow.mjs" check
+      run: node "$GITHUB_ACTION_PATH/../workflow.ts" check

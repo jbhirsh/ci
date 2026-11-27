@@ -35,7 +35,7 @@ jobs:
   gif:
     permissions:
       contents: read
-      # videos.mjs reads the PR's head, its CI run and that run's videos,
+      # videos.ts reads the PR's head, its CI run and that run's videos,
       # and starts the gifs-only run on main.
       pull-requests: read
       actions: write
