@@ -2,5 +2,10 @@
   "review": {
     "advisor": "opus",
     "skipBots": ["dependabot[bot]"]
+  },
+  "gif": {
+    "page": "job-summary/gif/page.ts",
+    "scenarios": "job-summary/gif/scenarios",
+    "scale": 2
   }
 }

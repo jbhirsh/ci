@@ -64,6 +64,11 @@ jobs:
         run: node pins/check.ts
       - name: Lint workflows (actionlint)
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color
+      # This repo's own `gif` settings, as Against <app> checks each app's:
+      # its page builder is there and its scenarios load (ci#176).
+      - name: GIF self-test (this repo's report page)
+        if: ${{ !cancelled() }}
+        run: node gif/selftest.ts .
       # This checkout's job-summary, so a change to it shows on its own PR.
       - if: ${{ !cancelled() }}
         uses: ./job-summary
