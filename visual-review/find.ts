@@ -34,34 +34,52 @@ import { MANIFEST, parseManifest } from '../visual-shots/shots.mjs';
 import { outsideOwnBlocks } from './record.ts';
 import { settings } from './settings.ts';
 import { CONTEXT } from './status.ts';
+import type { Api } from '../lib/comment.mjs';
+import type { Target } from './review.ts';
 
-/**
- * The run, as far as this reads it.
- *
- * @typedef {{ id: number, event: string, head_sha: string, head_branch?: string | null,
- *   path?: string, status?: string }} Run
- */
+/** The run, as far as this reads it. */
+export type Run = {
+  id: number;
+  event: string;
+  head_sha: string;
+  head_branch?: string | null;
+  path?: string;
+  status?: string;
+};
 
-/**
- * A PR, as far as this reads it.
- *
- * @typedef {{ number: number, state: string, head: { sha: string,
- *   repo: { full_name: string } | null }, base?: { ref: string } }} Pull
- */
+/** A PR, as far as this reads it. */
+export type Pull = {
+  number: number;
+  state: string;
+  head: { sha: string; repo: { full_name: string } | null };
+  base?: { ref: string };
+};
 
 /**
  * Downloads a run's visual-shots artifact into `dir`: 'none' when the run
  * has none, 'expired' when it's gone; any other failure throws, never
  * passing for "no shots".
  *
- * @param {{ api: import('../lib/comment.mjs').Api, gh: (args: string[]) => string,
- *   repo: string, runId: number, dir: string }} options gh: with the Actions token
- * @returns {'ok' | 'none' | 'expired'}
+ * @param options gh: with the Actions token
  */
-export function downloadShots({ api, gh, repo, runId, dir }) {
-  const found = /** @type {{ expired: boolean }[]} */ (
-    pages(api, `repos/${repo}/actions/runs/${runId}/artifacts?name=visual-shots`, 'artifacts')
-  );
+export function downloadShots({
+  api,
+  gh,
+  repo,
+  runId,
+  dir,
+}: {
+  api: Api;
+  gh: (args: string[]) => string;
+  repo: string;
+  runId: number;
+  dir: string;
+}): 'ok' | 'none' | 'expired' {
+  const found = pages(
+    api,
+    `repos/${repo}/actions/runs/${runId}/artifacts?name=visual-shots`,
+    'artifacts',
+  ) as { expired: boolean }[];
   if (found.length === 0) return 'none';
   if (found.every((a) => a.expired)) return 'expired';
   gh(['run', 'download', String(runId), '--repo', repo, '--name', 'visual-shots', '--dir', dir]);
@@ -73,18 +91,14 @@ export function downloadShots({ api, gh, repo, runId, dir }) {
  * changed only the contents of visual review's block and slots (record.ts):
  * the attach job's own upload. A retarget, a title edit, a slot added or
  * removed, or any change to the rest still calls for a review.
- *
- * @param {Record<string, unknown>} payload
  */
-export function ownEdit(payload) {
-  const changes = /** @type {{ body?: { from?: unknown }, base?: unknown } | undefined} */ (
-    payload.changes
-  );
+export function ownEdit(payload: Record<string, unknown>) {
+  const changes = payload.changes as { body?: { from?: unknown }; base?: unknown } | undefined;
   if (payload.action !== 'edited' || !changes?.body || changes.base) return false;
   const was = changes.body.from;
-  const now = /** @type {{ body?: unknown }} */ (payload.pull_request).body;
+  const now = (payload.pull_request as { body?: unknown }).body;
   // GitHub sends null for an empty description.
-  const text = (/** @type {unknown} */ v) => (v === null ? '' : v);
+  const text = (v: unknown) => (v === null ? '' : v);
   const [from, to] = [text(was), text(now)];
   if (typeof from !== 'string' || typeof to !== 'string') return false;
   return outsideOwnBlocks(from) === outsideOwnBlocks(to);
@@ -93,44 +107,49 @@ export function ownEdit(payload) {
 /**
  * The newest finished pull_request run of the screenshot workflow on a
  * commit, or null.
- *
- * @param {import('../lib/comment.mjs').Api} api
- * @param {string} repo
- * @param {string} workflow
- * @param {string} sha
  */
-export function latestRun(api, repo, workflow, sha) {
-  const got = /** @type {{ workflow_runs?: Run[] }} */ (
-    api(
-      'GET',
-      `repos/${repo}/actions/workflows/${workflow}/runs?event=pull_request&head_sha=${sha}&status=completed&per_page=10`,
-    )
-  );
+export function latestRun(api: Api, repo: string, workflow: string, sha: string) {
+  const got = api(
+    'GET',
+    `repos/${repo}/actions/workflows/${workflow}/runs?event=pull_request&head_sha=${sha}&status=completed&per_page=10`,
+  ) as { workflow_runs?: Run[] };
   return newest(got.workflow_runs ?? [])?.id ?? null;
 }
 
 /**
  * The reviews an event calls for.
  *
- * @param {{ name: string, payload: Record<string, unknown>, repo: string, main: string,
- *   workflow: string, api: import('../lib/comment.mjs').Api, log: (line: string) => void,
- *   mockupIssue: (run: number) => number | null }} event
- *   mockupIssue: the issue a run by hand's shots are a mockup for, from their
- *   manifest, or null when they're none
- * @returns {import('./review.ts').Target[]}
+ * @param event mockupIssue: the issue a run by hand's shots are a mockup for,
+ *   from their manifest, or null when they're none
  */
-export function targets({ name, payload, repo, main, workflow, api, log, mockupIssue }) {
-  /** @param {number} run */
-  const mockup = (run) => {
-    /** @type {number | null} */
-    let number;
+export function targets({
+  name,
+  payload,
+  repo,
+  main,
+  workflow,
+  api,
+  log,
+  mockupIssue,
+}: {
+  name: string;
+  payload: Record<string, unknown>;
+  repo: string;
+  main: string;
+  workflow: string;
+  api: Api;
+  log: (line: string) => void;
+  mockupIssue: (run: number) => number | null;
+}): Target[] {
+  const mockup = (run: number) => {
+    let number: number | null;
     try {
       number = mockupIssue(run);
     } catch (error) {
       // One mockup's shots that can't be read fail only that mockup, never
       // the PRs settled by the same push.
       log(
-        `::warning::run ${run}: its shots' manifest couldn't be read (${/** @type {Error} */ (error).message}): no mockup review`,
+        `::warning::run ${run}: its shots' manifest couldn't be read (${(error as Error).message}): no mockup review`,
       );
       return [];
     }
@@ -138,13 +157,9 @@ export function targets({ name, payload, repo, main, workflow, api, log, mockupI
       log(`run ${run}: a run by hand that is no mockup: nothing to do`);
       return [];
     }
-    return [{ kind: /** @type {const} */ ('issue'), number, run }];
+    return [{ kind: 'issue' as const, number, run }];
   };
-  /**
-   * @param {number} number
-   * @param {string} sha
-   */
-  const forPr = (number, sha) => {
+  const forPr = (number: number, sha: string) => {
     const run = latestRun(api, repo, workflow, sha);
     if (run === null) {
       log(
@@ -152,11 +167,11 @@ export function targets({ name, payload, repo, main, workflow, api, log, mockupI
       );
       return [];
     }
-    return [{ kind: /** @type {const} */ ('pr'), number, run }];
+    return [{ kind: 'pr' as const, number, run }];
   };
 
   if (name === 'pull_request_target') {
-    const pr = /** @type {Pull} */ (payload.pull_request);
+    const pr = payload.pull_request as Pull;
     if (pr.state !== 'open' || pr.head.repo?.full_name !== repo || pr.base?.ref !== main) return [];
     if (ownEdit(payload)) {
       log(`#${pr.number}: only visual review's own block changed: nothing to review`);
@@ -165,7 +180,7 @@ export function targets({ name, payload, repo, main, workflow, api, log, mockupI
     return forPr(pr.number, pr.head.sha);
   }
   if (name !== 'workflow_run') throw new Error(`visual-review doesn't run on ${name}`);
-  const run = /** @type {Run} */ (payload.workflow_run);
+  const run = payload.workflow_run as Run;
   const ours = (run.path ?? '').endsWith(`/${workflow}`);
   if (run.event === 'pull_request') {
     const found = pullOfRun(run, repo, api);
@@ -185,11 +200,11 @@ export function targets({ name, payload, repo, main, workflow, api, log, mockupI
 
   // Main's shots of this commit are in: settle whatever waited on them.
   const short = run.head_sha.slice(0, 7);
-  /** @type {import('./review.ts').Target[]} */
-  const out = [];
-  const pulls = /** @type {Pull[]} */ (
-    pages(api, `repos/${repo}/pulls?state=open&base=${encodeURIComponent(main)}`)
-  );
+  const out: Target[] = [];
+  const pulls = pages(
+    api,
+    `repos/${repo}/pulls?state=open&base=${encodeURIComponent(main)}`,
+  ) as Pull[];
   for (const pr of pulls) {
     if (pr.head.repo?.full_name !== repo) continue;
     const waiting = statusFrom(api, repo, pr.head.sha, CONTEXT);
@@ -197,23 +212,28 @@ export function targets({ name, payload, repo, main, workflow, api, log, mockupI
       out.push(...forPr(pr.number, pr.head.sha));
     }
   }
-  const mockups = /** @type {{ workflow_runs?: Run[] }} */ (
-    api(
-      'GET',
-      `repos/${repo}/actions/workflows/${workflow}/runs?event=workflow_dispatch&head_sha=${run.head_sha}&status=completed&per_page=20`,
-    )
-  );
+  const mockups = api(
+    'GET',
+    `repos/${repo}/actions/workflows/${workflow}/runs?event=workflow_dispatch&head_sha=${run.head_sha}&status=completed&per_page=20`,
+  ) as { workflow_runs?: Run[] };
   for (const m of mockups.workflow_runs ?? []) out.push(...mockup(m.id));
   return out;
 }
 
 /**
  * The issue a run's shots are a mockup for, from their manifest, or null.
- *
- * @param {{ api: import('../lib/comment.mjs').Api, gh: (args: string[]) => string,
- *   repo: string, run: number }} options
  */
-export function mockupIssue({ api, gh, repo, run }) {
+export function mockupIssue({
+  api,
+  gh,
+  repo,
+  run,
+}: {
+  api: Api;
+  gh: (args: string[]) => string;
+  repo: string;
+  run: number;
+}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'mockup-'));
   try {
     const got = downloadShots({ api, gh, repo, runId: run, dir });
@@ -227,19 +247,18 @@ export function mockupIssue({ api, gh, repo, run }) {
 }
 
 /** gh with the job's token (GH_TOKEN), returning what it printed. */
-const realGh = (/** @type {string[]} */ args) =>
+const realGh = (args: string[]) =>
   execFileSync('gh', args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit'],
     timeout: 300_000,
   });
 
-/**
- * @param {Record<string, string | undefined>} env
- * @param {import('../lib/comment.mjs').Api} [api]
- * @param {(args: string[]) => string} [gh]
- */
-export function main(env, api = ghApi, gh = realGh) {
+export function main(
+  env: Record<string, string | undefined>,
+  api: Api = ghApi,
+  gh: (args: string[]) => string = realGh,
+) {
   const s = settings(appConfig('visual-review', appRoot()));
   if (!s) throw new Error('.github/ci.json has no visual-review key');
   const payload = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH ?? '', 'utf8'));

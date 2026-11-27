@@ -27,17 +27,17 @@
 
 import { matchesAny } from '../lib/match.mjs';
 import { parseColumns } from '../lib/baselines.mjs';
+import type { Column } from '../lib/baselines.mjs';
 
-/**
- * @typedef {object} Settings
- * @property {string} workflow
- * @property {string} job
- * @property {string[]} folders
- * @property {number} ratio
- * @property {number} minor
- * @property {import('../lib/baselines.mjs').Column[]} columns
- * @property {string[]} mockupPaths
- */
+export type Settings = {
+  workflow: string;
+  job: string;
+  folders: string[];
+  ratio: number;
+  minor: number;
+  columns: Column[];
+  mockupPaths: string[];
+};
 
 /** Files a mockup patch never changes, whatever `mockupPaths` says. */
 const LOCKFILES = [
@@ -50,11 +50,8 @@ const LOCKFILES = [
 
 /**
  * A list of globs inside the checkout, checked.
- *
- * @param {unknown} value
- * @param {string} name
  */
-function globs(value, name) {
+function globs(value: unknown, name: string) {
   if (
     !Array.isArray(value) ||
     value.length === 0 ||
@@ -65,16 +62,13 @@ function globs(value, name) {
   ) {
     throw new Error(`.github/ci.json: visual-review.${name} must list globs inside the checkout`);
   }
-  return /** @type {string[]} */ (value).map((g) => g.replace(/\/+$/, ''));
+  return (value as string[]).map((g) => g.replace(/\/+$/, ''));
 }
 
 /**
  * The settings, checked; null when the app has no `visual-review` key.
- *
- * @param {Record<string, unknown>} config
- * @returns {Settings | null}
  */
-export function settings(config) {
+export function settings(config: Record<string, unknown>): Settings | null {
   if (Object.keys(config).length === 0) return null;
   const known = ['workflow', 'job', 'folders', 'ratio', 'minor', 'columns', 'mockupPaths'];
   const unknown = Object.keys(config).filter((k) => !known.includes(k));
@@ -110,9 +104,9 @@ export function settings(config) {
 /**
  * Whether a mockup patch may change this path.
  *
- * @param {string} file a repository path
- * @param {Settings} s
+ * @param file a repository path
+ * @param s
  */
-export function mockupMayChange(file, s) {
+export function mockupMayChange(file: string, s: Settings) {
   return matchesAny(file, s.mockupPaths) && !matchesAny(file, LOCKFILES);
 }

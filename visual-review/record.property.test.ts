@@ -5,7 +5,7 @@ import { withoutAppended } from './attach.ts';
 import { ownEdit } from './find.ts';
 import { assetLink, BOT, outsideOwnBlocks, parseRecord, recordLine } from './record.ts';
 
-const hex = (/** @type {number} */ n) =>
+const hex = (n: number) =>
   fc.string({ unit: fc.constantFrom(...'0123456789abcdef'), minLength: n, maxLength: n });
 const record = fc.record({
   sha: hex(40),
@@ -38,7 +38,7 @@ describe('ownEdit, for any description', () => {
   it("calls any change inside the block or a slot the upload's, and any outside an author's", () => {
     fc.assert(
       fc.property(prose, prose, prose, prose, (around, slotText, a, b) => {
-        const slot = (/** @type {string} */ text) =>
+        const slot = (text: string) =>
           `<!-- describe:visual-review:s -->\n${text}\n<!-- /describe:visual-review:s -->`;
         const was = blocks.write(`${around}\n${slot(slotText)}`, BOT, a);
         const now = blocks.write(`${around}\n${slot(b)}`, BOT, b);
@@ -59,8 +59,8 @@ describe('ownEdit, for any description', () => {
       fc.property(fc.anything(), fc.anything(), (changes, pr) => {
         ownEdit({
           action: 'edited',
-          changes: /** @type {never} */ (changes),
-          pull_request: /** @type {never} */ (pr ?? {}),
+          changes: changes as never,
+          pull_request: (pr ?? {}) as never,
         });
       }),
     );

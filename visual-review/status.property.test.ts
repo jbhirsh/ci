@@ -8,14 +8,14 @@ const sha = fc.stringMatching(/^[0-9a-f]{40}$/);
 
 const result = fc.oneof(
   fc.record({
-    kind: fc.constant(/** @type {const} */ ('compared')),
+    kind: fc.constant('compared' as const),
     screens: fc.nat({ max: 10_000 }),
     fingerprint: fc.stringMatching(/^[0-9a-f]{8}$/),
   }),
-  fc.constant({ kind: /** @type {const} */ ('no-shots') }),
-  fc.record({ kind: fc.constant(/** @type {const} */ ('job-failed')), job: fc.string() }),
-  fc.record({ kind: fc.constant(/** @type {const} */ ('waiting')), base: sha }),
-  fc.record({ kind: fc.constant(/** @type {const} */ ('no-reference')), base: sha }),
+  fc.constant({ kind: 'no-shots' as const }),
+  fc.record({ kind: fc.constant('job-failed' as const), job: fc.string() }),
+  fc.record({ kind: fc.constant('waiting' as const), base: sha }),
+  fc.record({ kind: fc.constant('no-reference' as const), base: sha }),
 );
 
 const pull = fc.record({

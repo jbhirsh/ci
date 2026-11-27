@@ -14,6 +14,8 @@
 //   - a place wider or taller than LARGE isn't zoomed, as a zoom would be
 //     no clearer than the diff: the table shows the diff picture itself.
 
+import type { Image } from '../lib/pixels.mjs';
+
 /** Changed pixels this close (about) are one place. */
 const GAP = 8;
 /** The most places outlined. */
@@ -29,37 +31,37 @@ const LARGE = 64;
 /** The width of the outlined thumbnail, in pixels. */
 export const WHERE_WIDTH = 160;
 
-/**
- * A rectangle of pixels.
- *
- * @typedef {{ x: number, y: number, w: number, h: number }} Box
- */
+/** A rectangle of pixels. */
+export type Box = { x: number; y: number; w: number; h: number };
 
-/**
- * What a small change looks like, planned from its mask.
- *
- * @typedef {object} Look
- * @property {Box[]} places the outlined places, largest first
- * @property {Box} zoom the zoomed place, padded and clamped to the shot
- * @property {number} scale the zoom's whole-number scale
- * @property {boolean} large whether the largest place is over LARGE: no zoom
- * @property {number} width the shot's width
- * @property {number} height the shot's height
- */
+/** What a small change looks like, planned from its mask. */
+export type Look = {
+  /** the outlined places, largest first */
+  places: Box[];
+  /** the zoomed place, padded and clamped to the shot */
+  zoom: Box;
+  /** the zoom's whole-number scale */
+  scale: number;
+  /** whether the largest place is over LARGE: no zoom */
+  large: boolean;
+  /** the shot's width */
+  width: number;
+  /** the shot's height */
+  height: number;
+};
 
 /**
  * The places where the mask is set, largest first, at most MAX_PLACES.
  *
- * @param {Uint8Array} mask one byte a pixel, 1 where it differs
- * @param {number} width
- * @param {number} height
- * @returns {Box[]}
+ * @param mask one byte a pixel, 1 where it differs
+ * @param width
+ * @param height
  */
-export function places(mask, width, height) {
+export function places(mask: Uint8Array, width: number, height: number): Box[] {
   const cols = Math.ceil(width / GAP);
   const rows = Math.ceil(height / GAP);
-  /** @type {Map<number, { x0: number, y0: number, x1: number, y1: number, n: number }>} */
-  const cells = new Map();
+  const cells: Map<number, { x0: number; y0: number; x1: number; y1: number; n: number }> =
+    new Map();
   for (let i = 0; i < mask.length; i++) {
     if (!mask[i]) continue;
     const x = i % width;
@@ -75,8 +77,7 @@ export function places(mask, width, height) {
     } else cells.set(key, { x0: x, y0: y, x1: x, y1: y, n: 1 });
   }
   // Join cells that touch, by flood fill.
-  /** @type {{ x0: number, y0: number, x1: number, y1: number, n: number }[]} */
-  const groups = [];
+  const groups: { x0: number; y0: number; x1: number; y1: number; n: number }[] = [];
   const seen = new Set();
   for (const start of cells.keys()) {
     if (seen.has(start)) continue;
@@ -84,8 +85,8 @@ export function places(mask, width, height) {
     const todo = [start];
     seen.add(start);
     while (todo.length > 0) {
-      const key = /** @type {number} */ (todo.pop());
-      const c = /** @type {NonNullable<ReturnType<typeof cells.get>>} */ (cells.get(key));
+      const key = todo.pop() as number;
+      const c = cells.get(key) as NonNullable<ReturnType<typeof cells.get>>;
       group.x0 = Math.min(group.x0, c.x0);
       group.y0 = Math.min(group.y0, c.y0);
       group.x1 = Math.max(group.x1, c.x1);
@@ -116,19 +117,9 @@ export function places(mask, width, height) {
 
 /**
  * A box grown by PAD on every side, to at least MIN_SIDE, kept inside the shot.
- *
- * @param {Box} box
- * @param {number} width
- * @param {number} height
- * @returns {Box}
  */
-export function padded(box, width, height) {
-  /**
-   * @param {number} at
-   * @param {number} size
-   * @param {number} limit
-   */
-  const axis = (at, size, limit) => {
+export function padded(box: Box, width: number, height: number): Box {
+  const axis = (at: number, size: number, limit: number) => {
     const want = Math.min(limit, Math.max(MIN_SIDE, size + 2 * PAD));
     const start = Math.min(Math.max(0, Math.round(at + size / 2 - want / 2)), limit - want);
     return [start, want];
@@ -140,20 +131,13 @@ export function padded(box, width, height) {
 
 /**
  * The whole-number scale that fits a box in MAX_ZOOM pixels (at least 1).
- *
- * @param {Box} box
  */
-export const scaleFor = (box) => Math.max(1, Math.floor(MAX_ZOOM / Math.max(box.w, box.h)));
+export const scaleFor = (box: Box) => Math.max(1, Math.floor(MAX_ZOOM / Math.max(box.w, box.h)));
 
 /**
  * The look of a small change, or null when the mask is empty.
- *
- * @param {Uint8Array} mask
- * @param {number} width
- * @param {number} height
- * @returns {Look | null}
  */
-export function lookAt(mask, width, height) {
+export function lookAt(mask: Uint8Array, width: number, height: number): Look | null {
   const found = places(mask, width, height);
   if (found.length === 0) return null;
   const zoom = padded(found[0], width, height);
@@ -168,17 +152,9 @@ export function lookAt(mask, width, height) {
 }
 
 /**
- * @typedef {import('../lib/pixels.mjs').Image} Image
- */
-
-/**
  * The part of an image in a box, as a new image.
- *
- * @param {Image} image
- * @param {Box} box
- * @returns {Image}
  */
-export function crop(image, box) {
+export function crop(image: Image, box: Box): Image {
   const data = new Uint8Array(box.w * box.h * 4);
   for (let y = 0; y < box.h; y++) {
     const from = ((box.y + y) * image.width + box.x) * 4;
@@ -189,12 +165,8 @@ export function crop(image, box) {
 
 /**
  * An image enlarged by a whole number, each pixel a square.
- *
- * @param {Image} image
- * @param {number} k
- * @returns {Image}
  */
-export function enlarge(image, k) {
+export function enlarge(image: Image, k: number): Image {
   const width = image.width * k;
   const data = new Uint8Array(width * image.height * k * 4);
   for (let y = 0; y < image.height * k; y++) {
@@ -209,13 +181,8 @@ export function enlarge(image, k) {
 /**
  * The screen at `maxWidth` pixels wide (never larger), with each place
  * outlined in red: the picture that says where in the screen it changed.
- *
- * @param {Image} image
- * @param {Box[]} boxes
- * @param {number} [maxWidth]
- * @returns {Image}
  */
-export function outlined(image, boxes, maxWidth = WHERE_WIDTH) {
+export function outlined(image: Image, boxes: Box[], maxWidth: number = WHERE_WIDTH): Image {
   const k = Math.min(1, maxWidth / image.width);
   const width = Math.max(1, Math.round(image.width * k));
   const height = Math.max(1, Math.round(image.height * k));
@@ -230,11 +197,7 @@ export function outlined(image, boxes, maxWidth = WHERE_WIDTH) {
       );
     }
   }
-  /**
-   * @param {number} x
-   * @param {number} y
-   */
-  const red = (x, y) => {
+  const red = (x: number, y: number) => {
     if (x < 0 || y < 0 || x >= width || y >= height) return;
     data.set([220, 38, 38, 255], (y * width + x) * 4);
   };
@@ -262,11 +225,8 @@ const PATCH_GAP = 6;
 /**
  * Pictures in a row, top-aligned, with a white gap between: the zoom
  * picture's before, after and diff, one upload instead of three.
- *
- * @param {Image[]} images
- * @returns {Image}
  */
-export function sideBySide(images) {
+export function sideBySide(images: Image[]): Image {
   const width = images.reduce((n, i) => n + i.width, 0) + PATCH_GAP * (images.length - 1);
   const height = Math.max(...images.map((i) => i.height));
   const data = new Uint8Array(width * height * 4).fill(255);
@@ -285,7 +245,5 @@ export function sideBySide(images) {
 
 /**
  * The width of a zoom picture for a look, so the table can say it.
- *
- * @param {Look} look
  */
-export const zoomWidth = (look) => 3 * look.zoom.w * look.scale + 2 * PATCH_GAP;
+export const zoomWidth = (look: Look) => 3 * look.zoom.w * look.scale + 2 * PATCH_GAP;

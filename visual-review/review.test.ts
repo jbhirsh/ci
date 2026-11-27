@@ -15,32 +15,40 @@ import {
   UPLOAD_FORMAT,
 } from './review.ts';
 import { settings } from './settings.ts';
+import type { Settings } from './settings.ts';
+import type { Handoff, Io } from './review.ts';
+import type { Record as RecordLine } from './record.ts';
 
 const REPO = 'jbhirsh/app';
 const HEAD = 'a'.repeat(40);
 const BASE = 'b'.repeat(40);
 const MB = 'c'.repeat(40);
-const s = /** @type {import('./settings.ts').Settings} */ (
-  settings({ workflow: 'visual.yml', job: 'visual', folders: ['shots'] })
-);
+const s = settings({ workflow: 'visual.yml', job: 'visual', folders: ['shots'] }) as Settings;
 
 /**
  * A fake GitHub: routes answer by "METHOD route", the shots each run's
  * artifact holds, and a record of what was posted.
- *
- * @param {{ routes?: Record<string, unknown>, shots?: Record<number, Record<string, Buffer> | null>,
- *   manifest?: Record<string, unknown>, author?: string, typename?: string, autoMerge?: unknown,
- *   headRef?: string, conclusion?: string, prHead?: string, body?: string,
- *   pushed?: { beforeCommit?: { oid: string }, afterCommit?: { oid: string } }[],
- *   statuses?: unknown[], expired?: boolean }} [o]
  */
-function fake(o = {}) {
-  /** @type {{ method: string, route: string, body?: unknown }[]} */
-  const calls = [];
-  /** @type {{ handoff: import('./review.ts').Handoff, files: { name: string, bytes: Buffer }[] }[]} */
-  const handoffs = [];
-  /** @type {number[]} */
-  const enabled = [];
+function fake(
+  o: {
+    routes?: Record<string, unknown>;
+    shots?: Record<number, Record<string, Buffer> | null>;
+    manifest?: Record<string, unknown>;
+    author?: string;
+    typename?: string;
+    autoMerge?: unknown;
+    headRef?: string;
+    conclusion?: string;
+    prHead?: string;
+    body?: string;
+    pushed?: { beforeCommit?: { oid: string }; afterCommit?: { oid: string } }[];
+    statuses?: unknown[];
+    expired?: boolean;
+  } = {},
+) {
+  const calls: { method: string; route: string; body?: unknown }[] = [];
+  const handoffs: { handoff: Handoff; files: { name: string; bytes: Buffer }[] }[] = [];
+  const enabled: number[] = [];
   const shots = o.shots ?? {
     1: { 'shots/a.png': testPng(10, 10, 5), 'shots/b.png': testPng() },
     2: { 'shots/a.png': testPng(), 'shots/b.png': testPng() },
@@ -52,8 +60,7 @@ function fake(o = {}) {
     event: 'pull_request',
     mockupIssue: null,
   };
-  /** @type {Record<string, unknown>} */
-  const routes = {
+  const routes: Record<string, unknown> = {
     [`GET repos/${REPO}/actions/runs/1`]: {
       id: 1,
       head_sha: HEAD,
@@ -71,8 +78,7 @@ function fake(o = {}) {
     [`POST repos/${REPO}/statuses/${HEAD}`]: {},
     ...o.routes,
   };
-  /** @type {import('./review.ts').Io} */
-  const io = {
+  const io: Io = {
     repo: REPO,
     owner: 'jbhirsh',
     main: 'main',
@@ -114,16 +120,15 @@ function fake(o = {}) {
     log: () => {},
   };
   const posted = () =>
-    /** @type {{ state: string, description: string } | undefined} */ (
-      calls.find((c) => c.method === 'POST')?.body
-    );
+    calls.find((c) => c.method === 'POST')?.body as
+      { state: string; description: string } | undefined;
   return { io, calls, handoffs, enabled, posted };
 }
 
-const PR = /** @type {const} */ ({ kind: 'pr', number: 5, run: 1 });
+const PR = { kind: 'pr', number: 5, run: 1 } as const;
 
 /** A status of the Actions token's. */
-const actions = (/** @type {string} */ state, /** @type {string} */ description) => ({
+const actions = (state: string, description: string) => ({
   id: 1,
   context: 'Visual changes',
   state,
@@ -133,10 +138,8 @@ const actions = (/** @type {string} */ state, /** @type {string} */ description)
 
 /**
  * A description whose visual-review block holds a record.
- *
- * @param {Partial<import('./record.ts').Record>} record
  */
-const recorded = (record) =>
+const recorded = (record: Partial<RecordLine>) =>
   blocks.write(
     'Mine.',
     BOT,
@@ -411,7 +414,7 @@ describe('review', () => {
     review(PR, { s, io: f.io });
     const posts = f.calls
       .filter((c) => c.method === 'POST')
-      .map((c) => /** @type {{ state: string }} */ (c.body).state);
+      .map((c) => (c.body as { state: string }).state);
     expect(posts).toEqual(['pending', 'success']);
     expect(f.handoffs).toHaveLength(1);
   });
@@ -452,7 +455,7 @@ describe('review', () => {
   });
 
   /** A mockup's fake GitHub, for issue 9. */
-  const mockup = (/** @type {Record<string, unknown>} */ routes = {}) =>
+  const mockup = (routes: Record<string, unknown> = {}) =>
     fake({
       manifest: { version: 1, sha: HEAD, base: HEAD, event: 'workflow_dispatch', mockupIssue: 9 },
       routes: {
@@ -492,7 +495,7 @@ describe('review', () => {
 
   it('refuses a mockup for a closed issue, a PR or another issue, and skips a run by hand that is no mockup', () => {
     const m = { version: 1, sha: HEAD, base: HEAD, event: 'workflow_dispatch', mockupIssue: 9 };
-    const issue = /** @type {const} */ ({ kind: 'issue', number: 9, run: 1 });
+    const issue = { kind: 'issue', number: 9, run: 1 } as const;
     expect(() =>
       review(issue, {
         s,
@@ -511,15 +514,20 @@ describe('review', () => {
 });
 
 describe('earlierResult', () => {
-  const sha = (/** @type {number} */ n) => String(n).padStart(40, '0');
+  const sha = (n: number) => String(n).padStart(40, '0');
   /**
    * The io for a PR with these commits (oldest first), force-pushed heads and statuses.
-   *
-   * @param {{ commits: string[], pushed?: [string, string][], statuses: Record<string, unknown[]> }} o
    */
-  const io = ({ commits, pushed = [], statuses }) => {
-    /** @type {string[]} */
-    const asked = [];
+  const io = ({
+    commits,
+    pushed = [],
+    statuses,
+  }: {
+    commits: string[];
+    pushed?: [string, string][];
+    statuses: Record<string, unknown[]>;
+  }) => {
+    const asked: string[] = [];
     const f = fake({
       // Each force-push oldest first, as GraphQL lists them: it replaced `before`, made `after`.
       pushed: pushed.map(([before, after]) => ({

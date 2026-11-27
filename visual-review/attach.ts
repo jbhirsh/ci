@@ -51,6 +51,9 @@ import { ghApi } from '../lib/comment.mjs';
 import { commandIn } from '../lib/gh.mjs';
 import { blocks, place } from '../describe/describe.ts';
 import { BOT, assetLink, parseRecord, recordLine } from './record.ts';
+import type { Handoff } from './review.ts';
+import type { Api } from '../lib/comment.mjs';
+import type { Command } from '../lib/gh.mjs';
 
 /** A picture's file in the hand-off: `01.png` to `50.png`. */
 const PICTURE = /^\d{2}\.png$/;
@@ -61,17 +64,19 @@ const ASSET = /^[0-9a-f][0-9a-f-]{7,63}$/;
 /**
  * The hand-off in `dir`, checked, or null when the review handed none.
  *
- * @param {string} dir
- * @param {{ kind: string, number: number }} [target] the matrix target it must be for
- * @returns {import('./review.ts').Handoff | null}
+ * @param dir
+ * @param target the matrix target it must be for
  */
-export function readHandoff(dir, target) {
+export function readHandoff(
+  dir: string,
+  target?: { kind: string; number: number },
+): Handoff | null {
   const file = path.join(dir, 'attach.json');
   if (!existsSync(file)) return null;
-  const h = /** @type {Record<string, unknown>} */ (JSON.parse(readFileSync(file, 'utf8')));
-  const r = /** @type {Record<string, unknown>} */ (h.record ?? {});
-  const whole = (/** @type {unknown} */ n) => Number.isInteger(n) && Number(n) > 0;
-  const strings = (/** @type {unknown} */ v, /** @type {RegExp} */ re) =>
+  const h = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+  const r = (h.record ?? {}) as Record<string, unknown>;
+  const whole = (n: unknown) => Number.isInteger(n) && Number(n) > 0;
+  const strings = (v: unknown, re: RegExp) =>
     Array.isArray(v) && v.every((x) => typeof x === 'string' && re.test(x));
   const ok =
     h.version === 1 &&
@@ -98,7 +103,7 @@ export function readHandoff(dir, target) {
       `visual-review: the hand-off is for ${h.kind} #${h.number}, not ${target.kind} #${target.number}`,
     );
   }
-  const handoff = /** @type {import('./review.ts').Handoff} */ (/** @type {unknown} */ (h));
+  const handoff = h as unknown as Handoff;
   for (const p of handoff.pictures) {
     if (!existsSync(path.join(dir, p))) throw new Error(`visual-review: the hand-off lacks ${p}`);
   }
@@ -107,10 +112,8 @@ export function readHandoff(dir, target) {
 
 /**
  * The text of visual review's block in a description, markers included, or ''.
- *
- * @param {string} body
  */
-const ownBlock = (body) => {
+const ownBlock = (body: string) => {
   const at = blocks.find(body, BOT);
   return at ? body.slice(at.from, at.to) : '';
 };
@@ -124,10 +127,10 @@ const UPLOADED =
  * `body` cut where `meant` ends, when all that follows is attachment images;
  * otherwise `body` as it is (someone else's edit landed too).
  *
- * @param {string} body as gh left it
- * @param {string} meant what was written, its paths swapped for their links
+ * @param body as gh left it
+ * @param meant what was written, its paths swapped for their links
  */
-export function withoutAppended(body, meant) {
+export function withoutAppended(body: string, meant: string) {
   const head = meant.trimEnd();
   if (!body.startsWith(head)) return body;
   const tail = body.slice(head.length);
@@ -138,42 +141,40 @@ export function withoutAppended(body, meant) {
     : body;
 }
 
-/**
- * What attach needs from GitHub.
- *
- * @typedef {object} Io
- * @property {string} repo owner/name
- * @property {string} dir the hand-off's folder, where gh runs
- * @property {import('../lib/comment.mjs').Api} api the Actions token's REST API
- * @property {import('../lib/gh.mjs').Command} gh gh with BOT_PR_TOKEN, in `dir`
- * @property {(nodeId: string) => void} hide marks a comment outdated (the Actions token)
- * @property {(line: string) => void} log
- */
+/** What attach needs from GitHub. */
+export type Io = {
+  /** owner/name */
+  repo: string;
+  /** the hand-off's folder, where gh runs */
+  dir: string;
+  /** the Actions token's REST API */
+  api: Api;
+  /** gh with BOT_PR_TOKEN, in `dir` */
+  gh: Command;
+  /** marks a comment outdated (the Actions token) */
+  hide: (nodeId: string) => void;
+  log: (line: string) => void;
+};
 
 /**
  * Puts a hand-off into its description. Returns 'stale' when the head check
  * stopped it, 'written' when the description changed, 'unchanged' when not.
- *
- * @param {import('./review.ts').Handoff} h
- * @param {Io} io
- * @returns {'stale' | 'written' | 'unchanged'}
  */
-export function attach(h, io) {
+export function attach(h: Handoff, io: Io): 'stale' | 'written' | 'unchanged' {
   const route = `repos/${io.repo}/issues/${h.number}`;
-  const read = () =>
-    String(/** @type {{ body?: string | null }} */ (io.api('GET', route)).body ?? '');
+  const read = () => String((io.api('GET', route) as { body?: string | null }).body ?? '');
   if (h.kind === 'pr') {
-    const pr = /** @type {{ head: { sha: string } }} */ (
-      io.api('GET', `repos/${io.repo}/pulls/${h.number}`)
-    );
+    const pr = io.api('GET', `repos/${io.repo}/pulls/${h.number}`) as { head: { sha: string } };
     if (pr.head.sha !== h.head) {
       io.log(`visual-review: #${h.number} has moved on from ${h.head.slice(0, 7)}: edits nothing`);
       return 'stale';
     }
   } else {
-    const issue = /** @type {{ state?: string, pull_request?: unknown, body?: string | null }} */ (
-      io.api('GET', route)
-    );
+    const issue = io.api('GET', route) as {
+      state?: string;
+      pull_request?: unknown;
+      body?: string | null;
+    };
     if (issue.state !== 'open' || issue.pull_request) {
       io.log(`visual-review: #${h.number} is no open issue now: edits nothing`);
       return 'stale';
@@ -193,11 +194,10 @@ export function attach(h, io) {
     io.log(`visual-review: hid ${h.legacy.length} upload comment(s) from before ci#144`);
   }
   let { section, assets } = h;
-  /** @type {(body: string) => string} */
-  let tidy = (body) => body;
+  let tidy: (body: string) => string = (body) => body;
   if (h.pictures.length > 0) {
     const was = read();
-    const stem = (/** @type {string} */ file) => file.slice(0, -'.png'.length);
+    const stem = (file: string) => file.slice(0, -'.png'.length);
     const staged = blocks.write(
       was,
       BOT,
@@ -221,8 +221,7 @@ export function attach(h, io) {
       log: io.log,
       span: ownBlock,
     });
-    /** @type {Map<string, string>} */
-    const ids = new Map();
+    const ids: Map<string, string> = new Map();
     for (const m of ownBlock(after).matchAll(UPLOADED)) ids.set(m[1], m[2]);
     const missing = h.pictures.filter((p) => !ids.has(stem(p)));
     if (missing.length > 0) {
@@ -230,7 +229,7 @@ export function attach(h, io) {
         `visual-review: after the upload, #${h.number}'s description has no link for ${missing.join(', ')}`,
       );
     }
-    assets = h.pictures.map((p) => /** @type {string} */ (ids.get(stem(p))));
+    assets = h.pictures.map((p) => ids.get(stem(p)) as string);
     h.pictures.forEach((p, i) => {
       section = section.replaceAll(`"./${p}"`, `"${assetLink(assets[i])}"`);
     });
@@ -257,7 +256,7 @@ export function attach(h, io) {
 }
 
 /** Hides a comment as outdated, through gh's GraphQL, with the job's GH_TOKEN. */
-function minimize(/** @type {string} */ nodeId) {
+function minimize(nodeId: string) {
   execFileSync(
     'gh',
     [
@@ -273,11 +272,13 @@ function minimize(/** @type {string} */ nodeId) {
 }
 
 /**
- * @param {Record<string, string | undefined>} env
- * @param {{ api?: import('../lib/comment.mjs').Api, hide?: (nodeId: string) => void }} [seams]
- *   for the tests
+ * @param env
+ * @param seams for the tests
  */
-export function main(env, { api = ghApi, hide = minimize } = {}) {
+export function main(
+  env: Record<string, string | undefined>,
+  { api = ghApi, hide = minimize }: { api?: Api; hide?: (nodeId: string) => void } = {},
+) {
   const dir = env.HANDOFF_DIR ?? '';
   const repo = env.GITHUB_REPOSITORY ?? '';
   if (!dir || !/^[\w.-]+\/[\w.-]+$/.test(repo)) {
@@ -288,12 +289,10 @@ export function main(env, { api = ghApi, hide = minimize } = {}) {
   if (!h) {
     // The download step can't fail (a review with nothing to write uploads
     // no artifact), so a failed download is told apart here.
-    const found = /** @type {{ total_count?: number }} */ (
-      api(
-        'GET',
-        `repos/${repo}/actions/runs/${env.GITHUB_RUN_ID}/artifacts?name=${encodeURIComponent(env.ARTIFACT ?? '')}`,
-      )
-    );
+    const found = api(
+      'GET',
+      `repos/${repo}/actions/runs/${env.GITHUB_RUN_ID}/artifacts?name=${encodeURIComponent(env.ARTIFACT ?? '')}`,
+    ) as { total_count?: number };
     if ((found.total_count ?? 0) > 0) {
       throw new Error(
         `visual-review: the review handed off ${env.ARTIFACT}, but it didn't download: run this job again`,

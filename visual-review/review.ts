@@ -47,55 +47,68 @@ import { CONTEXT, fingerprint, readMark, shownAt, status } from './status.ts';
 import { isMinor, keyOf, lines, pick, renderTable, summary } from './table.ts';
 import { crop, enlarge, outlined, sideBySide } from './zoom.ts';
 import { MAX_CHARS } from '../lib/comment.mjs';
+import type { Settings } from './settings.ts';
+import type { Pull, Result } from './status.ts';
+import type { Comment } from '../describe/describe.ts';
+import type { Line, Picture } from './table.ts';
+import type { Change } from './compare.ts';
+import type { Image, Pixels } from '../lib/pixels.mjs';
+import type { Look } from './zoom.ts';
+import type { Api } from '../lib/comment.mjs';
+import type { Record as RecordLine } from './record.ts';
 
 export { BOT };
 
-/**
- * What a review needs from GitHub and the runner.
- *
- * @typedef {object} Io
- * @property {string} repo owner/name
- * @property {string} owner the repository owner's login
- * @property {string} main the default branch
- * @property {import('../lib/comment.mjs').Api} api the Actions token's REST API
- * @property {(query: string, variables: Record<string, unknown>) => unknown} graphql
- * @property {(runId: number, dir: string) => 'ok' | 'none' | 'expired'} artifact
- *   downloads a run's visual-shots artifact into `dir`: 'none' when the run
- *   has none, 'expired' when it's gone; any other failure throws, never
- *   passing for "no shots"
- * @property {(handoff: Handoff, files: { name: string, bytes: Buffer }[]) => void}
- *   handoff writes what the attach job reads: the hand-off and the pictures
- * @property {string} uploader BOT_PR_TOKEN's account, whose upload comments
- *   (before ci#144) count
- * @property {(number: number) => string} enable enable.mjs, for one PR
- * @property {import('../lib/pixels.mjs').Pixels} pixels
- * @property {() => number} now epoch seconds
- * @property {(line: string) => void} log
- */
+/** What a review needs from GitHub and the runner. */
+export type Io = {
+  /** owner/name */
+  repo: string;
+  /** the repository owner's login */
+  owner: string;
+  /** the default branch */
+  main: string;
+  /** the Actions token's REST API */
+  api: Api;
+  graphql: (query: string, variables: Record<string, unknown>) => unknown;
+  /**
+   * downloads a run's visual-shots artifact into `dir`: 'none' when the run has none, 'expired'
+   * when it's gone; any other failure throws, never passing for "no shots"
+   */
+  artifact: (runId: number, dir: string) => 'ok' | 'none' | 'expired';
+  /** writes what the attach job reads: the hand-off and the pictures */
+  handoff: (handoff: Handoff, files: { name: string; bytes: Buffer }[]) => void;
+  /** BOT_PR_TOKEN's account, whose upload comments (before ci#144) count */
+  uploader: string;
+  /** enable.mjs, for one PR */
+  enable: (number: number) => string;
+  pixels: Pixels;
+  /** epoch seconds */
+  now: () => number;
+  log: (line: string) => void;
+};
 
-/**
- * One review to do: a PR's or a mockup's screenshot run.
- *
- * @typedef {{ kind: 'pr' | 'issue', number: number, run: number }} Target
- */
+/** One review to do: a PR's or a mockup's screenshot run. */
+export type Target = { kind: 'pr' | 'issue'; number: number; run: number };
 
-/**
- * What the review hands the attach job (attach.ts), as `attach.json` beside
- * the pictures.
- *
- * @typedef {object} Handoff
- * @property {1} version
- * @property {'pr' | 'issue'} kind
- * @property {number} number
- * @property {string} head the run's head, which a PR's must still be
- * @property {number} run the screenshot run
- * @property {Omit<import('./record.ts').Record, 'assets'>} record
- * @property {string} section the finished section; with pictures, each
- *   referenced by its local path (`src="./01.png"`)
- * @property {string[]} pictures the files to upload, in pick's order
- * @property {string[]} assets with no pictures, the record's attachment ids
- * @property {string[]} legacy the upload comments (node ids) attach hides
- */
+/** What the review hands the attach job (attach.ts), as `attach.json` beside the pictures. */
+export type Handoff = {
+  version: 1;
+  kind: 'pr' | 'issue';
+  number: number;
+  /** the run's head, which a PR's must still be */
+  head: string;
+  /** the screenshot run */
+  run: number;
+  record: Omit<RecordLine, 'assets'>;
+  /** the finished section; with pictures, each referenced by its local path (`src="./01.png"`) */
+  section: string;
+  /** the files to upload, in pick's order */
+  pictures: string[];
+  /** with no pictures, the record's attachment ids */
+  assets: string[];
+  /** the upload comments (node ids) attach hides */
+  legacy: string[];
+};
 
 /**
  * The shape of an upload's section. It goes up whenever the section's form
@@ -108,15 +121,9 @@ export const UPLOAD_FORMAT = 4;
 
 /**
  * Whether `to` is `from` or comes after it on the history GitHub compares.
- *
- * @param {Io} io
- * @param {string} from
- * @param {string} to
  */
-function reaches(io, from, to) {
-  const c = /** @type {{ status?: string }} */ (
-    io.api('GET', `repos/${io.repo}/compare/${from}...${to}`)
-  );
+function reaches(io: Io, from: string, to: string) {
+  const c = io.api('GET', `repos/${io.repo}/compare/${from}...${to}`) as { status?: string };
   return c.status === 'identical' || c.status === 'ahead';
 }
 
@@ -124,18 +131,18 @@ function reaches(io, from, to) {
  * Checks the base a PR's run says it was built on: on main, and no older
  * than the PR's merge base. Throws otherwise.
  *
- * @param {Io} io
- * @param {string} base
- * @param {string | null} head the PR's head, null for a mockup
+ * @param io
+ * @param base
+ * @param head the PR's head, null for a mockup
  */
-export function checkBase(io, base, head) {
+export function checkBase(io: Io, base: string, head: string | null) {
   if (!reaches(io, base, io.main)) {
     throw new Error(`the shots' base ${base.slice(0, 7)} isn't on ${io.main}`);
   }
   if (head === null) return;
-  const c = /** @type {{ merge_base_commit?: { sha?: string } }} */ (
-    io.api('GET', `repos/${io.repo}/compare/${io.main}...${head}`)
-  );
+  const c = io.api('GET', `repos/${io.repo}/compare/${io.main}...${head}`) as {
+    merge_base_commit?: { sha?: string };
+  };
   const mergeBase = c.merge_base_commit?.sha;
   if (!mergeBase || !reaches(io, mergeBase, base)) {
     throw new Error(`the shots' base ${base.slice(0, 7)} is older than the PR's merge base`);
@@ -144,20 +151,17 @@ export function checkBase(io, base, head) {
 
 /**
  * Main's shots of the base: downloaded into `dir`, or why not.
- *
- * @param {Io} io
- * @param {import('./settings.ts').Settings} s
- * @param {string} base
- * @param {string} dir
- * @returns {'ready' | 'waiting' | 'missing'}
  */
-export function reference(io, s, base, dir) {
-  const got = /** @type {{ workflow_runs?: { id: number, status: string }[] }} */ (
-    io.api(
-      'GET',
-      `repos/${io.repo}/actions/workflows/${s.workflow}/runs?event=push&branch=${encodeURIComponent(io.main)}&head_sha=${base}&per_page=10`,
-    )
-  );
+export function reference(
+  io: Io,
+  s: Settings,
+  base: string,
+  dir: string,
+): 'ready' | 'waiting' | 'missing' {
+  const got = io.api(
+    'GET',
+    `repos/${io.repo}/actions/workflows/${s.workflow}/runs?event=push&branch=${encodeURIComponent(io.main)}&head_sha=${base}&per_page=10`,
+  ) as { workflow_runs?: { id: number; status: string }[] };
   const run = newest(got.workflow_runs ?? []);
   // No push run at all ([skip ci], or a workflow that didn't run): nothing
   // will finish to settle it, so it's missing, not waiting.
@@ -166,26 +170,20 @@ export function reference(io, s, base, dir) {
   return io.artifact(run.id, dir) === 'ok' ? 'ready' : 'missing';
 }
 
-/**
- * A PR as GraphQL gives it here.
- *
- * @typedef {object} PullData
- * @property {{ login: string, __typename: string } | null} author
- * @property {string} headRefName
- * @property {{ enabledAt: string, enabledBy: { login: string } | null } | null} autoMergeRequest
- */
+/** A PR as GraphQL gives it here. */
+export type PullData = {
+  author: { login: string; __typename: string } | null;
+  headRefName: string;
+  autoMergeRequest: { enabledAt: string; enabledBy: { login: string } | null } | null;
+};
 
 /**
  * The PR, as the status rule reads it.
- *
- * @param {Io} io
- * @param {number} number
  */
-function pullFacts(io, number) {
+function pullFacts(io: Io, number: number) {
   const [owner, name] = io.repo.split('/');
-  const data = /** @type {{ repository: { pullRequest: PullData } }} */ (
-    io.graphql(
-      `query($owner: String!, $name: String!, $number: Int!) {
+  const data = io.graphql(
+    `query($owner: String!, $name: String!, $number: Int!) {
         repository(owner: $owner, name: $name) {
           pullRequest(number: $number) {
             author { login __typename } headRefName
@@ -193,37 +191,29 @@ function pullFacts(io, number) {
           }
         }
       }`,
-      { owner, name, number },
-    )
-  );
+    { owner, name, number },
+  ) as { repository: { pullRequest: PullData } };
   const pr = data.repository.pullRequest;
   const author = pr.author?.login ?? '';
   const am = pr.autoMergeRequest;
   return {
-    /** @type {import('./status.ts').Pull} */
     pull: {
       author,
       bot: pr.author?.__typename === 'Bot' || pr.headRefName.startsWith('bot/'),
       autoMerge: am
         ? { by: am.enabledBy?.login ?? '', at: Math.floor(Date.parse(am.enabledAt) / 1000) }
         : null,
-    },
+    } satisfies Pull,
     headRefName: pr.headRefName,
   };
 }
 
 /**
  * The upload comments that count (before ci#144), newest last.
- *
- * @param {Io} io
- * @param {number} number
  */
-function uploads(io, number) {
+function uploads(io: Io, number: number) {
   return pages(io.api, `repos/${io.repo}/issues/${number}/comments`).flatMap((c) => {
-    const upload = parseUpload(
-      /** @type {import('../describe/describe.ts').Comment} */ (c),
-      io.uploader,
-    );
+    const upload = parseUpload(c as Comment, io.uploader);
     return upload && upload.bot === BOT ? [upload] : [];
   });
 }
@@ -231,36 +221,27 @@ function uploads(io, number) {
 /**
  * The `Visual changes` status on a commit, or null: only the Actions
  * token's, since a PR's own workflow could post one under that name.
- *
- * @param {Io} io
- * @param {string} sha
  */
-const statusOn = (io, sha) => statusFrom(io.api, io.repo, sha, CONTEXT);
+const statusOn = (io: Io, sha: string) => statusFrom(io.api, io.repo, sha, CONTEXT);
 
 /** How many of a PR's commits, and of the heads its force-pushes made and replaced, earlierResult looks at, at most, each. */
 export const HEADS_LOOKED_AT = 30;
 
-/**
- * A force-push, as GraphQL gives it here.
- *
- * @typedef {{ beforeCommit?: { oid: string } | null, afterCommit?: { oid: string } | null }} ForcePush
- */
+/** A force-push, as GraphQL gives it here. */
+export type ForcePush = {
+  beforeCommit?: { oid: string } | null;
+  afterCommit?: { oid: string } | null;
+};
 
 /**
  * The heads a PR's force-pushes replaced and made, newest first, from
  * GraphQL: the REST timeline names only the head a force-push made, and the
  * one it replaced is where an accepted result's status sits after a rebase.
- *
- * @param {Io} io
- * @param {number} number
- * @returns {string[]}
  */
-function forcePushedHeads(io, number) {
+function forcePushedHeads(io: Io, number: number): string[] {
   const [owner, name] = io.repo.split('/');
-  const data =
-    /** @type {{ repository: { pullRequest: { timelineItems: { nodes: ForcePush[] } } } }} */ (
-      io.graphql(
-        `query($owner: String!, $name: String!, $number: Int!, $last: Int!) {
+  const data = io.graphql(
+    `query($owner: String!, $name: String!, $number: Int!, $last: Int!) {
         repository(owner: $owner, name: $name) {
           pullRequest(number: $number) {
             timelineItems(last: $last, itemTypes: [HEAD_REF_FORCE_PUSHED_EVENT]) {
@@ -269,9 +250,8 @@ function forcePushedHeads(io, number) {
           }
         }
       }`,
-        { owner, name, number, last: HEADS_LOOKED_AT },
-      )
-    );
+    { owner, name, number, last: HEADS_LOOKED_AT },
+  ) as { repository: { pullRequest: { timelineItems: { nodes: ForcePush[] } } } };
   return data.repository.pullRequest.timelineItems.nodes
     .toReversed()
     .flatMap((n) => [n.afterCommit?.oid, n.beforeCommit?.oid])
@@ -290,15 +270,9 @@ function forcePushedHeads(io, number) {
  * is also another PR's head counts too (a PR stacked on another): its mark
  * carries over only to the same fingerprint, the same pictures that PR
  * already showed.
- *
- * @param {Io} io
- * @param {number} number
- * @param {string} head
  */
-export function earlierResult(io, number, head) {
-  const commits = /** @type {{ sha: string }[]} */ (
-    pages(io.api, `repos/${io.repo}/pulls/${number}/commits`)
-  )
+export function earlierResult(io: Io, number: number, head: string) {
+  const commits = (pages(io.api, `repos/${io.repo}/pulls/${number}/commits`) as { sha: string }[])
     .map((c) => c.sha)
     .reverse()
     .filter((sha) => sha !== head)
@@ -321,13 +295,9 @@ const SECTION_BUDGET = MAX_CHARS - 20_000;
 
 /**
  * How many screens `all` has that `shown` doesn't.
- *
- * @param {readonly import('./table.ts').Line[]} all
- * @param {readonly import('./table.ts').Line[]} shown
  */
-const dropped = (all, shown) => {
-  const count = (/** @type {readonly import('./table.ts').Line[]} */ rows) =>
-    new Set(rows.map((r) => r.state ?? r.label)).size;
+const dropped = (all: readonly Line[], shown: readonly Line[]) => {
+  const count = (rows: readonly Line[]) => new Set(rows.map((r) => r.state ?? r.label)).size;
   return count(all) - count(shown);
 };
 
@@ -335,11 +305,8 @@ const dropped = (all, shown) => {
  * What decides how a result is laid out, besides its pictures: the share
  * that makes a change minor and which changes are. A `minor` setting changed
  * in an app's config re-uploads the open PRs once.
- *
- * @param {readonly import('./table.ts').Line[]} rows
- * @param {number} minor
  */
-const layoutOf = (rows, minor) =>
+const layoutOf = (rows: readonly Line[], minor: number) =>
   createHash('sha256')
     .update(
       `${minor}\n${rows.map((r) => `${r.change.file} ${isMinor(r) ? 'minor' : 'big'}`).join('\n')}`,
@@ -350,10 +317,8 @@ const layoutOf = (rows, minor) =>
 /**
  * The section's local path for a picture, which the attach job swaps for
  * its link once it has uploaded it.
- *
- * @param {number} i
  */
-export const pictureFile = (i) => `${String(i + 1).padStart(2, '0')}.png`;
+export const pictureFile = (i: number) => `${String(i + 1).padStart(2, '0')}.png`;
 
 /** An attachment's id, as long as GitHub's are (a UUID). */
 const SAMPLE_ID = '00000000-0000-0000-0000-000000000000';
@@ -362,11 +327,8 @@ const SAMPLE_ID = '00000000-0000-0000-0000-000000000000';
  * How much longer a section with `count` pictures grows once attach has
  * uploaded them: each local path (`./01.png`) becomes a link, and the record
  * line gains each picture's id and a comma.
- *
- * @param {string} section
- * @param {number} count
  */
-export function growth(section, count) {
+export function growth(section: string, count: number) {
   let n = count * (SAMPLE_ID.length + 1);
   for (let i = 0; i < count; i++) {
     const local = `./${pictureFile(i)}`;
@@ -377,58 +339,53 @@ export function growth(section, count) {
 
 /**
  * The pictures' bytes, in pick's order.
- *
- * @param {Io} io
- * @param {{ pictures: import('./table.ts').Picture[], changes: import('./compare.ts').Change[],
- *   before: string, after: string }} input
  */
-function pictureBytes(io, { pictures, changes, before, after }) {
+function pictureBytes(
+  io: Io,
+  {
+    pictures,
+    changes,
+    before,
+    after,
+  }: { pictures: Picture[]; changes: Change[]; before: string; after: string },
+) {
   const byFile = new Map(changes.map((c) => [c.file, c]));
-  /** @type {Map<string, import('../lib/pixels.mjs').Image>} */
-  const decoded = new Map();
+  const decoded: Map<string, Image> = new Map();
   /**
    * A shot's pixels, decoded once.
-   *
-   * @param {string} root
-   * @param {string} file
    */
-  const image = (root, file) => {
+  const image = (root: string, file: string) => {
     const key = `${root}\0${file}`;
     if (!decoded.has(key)) decoded.set(key, io.pixels.read(readFileSync(path.join(root, file))));
-    return /** @type {import('../lib/pixels.mjs').Image} */ (decoded.get(key));
+    return decoded.get(key) as Image;
   };
-  /** @param {import('../lib/pixels.mjs').Image} img */
-  const png = (img) => io.pixels.write(img);
+  const png = (img: Image) => io.pixels.write(img);
   /**
    * The bytes of one picture: a shot as it is, pixelmatch's diff, or a
    * picture made from them (zoom.ts).
-   *
-   * @param {import('./table.ts').Picture} p
-   * @param {import('./compare.ts').Change} change
    */
-  const bytes = (p, change) => {
+  const bytes = (p: Picture, change: Change) => {
     const look = change.look;
-    if (p.side === 'diff') return /** @type {Buffer} */ (change.diff);
+    if (p.side === 'diff') return change.diff as Buffer;
     if (p.side === 'before' || p.side === 'after') {
       return readFileSync(path.join(p.side === 'before' ? before : after, p.file));
     }
-    const l = /** @type {import('./zoom.ts').Look} */ (look);
+    const l = look as Look;
     if (p.side === 'where') return png(outlined(image(after, p.file), l.places));
     // One picture of the three patches, side by side: the changed place in
     // main's shot, the PR's, and pixelmatch's diff, each enlarged alike.
-    const patch = (/** @type {import('../lib/pixels.mjs').Image} */ img) =>
-      enlarge(crop(img, l.zoom), l.scale);
+    const patch = (img: Image) => enlarge(crop(img, l.zoom), l.scale);
     return png(
       sideBySide([
         patch(image(before, p.file)),
         patch(image(after, p.file)),
-        patch(io.pixels.read(/** @type {Buffer} */ (change.diff))),
+        patch(io.pixels.read(change.diff as Buffer)),
       ]),
     );
   };
   return pictures.map((p, i) => ({
     name: pictureFile(i),
-    bytes: bytes(p, /** @type {import('./compare.ts').Change} */ (byFile.get(p.file))),
+    bytes: bytes(p, byFile.get(p.file) as Change),
   }));
 }
 
@@ -438,16 +395,28 @@ function pictureBytes(io, { pictures, changes, before, after }) {
  * beside the rest of it: a table over SECTION_BUDGET, less `slack`, drops
  * its last (smallest) screens and says how many.
  *
- * @param {Io} io
- * @param {{ rows: import('./table.ts').Line[], links: Map<string, string>, base: string,
- *   minor: number, slack: (section: string) => number }} input
- *   slack: how much longer the section will grow once written (its local
- *   paths swapped for links)
+ * @param io
+ * @param input slack: how much longer the section will grow once written (its
+ *   local paths swapped for links)
  */
-function render(io, { rows, links, base, minor, slack }) {
+function render(
+  io: Io,
+  {
+    rows,
+    links,
+    base,
+    minor,
+    slack,
+  }: {
+    rows: Line[];
+    links: Map<string, string>;
+    base: string;
+    minor: number;
+    slack: (section: string) => number;
+  },
+) {
   let shown = rows;
-  /** @type {string} */
-  let section;
+  let section: string;
   for (;;) {
     section =
       shown.length === 0
@@ -471,15 +440,13 @@ function render(io, { rows, links, base, minor, slack }) {
 /**
  * Does one review. Returns the PR's or issue's number, or null when there
  * was nothing to do.
- *
- * @param {Target} target
- * @param {{ s: import('./settings.ts').Settings, io: Io }} context
- * @returns {number | null}
  */
-export function review(target, { s, io }) {
-  const run = /** @type {{ id: number, head_sha: string, conclusion: string | null }} */ (
-    io.api('GET', `repos/${io.repo}/actions/runs/${target.run}`)
-  );
+export function review(target: Target, { s, io }: { s: Settings; io: Io }): number | null {
+  const run = io.api('GET', `repos/${io.repo}/actions/runs/${target.run}`) as {
+    id: number;
+    head_sha: string;
+    conclusion: string | null;
+  };
   const mine = mkdtempSync(path.join(tmpdir(), 'shots-'));
   const got = io.artifact(run.id, mine);
   const manifest =
@@ -491,8 +458,7 @@ export function review(target, { s, io }) {
   }
 
   const number = target.number;
-  /** @type {string} */
-  let body;
+  let body: string;
   if (target.kind === 'issue') {
     if (!manifest?.mockupIssue) {
       io.log('visual-review: a run by hand that is no mockup: nothing to do');
@@ -502,9 +468,11 @@ export function review(target, { s, io }) {
     if (manifest.mockupIssue !== number) {
       throw new Error(`the mockup's shots are for #${manifest.mockupIssue}, not #${number}`);
     }
-    const issue = /** @type {{ state?: string, pull_request?: unknown, body?: string | null }} */ (
-      io.api('GET', `repos/${io.repo}/issues/${number}`)
-    );
+    const issue = io.api('GET', `repos/${io.repo}/issues/${number}`) as {
+      state?: string;
+      pull_request?: unknown;
+      body?: string | null;
+    };
     if (issue.state !== 'open' || issue.pull_request) {
       throw new Error(`mockup_issue #${number} isn't an open issue in ${io.repo}`);
     }
@@ -512,9 +480,10 @@ export function review(target, { s, io }) {
   } else {
     // A run for a head the PR has moved on from posts nothing: that head's
     // own run follows.
-    const pr = /** @type {{ head: { sha: string }, body?: string | null }} */ (
-      io.api('GET', `repos/${io.repo}/pulls/${number}`)
-    );
+    const pr = io.api('GET', `repos/${io.repo}/pulls/${number}`) as {
+      head: { sha: string };
+      body?: string | null;
+    };
     if (pr.head.sha !== run.head_sha) {
       io.log(`visual-review: #${number} has moved on from ${run.head_sha.slice(0, 7)}`);
       return number;
@@ -523,8 +492,7 @@ export function review(target, { s, io }) {
   }
 
   const theirs = mkdtempSync(path.join(tmpdir(), 'main-'));
-  /** @returns {{ result: import('./status.ts').Result, compared: { rows: import('./table.ts').Line[], changes: import('./compare.ts').Change[] } | null }} */
-  const assess = () => {
+  const assess = (): { result: Result; compared: { rows: Line[]; changes: Change[] } | null } => {
     if (!manifest) {
       // No shots is a pass only from a run that succeeded; an expired
       // artifact, or a run that failed or was cancelled, isn't one.
@@ -568,8 +536,10 @@ export function review(target, { s, io }) {
     const { rows, changes } = compared;
     const layout = layoutOf(rows, s.minor);
     const pictures = pick(rows);
-    /** @param {Omit<Handoff, 'version' | 'kind' | 'number' | 'head' | 'run'>} rest */
-    const hand = (rest, /** @type {{ name: string, bytes: Buffer }[]} */ files = []) =>
+    const hand = (
+      rest: Omit<Handoff, 'version' | 'kind' | 'number' | 'head' | 'run'>,
+      files: { name: string; bytes: Buffer }[] = [],
+    ) =>
       io.handoff(
         { version: 1, kind: target.kind, number, head: run.head_sha, run: target.run, ...rest },
         files,
@@ -668,7 +638,7 @@ export function review(target, { s, io }) {
     } catch (error) {
       // Auto-merge is a convenience: its status is posted, and autofix
       // tries enable.mjs again when the PR's next check completes.
-      io.log(`::warning::couldn't turn auto-merge on: ${/** @type {Error} */ (error).message}`);
+      io.log(`::warning::couldn't turn auto-merge on: ${(error as Error).message}`);
     }
   }
   return number;

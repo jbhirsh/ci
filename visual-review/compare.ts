@@ -15,6 +15,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { diff } from '../lib/pixels.mjs';
 import { lookAt } from './zoom.ts';
+import type { Pixels } from '../lib/pixels.mjs';
+import type { Look } from './zoom.ts';
 
 /** The most a shot may weigh, as GitHub caps an attached image. */
 export const MAX_SHOT_BYTES = 10 * 1024 * 1024;
@@ -25,9 +27,9 @@ const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 /**
  * Whether a path in a shots tree is one this takes.
  *
- * @param {string} file posix, relative
+ * @param file posix, relative
  */
-export function isShotPath(file) {
+export function isShotPath(file: string) {
   const parts = file.split('/');
   return (
     file.endsWith('.png') &&
@@ -38,14 +40,10 @@ export function isShotPath(file) {
 /**
  * Every PNG under a folder, as sorted posix paths relative to it. Throws on
  * a path isShotPath refuses, or on a link: a shot is a plain file.
- *
- * @param {string} root
  */
-export function shotsIn(root) {
-  /** @type {string[]} */
-  const found = [];
-  /** @param {string} rel */
-  const walk = (rel) => {
+export function shotsIn(root: string) {
+  const found: string[] = [];
+  const walk = (rel: string) => {
     for (const entry of readdirSync(path.join(root, rel), { withFileTypes: true })) {
       const file = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) walk(file);
@@ -60,44 +58,53 @@ export function shotsIn(root) {
   return found.sort();
 }
 
-/**
- * One shot that isn't the same in both.
- *
- * @typedef {object} Change
- * @property {string} file its path in the trees
- * @property {'changed' | 'added' | 'removed'} kind
- * @property {number} [ratio] the share of pixels that differ (1: resized)
- * @property {Buffer} [diff] pixelmatch's picture of the difference
- * @property {true} [resized] the two shots differ in size
- * @property {import('./zoom.ts').Look} [look] where a change under `minor` is
- * @property {string} after the PR's shot's SHA-256, '' when it's gone
- */
+/** One shot that isn't the same in both. */
+export type Change = {
+  /** its path in the trees */
+  file: string;
+  kind: 'changed' | 'added' | 'removed';
+  /** the share of pixels that differ (1: resized) */
+  ratio?: number;
+  /** pixelmatch's picture of the difference */
+  diff?: Buffer;
+  /** the two shots differ in size */
+  resized?: true;
+  /** where a change under `minor` is */
+  look?: Look;
+  /** the PR's shot's SHA-256, '' when it's gone */
+  after: string;
+};
 
 /**
  * The PR's shots against main's.
  *
- * @param {{ before: string, after: string, ratio: number, minor?: number,
- *   pixels: import('../lib/pixels.mjs').Pixels }} options
- *   `before`: main's tree; `after`: the PR's; `minor`: the share under which
- *   a change is small (0.001), and gets a look (zoom.ts)
- * @returns {Change[]} in path order
+ * @param options `before`: main's tree; `after`: the PR's; `minor`: the share
+ *   under which a change is small (0.001), and gets a look (zoom.ts)
+ * @returns in path order
  */
-export function compareShots({ before, after, ratio, minor = 0.001, pixels }) {
+export function compareShots({
+  before,
+  after,
+  ratio,
+  minor = 0.001,
+  pixels,
+}: {
+  before: string;
+  after: string;
+  ratio: number;
+  minor?: number;
+  pixels: Pixels;
+}): Change[] {
   const main = shotsIn(before);
   const pr = shotsIn(after);
-  /**
-   * @param {string} root
-   * @param {string} file
-   */
-  const read = (root, file) => {
+  const read = (root: string, file: string) => {
     const bytes = readFileSync(path.join(root, file));
     if (bytes.length > MAX_SHOT_BYTES) throw new Error(`${file} is over 10 MB`);
     if (!bytes.subarray(0, 8).equals(PNG)) throw new Error(`${file} is not a PNG`);
     return bytes;
   };
-  const sha = (/** @type {Buffer} */ b) => createHash('sha256').update(b).digest('hex');
-  /** @type {Change[]} */
-  const changes = [];
+  const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
+  const changes: Change[] = [];
   for (const file of [...new Set([...main, ...pr])].sort()) {
     if (!pr.includes(file)) {
       changes.push({ file, kind: 'removed', after: '' });

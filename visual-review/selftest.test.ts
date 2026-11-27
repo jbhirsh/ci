@@ -25,10 +25,8 @@ jobs:
 
 /**
  * An app checkout with these files.
- *
- * @param {Record<string, string>} files
  */
-function app(files) {
+function app(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), 'app-'));
   for (const [file, text] of Object.entries(files)) {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
@@ -62,7 +60,7 @@ describe('selftest', () => {
       '.github/workflows/visual.yml': SHOTS,
       '.github/workflows/visual-review.yml': STUB,
     };
-    for (const [over, why] of /** @type {[Record<string, string>, RegExp][]} */ ([
+    for (const [over, why] of [
       [{ '.github/workflows/visual.yml': '' }, /doesn't upload its shots/],
       [
         { '.github/workflows/visual.yml': `${SHOTS}\n  cancel-in-progress: true\n` },
@@ -77,7 +75,7 @@ describe('selftest', () => {
         { '.github/workflows/visual-review.yml': STUB.replace('PR GIFs', 'Visual review') },
         /lists itself/,
       ],
-    ])) {
+    ] as [Record<string, string>, RegExp][]) {
       expect(() => selftest(app({ ...base, ...over }))).toThrow(why);
     }
     expect(() => selftest(app({ '.github/ci.json': ci }))).toThrow(

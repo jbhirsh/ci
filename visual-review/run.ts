@@ -22,31 +22,26 @@ import { downloadShots } from './find.ts';
 import { review } from './review.ts';
 import { settings } from './settings.ts';
 import { CONTEXT, MAX_DESCRIPTION } from './status.ts';
+import type { Io, Target } from './review.ts';
+import type { Api } from '../lib/comment.mjs';
 
 /**
  * A matrix entry, checked: it comes from find.ts, but through the
  * workflow's text.
- *
- * @param {string} text
- * @returns {import('./review.ts').Target}
  */
-export function parseTarget(text) {
-  const t = /** @type {Record<string, unknown>} */ (JSON.parse(text));
-  const whole = (/** @type {unknown} */ n) => Number.isInteger(n) && Number(n) > 0;
+export function parseTarget(text: string): Target {
+  const t = JSON.parse(text) as Record<string, unknown>;
+  const whole = (n: unknown) => Number.isInteger(n) && Number(n) > 0;
   if ((t.kind === 'pr' || t.kind === 'issue') && whole(t.number) && whole(t.run)) {
     return { kind: t.kind, number: Number(t.number), run: Number(t.run) };
   }
   throw new Error(`not a review target: ${text}`);
 }
 
-/**
- * gh with a token.
- *
- * @typedef {(token: string, args: string[]) => string} Gh
- */
+/** gh with a token. */
+export type Gh = (token: string, args: string[]) => string;
 
-/** @type {Gh} */
-function realGh(token, args) {
+function realGh(token: string, args: string[]): string {
   return execFileSync('gh', args, {
     encoding: 'utf8',
     env: { ...process.env, GH_TOKEN: token },
@@ -58,13 +53,25 @@ function realGh(token, args) {
 /**
  * The review's io against GitHub: the Actions token for all of it.
  *
- * @param {{ env: Record<string, string | undefined>, repo: string, token: string,
- *   gh: Gh, api: import('../lib/comment.mjs').Api, handoffDir: string,
- *   handedOff: () => void }} options
- *   handedOff: told when a hand-off is written
- * @returns {import('./review.ts').Io}
+ * @param options handedOff: told when a hand-off is written
  */
-export function gitHubIo({ env, repo, token, gh, api, handoffDir, handedOff }) {
+export function gitHubIo({
+  env,
+  repo,
+  token,
+  gh,
+  api,
+  handoffDir,
+  handedOff,
+}: {
+  env: Record<string, string | undefined>;
+  repo: string;
+  token: string;
+  gh: Gh;
+  api: Api;
+  handoffDir: string;
+  handedOff: () => void;
+}): Io {
   return {
     repo,
     owner: env.OWNER ?? repo.split('/')[0],
@@ -95,10 +102,13 @@ export function gitHubIo({ env, repo, token, gh, api, handoffDir, handedOff }) {
 }
 
 /**
- * @param {Record<string, string | undefined>} env
- * @param {{ gh?: Gh, api?: import('../lib/comment.mjs').Api }} [seams] for the tests
+ * @param env
+ * @param seams for the tests
  */
-export function main(env, { gh = realGh, api = ghApi } = {}) {
+export function main(
+  env: Record<string, string | undefined>,
+  { gh = realGh, api = ghApi }: { gh?: Gh; api?: Api } = {},
+) {
   const root = appRoot();
   const s = settings(appConfig('visual-review', root));
   if (!s) throw new Error('.github/ci.json has no visual-review key');
@@ -137,10 +147,8 @@ export function main(env, { gh = realGh, api = ghApi } = {}) {
     // too, that's logged, and the job still fails with the first error.
     if (target.kind === 'pr') {
       try {
-        const run = /** @type {{ head_sha: string }} */ (
-          api('GET', `repos/${repo}/actions/runs/${target.run}`)
-        );
-        const why = /** @type {Error} */ (error).message.replace(/\s+/g, ' ');
+        const run = api('GET', `repos/${repo}/actions/runs/${target.run}`) as { head_sha: string };
+        const why = (error as Error).message.replace(/\s+/g, ' ');
         const description = `Visual review failed: ${why}`;
         api('POST', `repos/${repo}/statuses/${run.head_sha}`, {
           state: 'failure',

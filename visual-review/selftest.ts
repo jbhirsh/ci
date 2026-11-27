@@ -21,16 +21,13 @@ import { settings } from './settings.ts';
 
 /**
  * A workflow's `name:`, or null.
- *
- * @param {string} text
  */
-const nameOf = (text) => /^name:\s*["']?(.+?)["']?\s*$/m.exec(text)?.[1] ?? null;
+const nameOf = (text: string) => /^name:\s*["']?(.+?)["']?\s*$/m.exec(text)?.[1] ?? null;
 
 /**
- * @param {string} root
- * @returns {string[]} what to print; throws on the first problem
+ * @returns what to print; throws on the first problem
  */
-export function selftest(root) {
+export function selftest(root: string): string[] {
   const s = settings(appConfig('visual-review', root));
   if (!s) return ['visual-review: no settings; the app uses no visual review yet.'];
   const workflows = path.join(root, '.github', 'workflows');

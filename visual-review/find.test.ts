@@ -8,23 +8,20 @@ const own = { full_name: REPO };
 
 /**
  * A fake API answering by "METHOD route".
- *
- * @param {Record<string, unknown>} routes
  */
-const api = (routes) => (/** @type {string} */ method, /** @type {string} */ route) => {
+const api = (routes: Record<string, unknown>) => (method: string, route: string) => {
   const key = `${method} ${route}`;
   if (!(key in routes)) throw new Error(`unexpected ${key}`);
   return routes[key];
 };
-const runs = (/** @type {string} */ sha) =>
+const runs = (sha: string) =>
   `GET repos/${REPO}/actions/workflows/visual.yml/runs?event=pull_request&head_sha=${sha}&status=completed&per_page=10`;
 const pulls = `GET repos/${REPO}/commits/${HEAD}/pulls?per_page=100`;
-/**
- * @param {Record<string, unknown>} payload
- * @param {Record<string, unknown>} [routes]
- * @param {string} [name]
- */
-const event = (payload, routes = {}, name = 'workflow_run') => ({
+const event = (
+  payload: Record<string, unknown>,
+  routes: Record<string, unknown> = {},
+  name = 'workflow_run',
+) => ({
   name,
   payload,
   repo: REPO,
@@ -33,9 +30,9 @@ const event = (payload, routes = {}, name = 'workflow_run') => ({
   api: api(routes),
   log: () => {},
   // Run 12's shots are no mockup's; every other run by hand's are #9's.
-  mockupIssue: (/** @type {number} */ run) => (run === 12 ? null : 9),
+  mockupIssue: (run: number) => (run === 12 ? null : 9),
 });
-const wr = (/** @type {Record<string, unknown>} */ over) => ({
+const wr = (over: Record<string, unknown>) => ({
   workflow_run: {
     id: 11,
     event: 'pull_request',
@@ -140,11 +137,10 @@ describe('targets', () => {
         event(wr({ id: 12, event: 'workflow_dispatch', head_branch: 'main', head_sha: MAIN })),
       ),
     ).toEqual([]);
-    /** @type {string[]} */
-    const logs = [];
+    const logs: string[] = [];
     const broken = {
       ...event(wr({ id: 13, event: 'workflow_dispatch', head_branch: 'main', head_sha: MAIN })),
-      log: (/** @type {string} */ l) => logs.push(l),
+      log: (l: string) => logs.push(l),
       mockupIssue: () => {
         throw new Error('no visual-shots.json');
       },
@@ -193,7 +189,7 @@ describe('targets', () => {
   });
 
   it('skips a PR into another branch', () => {
-    const into = (/** @type {string} */ ref) => ({
+    const into = (ref: string) => ({
       number: 5,
       state: 'open',
       head: { sha: HEAD, repo: own },
@@ -213,18 +209,14 @@ describe('targets', () => {
 });
 
 describe('ownEdit', () => {
-  const block = (/** @type {string} */ inner) =>
+  const block = (inner: string) =>
     `<!-- describe:visual-review -->\n${inner}\n<!-- /describe:visual-review -->`;
-  const slot = (/** @type {string} */ state, /** @type {string} */ inner) =>
+  const slot = (state: string, inner: string) =>
     `<!-- describe:visual-review:${state} -->\n${inner}\n<!-- /describe:visual-review:${state} -->`;
   /**
    * An edited event's payload.
-   *
-   * @param {string} from
-   * @param {string} to
-   * @param {Record<string, unknown>} [more]
    */
-  const edit = (from, to, more = {}) => ({
+  const edit = (from: string, to: string, more: Record<string, unknown> = {}) => ({
     action: 'edited',
     changes: { body: { from } },
     pull_request: { body: to },
@@ -236,7 +228,7 @@ describe('ownEdit', () => {
     expect(ownEdit(edit(before, before.replace('old table', 'staged pictures')))).toBe(true);
     expect(ownEdit(edit(before, before.replace('old T', 'new T')))).toBe(true);
     // An empty description comes as null.
-    expect(ownEdit(edit(/** @type {never} */ (null), block('pictures')))).toBe(true);
+    expect(ownEdit(edit(null as never, block('pictures')))).toBe(true);
     // The first upload adds the block at the end.
     expect(ownEdit(edit('Goal.\n', `Goal.\n\n${block('pictures')}\n`))).toBe(true);
   });
@@ -253,9 +245,7 @@ describe('ownEdit', () => {
       false,
     );
     expect(ownEdit({ action: 'auto_merge_enabled', pull_request: { body: before } })).toBe(false);
-    expect(ownEdit(edit(before, /** @type {string} */ (/** @type {unknown} */ (null))))).toBe(
-      false,
-    );
+    expect(ownEdit(edit(before, null as unknown as string))).toBe(false);
   });
 
   it("makes targets review nothing for the upload, and the PR for an author's edit", () => {
@@ -274,7 +264,7 @@ describe('ownEdit', () => {
 });
 
 describe('downloadShots and mockupIssue', () => {
-  const art = (/** @type {number} */ id) =>
+  const art = (id: number) =>
     `GET repos/${REPO}/actions/runs/${id}/artifacts?name=visual-shots&per_page=100&page=1`;
   const routes = api({
     [art(1)]: { artifacts: [] },
@@ -283,9 +273,8 @@ describe('downloadShots and mockupIssue', () => {
   });
 
   it('says none or expired, and downloads with gh otherwise, letting a failure throw', () => {
-    /** @type {string[][]} */
-    const calls = [];
-    const gh = (/** @type {string[]} */ args) => {
+    const calls: string[][] = [];
+    const gh = (args: string[]) => {
       calls.push(args);
       return '';
     };
@@ -313,7 +302,7 @@ describe('downloadShots and mockupIssue', () => {
       event: 'workflow_dispatch',
       mockupIssue: 9,
     };
-    const gh = (/** @type {string[]} */ args) => {
+    const gh = (args: string[]) => {
       writeFileSync(
         path.join(args[args.indexOf('--dir') + 1], 'visual-shots.json'),
         JSON.stringify(manifest),
