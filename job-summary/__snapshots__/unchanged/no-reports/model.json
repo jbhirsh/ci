@@ -1,0 +1,33 @@
+{
+  "repo": "jbhirsh/sift",
+  "workflow": "CI",
+  "job": "Accessibility audit",
+  "noun": "test",
+  "problem": "",
+  "run": {
+    "number": 42,
+    "url": "https://gh/run/42",
+    "sha": "abcdef123",
+    "branch": "feat",
+    "when": "2026-10-29T10:00:00.000Z"
+  },
+  "seconds": 300,
+  "usual": null,
+  "steps": [
+    {
+      "i": 1,
+      "name": "Audit",
+      "start": 0,
+      "seconds": 262,
+      "conclusion": "success",
+      "usual": null,
+      "slower": false,
+      "past": []
+    }
+  ],
+  "runs": [],
+  "tests": null,
+  "notes": [],
+  "load": [],
+  "settle": null
+}

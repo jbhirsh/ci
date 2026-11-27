@@ -5,11 +5,19 @@
 // (job-summary-<job>, its tests' names, times and results), its tests. A
 // call that fails leaves that part out: history is never worth failing a
 // summary over.
+//
+// A probe's measurements (measures.ts) have a history of their own: main's
+// runs of this run's event only (the `only` option), read only for a job
+// given the measurements input. BoardGames' probe runs on
+// deployment_status, while its scheduled runs on main, which have no probe
+// job, would otherwise crowd them out.
 
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { parseRecorded } from './measures.ts';
 import type { TestCase } from './junit.ts';
+import type { Recorded } from './measures.ts';
 
 export type Gh = (args: string[]) => string;
 
@@ -60,10 +68,26 @@ export type PastRun = {
    * without one)
    */
   seconds: number | null;
+  /** its measurements, from its record, only when it kept some */
+  measurements?: Recorded;
 };
 
-/** What a run's record holds. */
-export type RunRecord = { tests: PastRun['tests']; seconds: number | null };
+/** What a run's record holds: measurements only when it kept some. */
+export type RunRecord = {
+  tests: PastRun['tests'];
+  seconds: number | null;
+  measurements?: Recorded;
+};
+
+/**
+ * Which earlier runs to read, in place of this run's branch and the
+ * default branch, of any event: measurements' history (summary.ts).
+ */
+export type Only = {
+  /** the runs' event ("deployment_status") */
+  event?: string;
+  branches?: string[];
+};
 
 /**
  * The artifact a run's record of its tests goes in: one per job, by name.
@@ -129,13 +153,15 @@ export function pastRuns(
   defaultBranch: string,
   count: number,
   gh: Gh,
+  only: Only = {},
 ): Run[] {
   const named = (b: string | null): b is string => Boolean(b);
-  const branches = [...new Set([run.head_branch, defaultBranch].filter(named))];
+  const branches = [...new Set((only.branches ?? [run.head_branch, defaultBranch]).filter(named))];
+  const event = only.event ? `&event=${encodeURIComponent(only.event)}` : '';
   const found: Map<number, Run> = new Map();
   for (const branch of branches) {
     const page: { workflow_runs?: Run[] } | null = api(gh, [
-      `repos/${repo}/actions/workflows/${run.workflow_id}/runs?branch=${encodeURIComponent(branch)}&status=completed&created=${encodeURIComponent(`<${run.created_at}`)}&per_page=${count}`,
+      `repos/${repo}/actions/workflows/${run.workflow_id}/runs?branch=${encodeURIComponent(branch)}${event}&status=completed&created=${encodeURIComponent(`<${run.created_at}`)}&per_page=${count}`,
     ]);
     for (const r of page?.workflow_runs ?? []) {
       const fork = r.head_repository && r.head_repository.full_name !== repo;
@@ -160,8 +186,8 @@ export function pastJob(repo: string, run: Run, name: string, gh: Gh): Job | nul
 }
 
 /**
- * The tests a run's record holds, and the job's time it wrote, or null when
- * it can't be read.
+ * The tests a run's record holds, the job's time it wrote and its
+ * measurements, if it kept any, or null when it can't be read.
  *
  * @param text the record's JSON
  */
@@ -173,8 +199,10 @@ export function parseRecord(text: string): RunRecord | null {
       'seconds' in data && typeof data.seconds === 'number' && data.seconds >= 0
         ? data.seconds
         : null;
+    const measurements = 'measurements' in data ? parseRecorded(data.measurements) : null;
+    const kept = measurements ? { measurements } : {};
     if (!('tests' in data) || !Array.isArray(data.tests)) {
-      return seconds === null ? null : { tests: null, seconds };
+      return seconds === null && !measurements ? null : { tests: null, seconds, ...kept };
     }
     const tests = data.tests
       .filter(
@@ -186,7 +214,7 @@ export function parseRecord(text: string): RunRecord | null {
           ['passed', 'failed', 'skipped', 'passed on re-run'].includes(t.result),
       )
       .map((t) => ({ name: t.name, seconds: t.seconds, result: t.result }));
-    return { tests, seconds };
+    return { tests, seconds, ...kept };
   } catch {
     return null;
   }
@@ -223,6 +251,7 @@ export function downloadRecord(gh: Gh, repo: string, runId: number, name: string
  * @param record
  * @param until milliseconds
  * @param clock
+ * @param only which runs, in place of this branch's and the default branch's
  */
 export function history(
   repo: string,
@@ -234,10 +263,11 @@ export function history(
   record?: (runId: number, artifact: string) => string | null,
   until: number = Infinity,
   clock: () => number = Date.now,
+  only: Only = {},
 ): PastRun[] {
   const read = record ?? ((id, artifact) => downloadRecord(gh, repo, id, artifact));
   const past: PastRun[] = [];
-  for (const r of pastRuns(repo, run, defaultBranch, count, gh)) {
+  for (const r of pastRuns(repo, run, defaultBranch, count, gh, only)) {
     if (clock() > until) break;
     const job = pastJob(repo, r, name, gh);
     if (!job) continue;
@@ -249,6 +279,7 @@ export function history(
       tests: kept?.tests ?? null,
       recorded: kept !== null,
       seconds: kept?.seconds ?? null,
+      ...(kept?.measurements ? { measurements: kept.measurements } : {}),
     });
   }
   return past;

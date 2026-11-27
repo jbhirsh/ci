@@ -29,11 +29,18 @@
 // LOAD: sift's own scripts write them) or else from what job-summary/note
 // and job-summary/sample-load left in RUNNER_TEMP (telemetry.mjs).
 //
+// A probe's results file (MEASUREMENTS, probe/results.ts) is kept only
+// when given: its values go in the record (version 3, measures.ts), for
+// later runs to compare theirs with. With no MEASUREMENTS, nothing reads
+// or writes them, and the record keeps version 2 with no measurements key,
+// as every job had before.
+//
 //   node summary.ts   (env: JOB; JUNIT (patterns, one per line), NOUN,
 //                       NOTES (a JSON file), LOAD (a CSV file), SETTLE,
-//                       REPORT_BASE, all optional; GITHUB_REPOSITORY,
-//                       GITHUB_WORKFLOW, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT,
-//                       RUNNER_TEMP; GH_TOKEN for gh)
+//                       REPORT_BASE, MEASUREMENTS (a JSON file), all
+//                       optional; GITHUB_REPOSITORY, GITHUB_WORKFLOW,
+//                       GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, RUNNER_TEMP;
+//                       GH_TOKEN for gh)
 
 import { execFileSync } from 'node:child_process';
 import { globSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -41,8 +48,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setOutput, summary } from '../lib/actions.ts';
+import { parseResults } from '../probe/results.ts';
 import { artifactName, current, history } from './history.ts';
 import { parseJunit, settleReruns } from './junit.ts';
+import { recorded } from './measures.ts';
 import { buildModel, noteworthy, parts } from './model.ts';
 import { render, section } from './render.ts';
 import { pagesBase, report, reportUrl } from './report.ts';
@@ -50,7 +59,9 @@ import { changedFiles, locate, realGit, trackedFiles } from './source.ts';
 import { telemetryFiles } from './telemetry.mjs';
 import { byTest, jobSeconds, stepRows } from './trends.ts';
 import type { Gh, Job, PastRun, Run } from './history.ts';
+import type { Results } from '../probe/results.ts';
 import type { TestCase } from './junit.ts';
+import type { Recorded } from './measures.ts';
 import type { Git } from './source.ts';
 import type { Sample } from './model.ts';
 
@@ -103,15 +114,43 @@ export function readTests(
  * The record of a run that later runs read back (history.ts parseRecord):
  * its tests (null without reports), and the job's time so far, which later
  * runs compare theirs with, as both stop at the summary (a job's end
- * includes its summary's downloads and the post-job steps).
+ * includes its summary's downloads and the post-job steps). Measurements
+ * only with the input, which makes it version 3.
  */
-export function record(job: string, tests: TestCase[] | null, seconds: number | null) {
-  return JSON.stringify({
+export function record(
+  job: string,
+  tests: TestCase[] | null,
+  seconds: number | null,
+  measurements?: Recorded,
+) {
+  const kept = {
     version: 2,
     job,
     seconds,
     tests: tests?.map(({ name, seconds, result }) => ({ name, seconds, result })) ?? null,
-  });
+  };
+  return JSON.stringify(measurements ? { ...kept, version: 3, measurements } : kept);
+}
+
+/**
+ * A probe's results file (MEASUREMENTS): what it holds, or, when it can't
+ * be read (the probe failed before writing it), none and a note saying
+ * why.
+ */
+function readMeasurements(file: string, read: (file: string) => string): Results {
+  try {
+    return parseResults(JSON.parse(read(file)));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const code = (error as { code?: unknown } | null)?.code;
+    const why =
+      error instanceof SyntaxError
+        ? 'not JSON'
+        : code === 'ENOENT' || message === 'ENOENT'
+          ? 'not there'
+          : message;
+    return { ...parseResults(null), notes: [`${file} couldn't be read: ${why}.`] };
+  }
 }
 
 /**
@@ -219,6 +258,7 @@ export function build(env: Record<string, string | undefined>, gh: Gh, io: Io = 
   let run: Run | null = null;
   let thisJob: Job | null = null;
   let past: PastRun[] = [];
+  const results = env.MEASUREMENTS ? readMeasurements(env.MEASUREMENTS, read) : null;
   // One time limit for reading the history and asking git about it.
   const until = clock() + HISTORY_MS;
   const found = current(env, gh);
@@ -283,13 +323,19 @@ export function build(env: Record<string, string | undefined>, gh: Gh, io: Io = 
     );
     for (const t of model.tests) t.code = snippets.get(t.name)?.code ?? t.code;
   }
+  // Measurements only when the file held some: an unreadable one must not
+  // put an empty run in their history.
+  const kept = results?.measurements.length ? recorded(results) : undefined;
   // A fork's run isn't published (job-reports.yml), so it has no report to link.
   const fork = Boolean(run?.head_repository && run.head_repository.full_name !== repo);
   const link = run && base && !fork ? reportUrl(base, run.id, artifact) : '';
   return {
     markdown: render(model, link),
     section: section(model, link),
-    record: tests || thisJob ? record(job, tests, thisJob ? jobSeconds(thisJob, now) : null) : null,
+    record:
+      tests || thisJob || kept
+        ? record(job, tests, thisJob ? jobSeconds(thisJob, now) : null, kept)
+        : null,
     report: run ? report(model, io.page) : null,
   };
 }

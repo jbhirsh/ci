@@ -1,0 +1,56 @@
+<div class="page">
+      <header class="top">
+        <div class="crumbs" id="crumbs"><a href="https://github.com/jbhirsh/sift">jbhirsh/sift</a> › CI › <a href="https://gh/run/42">run #42</a> · abcdef1 on feat · 2026-10-29T10:00:00.000Z</div>
+        <h1 id="title">Accessibility audit <span class="pill ok">no step failed</span></h1>
+        <div class="facts" id="facts"><span>Job time <b>5m 00s</b></span><span>No usual time yet: three earlier runs that passed make one</span><span>Steps <b>1</b></span></div>
+      </header>
+
+      <section class="card" id="problem-card" hidden="">
+        <h2>Not everything could be read</h2>
+        <p id="problem"></p>
+      </section>
+
+      <section class="card" id="attention-card" hidden="">
+        <h2>Needs attention</h2>
+        <ul class="attention" id="attention"></ul>
+      </section>
+
+      <section class="card" id="steps-card">
+        <h2>Steps</h2>
+        <div class="legend">
+          <span><i style="background: var(--bar)"></i>as usual</span><span><i style="background: var(--warn-bar)"></i>slower than usual</span><span><i style="background: var(--bad)"></i>failed</span><span><i style="border: 1px dashed var(--fg)"></i>usual time</span>
+        </div>
+        <div class="tablewrap"><table id="steps" class="steps"><thead><tr><th class="num" aria-sort="none"><button type="button" class="sortbtn" data-k="i">#</button></th><th class="" aria-sort="none"><button type="button" class="sortbtn" data-k="name">Step</button></th><th class="tl"><div class="axisrow"><span style="left:0%">0</span><span style="left:20%">1m</span><span style="left:40%">2m</span><span style="left:60%">3m</span><span style="left:80%">4m</span><span style="left:100%">5m</span></div></th><th class="num" aria-sort="none"><button type="button" class="sortbtn" data-k="seconds">This run</button></th><th class="num" aria-sort="none"><button type="button" class="sortbtn" data-k="usual">Usual</button></th><th class="num" aria-sort="none"><button type="button" class="sortbtn" data-k="change">Change</button></th><th class="">Last runs</th></tr></thead><tbody><tr id="step-1"><td class="num muted">1</td><td><span class="stepname" title="Audit">Audit</span></td><td class="tl"><div class="track"><i class="tick" style="left:0%"></i><i class="tick" style="left:20%"></i><i class="tick" style="left:40%"></i><i class="tick" style="left:60%"></i><i class="tick" style="left:80%"></i><i class="tick" style="left:100%"></i><i class="seg " tabindex="0" data-step="0" style="left:0%;width:max(3px, 87.33333333333333%)"></i></div></td><td class="num ">4m 22s</td><td class="num muted">n/a</td><td class="num muted">–</td><td><span class="minibars" data-spark="0"><span class="b this" data-i="0" style="height:22px"></span></span></td></tr></tbody></table></div>
+      </section>
+
+      <section class="card" id="tests-card" hidden="">
+        <h2 id="tests-title">Tests</h2>
+        <div class="toolbar">
+          <input id="q" type="search" placeholder="Filter by name, file or describe block" aria-label="Filter tests">
+          <span id="chips" class="toolbar"></span>
+          <button type="button" class="link-btn" id="expand">Expand all</button>
+          <button type="button" class="link-btn" id="collapse">Collapse all</button>
+        </div>
+        <div class="tree" id="tree" role="tree"></div>
+      </section>
+
+      <section class="card" id="history-card" hidden="">
+        <h2 id="history-title">Job time</h2>
+        <div class="chart" id="history"></div>
+      </section>
+
+      <section class="card" id="notes-card" hidden="">
+        <h2>Environment</h2>
+        <dl class="notes" id="notes" hidden=""></dl>
+        <div id="load-wrap" hidden="">
+          <h2>CPU over the job</h2>
+          <div class="legend">
+            <span><i style="background: var(--bad)"></i>CPU busy</span><span id="settle-key"><i style="border: 1px dashed var(--fg)"></i>the settle wait's limit</span><span><i style="background: var(--soft); border: 1px solid var(--line)"></i>a step</span>
+          </div>
+          <div class="chart" id="load"></div>
+          <div class="stepkey" id="stepkey"></div>
+        </div>
+      </section>
+
+      <p class="foot" id="foot">Written by jbhirsh/ci's job-summary for run #42.</p>
+    </div>

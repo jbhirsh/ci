@@ -45,6 +45,13 @@ inputs:
       The % busy a settle wait (sift's) waits under, drawn on the CPU chart.
       None by default.
     default: ""
+  measurements:
+    description: >-
+      A probe's results file (jbhirsh/ci/probe/web's `results` output), to
+      track its timings like the steps' and tests': each request's phases,
+      cold and warm, go in the run's record (measures.ts). None by default:
+      a job without it is summarized as before.
+    default: ""
   report-base:
     description: >-
       Where the repository's Pages site is, for the summary's link to the
@@ -77,6 +84,7 @@ runs:
         NOTES: ${{ inputs.notes }}
         LOAD: ${{ inputs.load }}
         SETTLE: ${{ inputs.settle }}
+        MEASUREMENTS: ${{ inputs.measurements }}
         REPORT_BASE: ${{ inputs.report-base }}
       # summary.ts runs as Node 24 strips its types. Should setup-node have
       # failed above, the runner's own Node may strip none: that says so in

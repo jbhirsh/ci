@@ -1,4 +1,5 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -12,6 +13,8 @@ import {
   record,
   reportFiles,
 } from './summary.ts';
+import { template } from './report.ts';
+import type { Io } from './summary.ts';
 import type { Gh } from './history.ts';
 import type { Git } from './source.ts';
 import type { Model } from './model.ts';
@@ -478,5 +481,137 @@ describe('main', () => {
       '::warning::job-summary: odder',
     ]);
     log.mockRestore();
+  });
+});
+
+/**
+ * A built report's page as it's drawn, in jsdom: the page's own elements,
+ * with dates written alike in any time zone.
+ */
+function drawn(page: string | null) {
+  const { JSDOM }: { JSDOM: new (html: string, options: object) => { window: Window } } =
+    createRequire(import.meta.url)('jsdom');
+  const { window } = new JSDOM(page ?? '', {
+    runScripts: 'dangerously',
+    beforeParse(w: Window & typeof globalThis) {
+      w.matchMedia = (() => ({ matches: false })) as unknown as Window['matchMedia'];
+      w.Date.prototype.toLocaleString = function (this: Date) {
+        return this.toISOString();
+      };
+    },
+  });
+  // The measurements' card, hidden without them, isn't part of today's
+  // page: it goes, with the space before it.
+  const card = window.document.getElementById('measures-card');
+  if (card?.previousSibling?.nodeType === 3) card.previousSibling.remove();
+  card?.remove();
+  return `${window.document.querySelector('.page')?.outerHTML}\n`;
+}
+
+describe('without measurements', () => {
+  // Today's jobs, built as they were before the measurements input: their
+  // summary, comment section, record and drawn report, byte for byte. The
+  // snapshots were written by the code before it, so a change that reaches
+  // a job without the input fails here.
+  const scenarios: [string, Record<string, string>, Gh, Io][] = [
+    [
+      'notes-load',
+      { ...env, NOUN: 'check', NOTES: 'notes.json', LOAD: 'load.csv', SETTLE: '80' },
+      fakeGh(),
+      io,
+    ],
+    ['no-reports', { ...env, JUNIT: '' }, fakeGh(), io],
+    [
+      'earlier-run',
+      env,
+      fakeGh({
+        [`repos/jbhirsh/sift/actions/workflows/7/runs?branch=feat&status=completed&created=${encodeURIComponent(`<${thisRun.created_at}`)}&per_page=${HISTORY}`]:
+          {
+            workflow_runs: [
+              { ...thisRun, id: 41, run_number: 41, head_sha: 'old1', created_at: at(-3600) },
+            ],
+          },
+        'repos/jbhirsh/sift/actions/runs/41/jobs?per_page=100': {
+          jobs: [
+            {
+              name: 'Accessibility audit',
+              conclusion: 'success',
+              started_at: at(0),
+              completed_at: at(100),
+              steps: [
+                { name: 'Audit', conclusion: 'success', started_at: at(0), completed_at: at(90) },
+              ],
+            },
+          ],
+        },
+      }),
+      {
+        ...io,
+        download: () => '{"seconds":95,"tests":[{"name":"U","seconds":1,"result":"passed"}]}',
+      },
+    ],
+  ];
+  for (const [name, given, gh, options] of scenarios) {
+    it(`builds ${name} as it did`, async () => {
+      const built = build({ ...given, GITHUB_WORKFLOW: 'CI' }, gh, {
+        ...options,
+        page: template(),
+      });
+      const dir = `./__snapshots__/unchanged/${name}`;
+      await expect(built.markdown).toMatchFileSnapshot(`${dir}/summary.md`);
+      await expect(built.section).toMatchFileSnapshot(`${dir}/section.md`);
+      await expect(built.record).toMatchFileSnapshot(`${dir}/record.json`);
+      await expect(drawn(built.report)).toMatchFileSnapshot(`${dir}/report.html`);
+      // The page's data: as it was, with measurements null.
+      const json = (built.report ?? '').match(/const data = (.*);\n/)?.[1] ?? 'null';
+      const { measurements, ...data } = JSON.parse(json.replace(/\\u003c/g, '<'));
+      expect(measurements ?? null).toBeNull();
+      await expect(`${JSON.stringify(data, null, 2)}\n`).toMatchFileSnapshot(`${dir}/model.json`);
+    });
+  }
+});
+
+describe('with measurements', () => {
+  const probe = {
+    version: 1,
+    driver: 'web',
+    target: 'https://x.vercel.app',
+    environment: 'preview',
+    measurements: [
+      { name: 'games', phase: 'total', start: 'cold', ms: 3400 },
+      { name: 'games', phase: 'browser', start: 'cold', ms: 3620, responseStartMs: 3610 },
+      { name: 'games', phase: 'total', start: 'warm', ms: 34 },
+      { name: 'games', phase: 'browser', start: 'warm', ms: 410, responseStartMs: 300 },
+    ],
+    notes: ['cold carried by: games'],
+  };
+  const options: Io = {
+    ...io,
+    read: (f) => (f === 'probe.json' ? JSON.stringify(probe) : (io.read?.(f) ?? '')),
+  };
+  const given = { ...env, MEASUREMENTS: 'probe.json', GITHUB_EVENT_NAME: 'deployment_status' };
+
+  it('records each value, version 3', () => {
+    const built = build(given, fakeGh(), options);
+    expect(JSON.parse(built.record ?? '')).toMatchObject({
+      version: 3,
+      measurements: {
+        environment: 'preview',
+        values: [
+          { name: 'games', phase: 'total', start: 'cold', ms: 3400 },
+          { name: 'games', phase: 'browser', start: 'cold', ms: 3620 },
+          { name: 'games', phase: 'total', start: 'warm', ms: 34 },
+          { name: 'games', phase: 'browser', start: 'warm', ms: 410 },
+        ],
+      },
+    });
+  });
+
+  it("records no measurements when the results file couldn't be read", () => {
+    for (const file of ['gone.json', 'r/b.xml']) {
+      const built = build({ ...given, MEASUREMENTS: file }, fakeGh(), options);
+      expect(JSON.parse(built.record ?? '')).toMatchObject({ version: 2 });
+      expect(JSON.parse(built.record ?? '')).not.toHaveProperty('measurements');
+    }
   });
 });
