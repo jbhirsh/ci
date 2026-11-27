@@ -1,5 +1,5 @@
 // Self-test of the commit-message check against an app's checkout:
-// `node commits/selftest.mjs <app dir>`. It reads the last commits on the
+// `node commits/selftest.ts <app dir>`. It reads the last commits on the
 // checkout's HEAD the way the check reads a PR's (from git rather than the
 // API, which needs a PR) and runs every message through the rules, so a
 // message shape the parser can't take fails here before it fails a PR.
@@ -9,7 +9,7 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { problems } from './check.mjs';
+import { problems } from './check.ts';
 
 /** How far back to read. */
 export const DEPTH = 200;
@@ -19,7 +19,7 @@ export const DEPTH = 200;
  * GitHub login, so Dependabot is recognised by its author name.
  *
  * @param {string} root
- * @returns {import('./check.mjs').Commit[]}
+ * @returns {import('./check.ts').Commit[]}
  */
 export function gitCommits(root) {
   const out = execFileSync('git', ['log', `-n${DEPTH}`, '--format=%h%x00%P%x00%an%x00%B%x1e'], {

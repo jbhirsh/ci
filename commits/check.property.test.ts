@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { body, problems } from './check.mjs';
+import { body, problems } from './check.ts';
 
 // A commit message is whatever a person (or a bot) typed.
 const message = fc.string({ unit: fc.constantFrom('a', 'B', ' ', ':', '-', '\n', '!', 'é', '🎉') });

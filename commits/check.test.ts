@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { annotations, body, main, parseCommit, prCommits, problems } from './check.mjs';
+import { annotations, body, main, parseCommit, prCommits, problems } from './check.ts';
 
 const TRAILERS = 'Co-Authored-By: Claude <noreply@anthropic.com>';
 

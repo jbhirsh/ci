@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { cli, gitCommits, selftest } from './selftest.mjs';
+import { cli, gitCommits, selftest } from './selftest.ts';
 
 /** A throwaway repository holding these commits, oldest first. */
 function repo(/** @type {{ message: string, author?: string }[]} */ commits) {
