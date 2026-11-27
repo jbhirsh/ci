@@ -195,7 +195,15 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github_token }}
         PR_NUMBER: ${{ steps.pr.outputs.number }}
-      run: node "$GITHUB_ACTION_PATH/../dependabot-merge/enable.ts"
+      # enable.ts runs as Node 24 strips its types. Should setup-node have
+      # failed above, the runner's own Node may strip none: that says so in
+      # a warning rather than a stack trace.
+      run: |
+        if node -e 'process.exit(process.features.typescript ? 0 : 1)'; then
+          node "$GITHUB_ACTION_PATH/../dependabot-merge/enable.ts"
+        else
+          echo "::warning::autofix: Node $(node --version) on the PATH can't run TypeScript (did setup-node fail?), so auto-merge wasn't turned on"
+        fi
 
     - uses: actions/checkout@v7
       if: steps.pr.outputs.skip == 'false'
