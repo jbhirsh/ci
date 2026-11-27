@@ -38,11 +38,8 @@ const BOT = [
 
 /**
  * The replaced files, checked: names only, PNGs only.
- *
- * @param {string | undefined} changed
- * @returns {string[]}
  */
-export function changedFiles(changed) {
+export function changedFiles(changed: string | undefined): string[] {
   const files = (changed ?? '').split(/\s+/).filter(Boolean);
   const bad = files.filter((f) => !isShotName(f));
   if (bad.length > 0) throw new Error(`not a screenshot name: ${bad.join(', ')}`);
@@ -51,12 +48,17 @@ export function changedFiles(changed) {
 
 /**
  * What to do with the bot PR.
- *
- * @param {{ capture: boolean, files: string[], open: string }} state
- *   `open` is the open bot PR's number, '' when there's none
- * @returns {'publish' | 'close' | 'update' | 'none'}
  */
-export function plan({ capture, files, open }) {
+export function plan({
+  capture,
+  files,
+  open,
+}: {
+  capture: boolean;
+  files: string[];
+  /** the open bot PR's number, '' when there's none */
+  open: string;
+}): 'publish' | 'close' | 'update' | 'none' {
   if (files.length > 0) return 'publish';
   if (!open) return 'none';
   return capture ? 'close' : 'update';
@@ -64,22 +66,34 @@ export function plan({ capture, files, open }) {
 
 /**
  * Where the shots came from, for the description and the commit.
- *
- * @param {string} source
- * @param {string | undefined} sourcePr
  */
-function origin(source, sourcePr) {
+function origin(source: string, sourcePr: string | undefined) {
   return sourcePr ? `${source}, for #${sourcePr}` : source;
 }
 
 /**
  * The bot PR's description.
- *
- * @param {{ repo: string, dir: string, base: string, head: string, files: string[],
- *   source: string, sourcePr?: string, runUrl?: string }} input
  */
-export function prBody({ repo, dir, base, head, files, source, sourcePr, runUrl }) {
-  const raw = (/** @type {string} */ sha, /** @type {string} */ file) =>
+export function prBody({
+  repo,
+  dir,
+  base,
+  head,
+  files,
+  source,
+  sourcePr,
+  runUrl,
+}: {
+  repo: string;
+  dir: string;
+  base: string;
+  head: string;
+  files: string[];
+  source: string;
+  sourcePr?: string;
+  runUrl?: string;
+}) {
+  const raw = (sha: string, file: string) =>
     `https://raw.githubusercontent.com/${repo}/${sha}/${dir}/${file}`;
   return [
     '## Goal',
@@ -103,19 +117,13 @@ export function prBody({ repo, dir, base, head, files, source, sourcePr, runUrl 
   ].join('\n');
 }
 
-/**
- * @typedef {(command: string, args: string[], input?: string) => string} Run
- *   runs git or gh in the app's checkout, returning stdout; throws on failure
- */
+/** runs git or gh in the app's checkout, returning stdout; throws on failure */
+export type Run = (command: string, args: string[], input?: string) => string;
 
 /**
  * Brings the bot PR in line with the capture, and says what it did.
- *
- * @param {Record<string, string | undefined>} env
- * @param {Run} run
- * @param {string} root
  */
-export function main(env, run, root) {
+export function main(env: Record<string, string | undefined>, run: Run, root: string) {
   const s = settings(appConfig('readme-screenshots', root));
   const files = changedFiles(env.CHANGED);
   const repo = env.GITHUB_REPOSITORY ?? '';
@@ -228,8 +236,7 @@ export function main(env, run, root) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = appRoot();
-  /** @type {Run} */
-  const run = (command, args, input) =>
+  const run: Run = (command, args, input) =>
     execFileSync(command, args, {
       cwd: root,
       encoding: 'utf8',

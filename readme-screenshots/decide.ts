@@ -18,14 +18,13 @@ import { setOutput } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
 import { pick } from '../lib/match.mjs';
 import { settings } from './settings.ts';
+import type { Settings } from './settings.ts';
 
 /**
  * The workflow file a run belongs to, from GITHUB_WORKFLOW_REF
  * (`owner/repo/.github/workflows/readme-screenshots.yml@refs/heads/main`).
- *
- * @param {string | undefined} ref
  */
-export function workflowFile(ref) {
+export function workflowFile(ref: string | undefined) {
   const match = /\/\.github\/workflows\/([^/@]+)@/.exec(ref ?? '');
   if (!match) throw new Error(`GITHUB_WORKFLOW_REF names no workflow: ${ref}`);
   return match[1];
@@ -33,14 +32,20 @@ export function workflowFile(ref) {
 
 /**
  * The verdict, and why.
- *
- * @param {{ event: string, since: string | null, changed: string[] | null,
- *   settings: import('./settings.ts').Settings }} input
- *   `since` is the last successful run's commit; `changed` the files changed
- *   since it (null when that commit isn't in the history)
- * @returns {{ capture: boolean, reason: string, shown: string[] }}
  */
-export function decide({ event, since, changed, settings: s }) {
+export function decide({
+  event,
+  since,
+  changed,
+  settings: s,
+}: {
+  event: string;
+  /** the last successful run's commit */
+  since: string | null;
+  /** the files changed since it (null when that commit isn't in the history) */
+  changed: string[] | null;
+  settings: Settings;
+}): { capture: boolean; reason: string; shown: string[] } {
   if (event !== 'push') return { capture: true, reason: `run by ${event}`, shown: [] };
   if (!since) return { capture: true, reason: 'no successful run to count from', shown: [] };
   if (changed === null) {
@@ -52,20 +57,14 @@ export function decide({ event, since, changed, settings: s }) {
     : { capture: false, reason: `nothing they show changed since ${since.slice(0, 7)}`, shown };
 }
 
-/**
- * @typedef {(command: string, args: string[]) => string} Run runs a command
- *   in the app's checkout, returning stdout; throws when it fails
- */
+/** runs a command in the app's checkout, returning stdout; throws when it fails */
+export type Run = (command: string, args: string[]) => string;
 
 /**
  * The files changed between `since` and HEAD, or null when `since` isn't a
  * commit in the history.
- *
- * @param {string} since
- * @param {Run} run
- * @returns {string[] | null}
  */
-export function changedSince(since, run) {
+export function changedSince(since: string, run: Run): string[] | null {
   try {
     run('git', ['cat-file', '-e', `${since}^{commit}`]);
   } catch {
@@ -74,12 +73,7 @@ export function changedSince(since, run) {
   return run('git', ['diff', '--name-only', since, 'HEAD']).split('\n').filter(Boolean);
 }
 
-/**
- * @param {Record<string, string | undefined>} env
- * @param {Run} run
- * @param {string} root
- */
-export function main(env, run, root) {
+export function main(env: Record<string, string | undefined>, run: Run, root: string) {
   const s = settings(appConfig('readme-screenshots', root));
   const event = env.GITHUB_EVENT_NAME ?? 'local';
   let since = null;
@@ -119,8 +113,7 @@ export function main(env, run, root) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = appRoot();
-  /** @type {Run} */
-  const run = (command, args) =>
+  const run: Run = (command, args) =>
     execFileSync(command, args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   for (const line of main(process.env, run, path.resolve(root))) console.log(line);
 }

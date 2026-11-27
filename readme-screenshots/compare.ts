@@ -18,47 +18,45 @@ import { setOutput } from '../lib/actions.mjs';
 import { appConfig, appRoot } from '../lib/app.mjs';
 import { diff, PIXELS } from '../lib/pixels.mjs';
 import { CHANGED_RATIO, isShotName, settings } from './settings.ts';
-
-/** @typedef {import('../lib/pixels.mjs').Pixels} Pixels */
+import type { Pixels } from '../lib/pixels.mjs';
 
 /**
  * The share of pixels that differ between two PNGs, or 1 when their sizes
  * differ (lib/pixels.mjs's diff).
- *
- * @param {Buffer} a
- * @param {Buffer} b
- * @param {Pixels} pixels
  */
-export function diffRatio(a, b, pixels) {
+export function diffRatio(a: Buffer, b: Buffer, pixels: Pixels) {
   return diff(a, b, pixels).ratio;
 }
 
 /**
  * Whether a fresh shot replaces the README's (undefined: there's none yet).
- *
- * @param {Buffer | undefined} existing
- * @param {Buffer} shot
- * @param {Pixels} pixels
  */
-export function shouldReplace(existing, shot, pixels) {
+export function shouldReplace(existing: Buffer | undefined, shot: Buffer, pixels: Pixels) {
   return existing === undefined || diffRatio(existing, shot, pixels) > CHANGED_RATIO;
 }
 
 /**
  * Copies each fresh shot that should replace the README's into `out`, and
  * returns their names, sorted.
- *
- * @param {{ fresh: string, docs: string, out: string, pixels: Pixels }} dirs
  */
-export function compare({ fresh, docs, out, pixels }) {
+export function compare({
+  fresh,
+  docs,
+  out,
+  pixels,
+}: {
+  fresh: string;
+  docs: string;
+  out: string;
+  pixels: Pixels;
+}) {
   mkdirSync(out, { recursive: true });
   const names = readdirSync(fresh)
     .filter((name) => name.endsWith('.png'))
     .sort();
   const bad = names.filter((name) => !isShotName(name));
   if (bad.length > 0) throw new Error(`not a screenshot name: ${bad.join(', ')}`);
-  /** @type {string[]} */
-  const replaced = [];
+  const replaced: string[] = [];
   for (const name of names) {
     const target = path.join(docs, name);
     const shot = readFileSync(path.join(fresh, name));
@@ -70,11 +68,7 @@ export function compare({ fresh, docs, out, pixels }) {
   return replaced;
 }
 
-/**
- * @param {string[]} argv
- * @param {string} [root]
- */
-export async function main(argv, root = appRoot()) {
+export async function main(argv: string[], root: string = appRoot()) {
   const [fresh, out] = argv;
   if (!fresh || !out) throw new Error('usage: compare.ts <fresh dir> <out dir>');
   const { dir } = settings(appConfig('readme-screenshots', root));

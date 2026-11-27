@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { changedFiles, main, plan, prBody } from './publish.ts';
+import type { Run } from './publish.ts';
 
 const BASE = 'a'.repeat(40);
 const HEAD = 'b'.repeat(40);
@@ -63,7 +64,7 @@ describe('prBody', () => {
     expect(body).toContain('## Changes');
     expect(body).not.toContain('No visible UI change');
     expect(body).toContain('## Checklist');
-    const at = (/** @type {string} */ h) => body.indexOf(h);
+    const at = (h: string) => body.indexOf(h);
     expect(at('## Goal')).toBeLessThan(at('## Changes'));
     expect(at('## Changes')).toBeLessThan(at('| Screenshot |'));
     expect(at('| Screenshot |')).toBeLessThan(at('## Checklist'));
@@ -87,15 +88,15 @@ describe('prBody', () => {
 /**
  * A fake git and gh: answers `pr list` with `open` (then, after a create,
  * with 12), `rev-parse` with BASE then HEAD; records every call.
- *
- * @param {{ open?: string, fail?: { when: RegExp, message: string } }} [options]
  */
-function fake({ open = '', fail } = {}) {
-  const calls = /** @type {{ command: string, args: string[], input?: string }[]} */ ([]);
+function fake({
+  open = '',
+  fail,
+}: { open?: string; fail?: { when: RegExp; message: string } } = {}) {
+  const calls = [] as { command: string; args: string[]; input?: string }[];
   let revs = 0;
   let created = false;
-  /** @type {import('./publish.ts').Run} */
-  const run = (command, args, input) => {
+  const run: Run = (command, args, input) => {
     calls.push({ command, args, input });
     const line = `${command} ${args.join(' ')}`;
     if (fail && fail.when.test(line)) throw new Error(`Command failed: ${line}\n${fail.message}`);
