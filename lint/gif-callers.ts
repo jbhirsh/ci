@@ -41,7 +41,7 @@ const isObject = (value: unknown) =>
  * The workflow's trigger names (`on:`; the yaml package reads YAML 1.2, where
  * `on` is a plain key).
  */
-function triggers(doc: Doc): Set<string> {
+export function triggers(doc: Doc): Set<string> {
   const on = doc.on;
   if (typeof on === 'string') return new Set([on]);
   if (Array.isArray(on)) return new Set(on.map(String));
