@@ -84,10 +84,9 @@ const name = fc.stringMatching(/^[a-z][a-z0-9-]{0,8}$/);
 
 /**
  * Whether one entry's path is a folder another entry's path is inside.
- *
- * @param {{ path: string }[]} files
  */
-const nested = (files) => files.some((a) => files.some((b) => b.path.startsWith(`${a.path}/`)));
+const nested = (files: { path: string }[]) =>
+  files.some((a) => files.some((b) => b.path.startsWith(`${a.path}/`)));
 const file = fc.record({
   path: fc.array(name, { minLength: 1, maxLength: 3 }).map((s) => s.join('/')),
   source: fc.array(name, { minLength: 1, maxLength: 3 }).map((s) => `sync/${s.join('/')}`),
@@ -149,12 +148,10 @@ describe('companionProblem, for any settings and key', () => {
     fc.assert(
       fc.property(key, fc.jsonValue(), (path, leaf) => {
         // Nest the path's folders as objects, and put anything where the key goes.
-        /** @type {Record<string, unknown>} */
-        const config = {};
+        const config: Record<string, unknown> = {};
         let at = config;
         for (const segment of path.slice(0, -1)) {
-          /** @type {Record<string, unknown>} */
-          const next = {};
+          const next: Record<string, unknown> = {};
           Object.defineProperty(at, segment, { value: next, enumerable: true });
           at = next;
         }

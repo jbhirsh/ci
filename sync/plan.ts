@@ -13,9 +13,7 @@
 
 import { createHash } from 'node:crypto';
 import { newest } from '../lib/github.mjs';
-
-/** @typedef {import('./manifest.ts').Resolved} Resolved */
-/** @typedef {import('./manifest.ts').Companion} Companion */
+import type { Companion, Resolved } from './manifest.ts';
 
 /** The one branch every sync PR comes from, in every app. */
 export const BRANCH = 'bot/sync-files';
@@ -30,37 +28,34 @@ const MAX_SUBJECT = 72;
  */
 const MAX_CELLS = 4_000_000;
 
-/**
- * One file the sync writes in an app.
- *
- * @typedef {object} Change
- * @property {string} path where the app holds it
- * @property {string} source where this repo holds its content
- * @property {string | undefined} why the app's variant's reason, when it has one
- * @property {'added' | 'updated'} status
- * @property {Buffer} bytes what the app's file becomes
- * @property {{ added: number, removed: number }} stat lines
- * @property {Companion[]} companions keys this file adds to the app's ci.json
- */
+/** One file the sync writes in an app. */
+export type Change = {
+  /** where the app holds it */
+  path: string;
+  /** where this repo holds its content */
+  source: string;
+  /** the app's variant's reason, when it has one */
+  why: string | undefined;
+  status: 'added' | 'updated';
+  /** what the app's file becomes */
+  bytes: Buffer;
+  /** lines */
+  stat: { added: number; removed: number };
+  /** keys this file adds to the app's ci.json */
+  companions: Companion[];
+};
 
 /**
  * Whether two files hold the same bytes.
- *
- * @param {Uint8Array} a
- * @param {Uint8Array} b
  */
-export const sameBytes = (a, b) => Buffer.from(a).equals(Buffer.from(b));
+export const sameBytes = (a: Uint8Array, b: Uint8Array) => Buffer.from(a).equals(Buffer.from(b));
 
 /**
  * The lines one text loses and gains on the way to another: a longest common
  * subsequence over `\n`-split lines, so equal texts lose and gain nothing and
  * any difference shows. Never throws.
- *
- * @param {string} before
- * @param {string} after
- * @returns {{ removed: string[], added: string[] }}
  */
-export function lineDiff(before, after) {
+export function lineDiff(before: string, after: string): { removed: string[]; added: string[] } {
   const a = before.split('\n');
   const b = after.split('\n');
   let start = 0;
@@ -82,10 +77,8 @@ export function lineDiff(before, after) {
         x[i] === y[j] ? lengths[i + 1][j + 1] + 1 : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
     }
   }
-  /** @type {string[]} */
-  const removed = [];
-  /** @type {string[]} */
-  const added = [];
+  const removed: string[] = [];
+  const added: string[] = [];
   let i = 0;
   let j = 0;
   while (i < x.length && j < y.length) {
@@ -105,37 +98,28 @@ export function lineDiff(before, after) {
 
 /**
  * How many lines a change adds and removes.
- *
- * @param {string} before
- * @param {string} after
  */
-export function diffStat(before, after) {
+export function diffStat(before: string, after: string) {
   const { removed, added } = lineDiff(before, after);
   return { added: added.length, removed: removed.length };
 }
 
 /**
  * The id git (and GitHub's API) gives a file's content: a blob's SHA-1.
- *
- * @param {Uint8Array} bytes
  */
-export function blobSha(bytes) {
+export function blobSha(bytes: Uint8Array) {
   return createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
 }
 
 /**
  * Whether a companion's key is already in the app's settings (it is then
  * never written: an app's own value stays).
- *
- * @param {Record<string, unknown>} settings
- * @param {string[]} key
  */
-export function holds(settings, key) {
-  /** @type {unknown} */
-  let at = settings;
+export function holds(settings: Record<string, unknown>, key: string[]) {
+  let at: unknown = settings;
   for (const segment of key) {
     if (typeof at !== 'object' || at === null || !Object.hasOwn(at, segment)) return false;
-    at = /** @type {Record<string, unknown>} */ (at)[segment];
+    at = (at as Record<string, unknown>)[segment];
   }
   return true;
 }
@@ -145,13 +129,17 @@ export function holds(settings, key) {
  * it becomes. A companion comes with a file only when the sync adds that file
  * and the app's settings lack its key.
  *
- * @param {Resolved[]} files the app's synced files (manifest.ts's resolve)
- * @param {(source: string) => Buffer} readSource a file of this repo
- * @param {(file: string) => Buffer | null} readApp a file of the app, or null when absent
- * @param {Record<string, unknown>} settings the app's `.github/ci.json`
- * @returns {Change[]}
+ * @param files the app's synced files (manifest.ts's resolve)
+ * @param readSource a file of this repo
+ * @param readApp a file of the app, or null when absent
+ * @param settings the app's `.github/ci.json`
  */
-export function changesFor(files, readSource, readApp, settings) {
+export function changesFor(
+  files: Resolved[],
+  readSource: (source: string) => Buffer,
+  readApp: (file: string) => Buffer | null,
+  settings: Record<string, unknown>,
+): Change[] {
   return files.flatMap((file) => {
     const bytes = readSource(file.source);
     const current = readApp(file.path);
@@ -175,21 +163,14 @@ export function changesFor(files, readSource, readApp, settings) {
 
 /**
  * A link to a file of this repo at a commit.
- *
- * @param {string} sha
- * @param {string} file
  */
-const blob = (sha, file) => `https://github.com/${CI_REPO}/blob/${sha}/${file}`;
+const blob = (sha: string, file: string) => `https://github.com/${CI_REPO}/blob/${sha}/${file}`;
 
 /**
  * The commit a change gets: one per file, its subject naming the file (by
  * its base name when the path would make it too long).
- *
- * @param {Change} change
- * @param {string} ciSha
- * @returns {{ subject: string, body: string }}
  */
-export function commitMessage(change, ciSha) {
+export function commitMessage(change: Change, ciSha: string): { subject: string; body: string } {
   const full = `Sync ${change.path} with ${CI_REPO}`;
   const subject =
     full.length <= MAX_SUBJECT ? full : `Sync ${change.path.split('/').at(-1)} with ${CI_REPO}`;
@@ -225,21 +206,25 @@ const ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '|': '&#124;', '\\': 
  * hold every character: GitHub splits a table row at any `|` not escaped as
  * `\|`, so a backslash before one changes where the cell ends. An HTML
  * <code> with each special character as an entity holds any text.
- *
- * @param {string} text
  */
-export const codeCell = (text) =>
+export const codeCell = (text: string) =>
   `<code>${text
     .replace(/\s+/g, ' ')
-    .replace(/[&<>|\\]/g, (char) => ENTITIES[/** @type {keyof typeof ENTITIES} */ (char)])}</code>`;
+    .replace(/[&<>|\\]/g, (char) => ENTITIES[char as keyof typeof ENTITIES])}</code>`;
 
 /**
  * The sync PR's description: what it changes, where each file comes from and
  * why a variant differs, in the shared template's headings.
- *
- * @param {{ ciSha: string, runUrl?: string, changes: Change[] }} input
  */
-export function prBody({ ciSha, runUrl, changes }) {
+export function prBody({
+  ciSha,
+  runUrl,
+  changes,
+}: {
+  ciSha: string;
+  runUrl?: string;
+  changes: Change[];
+}) {
   const variants = changes.filter((change) => change.why);
   const companions = changes.flatMap((change) =>
     change.companions.map((companion) => ({ file: change.path, key: companion.key })),
@@ -290,13 +275,8 @@ export function prBody({ ciSha, runUrl, changes }) {
 
 /**
  * The dry run's report: the PR the sync would open, or that there is none.
- *
- * @param {string} app
- * @param {Change[]} changes
- * @param {string} ciSha
- * @returns {string[]}
  */
-export function report(app, changes, ciSha) {
+export function report(app: string, changes: Change[], ciSha: string): string[] {
   if (changes.length === 0) return [`${app}: every synced file matches ${CI_REPO}; no PR.`];
   return [
     `${app}: would open or update one PR from ${BRANCH}, "${PR_TITLE}", with ${changes.length} commit(s):`,
@@ -328,12 +308,21 @@ export function report(app, changes, ciSha) {
  * which ends both: a conflict can't outlive a rebuild, so it is never
  * reported.
  *
- * @param {{ changes: number, open: boolean, matches: boolean, mergeable: string | null }} state
- *   `matches`: the open PR's branch changes exactly the files that differ,
- *   to exactly these bytes; `mergeable`: GitHub's `mergeable_state` for it
- * @returns {'none' | 'close' | 'build' | 'keep'}
+ * @param state `matches`: the open PR's branch changes exactly the files that
+ *   differ, to exactly these bytes; `mergeable`: GitHub's `mergeable_state` for
+ *   it
  */
-export function decide({ changes, open, matches, mergeable }) {
+export function decide({
+  changes,
+  open,
+  matches,
+  mergeable,
+}: {
+  changes: number;
+  open: boolean;
+  matches: boolean;
+  mergeable: string | null;
+}): 'none' | 'close' | 'build' | 'keep' {
   if (changes === 0) return open ? 'close' : 'none';
   if (!open || !matches) return 'build';
   return mergeable === 'behind' || mergeable === 'dirty' ? 'build' : 'keep';
@@ -349,13 +338,13 @@ const FAILED = new Set([
   'stale',
 ]);
 
-/**
- * @typedef {object} Thread
- * @property {boolean} isResolved
- * @property {string | null} path
- * @property {number | null} line
- * @property {string} [url] its first comment
- */
+export type Thread = {
+  isResolved: boolean;
+  path: string | null;
+  line: number | null;
+  /** its first comment */
+  url?: string;
+};
 
 /** The conclusions of a check run that pass a required check. */
 const PASSED = new Set(['success', 'skipped', 'neutral']);
@@ -372,16 +361,8 @@ const PASSED = new Set(['success', 'skipped', 'neutral']);
  * cause, named with the types of the rules on main, so a PR is never stuck
  * in silence.
  *
- * @param {{
- *   threads: Thread[],
- *   required: string[],
- *   checkRuns: { id: number, name: string, status: string, conclusion: string | null }[],
- *   statuses: { context: string, state: string }[],
- *   mergeable?: string | null,
- *   ruleTypes?: string[],
- * }} state the head's check runs and the combined status's statuses;
+ * @param state the head's check runs and the combined status's statuses;
  *   `mergeable`, GitHub's mergeable_state; `ruleTypes`, main's rules' types
- * @returns {string[]}
  */
 export function blockers({
   threads,
@@ -390,7 +371,14 @@ export function blockers({
   statuses,
   mergeable = null,
   ruleTypes = [],
-}) {
+}: {
+  threads: Thread[];
+  required: string[];
+  checkRuns: { id: number; name: string; status: string; conclusion: string | null }[];
+  statuses: { context: string; state: string }[];
+  mergeable?: string | null;
+  ruleTypes?: string[];
+}): string[] {
   const causes = threads
     .filter((thread) => !thread.isResolved)
     .map(

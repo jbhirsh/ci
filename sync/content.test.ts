@@ -19,15 +19,12 @@ import { APPS, CI_ROOT, loadManifest, resolve } from './manifest.ts';
  * The workflows of each app that a synced PR GIF attach caller may wait for
  * and that the sync doesn't write (sift's recording is its own CI).
  */
-const OWN_WORKFLOWS = /** @type {Record<string, string[]>} */ ({ sift: ['CI'] });
+const OWN_WORKFLOWS = { sift: ['CI'] } as Record<string, string[]>;
 
 /**
  * What lint/actions.mjs finds wrong with the workflows an app would hold.
- *
- * @param {string} ciRoot
- * @param {string} app
  */
-function lintSynced(ciRoot, app) {
+function lintSynced(ciRoot: string, app: string) {
   const docs = resolve(loadManifest(ciRoot), app)
     .filter((file) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(file.path))
     .map((file) => ({ file, doc: parse(readFileSync(path.join(ciRoot, file.source), 'utf8')) }));
@@ -41,8 +38,7 @@ function lintSynced(ciRoot, app) {
   );
 }
 
-/** @type {string[]} */
-const temps = [];
+const temps: string[] = [];
 afterEach(() => {
   for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
 });

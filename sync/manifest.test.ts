@@ -13,16 +13,13 @@ import {
 } from './manifest.ts';
 
 const all = ['BoardGames', 'fog-and-frontier', 'sift'];
-const entry = (/** @type {Record<string, unknown>} */ more = {}) => ({
+const entry = (more: Record<string, unknown> = {}) => ({
   path: '.github/workflows/a.yml',
   source: 'sync/callers/a.yml',
   apps: all,
   ...more,
 });
-const manifest = (
-  /** @type {Record<string, unknown>[]} */ files = [entry()],
-  /** @type {unknown[]} */ unsynced = [],
-) => ({
+const manifest = (files: Record<string, unknown>[] = [entry()], unsynced: unknown[] = []) => ({
   files,
   unsynced,
 });
@@ -88,11 +85,9 @@ describe('manifestProblems', () => {
   });
 
   it('refuses a file entry that is not whole', () => {
-    expect(
-      manifestProblems(
-        manifest([/** @type {Record<string, unknown>} */ (/** @type {unknown} */ ('a'))]),
-      ),
-    ).toEqual(['files[0] must be an object']);
+    expect(manifestProblems(manifest(['a' as unknown as Record<string, unknown>]))).toEqual([
+      'files[0] must be an object',
+    ]);
     const found = manifestProblems(
       manifest([{ path: '../x', source: '', apps: [], variant: {} }]),
     ).join('\n');
@@ -142,7 +137,7 @@ describe('manifestProblems', () => {
   });
 
   it('holds a variant to its app, its reason and a difference', () => {
-    const variants = (/** @type {unknown} */ v) =>
+    const variants = (v: unknown) =>
       manifestProblems(manifest([entry({ apps: ['sift'], variants: v })])).join('\n');
     expect(variants({ fog: { source: 'x.yml', why: 'w' } })).toMatch(
       /"fog" is not one of this file's apps/,
@@ -157,7 +152,7 @@ describe('manifestProblems', () => {
   });
 
   it('holds a companion to a key path and a string', () => {
-    const companions = (/** @type {unknown} */ c) =>
+    const companions = (c: unknown) =>
       manifestProblems(manifest([entry({ companions: c })])).join('\n');
     expect(companions({})).toMatch(/must be an array/);
     expect(companions(['x'])).toMatch(/\[0\] must be an object/);
@@ -175,7 +170,7 @@ describe('manifestProblems', () => {
   });
 
   it('holds an unsynced entry to a path, a reason and being unsynced', () => {
-    const unsynced = (/** @type {unknown[]} */ u) =>
+    const unsynced = (u: unknown[]) =>
       manifestProblems({ files: [entry()], unsynced: u }).join('\n');
     expect(unsynced(['x'])).toMatch(/unsynced\[0\] must be an object/);
     expect(unsynced([{ source: 'a', why: '' }])).toMatch(/why must say why/);
@@ -219,11 +214,8 @@ describe('parseManifest', () => {
 
 /**
  * A throwaway checkout of this repo with the files given.
- *
- * @param {Record<string, string>} files
- * @returns {string}
  */
-function repo(files) {
+function repo(files: Record<string, string>): string {
   const root = mkdtempSync(path.join(tmpdir(), 'ci-'));
   for (const [file, content] of Object.entries(files)) {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true });

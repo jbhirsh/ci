@@ -8,20 +8,24 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { APPS, CI_ROOT } from './manifest.ts';
 
-/** @param {string} file */
-const yaml = (file) => parse(readFileSync(path.join(CI_ROOT, file), 'utf8'));
+const yaml = (file: string) => parse(readFileSync(path.join(CI_ROOT, file), 'utf8'));
 const workflow = yaml('.github/workflows/sync-files.yml');
 const { prepare, publish } = workflow.jobs;
-/** @typedef {Record<string, any>} Step */
+/** A step of a job or an action, as the YAML holds it. */
+type Step = {
+  id?: string;
+  if?: string;
+  uses: string;
+  run?: string;
+  with: Record<string, string>;
+  env: Record<string, string>;
+};
 /**
  * The steps of the action a job's step uses from this checkout (`./ci/<path>`).
- *
- * @param {Step} step
- * @returns {Step[]}
  */
-const actionSteps = (step) => yaml(`${step.uses.replace(/^\.\/ci\//, '')}/action.yml`).runs.steps;
-/** @param {unknown} value */
-const text = (value) => JSON.stringify(value);
+const actionSteps = (step: Step): Step[] =>
+  yaml(`${step.uses.replace(/^\.\/ci\//, '')}/action.yml`).runs.steps;
+const text = (value: unknown) => JSON.stringify(value);
 const SHA = '${{ github.event.workflow_run.head_sha || github.sha }}';
 const TRIGGER = [
   "github.event_name == 'workflow_dispatch'",
@@ -33,10 +37,8 @@ const TRIGGER = [
 /**
  * Whether a step runs code of the app's: checks an app out, or runs prepare
  * (which runs the app's Prettier).
- *
- * @param {Step} step
  */
-const runsAppCode = (step) =>
+const runsAppCode = (step: Step) =>
   String(step.with?.repository ?? '').includes('inputs.app') ||
   /sync\.ts" prepare/.test(String(step.run));
 
@@ -110,8 +112,8 @@ describe('sync-files.yml', () => {
   });
 
   it('runs no code from a ref an event names, and keeps no cache that main could restore', () => {
-    for (const job of Object.values(workflow.jobs)) {
-      const steps = /** @type {Step[]} */ (job.steps).flatMap((step) =>
+    for (const job of Object.values(workflow.jobs as Record<string, { steps: Step[] }>)) {
+      const steps = (job.steps as Step[]).flatMap((step) =>
         String(step.uses).startsWith('./ci/') ? [step, ...actionSteps(step)] : [step],
       );
       for (const step of steps) {
@@ -126,12 +128,12 @@ describe('sync-files.yml', () => {
   });
 
   it("never puts the token in a job that runs an app's code", () => {
-    const holding = Object.entries(workflow.jobs).filter(([, job]) =>
-      text(job).includes('secrets.BOT_PR_TOKEN }}'),
+    const holding = Object.entries(workflow.jobs as Record<string, { steps: Step[] }>).filter(
+      ([, job]) => text(job).includes('secrets.BOT_PR_TOKEN }}'),
     );
     expect(holding.map(([id]) => id)).toEqual(['publish']);
     for (const [, job] of holding) {
-      for (const step of /** @type {Step[]} */ (job.steps)) {
+      for (const step of job.steps as Step[]) {
         expect(runsAppCode(step)).toBe(false);
         if (String(step.uses).startsWith('./ci/')) {
           expect(actionSteps(step).filter(runsAppCode)).toEqual([]);
@@ -158,7 +160,7 @@ describe('the actions', () => {
       [prepareSteps, '$GITHUB_ACTION_PATH/../sync.ts'],
       [publishSteps, '$GITHUB_ACTION_PATH/sync.ts'],
     ]) {
-      const list = /** @type {Step[]} */ (steps);
+      const list = steps as Step[];
       expect(list[1].id).toBe('check');
       expect(list[1].run).toBe(`node "${script}" check`);
       for (const step of list.slice(2)) expect(step.if).toBe("steps.check.outputs.go == 'true'");
@@ -182,18 +184,14 @@ describe('the actions', () => {
 
   it('give the bot token only to the publish step, with the auto-merge setting', () => {
     const holding = publishSteps.filter((step) => text(step).includes('inputs.token }}'));
-    expect(holding.map((step) => step.run)).toEqual([
-      'node "$GITHUB_ACTION_PATH/sync.ts" publish',
-    ]);
+    expect(holding.map((step) => step.run)).toEqual(['node "$GITHUB_ACTION_PATH/sync.ts" publish']);
     expect(holding[0].env.GH_TOKEN).toBe('${{ inputs.token }}');
     expect(holding[0].env.AUTO_MERGE).toBe('${{ inputs.auto-merge }}');
     expect(yaml('sync/action.yml').inputs['auto-merge'].default).toBe('true');
   });
 
   it('check the app out in Prepare with no credentials kept', () => {
-    const checkout = /** @type {Step} */ (
-      prepareSteps.find((step) => step.uses === 'actions/checkout@v7')
-    );
+    const checkout = prepareSteps.find((step) => step.uses === 'actions/checkout@v7') as Step;
     expect(checkout.with).toMatchObject({
       repository: 'jbhirsh/${{ inputs.app }}',
       token: '${{ inputs.ci-token }}',

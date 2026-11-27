@@ -22,14 +22,13 @@ const leaf = fc.oneof(
   fc.constant(null),
   fc.array(fc.oneof(fc.string({ maxLength: 4 }), fc.integer()), { maxLength: 3 }),
 );
-/** @type {fc.Arbitrary<Record<string, unknown>>} */
-const settings = fc
+const settings: fc.Arbitrary<Record<string, unknown>> = fc
   .letrec((tie) => ({
     node: fc.dictionary(keyName, fc.oneof({ depthSize: 'small' }, leaf, tie('node')), {
       maxKeys: 4,
     }),
   }))
-  .node.map((value) => /** @type {Record<string, unknown>} */ (value));
+  .node.map((value) => value as Record<string, unknown>);
 const companions = fc.array(
   fc.record({ key: fc.array(keyName, { minLength: 1, maxLength: 3 }), value: fc.string() }),
   { maxLength: 3 },
@@ -39,24 +38,22 @@ const companions = fc.array(
  * The settings with each companion set that can be, in order, never
  * overwriting: what addCompanions must produce. Null when a key on the way
  * to one holds something other than an object, which it must refuse.
- *
- * @param {Record<string, unknown>} value
- * @param {{ key: string[], value: string }[]} list
- * @returns {Record<string, unknown> | null}
  */
-function expected(value, list) {
+function expected(
+  value: Record<string, unknown>,
+  list: { key: string[]; value: string }[],
+): Record<string, unknown> | null {
   const out = structuredClone(value);
   for (const { key, value: v } of list) {
     if (holds(out, key)) continue;
-    /** @type {Record<string, unknown>} */
-    let at = out;
+    let at: Record<string, unknown> = out;
     for (const segment of key.slice(0, -1)) {
       if (!Object.hasOwn(at, segment)) at[segment] = {};
       const next = at[segment];
       if (typeof next !== 'object' || next === null || Array.isArray(next)) return null;
-      at = /** @type {Record<string, unknown>} */ (next);
+      at = next as Record<string, unknown>;
     }
-    at[/** @type {string} */ (key.at(-1))] = v;
+    at[key.at(-1) as string] = v;
   }
   return out;
 }
@@ -64,18 +61,14 @@ function expected(value, list) {
 /**
  * Whether a companion is written into an object the settings hold empty,
  * which the guard reads as a rewritten line (`{}` becomes `{` and `}`).
- *
- * @param {Record<string, unknown>} value
- * @param {{ key: string[] }[]} list
  */
-function intoEmpty(value, list) {
+function intoEmpty(value: Record<string, unknown>, list: { key: string[] }[]) {
   return list.some(({ key }) => {
-    /** @type {unknown} */
-    let at = value;
+    let at: unknown = value;
     for (const segment of ['', ...key.slice(0, -1)].entries()) {
       if (segment[0] > 0) {
         if (typeof at !== 'object' || at === null || !Object.hasOwn(at, segment[1])) return false;
-        at = /** @type {Record<string, unknown>} */ (at)[segment[1]];
+        at = (at as Record<string, unknown>)[segment[1]];
       }
       if (typeof at === 'object' && at !== null && Object.keys(at).length === 0) return true;
     }

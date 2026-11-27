@@ -19,12 +19,9 @@ const text = fc.oneof(
 
 /**
  * How many times each line occurs.
- *
- * @param {string[]} list
  */
-const counts = (list) => {
-  /** @type {Map<string, number>} */
-  const out = new Map();
+const counts = (list: string[]) => {
+  const out: Map<string, number> = new Map();
   for (const line of list) out.set(line, (out.get(line) ?? 0) + 1);
   return out;
 };
@@ -72,14 +69,13 @@ describe('the byte compare and the line counts', () => {
 });
 
 describe('codeCell', () => {
-  /** @param {string} html */
-  const decode = (html) =>
+  const decode = (html: string) =>
     html
       .replace(/^<code>|<\/code>$/g, '')
       .replace(/&#(\d+);|&(amp|lt|gt);/g, (_, code, name) =>
         code
           ? String.fromCharCode(Number(code))
-          : { amp: '&', lt: '<', gt: '>' }[/** @type {'amp' | 'lt' | 'gt'} */ (name)],
+          : { amp: '&', lt: '<', gt: '>' }[name as 'amp' | 'lt' | 'gt'],
       );
 
   it('holds any text in one table cell, and reads back as that text on one line', () => {
