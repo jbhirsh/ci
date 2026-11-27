@@ -24,6 +24,13 @@ node <tool>/selftest.ts ../BoardGames
 The GIF tool runs as the apps run it, `node gif/cli.mjs <scenario>`: `gif/cli.ts` only exports its
 `main`.
 
+The probe runs against a deployment rather than a checkout (`probe/web/run.ts`'s header lists
+its inputs; WebKit comes from `npx playwright install --with-deps webkit`):
+
+```bash
+APP_ROOT=../BoardGames PROBE_URL=https://<deployment> node probe/web/run.ts
+```
+
 The checks CI runs: `npm run lint`, `npm run typecheck`, `npm run format:check`,
 `npm run test:coverage`.
 

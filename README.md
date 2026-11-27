@@ -44,6 +44,9 @@ as one PR that merges itself once the app's checks pass.
 - **Reports that remember.** Each job's summary, a report page on GitHub Pages and one PR
   comment, comparing the run with recent ones to show what got slower or flaky
   (`job-summary/`).
+- **How fast each deployment answers.** A probe loads an app's pages on every deployment in
+  WebKit and reads each API response's `Server-Timing` phases, cold and warm, into one results
+  file and a table in the job summary (`probe/`).
 - **Upkeep on autopilot.** A weekly audit of dead code, duplication and broken links that
   keeps one issue per finding (`audit/`), Dependabot PRs that merge themselves once green
   (`dependabot-merge/`), and the shared Claude rules every repo here follows, kept here

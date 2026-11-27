@@ -509,7 +509,7 @@ describe('main', () => {
       renameSync(path.join(copy, 'pins', 'check.ts'), path.join(copy, 'pins', 'check.mjs'));
       expect(main(copy, null)).toEqual([
         'pins/action.yml: step 2 (Check for pins without a reason): $GITHUB_ACTION_PATH/check.ts: no pins/check.ts in this repo',
-        '.github/workflows/ci.yml: job check step 9 (Pins (pins/check.ts, as the apps run it)): runs pins/check.ts: no pins/check.ts in this repo',
+        '.github/workflows/ci.yml: job check step 10 (Pins (pins/check.ts, as the apps run it)): runs pins/check.ts: no pins/check.ts in this repo',
       ]);
     } finally {
       rmSync(copy, { recursive: true, force: true });

@@ -49,6 +49,9 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # The probe's browser test runs in real WebKit (probe/web/drive.webkit.test.ts),
+      # this repo's Playwright's own.
+      - run: npx playwright install --with-deps webkit
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
