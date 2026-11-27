@@ -35,11 +35,8 @@ describe('decide', () => {
 /**
  * A stand-in gh: answers from `responses` by the command's first two words,
  * recording every call.
- *
- * @param {Record<string, string>} responses
- * @param {string[][]} calls
  */
-const fakeGh = (responses, calls) => (/** @type {string[]} */ args) => {
+const fakeGh = (responses: Record<string, string>, calls: string[][]) => (args: string[]) => {
   calls.push(args);
   return responses[args.slice(0, 2).join(' ')] ?? '';
 };
@@ -48,8 +45,7 @@ describe('enable', () => {
   const env = { GITHUB_REPOSITORY: 'jbhirsh/sift', PR_NUMBER: '208' };
 
   it('turns auto-merge on, by rebase, when the PR qualifies', () => {
-    /** @type {string[][]} */
-    const calls = [];
+    const calls: string[][] = [];
     const gh = fakeGh(
       { 'pr view': JSON.stringify(PR), 'api repos/jbhirsh/sift/issues/208/timeline': '' },
       calls,
@@ -67,8 +63,7 @@ describe('enable', () => {
   });
 
   it('leaves auto-merge alone once it was ever set', () => {
-    /** @type {string[][]} */
-    const calls = [];
+    const calls: string[][] = [];
     const gh = fakeGh(
       {
         'pr view': JSON.stringify(PR),
@@ -81,8 +76,7 @@ describe('enable', () => {
   });
 
   it("finds the PR by the run's branch when the run names none", () => {
-    /** @type {string[][]} */
-    const calls = [];
+    const calls: string[][] = [];
     const gh = fakeGh({ 'pr list': '7\n', 'pr view': JSON.stringify(PR) }, calls);
     expect(enable({ GITHUB_REPOSITORY: 'jbhirsh/sift', HEAD_BRANCH: PR.headRefName }, gh)).toBe(
       '#7: turning auto-merge on',
@@ -104,11 +98,10 @@ describe('the visual review gate', () => {
   const HEAD = 'c'.repeat(40);
   const config = Buffer.from(JSON.stringify({ 'visual-review': {} })).toString('base64');
 
-  /** @param {string} description what `Visual changes` says on the head */
-  const gh = (description) => {
-    /** @type {string[][]} */
-    const calls = [];
-    const run = (/** @type {string[]} */ args) => {
+  /** @param description what `Visual changes` says on the head */
+  const gh = (description: string) => {
+    const calls: string[][] = [];
+    const run = (args: string[]) => {
       calls.push(args);
       if (args[0] === 'pr' && args[1] === 'view') {
         return JSON.stringify({ ...PR, headRefOid: HEAD });
@@ -137,7 +130,7 @@ describe('the visual review gate', () => {
   });
 
   it('is off in a repository with no .github/ci.json, and rethrows other errors', () => {
-    const missing = (/** @type {string[]} */ args) => {
+    const missing = (args: string[]) => {
       if (args[0] === 'pr' && args[1] === 'view')
         return JSON.stringify({ ...PR, headRefOid: HEAD });
       if (args[1]?.endsWith('/contents/.github/ci.json')) {
@@ -146,7 +139,7 @@ describe('the visual review gate', () => {
       return '';
     };
     expect(enable(env, missing)).toBe('#208: turning auto-merge on');
-    const broken = (/** @type {string[]} */ args) => {
+    const broken = (args: string[]) => {
       if (args[0] === 'pr' && args[1] === 'view')
         return JSON.stringify({ ...PR, headRefOid: HEAD });
       if (args[1]?.endsWith('/contents/.github/ci.json')) throw new Error('HTTP 502');
