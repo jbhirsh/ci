@@ -15,18 +15,20 @@ import {
   patchProblem,
   shotsUnder,
 } from './shots.ts';
+import type { Settings } from '../visual-review/settings.ts';
 
 const SHA = 'a'.repeat(40);
-const s = /** @type {import('../visual-review/settings.ts').Settings} */ (
-  settings({ workflow: 'v.yml', job: 'v', folders: ['shots/*-snapshots'], mockupPaths: ['src/**'] })
-);
+const s = settings({
+  workflow: 'v.yml',
+  job: 'v',
+  folders: ['shots/*-snapshots'],
+  mockupPaths: ['src/**'],
+}) as Settings;
 
 /**
  * An app checkout: a git repo with these files committed, and its settings.
- *
- * @param {Record<string, string>} files
  */
-function app(files) {
+function app(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), 'app-'));
   const all = {
     '.github/ci.json': JSON.stringify({
@@ -43,8 +45,7 @@ function app(files) {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     writeFileSync(path.join(root, file), text);
   }
-  const git = (/** @type {string[]} */ args) =>
-    execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+  const git = (args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
   git(['init', '-q']);
   git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'add', '.']);
   git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'one']);

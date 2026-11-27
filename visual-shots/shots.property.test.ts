@@ -2,10 +2,14 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { mockupMayChange, settings } from '../visual-review/settings.ts';
 import { decodePatch, parseManifest, patchProblem } from './shots.ts';
+import type { Settings } from '../visual-review/settings.ts';
 
-const s = /** @type {import('../visual-review/settings.ts').Settings} */ (
-  settings({ workflow: 'v.yml', job: 'v', folders: ['f'], mockupPaths: ['src/**', 'public/**'] })
-);
+const s = settings({
+  workflow: 'v.yml',
+  job: 'v',
+  folders: ['f'],
+  mockupPaths: ['src/**', 'public/**'],
+}) as Settings;
 const segment = fc.stringMatching(/^[A-Za-z0-9._-]{1,12}$/);
 const repoPath = fc.array(segment, { minLength: 1, maxLength: 5 }).map((p) => p.join('/'));
 
