@@ -5,9 +5,9 @@ import { isolateGit } from '../mutation/test-repo.mjs';
 import { TITLES, drawGraph, knipConfig, main, runJscpd, runKnip, settings } from './run.ts';
 import { cli, selftest } from './selftest.ts';
 import { app, cleanApps } from './test-app.ts';
+import type { Deps, Spawn } from './run.ts';
 
-/** @type {() => void} */
-let restoreGit;
+let restoreGit: () => void;
 beforeEach(() => {
   restoreGit = isolateGit();
 });
@@ -19,26 +19,21 @@ afterEach(() => {
 /**
  * An app holding these files (each `{}` unless given), and a package.json
  * with the `jscpd` script unless one is given.
- *
- * @param {string[] | Record<string, string>} files
  */
-function root(files = []) {
+function root(files: string[] | Record<string, string> = []) {
   const given = Array.isArray(files) ? Object.fromEntries(files.map((f) => [f, '{}'])) : files;
   return app({ 'package.json': '{"scripts":{"jscpd":"jscpd"}}', ...given });
 }
 
 /**
  * Deps for main, with a spawn that answers each tool.
- *
- * @param {Partial<import('./run.ts').Deps>} overrides
  */
-function deps(overrides = {}) {
-  const out = { summary: /** @type {string[]} */ ([]), outputs: /** @type {string[][]} */ ([]) };
-  const gh = vi.fn((/** @type {string[]} */ args) =>
+function deps(overrides: Partial<Deps> = {}) {
+  const out = { summary: [] as string[], outputs: [] as string[][] };
+  const gh = vi.fn((args: string[]) =>
     args[1] === 'list' ? '[{"number":4,"title":"Dead code (weekly audit)","state":"OPEN"}]' : '',
   );
-  /** @type {import('./run.ts').Deps} */
-  const d = {
+  const d: Deps = {
     root: root(['knip.jsonc']),
     env: { GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'o/r', GITHUB_RUN_ID: '7' },
     spawn: () => ({
@@ -83,8 +78,7 @@ describe('runKnip', () => {
 
 describe('runJscpd', () => {
   it("runs the app's jscpd script and reads the JSON report it wrote, whatever its exit code", () => {
-    /** @type {string[][]} */
-    const calls = [];
+    const calls: string[][] = [];
     const report = runJscpd(root(), (command, args) => {
       calls.push([command, ...args]);
       writeFileSync(
@@ -152,7 +146,7 @@ describe('main', () => {
     expect(out.summary[0]).toContain('### Unused exports (1)');
     expect(out.outputs).toEqual([['findings', '3']]);
     expect(gh.mock.calls[1][0]).toEqual(['issue', 'edit', '4', '--body-file', '-']);
-    expect(/** @type {unknown[]} */ (gh.mock.calls[1])[1]).toContain('### Suppressions (2)');
+    expect((gh.mock.calls[1] as unknown[])[1]).toContain('### Suppressions (2)');
   });
 
   it('fails a dry run on a suppression too, leaving the issue alone', () => {
@@ -167,7 +161,7 @@ describe('main', () => {
     const { d, gh } = deps({ root: root(['knip.ts']) });
     expect(() => main(['knip'], d)).toThrow("knip.ts can't be read without running it");
     expect(gh.mock.calls[1][0]).toEqual(['issue', 'edit', '4', '--body-file', '-']);
-    expect(/** @type {unknown[]} */ (gh.mock.calls[1])[1]).toMatch(
+    expect((gh.mock.calls[1] as unknown[])[1]).toMatch(
       /^### Suppressions \(1\)\n\nknip\.ts can't be read without running it/m,
     );
   });
@@ -245,7 +239,7 @@ describe('graph', () => {
     const app = root();
     mkdirSync(path.join(app, '.github'));
     writeFileSync(path.join(app, '.github', 'ci.json'), '{"audit":{"graph":["src","api"]}}');
-    const calls = /** @type {string[][]} */ ([]);
+    const calls = [] as string[][];
     const { d } = deps({
       root: app,
       spawn: (command, args, _cwd, input) => {
@@ -285,8 +279,7 @@ describe('graph', () => {
 });
 
 describe('selftest', () => {
-  /** @type {import('./run.ts').Spawn} */
-  const tools = (_, args) => {
+  const tools: Spawn = (_, args) => {
     if (args.includes('jscpd')) {
       writeFileSync(path.join(args[args.indexOf('--output') + 1], 'jscpd-report.json'), '{}');
     }
@@ -317,7 +310,7 @@ describe('selftest', () => {
 
 describe('cli', () => {
   it('prints the self-test and returns its exit code', () => {
-    const lines = /** @type {string[]} */ ([]);
+    const lines = [] as string[];
     expect(cli([root()], (l) => lines.push(l))).toBe(1);
     expect(lines.at(-1)).toBe("audit self-test failed: audit.graph names what isn't there: src");
   });

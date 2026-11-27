@@ -4,26 +4,20 @@
 // about it. Each takes the report as the tool wrote it, untrusted in shape,
 // so each tolerates fields it doesn't know.
 
-/**
- * @typedef {{ count: number, markdown: string }} Findings
- */
+export type Findings = { count: number; markdown: string };
 
-/** @param {unknown} value */
-const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+const isRecord = (value: unknown) =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/**
- * @param {unknown} value
- * @returns {Record<string, unknown>}
- */
-const record = (value) => (isRecord(value) ? /** @type {Record<string, unknown>} */ (value) : {});
+const record = (value: unknown): Record<string, unknown> =>
+  isRecord(value) ? (value as Record<string, unknown>) : {};
 
-/** @param {unknown} value */
-const list = (value) => (Array.isArray(value) ? /** @type {unknown[]} */ (value) : []);
+const list = (value: unknown) => (Array.isArray(value) ? (value as unknown[]) : []);
 
 // --- Dead code (knip) ------------------------------------------------------
 
 /** knip's issue types, as the issue lists them. */
-const KNIP_LABELS = /** @type {Record<string, string>} */ ({
+const KNIP_LABELS = {
   files: 'Unused files',
   dependencies: 'Unused dependencies',
   devDependencies: 'Unused devDependencies',
@@ -42,7 +36,7 @@ const KNIP_LABELS = /** @type {Record<string, string>} */ ({
   cycles: 'Circular dependencies',
   catalog: 'Unused catalog entries',
   catalogReferences: 'Unresolved catalog references',
-});
+} as Record<string, string>;
 
 /** Fields of a knip issue that say where, not what. */
 const KNIP_NOT_FINDINGS = new Set(['file', 'owners']);
@@ -50,11 +44,8 @@ const KNIP_NOT_FINDINGS = new Set(['file', 'owners']);
 /**
  * The named items in one finding: an item, or a list of them (a duplicate
  * export, a cycle).
- *
- * @param {unknown} item
- * @returns {{ name: string, line?: number }[]}
  */
-function namedItems(item) {
+function namedItems(item: unknown): { name: string; line?: number }[] {
   return (Array.isArray(item) ? item : [item]).flatMap((one) => {
     const r = record(one);
     if (typeof r.name !== 'string') return [];
@@ -66,11 +57,8 @@ function namedItems(item) {
  * The findings under one field of a knip issue: a list of items, or (in
  * older knip) an object of lists keyed by their enum or class, or `true` for
  * an unused file.
- *
- * @param {unknown} value
- * @returns {unknown[]}
  */
-function knipItems(value) {
+function knipItems(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
   if (isRecord(value)) return Object.values(record(value)).flatMap(knipItems);
   return [];
@@ -79,15 +67,10 @@ function knipItems(value) {
 /**
  * knip's `--reporter json` output as findings, grouped by type, each named
  * with its file and line. `config` is the knip config file, for the advice.
- *
- * @param {unknown} report
- * @param {string} config
- * @returns {Findings}
  */
-export function knipFindings(report, config) {
-  /** @type {Map<string, string[]>} */
-  const byType = new Map();
-  const add = (/** @type {string} */ type, /** @type {string} */ entry) =>
+export function knipFindings(report: unknown, config: string): Findings {
+  const byType: Map<string, string[]> = new Map();
+  const add = (type: string, entry: string) =>
     byType.set(type, [...(byType.get(type) ?? []), entry]);
   // Older knip listed unused files at the top level.
   for (const file of list(record(report).files)) {
@@ -131,11 +114,8 @@ export function knipFindings(report, config) {
 /**
  * A report path relative to the repository (jscpd writes absolute ones when
  * the app's config asks for them).
- *
- * @param {string} file
- * @param {string} root
  */
-function relative(file, root) {
+function relative(file: string, root: string) {
   const prefix = root.endsWith('/') ? root : `${root}/`;
   return file.startsWith(prefix) ? file.slice(prefix.length) : file;
 }
@@ -143,11 +123,10 @@ function relative(file, root) {
 /**
  * jscpd's JSON report as findings: every clone, largest first.
  *
- * @param {unknown} report
- * @param {string} root the app's checkout
- * @returns {Findings}
+ * @param report
+ * @param root the app's checkout
  */
-export function jscpdFindings(report, root) {
+export function jscpdFindings(report: unknown, root: string): Findings {
   const clones = list(record(report).duplicates)
     .map(record)
     .map((c) => ({
@@ -157,7 +136,7 @@ export function jscpdFindings(report, root) {
     }))
     .sort((a, b) => b.lines - a.lines);
   if (clones.length === 0) return { count: 0, markdown: '' };
-  const at = (/** @type {Record<string, unknown>} */ loc) =>
+  const at = (loc: Record<string, unknown>) =>
     `\`${relative(String(loc.name ?? '?'), root)}:${loc.start}-${loc.end}\``;
   const total = record(record(record(report).statistics).total);
   const percentage = typeof total.percentage === 'number' ? total.percentage : 0;
@@ -176,10 +155,8 @@ export function jscpdFindings(report, root) {
 
 /**
  * One failure's status as lychee wrote it: text, or a code and its text.
- *
- * @param {unknown} status
  */
-function statusText(status) {
+function statusText(status: unknown) {
   if (typeof status === 'string') return status;
   const s = record(status);
   if (s.code) return `${s.code}${s.text ? ` ${s.text}` : ''}`;
@@ -190,14 +167,11 @@ function statusText(status) {
  * The broken links in lychee's JSON report (`error_map`, which older
  * releases called `fail_map`: doc → failures, each with its url and status),
  * listed by doc, since lychee's own Markdown doesn't say which doc each is in.
- *
- * @param {unknown} report
- * @returns {Findings}
  */
-export function lycheeFindings(report) {
+export function lycheeFindings(report: unknown): Findings {
   const r = record(report);
   const docs = Object.entries(record(r.error_map ?? r.fail_map))
-    .map(([doc, failures]) => /** @type {[string, unknown[]]} */ ([doc, list(failures)]))
+    .map(([doc, failures]) => [doc, list(failures)] as [string, unknown[]])
     .filter(([, failures]) => failures.length > 0)
     .sort(([a], [b]) => a.localeCompare(b));
   const count = docs.reduce((sum, [, failures]) => sum + failures.length, 0);

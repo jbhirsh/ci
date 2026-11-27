@@ -17,22 +17,18 @@ export const LABEL = 'weekly-audit';
 /** GitHub refuses an issue body over 65,536 characters; this leaves room. */
 export const MAX_BODY = 65_000;
 
-/**
- * @typedef {{ number: number, title: string, state: 'OPEN' | 'CLOSED' }} Issue
- * @typedef {'create' | 'update' | 'reopen' | 'close' | 'none'} Action
- * @typedef {(args: string[], input?: string) => string} Gh runs gh with
- *   `input` on stdin and returns its stdout
- */
+export type Issue = { number: number; title: string; state: 'OPEN' | 'CLOSED' };
+
+export type Action = 'create' | 'update' | 'reopen' | 'close' | 'none';
+
+/** runs gh with `input` on stdin and returns its stdout */
+export type Gh = (args: string[], input?: string) => string;
 
 /**
  * What to do with a category's issue: open one for new findings, keep the
  * open one current (or reopen a closed one), close it once a sweep is clean.
- *
- * @param {Pick<Issue, 'state'> | undefined} existing
- * @param {boolean} found
- * @returns {Action}
  */
-export function issueAction(existing, found) {
+export function issueAction(existing: Pick<Issue, 'state'> | undefined, found: boolean): Action {
   if (found) {
     if (!existing) return 'create';
     return existing.state === 'OPEN' ? 'update' : 'reopen';
@@ -43,12 +39,8 @@ export function issueAction(existing, found) {
 /**
  * The issue body: the findings, then where they came from. A report too long
  * for an issue is cut at a line, with a note sending the reader to the run.
- *
- * @param {string} findings
- * @param {string} runUrl
- * @param {number} [maxLength]
  */
-export function issueBody(findings, runUrl, maxLength = MAX_BODY) {
+export function issueBody(findings: string, runUrl: string, maxLength: number = MAX_BODY) {
   const footer = `\n\n---\n_Updated by the [weekly audit](${runUrl}). It closes this issue once a sweep finds nothing._\n`;
   const cut = `\n\n_Cut short: the full report is in [the run](${runUrl})._`;
   let text = findings.trim();
@@ -64,14 +56,9 @@ export function issueBody(findings, runUrl, maxLength = MAX_BODY) {
 /**
  * The issue labelled `weekly-audit` with exactly this title, open or closed
  * (the newest, should there be several).
- *
- * @param {Gh} gh
- * @param {string} title
- * @returns {Issue | undefined}
  */
-export function findIssue(gh, title) {
-  /** @type {unknown} */
-  const issues = JSON.parse(
+export function findIssue(gh: Gh, title: string): Issue | undefined {
+  const issues: unknown = JSON.parse(
     gh([
       'issue',
       'list',
@@ -86,19 +73,29 @@ export function findIssue(gh, title) {
     ]),
   );
   if (!Array.isArray(issues)) throw new Error('gh issue list gave no list');
-  return /** @type {Issue[]} */ (issues)
+  return (issues as Issue[])
     .filter((issue) => issue.title === title)
     .sort((a, b) => b.number - a.number)[0];
 }
 
 /**
  * Brings the category's issue in line with this sweep, and says what it did.
- *
- * @param {{ title: string, findings: string, runUrl: string, date: string }} sweep
- *   `findings` is the report, empty for a clean sweep
- * @param {Gh} gh
  */
-export function sync({ title, findings, runUrl, date }, gh) {
+export function sync(
+  {
+    title,
+    findings,
+    runUrl,
+    date,
+  }: {
+    title: string;
+    /** the report, empty for a clean sweep */
+    findings: string;
+    runUrl: string;
+    date: string;
+  },
+  gh: Gh,
+) {
   const existing = findIssue(gh, title);
   const action = issueAction(existing, findings.trim() !== '');
   const body = issueBody(findings, runUrl);

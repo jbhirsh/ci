@@ -4,11 +4,7 @@
 // dependency, as this repo has none for its audit (CLAUDE.md, "Runtime
 // dependencies"). Invalid input throws JSON.parse's SyntaxError.
 
-/**
- * @param {string} text
- * @returns {unknown}
- */
-export function parseJsonc(text) {
+export function parseJsonc(text: string): unknown {
   let out = '';
   // A byte-order mark, as some editors write, isn't JSON's.
   let i = text.startsWith('\uFEFF') ? 1 : 0;
@@ -39,9 +35,9 @@ export function parseJsonc(text) {
  * Drops each comma that only whitespace separates from a closing `]` or
  * `}`, outside strings.
  *
- * @param {string} text comment-free JSON
+ * @param text comment-free JSON
  */
-function withoutTrailingCommas(text) {
+function withoutTrailingCommas(text: string) {
   let out = '';
   let i = 0;
   while (i < text.length) {

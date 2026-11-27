@@ -6,10 +6,10 @@ import { parseJsonc } from './jsonc.ts';
  * JSON text with a comment or whitespace after each structural token, and a
  * trailing comma before each closing bracket of a non-empty array or object.
  *
- * @param {string} json
- * @param {string[]} fillers what to put after each token, in turn
+ * @param json
+ * @param fillers what to put after each token, in turn
  */
-function commented(json, fillers) {
+function commented(json: string, fillers: string[]) {
   let out = '';
   let n = 0;
   let inString = false;

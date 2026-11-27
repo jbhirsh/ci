@@ -24,11 +24,10 @@ describe('knipSuppressions, for any config', () => {
     fc.assert(
       fc.property(config, fc.array(fc.string(), { maxLength: 3 }), (value, tracked) => {
         for (const { path } of knipSuppressions(value, tracked)) {
-          /** @type {unknown} */
-          let at = value;
+          let at: unknown = value;
           for (const step of path) {
             expect(typeof at === 'object' && at !== null && Object.hasOwn(at, step)).toBe(true);
-            at = /** @type {Record<string, unknown>} */ (at)[step];
+            at = (at as Record<string, unknown>)[step];
           }
         }
       }),
