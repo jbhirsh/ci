@@ -1,7 +1,7 @@
-// The two blocks pictures/cli.mjs writes. In the host PR's description, one
+// The two blocks pictures/cli.ts writes. In the host PR's description, one
 // `![path](./path)` line a picture: the form gh's `--attach` rewrites in
 // place with each upload's URL (ci#33's trial T1, BoardGames#309), read back
-// in the same order. Its alt text is the file's path, which inputs.mjs keeps
+// in the same order. Its alt text is the file's path, which inputs.ts keeps
 // to plain name characters, so nothing in it can end the link or add one.
 // In the target's description, a table of `<img>` tags pointing at those
 // URLs, `columns` wide, each at `width` pixels (Markdown images can't take a
@@ -13,7 +13,7 @@
 // backslash goes before each mark that formats inline Markdown, so none
 // formats it or ends the bold around it.
 
-/** @typedef {import('./inputs.mjs').Picture} Picture */
+/** @typedef {import('./inputs.ts').Picture} Picture */
 
 /**
  * A caption as text in an HTML attribute: on one line, with no character

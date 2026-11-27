@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { MAX_BRANCH, PREFIX, parseBranch, parseNamedFiles } from './branch.mjs';
+import { MAX_BRANCH, PREFIX, parseBranch, parseNamedFiles } from './branch.ts';
 
 // BRANCH and FILES are whatever the dispatcher typed: any text, and text
 // built from the pieces another ref, an option, a glob or a way out of the

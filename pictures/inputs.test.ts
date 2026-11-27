@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseBlock, parseFiles, parseInputs } from './inputs.mjs';
+import { parseBlock, parseFiles, parseInputs } from './inputs.ts';
 
 const env = {
   REPO: 'jbhirsh/sift',
@@ -113,8 +113,8 @@ describe('parseBlock', () => {
   });
 });
 
-describe('node pictures/inputs.mjs', () => {
-  const script = path.join(import.meta.dirname, 'inputs.mjs');
+describe('node pictures/inputs.ts', () => {
+  const script = path.join(import.meta.dirname, 'inputs.ts');
   /** @param {Record<string, string>} values */
   const run = (values) =>
     spawnSync(process.execPath, [script], {

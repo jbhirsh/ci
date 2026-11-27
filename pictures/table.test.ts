@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellText, escapeCaption, hostBlock, imageCell, pictureTable } from './table.mjs';
+import { cellText, escapeCaption, hostBlock, imageCell, pictureTable } from './table.ts';
 
 const url = (/** @type {number} */ i) => `https://github.com/user-attachments/assets/id-${i}`;
 

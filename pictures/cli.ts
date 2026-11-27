@@ -3,9 +3,9 @@
 // `<!-- pictures:<block> -->` markers in its description (ci#60), so a
 // Claude session, which can dispatch a workflow but can't upload, gets its
 // mockups into a plan's issue. pictures/attach/action.yml runs it, in the
-// artifact's folder, with its inputs in the environment (inputs.mjs):
+// artifact's folder, with its inputs in the environment (inputs.ts):
 //
-//   node pictures/cli.mjs
+//   node pictures/cli.ts
 //
 // The files always upload through a host PR, one whose description may be
 // overwritten (sift's is a throwaway draft), as the route was built when gh
@@ -13,7 +13,7 @@
 // edit` too (ci#144's V10), which visual review's mockups use, but this
 // route is unchanged:
 //
-// 1. The inputs and files are checked (inputs.mjs, files.mjs).
+// 1. The inputs and files are checked (inputs.ts, files.ts).
 // 2. The host's `pictures:<block>` block, in place of an earlier one, gets
 //    one `![caption](./file)` line a picture, and `gh pr edit --attach`
 //    uploads them (lib/attach.mjs, at most 50 an edit), each line's path
@@ -22,7 +22,7 @@
 //    one attachment a file, in order: anything else stops the run.
 // 4. Each link is fetched, signed out, until it answers.
 // 5. The target's `pictures:<block>` block gets the `<img>` table
-//    (table.mjs), with a plain `gh issue edit` or `gh pr edit --body-file`
+//    (table.ts), with a plain `gh issue edit` or `gh pr edit --body-file`
 //    and no `--attach`, whichever the target is (the issues API sets
 //    `pull_request` on a PR). A target that is the host itself has its
 //    block become the table in a second edit.
@@ -41,9 +41,9 @@ import { pathToFileURL } from 'node:url';
 import { attachToDescription, attachmentLinksIn, waitForLinks } from '../lib/attach.mjs';
 import { blocksFor } from '../lib/blocks.mjs';
 import { ghIn } from '../lib/gh.mjs';
-import { checkFiles } from './files.mjs';
-import { parseInputs } from './inputs.mjs';
-import { hostBlock, pictureTable } from './table.mjs';
+import { checkFiles } from './files.ts';
+import { parseInputs } from './inputs.ts';
+import { hostBlock, pictureTable } from './table.ts';
 
 /** The blocks this tool keeps: `<!-- pictures:<block> -->`. */
 const blocks = blocksFor('pictures');

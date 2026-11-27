@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { parseBlock, parseFiles } from './inputs.mjs';
+import { parseBlock, parseFiles } from './inputs.ts';
 
 // FILES and BLOCK are whatever the dispatcher typed: any text, and text
 // built from the pieces a way out of the folder is made of.
