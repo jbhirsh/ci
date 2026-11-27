@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { EXCLUDED_RULES, main, missingPaths, semgrepArgs, settings } from './scan.ts';
 import { cli, selftest } from './selftest.ts';
 
-function app(/** @type {unknown} */ semgrep) {
+function app(semgrep: unknown) {
   const root = mkdtempSync(path.join(tmpdir(), 'semgrep-'));
   mkdirSync(path.join(root, '.github'));
   mkdirSync(path.join(root, 'src'));
@@ -64,8 +64,7 @@ describe('selftest', () => {
 describe('main', () => {
   it("runs semgrep in the app's checkout and passes on its exit code", () => {
     const root = app({ paths: ['src'] });
-    /** @type {[string, string[], string][]} */
-    const calls = [];
+    const calls: [string, string[], string][] = [];
     expect(main(root, (command, args, cwd) => (calls.push([command, args, cwd]), 1))).toBe(1);
     expect(calls[0][0]).toBe('semgrep');
     expect(calls[0][1].at(-1)).toBe('src');
@@ -75,7 +74,7 @@ describe('main', () => {
   });
 
   it('fails without running semgrep when a path is missing', () => {
-    const lines = /** @type {string[]} */ ([]);
+    const lines = [] as string[];
     const run = () => 0;
     expect(main(app({ paths: ['gone'] }), run, (l) => lines.push(l))).toBe(1);
     expect(lines[0]).toContain("names what isn't there: gone");
@@ -84,7 +83,7 @@ describe('main', () => {
 
 describe('cli', () => {
   it('prints the self-test and returns its exit code', () => {
-    const lines = /** @type {string[]} */ ([]);
+    const lines = [] as string[];
     expect(cli([app({})], (l) => lines.push(l))).toBe(0);
     expect(cli([app({ paths: ['gone'] })], (l) => lines.push(l))).toBe(1);
     expect(lines.at(-1)).toMatch(/^semgrep self-test failed: .*gone/);

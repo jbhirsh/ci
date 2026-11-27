@@ -35,11 +35,8 @@ export const EXCLUDED_RULES = [
 
 /**
  * The app's `semgrep` settings, checked.
- *
- * @param {Record<string, unknown>} config
- * @returns {{ paths: string[] }}
  */
-export function settings(config) {
+export function settings(config: Record<string, unknown>): { paths: string[] } {
   const { paths = [] } = config;
   if (!Array.isArray(paths) || !paths.every((p) => typeof p === 'string' && p !== '')) {
     throw new Error('.github/ci.json: semgrep.paths must be a list of paths');
@@ -54,11 +51,8 @@ export function settings(config) {
 
 /**
  * Semgrep's command line for these settings.
- *
- * @param {{ paths: string[] }} options
- * @returns {string[]}
  */
-export function semgrepArgs({ paths }) {
+export function semgrepArgs({ paths }: { paths: string[] }): string[] {
   return [
     'scan',
     '--config',
@@ -71,24 +65,24 @@ export function semgrepArgs({ paths }) {
 
 /**
  * The settings' paths that aren't in the checkout.
- *
- * @param {{ paths: string[] }} options
- * @param {string} root
- * @returns {string[]}
  */
-export function missingPaths({ paths }, root) {
+export function missingPaths({ paths }: { paths: string[] }, root: string): string[] {
   return paths.filter((p) => !existsSync(path.join(root, p)));
 }
 
 /**
  * Runs Semgrep over the app's checkout and returns its exit code.
  *
- * @param {string} root
- * @param {(command: string, args: string[], cwd: string) => number | null} run runs a command
+ * @param root
+ * @param run runs a command
  *   with its output shown, returning its exit code
- * @param {(line: string) => void} [log]
+ * @param log
  */
-export function main(root, run, log = console.error) {
+export function main(
+  root: string,
+  run: (command: string, args: string[], cwd: string) => number | null,
+  log: (line: string) => void = console.error,
+) {
   const options = settings(appConfig('semgrep', root));
   const missing = missingPaths(options, root);
   if (missing.length > 0) {
