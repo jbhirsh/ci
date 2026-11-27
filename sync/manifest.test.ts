@@ -10,7 +10,7 @@ import {
   parseManifest,
   pathProblem,
   resolve,
-} from './manifest.mjs';
+} from './manifest.ts';
 
 const all = ['BoardGames', 'fog-and-frontier', 'sift'];
 const entry = (/** @type {Record<string, unknown>} */ more = {}) => ({

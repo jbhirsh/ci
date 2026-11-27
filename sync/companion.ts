@@ -1,4 +1,4 @@
-// A companion (manifest.mjs) is a key a synced file needs in the app's
+// A companion (manifest.ts) is a key a synced file needs in the app's
 // `.github/ci.json`: `autofix.exempt["PR changes"]` for a workflow on
 // `pull_request_target`, which the app's autofix check otherwise fails. The
 // sync sets it only when it adds the file, in the same commit, and never
@@ -19,13 +19,13 @@
 // The app's ci.json is outside input: every function here takes any text and
 // never throws on it except addCompanions, which refuses text that isn't a
 // JSON object, or whose key on the way to a companion holds something other
-// than an object (sync.mjs reports it; the self-test catches it first).
+// than an object (sync.ts reports it; the self-test catches it first).
 
 import { isDeepStrictEqual } from 'node:util';
 import { importFromApp, SETTINGS_FILE } from '../lib/app.mjs';
-import { holds, lineDiff } from './plan.mjs';
+import { holds, lineDiff } from './plan.ts';
 
-/** @typedef {import('./manifest.mjs').Companion} Companion */
+/** @typedef {import('./manifest.ts').Companion} Companion */
 
 /**
  * An object in the text: where its closing brace is, where its last member's

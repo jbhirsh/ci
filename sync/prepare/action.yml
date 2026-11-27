@@ -1,7 +1,7 @@
 name: Sync files, prepare
 description: >-
   The sync's first job for one app, which holds no token (ci#109;
-  sync/sync.mjs's header says what each step does). It checks that
+  sync/sync.ts's header says what each step does). It checks that
   BOT_PR_TOKEN is set and that the commit's CI passed, checks the app out,
   works out what differs, and for a file that brings a companion key writes
   the app's .github/ci.json through the app's own Prettier - the only code of
@@ -44,7 +44,7 @@ runs:
         TOKEN_SET: ${{ inputs.token-set }}
         GH_TOKEN: ${{ inputs.ci-token }}
         CI_SHA: ${{ inputs.ci-sha }}
-      run: node "$GITHUB_ACTION_PATH/../sync.mjs" check
+      run: node "$GITHUB_ACTION_PATH/../sync.ts" check
 
     - if: steps.check.outputs.go == 'true'
       uses: actions/checkout@v7
@@ -63,7 +63,7 @@ runs:
         APP_ROOT: sync-app
         CI_SHA: ${{ inputs.ci-sha }}
         SYNC_OUT: ${{ runner.temp }}/sync-files
-      run: node "$GITHUB_ACTION_PATH/../sync.mjs" prepare
+      run: node "$GITHUB_ACTION_PATH/../sync.ts" prepare
 
     - if: steps.check.outputs.go == 'true'
       uses: actions/upload-artifact@v7

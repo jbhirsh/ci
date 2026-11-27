@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { APPS, CI_ROOT } from './manifest.mjs';
+import { APPS, CI_ROOT } from './manifest.ts';
 
 /** @param {string} file */
 const yaml = (file) => parse(readFileSync(path.join(CI_ROOT, file), 'utf8'));
@@ -38,7 +38,7 @@ const TRIGGER = [
  */
 const runsAppCode = (step) =>
   String(step.with?.repository ?? '').includes('inputs.app') ||
-  /sync\.mjs" prepare/.test(String(step.run));
+  /sync\.ts" prepare/.test(String(step.run));
 
 describe('sync-files.yml', () => {
   it('runs after CI on main, or by hand for one app or all, with no paths filter', () => {
@@ -155,8 +155,8 @@ describe('the actions', () => {
 
   it('check first, and run nothing more when the check says to skip', () => {
     for (const [steps, script] of [
-      [prepareSteps, '$GITHUB_ACTION_PATH/../sync.mjs'],
-      [publishSteps, '$GITHUB_ACTION_PATH/sync.mjs'],
+      [prepareSteps, '$GITHUB_ACTION_PATH/../sync.ts'],
+      [publishSteps, '$GITHUB_ACTION_PATH/sync.ts'],
     ]) {
       const list = /** @type {Step[]} */ (steps);
       expect(list[1].id).toBe('check');
@@ -183,7 +183,7 @@ describe('the actions', () => {
   it('give the bot token only to the publish step, with the auto-merge setting', () => {
     const holding = publishSteps.filter((step) => text(step).includes('inputs.token }}'));
     expect(holding.map((step) => step.run)).toEqual([
-      'node "$GITHUB_ACTION_PATH/sync.mjs" publish',
+      'node "$GITHUB_ACTION_PATH/sync.ts" publish',
     ]);
     expect(holding[0].env.GH_TOKEN).toBe('${{ inputs.token }}');
     expect(holding[0].env.AUTO_MERGE).toBe('${{ inputs.auto-merge }}');

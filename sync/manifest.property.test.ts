@@ -6,7 +6,7 @@ import {
   manifestProblems,
   parseManifest,
   pathProblem,
-} from './manifest.mjs';
+} from './manifest.ts';
 
 // A path is whatever a manifest's author typed: build it from the pieces the
 // rules treat specially.

@@ -1,10 +1,10 @@
 // Self-test of the sync manifest against an app's checkout:
-// `node sync/selftest.mjs <app dir>`. It fails on a manifest error, and on
+// `node sync/selftest.ts <app dir>`. It fails on a manifest error, and on
 // the app's own state only where the sync could not put a file there; never
 // on a difference. An app whose files differ from this repo's is the sync's
 // whole job, and a change here must not turn its CI red. What it checks:
 //
-//   - this repo's manifest loads (manifest.mjs says what that holds);
+//   - this repo's manifest loads (manifest.ts says what that holds);
 //   - the app's `.github/ci.json`, when it has one, is a JSON object, and every
 //     companion the manifest would set in it can be (no key on its way is held
 //     by something that isn't an object);
@@ -12,7 +12,7 @@
 //     is a link or a file, where the sync could not write it.
 //
 // For a named app it then prints what the next sync would change there (the
-// dry run's report, plan.mjs), as information: a difference never fails it.
+// dry run's report, plan.ts), as information: a difference never fails it.
 //
 // The last two are the app's state, not the manifest's, and failing on them is
 // deliberate: the sync would otherwise fail in the app's PR, later and harder
@@ -32,10 +32,10 @@ import {
   loadManifest,
   lstatOrNull,
   resolve,
-} from './manifest.mjs';
-import { changesFor, report } from './plan.mjs';
+} from './manifest.ts';
+import { changesFor, report } from './plan.ts';
 
-/** @typedef {import('./manifest.mjs').Manifest} Manifest */
+/** @typedef {import('./manifest.ts').Manifest} Manifest */
 
 /**
  * The app the self-test is for, or undefined when none is named.

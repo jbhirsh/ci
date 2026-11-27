@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { describeWorkflow } from '../autofix/check-triggers.ts';
 import { lintGifCallers } from '../lint/gif-callers.mjs';
-import { APPS, CI_ROOT, loadManifest } from './manifest.mjs';
+import { APPS, CI_ROOT, loadManifest } from './manifest.ts';
 
 /** @param {string} file a path in this repo */
 const read = (file) => readFileSync(path.join(CI_ROOT, file), 'utf8');
@@ -94,7 +94,7 @@ describe('the manifest covers every canonical caller and reusable workflow', () 
  * the app's CI for it (it is neither in claude-autofix.yml's list nor exempt).
  * A variant is read too: it may be named differently.
  *
- * @param {import('./manifest.mjs').Entry[]} files
+ * @param {import('./manifest.ts').Entry[]} files
  * @param {(source: string) => string} text a source's content
  * @returns {string[]}
  */

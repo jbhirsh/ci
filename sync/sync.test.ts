@@ -9,8 +9,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { writeFiles } from '../review/testApp.ts';
-import { CI_ROOT } from './manifest.mjs';
-import { BRANCH, blobSha } from './plan.mjs';
+import { CI_ROOT } from './manifest.ts';
+import { BRANCH, blobSha } from './plan.ts';
 import {
   appOf,
   check,
@@ -23,8 +23,8 @@ import {
   publish,
   readPrepared,
   SECRET,
-} from './sync.mjs';
-import { loadManifest, resolve } from './manifest.mjs';
+} from './sync.ts';
+import { loadManifest, resolve } from './manifest.ts';
 
 const CI_SHA = 'abcdef0123456789abcdef0123456789abcdef01';
 const TEMPLATE = readFileSync(path.join(CI_ROOT, '.github/pull_request_template.md'), 'utf8');
@@ -268,7 +268,7 @@ function fakeGitHub(repo, bare) {
     if (method === 'GET' && /^commits\/\w+\/status/.test(r)) return { statuses: state.statuses };
     throw new Error(`unexpected ${method} ${route}`);
   };
-  /** @type {import('./sync.mjs').Graphql} */
+  /** @type {import('./sync.ts').Graphql} */
   const graphql = (query, variables) => {
     if (query.includes('reviewThreads')) {
       return { repository: { pullRequest: { reviewThreads: { nodes: state.threads } } } };
@@ -293,7 +293,7 @@ function fakeGitHub(repo, bare) {
  *
  * @param {{ app: string, ci: string, remote: ReturnType<typeof appRemote>,
  *   github: ReturnType<typeof fakeGitHub>, token?: string, autoMerge?: string,
- *   wrapGit?: (git: import('./sync.mjs').Git) => import('./sync.mjs').Git }} input
+ *   wrapGit?: (git: import('./sync.ts').Git) => import('./sync.ts').Git }} input
  */
 async function run({
   app,
@@ -524,8 +524,8 @@ describe('publish', () => {
     const remote = appRemote({});
     const github = fakeGitHub('jbhirsh/fog-and-frontier', remote.bare);
     /**
-     * @param {import('./sync.mjs').Git} g
-     * @returns {import('./sync.mjs').Git}
+     * @param {import('./sync.ts').Git} g
+     * @returns {import('./sync.ts').Git}
      */
     const wrapGit = (g) => (args, options) => {
       if (args.includes('push')) {
@@ -548,8 +548,8 @@ describe('publish', () => {
     const remote = appRemote({});
     const github = fakeGitHub('jbhirsh/sift', remote.bare);
     /** @param {string} stderr */
-    const refusing = (stderr) => (/** @type {import('./sync.mjs').Git} */ g) =>
-      /** @type {import('./sync.mjs').Git} */ (
+    const refusing = (stderr) => (/** @type {import('./sync.ts').Git} */ g) =>
+      /** @type {import('./sync.ts').Git} */ (
         (args, options) => {
           if (args.includes('push')) throw Object.assign(new Error('git push failed'), { stderr });
           return g(args, options);
@@ -577,8 +577,8 @@ describe('publish', () => {
     const github = fakeGitHub('jbhirsh/sift', remote.bare);
     const other = remote.commit({ 'theirs.txt': 'pushed by someone else\n' });
     /**
-     * @param {import('./sync.mjs').Git} g
-     * @returns {import('./sync.mjs').Git}
+     * @param {import('./sync.ts').Git} g
+     * @returns {import('./sync.ts').Git}
      */
     const wrapGit = (g) => (args, options) => {
       const out = g(args, options);
@@ -649,7 +649,7 @@ describe('publish', () => {
     const ci = ciRoot();
     const remote = appRemote({ '.github/workflows/hello.yml': 'old\n' });
     const github = fakeGitHub('jbhirsh/BoardGames', remote.bare);
-    /** @type {import('./sync.mjs').Graphql} */
+    /** @type {import('./sync.ts').Graphql} */
     const graphql = (query, variables) => {
       if (query.includes('enablePullRequestAutoMerge'))
         throw new Error('Auto merge is not allowed');
@@ -1065,7 +1065,7 @@ describe('dryRun and main', () => {
     expect(await main(['dry-run', 'BoardGames', checkout], {}, (l) => log.push(l), deps)).toBe(0);
     expect(await main(['nothing'], {}, (l) => log.push(l))).toBe(2);
     expect(log.at(-1)).toBe(
-      'usage: node sync/sync.mjs check | prepare | publish | dry-run <app> <app dir>',
+      'usage: node sync/sync.ts check | prepare | publish | dry-run <app> <app dir>',
     );
   });
 
@@ -1126,7 +1126,7 @@ describe('gitIn', () => {
 });
 
 describe('publish, in the cases review found', () => {
-  /** @param {import('./sync.mjs').Git} g @returns {import('./sync.mjs').Git} */
+  /** @param {import('./sync.ts').Git} g @returns {import('./sync.ts').Git} */
   const id = (g) => g;
 
   it('names a PR GitHub calls blocked with every check passed and no thread, and main’s rules', async () => {
@@ -1155,7 +1155,7 @@ describe('publish, in the cases review found', () => {
     });
     const big = git(remote.bare)(['rev-parse', 'main:docs/big.bin']).trim();
     const github = fakeGitHub('jbhirsh/BoardGames', remote.bare);
-    /** @param {import('./sync.mjs').Git} g @returns {import('./sync.mjs').Git} */
+    /** @param {import('./sync.ts').Git} g @returns {import('./sync.ts').Git} */
     const wrapGit = (g) => (args, options) => {
       // main moves after the sync read it, so GitHub no longer advertises its base.
       if (args[0] === 'ls-remote' && args.includes(`refs/heads/${BRANCH}`)) {

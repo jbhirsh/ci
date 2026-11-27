@@ -614,7 +614,7 @@ const read = (file) => parse(readFileSync(file, 'utf8'));
 /**
  * What a `jbhirsh/ci/<path>` reference names in a checkout of this repo: an
  * action's folder or a workflow file, or null. The sync lints the workflows
- * it is about to write with it (sync/sync.mjs).
+ * it is about to write with it (sync/sync.ts).
  *
  * @param {string} root this repo's checkout
  * @returns {(target: string) => Target | null}

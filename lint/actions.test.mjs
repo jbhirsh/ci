@@ -490,7 +490,7 @@ describe('treeAt', () => {
     const tree = treeAt(root);
     expect(tree.exists('lint/actions.mjs')).toBe(true);
     expect(tree.exists('lint/gone.mjs')).toBe(false);
-    expect(tree.glob('*/selftest.{mjs,ts}')).toContain('sync/selftest.mjs');
+    expect(tree.glob('*/selftest.{mjs,ts}')).toContain('sync/selftest.ts');
     expect(tree.glob('**/node_modules/**/*.mjs')).toEqual([]);
   });
 });
