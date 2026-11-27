@@ -1,13 +1,13 @@
 // The screenshot job's side of visual review (ci#64): what it uploads for
 // visual-review to compare, and, for a mockup, the patch it builds first.
 //
-//   node shots.mjs collect <out dir>   copies every PNG under the app's
+//   node shots.ts collect <out dir>   copies every PNG under the app's
 //       `visual-review.folders` into <out dir>, paths kept, and writes
 //       visual-shots.json beside them: the commit the shots are of (a
 //       PR's head, its merge commit's second parent), the commit it's built
 //       on (main's head, the first parent; for any other run, HEAD), the event,
 //       and a mockup's issue
-//   node shots.mjs mockup              checks MOCKUP_PATCH (base64) and
+//   node shots.ts mockup              checks MOCKUP_PATCH (base64) and
 //       applies it to the checkout: only paths `mockupPaths` allows, never
 //       a lockfile, no rename, copy, link or mode change. It needs
 //       MOCKUP_ISSUE, and a run on the default branch (GITHUB_REF against
@@ -191,7 +191,7 @@ export function main(argv, env, root = appRoot()) {
     throw new Error('.github/ci.json has no visual-review key: visual-shots has nothing to do');
   const [command, out] = argv;
   if (command === 'collect') {
-    if (!out) throw new Error('usage: shots.mjs collect <out dir>');
+    if (!out) throw new Error('usage: shots.ts collect <out dir>');
     const files = shotsUnder(root, s.folders);
     for (const file of files) {
       mkdirSync(path.dirname(path.join(out, file)), { recursive: true });
@@ -237,7 +237,7 @@ export function main(argv, env, root = appRoot()) {
     git(['apply', file]);
     return 'mockup patch applied';
   }
-  throw new Error('usage: shots.mjs collect <out dir> | shots.mjs mockup');
+  throw new Error('usage: shots.ts collect <out dir> | shots.ts mockup');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

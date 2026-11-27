@@ -40,7 +40,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { newest, pages, statusFrom } from '../lib/github.mjs';
 import { parseUpload } from '../describe/describe.ts';
-import { parseManifest, MANIFEST } from '../visual-shots/shots.mjs';
+import { parseManifest, MANIFEST } from '../visual-shots/shots.ts';
 import { compareShots } from './compare.ts';
 import { BOT, assetLink, parseRecord } from './record.ts';
 import { CONTEXT, fingerprint, readMark, shownAt, status } from './status.ts';
