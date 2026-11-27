@@ -19,14 +19,15 @@
 //    uploads them (lib/attach.mjs, at most 50 an edit), each line's path
 //    rewritten to its upload's URL.
 // 3. The host's description is read back, and its block must link exactly
-//    one attachment a file, in order: anything else stops the run.
-// 4. Each link is fetched, signed out, until it answers.
-// 5. The target's `pictures:<block>` block gets the `<img>` table
+//    one attachment a file, in order: anything else stops the run. Nothing
+//    fetches the links: one can answer 404 for a moment after the edit and
+//    goes live by itself (lib/attach.mjs).
+// 4. The target's `pictures:<block>` block gets the `<img>` table
 //    (table.ts), with a plain `gh issue edit` or `gh pr edit --body-file`
 //    and no `--attach`, whichever the target is (the issues API sets
 //    `pull_request` on a PR). A target that is the host itself has its
 //    block become the table in a second edit.
-// 6. The target's URL is logged.
+// 5. The target's URL is logged.
 //
 // It runs none of the app's code and checks nothing out: it reads only the
 // artifact's files, as bytes, and holds the token (GH_TOKEN, a person's:
@@ -38,7 +39,7 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { attachToDescription, attachmentLinksIn, waitForLinks } from '../lib/attach.mjs';
+import { attachToDescription, attachmentLinksIn } from '../lib/attach.mjs';
 import { blocksFor } from '../lib/blocks.mjs';
 import { ghIn } from '../lib/gh.mjs';
 import { checkFiles } from './files.ts';
@@ -56,8 +57,6 @@ export type Context = {
   cwd?: string;
   /** runs gh in `cwd` */
   gh?: Command;
-  fetch?: typeof globalThis.fetch;
-  wait?: (ms: number) => Promise<unknown>;
   log?: (line: string) => void;
 };
 
@@ -65,14 +64,7 @@ export type Context = {
  * Attaches the pictures; returns the target's URL.
  */
 export async function main(context: Context = {}) {
-  const {
-    env = process.env,
-    cwd = process.cwd(),
-    gh = ghIn(cwd),
-    fetch,
-    wait,
-    log = console.log,
-  } = context;
+  const { env = process.env, cwd = process.cwd(), gh = ghIn(cwd), log = console.log } = context;
   const inputs = parseInputs(env);
   const { repo, target, hostPr, block, files } = inputs;
   if (!env.GH_TOKEN) {
@@ -126,7 +118,6 @@ export async function main(context: Context = {}) {
       `pictures: #${hostPr}'s pictures:${block} block links ${links.length} attachment(s), not the ${files.length} attached`,
     );
   }
-  await waitForLinks(links, { prefix: 'pictures', label: 'attached picture(s)', fetch, wait });
 
   const table = pictureTable(
     links.map((url, i) => ({ url, caption: files[i].caption })),

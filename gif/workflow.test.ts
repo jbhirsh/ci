@@ -8,7 +8,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ATTACH_MAX_BYTES } from '../lib/attach.mjs';
 import {
   attachmentLinks,
@@ -23,7 +23,6 @@ import {
   readManifest,
   recordRuns,
   screenRun,
-  waitForLinks,
   writeManifest,
 } from './workflow.ts';
 import { recordedLine, withBlock } from './publish.ts';
@@ -227,49 +226,6 @@ describe('attachmentLinks', () => {
   });
 });
 
-describe('waitForLinks', () => {
-  /**
-   * A fetch answering each link from its own list of statuses (or errors),
-   * the last repeating; a clock that moves on each wait.
-   */
-  function fake(answers: Record<string, (number | Error)[]>) {
-    let clock = 0;
-    const asked: string[] = [];
-    const fetch = (async (url: string) => {
-      asked.push(url);
-      const list = answers[url];
-      const next = list.length > 1 ? list.shift() : list[0];
-      if (next instanceof Error) throw next;
-      return new Response(next === 200 ? 'GIF89a' : null, { status: next });
-    }) as unknown as typeof globalThis.fetch;
-    return {
-      asked,
-      options: {
-        fetch,
-        now: () => clock,
-        wait: async (ms: number) => {
-          clock += ms;
-        },
-        limitMs: 20,
-        everyMs: 5,
-      },
-    };
-  }
-
-  it('waits for a link that goes live a moment after the edit', async () => {
-    const { asked, options } = fake({ a: [404, new Error('reset'), 200], b: [200] });
-    await waitForLinks(['a', 'b'], options);
-    expect(asked).toEqual(['a', 'a', 'a', 'b']);
-  });
-
-  it('names each link that never answered', async () => {
-    const { options } = fake({ a: [404], b: [200], c: [new Error('ENOTFOUND')] });
-    await expect(waitForLinks(['a', 'b', 'c'], options)).rejects.toThrow(
-      "2 attached GIF(s) didn't answer within 0.02 s: a (404), c (ENOTFOUND)",
-    );
-  });
-});
-
 describe('main', () => {
   const saved = { APP_ROOT: process.env.APP_ROOT, PATH: process.env.PATH };
   afterEach(() => {
@@ -407,18 +363,14 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
     };
   }
 
-  it("attaches the artifact's GIFs, waits for their links, and says so in the summary", async () => {
+  it("attaches the artifact's GIFs, fetching none of their links, and says so in the summary", async () => {
     const gh = fakeGh('2.103.3');
     const cwd = folder({
       'pr-gif/sheet/sheet-after.gif': GIF,
       'pr-gif/sheet/sheet-before.gif': GIF,
     });
     const summary = path.join(cwd, 'summary.md');
-    const fetched: string[] = [];
-    const fetch = (async (url: string) => (
-      fetched.push(url),
-      new Response('GIF89a')
-    )) as unknown as typeof globalThis.fetch;
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('no network in tests'));
     const logs: string[] = [];
     const env = {
       PR: '12',
@@ -426,15 +378,19 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
       GITHUB_REPOSITORY: 'o/r',
       GITHUB_STEP_SUMMARY: summary,
     };
-    expect(await main(['attach'], { env, cwd, fetch, log: (l) => logs.push(l) })).toBe(0);
+    try {
+      expect(await main(['attach'], { env, cwd, log: (l) => logs.push(l) })).toBe(0);
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      fetch.mockRestore();
+    }
     expect(gh.body()).toContain(
       '![GIF: sheet before](https://github.com/user-attachments/assets/id-',
     );
     expect(gh.body()).not.toContain('](./');
-    expect(fetched).toHaveLength(2);
     expect(logs).toEqual([
       "pr-gif: attached 2 GIFs to #12's description",
-      'pr-gif: every attached GIF answers: https://github.com/o/r/pull/12',
+      'pr-gif: the description links every attached GIF: https://github.com/o/r/pull/12',
     ]);
     expect(readFileSync(summary, 'utf8')).toBe(
       'Attached the GIFs of `sheet` to [#12](https://github.com/o/r/pull/12).\n',
@@ -703,7 +659,6 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
         failed: ['broken'],
       }),
     });
-    const fetch = (async () => new Response('GIF89a')) as unknown as typeof globalThis.fetch;
     const logs: string[] = [];
     const env = {
       PR: '12',
@@ -715,7 +670,7 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
       RUN_URL: runUrl,
       SCENARIOS: 'sheet,new,broken',
     };
-    expect(await main(['attach'], { env, cwd, fetch, log: (l) => logs.push(l) })).toBe(1);
+    expect(await main(['attach'], { env, cwd, log: (l) => logs.push(l) })).toBe(1);
     const body = gh.body();
     expect(body).toContain(
       "<!-- pr-gif:sheet -->\nRecorded automatically at `aaaaaaa`. No before: main couldn't play this scenario.\n\n| Scenario |",
@@ -811,9 +766,8 @@ fs.writeFileSync(${JSON.stringify(state)}, body);
         failed: [],
       }),
     });
-    const fetch = (async () => new Response('GIF89a')) as unknown as typeof globalThis.fetch;
     const env = { PR: '12', GH_TOKEN: 'token', GITHUB_REPOSITORY: 'o/r' };
-    expect(await main(['attach'], { env, cwd, fetch, log: () => {} })).toBe(0);
+    expect(await main(['attach'], { env, cwd, log: () => {} })).toBe(0);
     expect(gh.body()).toContain('<!-- pr-gif:sheet -->\nRecorded at `aaaaaaa`.\n\n| Scenario |');
   });
 });

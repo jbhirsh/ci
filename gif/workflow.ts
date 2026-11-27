@@ -51,9 +51,9 @@
 // one over the 10 MB GitHub attaches, and a manifest of any other shape or
 // for another PR or commit.
 // publish.ts's attachToPr writes the tables into the description and
-// uploads; then each new link is fetched, signed out, until it answers 200,
-// for up to a minute, since an edited-in attachment goes live a moment after
-// the edit (ci#33's trial T1).
+// uploads, then reads it back: every reference rewritten, one link a GIF.
+// Nothing fetches the links: one can answer 404 for a moment after the edit
+// and goes live by itself (lib/attach.mjs).
 
 import { spawnSync } from 'node:child_process';
 import {
@@ -71,7 +71,7 @@ import {
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { appRoot } from '../lib/app.mjs';
-import { ATTACH_MAX_BYTES, attachmentLinksIn, waitForLinks as waitFor } from '../lib/attach.mjs';
+import { ATTACH_MAX_BYTES, attachmentLinksIn } from '../lib/attach.mjs';
 import {
   HeadMovedError,
   attachToPr,
@@ -580,23 +580,6 @@ export function attachmentLinks(body: string, scenarios: readonly Published[]) {
 }
 
 /**
- * Waits until every link answers 200, signed out, for up to `limitMs` in
- * all; throws naming the ones that never did (lib/attach.mjs).
- */
-export function waitForLinks(
-  links: readonly string[],
-  options: {
-    fetch?: typeof globalThis.fetch;
-    wait?: (ms: number) => Promise<unknown>;
-    now?: () => number;
-    limitMs?: number;
-    everyMs?: number;
-  } = {},
-) {
-  return waitFor(links, { prefix: 'pr-gif', label: 'attached GIF(s)', ...options });
-}
-
-/**
  * Runs a command, returning what it printed; a failure throws.
  */
 function output(command: string, args: readonly string[], cwd?: string) {
@@ -653,8 +636,6 @@ export type Context = {
   /** runs git in the app's checkout, returning what it printed */
   git?: (args: string[]) => string;
   log?: (line: string) => void;
-  fetch?: typeof globalThis.fetch;
-  wait?: (ms: number) => Promise<unknown>;
 };
 
 /**
@@ -972,11 +953,9 @@ async function attachStep(
     return 0;
   }
   if (scenarios.length > 0) {
-    await waitForLinks(attachmentLinks(body, scenarios), {
-      fetch: context.fetch,
-      wait: context.wait,
-    });
-    log(`pr-gif: every attached GIF answers: https://github.com/${repo}/pull/${pr}`);
+    // Called for its check, one link a GIF, which throws on any other count.
+    attachmentLinks(body, scenarios);
+    log(`pr-gif: the description links every attached GIF: https://github.com/${repo}/pull/${pr}`);
   }
   if (env.GITHUB_STEP_SUMMARY) {
     const link = `[#${pr}](https://github.com/${repo}/pull/${pr})`;
