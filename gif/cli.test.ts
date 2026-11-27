@@ -10,7 +10,6 @@ import type { MockInstance } from 'vitest';
 const calls = vi.hoisted(() => [] as string[]);
 const fakes = vi.hoisted(() => ({
   playwright: undefined as unknown,
-  playwrightFails: null as string | null,
 }));
 
 vi.mock('./build.ts', () => ({
@@ -78,17 +77,11 @@ vi.mock('./videos.ts', () => ({
 }));
 vi.mock('../lib/app.mjs', async (actual) => ({
   ...(await actual()),
-  importFromApp: vi.fn((name: string) => {
-    if (name === 'vite') return Promise.reject(new Error('no vite'));
-    if (name === '@playwright/test' && fakes.playwrightFails !== '@playwright/test') {
-      return Promise.resolve({ default: fakes.playwright });
-    }
-    if (name === 'playwright') return Promise.resolve(fakes.playwright);
-    return Promise.reject(new Error(`no ${name}`));
-  }),
+  importFromApp: vi.fn((name: string) => Promise.reject(new Error(`no ${name}`))),
+  appPlaywright: vi.fn(() => Promise.resolve(fakes.playwright)),
 }));
 
-const { appPlaywright, main } = await import('./cli.ts');
+const { main } = await import('./cli.ts');
 const publish = await import('./publish.ts');
 
 /**
@@ -159,7 +152,6 @@ beforeEach(() => {
   calls.length = 0;
   Object.assign(globalThis, { gifCalls: calls });
   log = vi.spyOn(console, 'log').mockImplementation(() => {});
-  fakes.playwrightFails = null;
 });
 afterEach(() => {
   delete process.env.APP_ROOT;
@@ -341,17 +333,5 @@ describe('main, for an app whose CI records videos', () => {
     app({ source: 'ci-videos' });
     await main(['189', '--side-by-side']);
     expect(calls).toEqual(['videos 189 --side-by-side']);
-  });
-});
-
-describe('appPlaywright', () => {
-  it("takes Playwright Test's exports from its CommonJS default, or else playwright's own", async () => {
-    const { launch } = fakeBrowser();
-    const test = Object.assign(() => {}, { webkit: { launch } });
-    fakes.playwright = test;
-    expect((await appPlaywright('/app')).webkit.launch).toBe(launch);
-    fakes.playwrightFails = '@playwright/test';
-    fakes.playwright = { webkit: { launch } };
-    expect((await appPlaywright('/app')).webkit.launch).toBe(launch);
   });
 });
