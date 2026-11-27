@@ -47,7 +47,7 @@
 import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { appRoot, importFromApp } from '../lib/app.mjs';
+import { appPlaywright, appRoot } from '../lib/app.mjs';
 import { addBaseTree, build, git, serve, stopServers } from './build.ts';
 import { checkFfmpeg, framesToGif, sideBySide } from './ffmpeg.ts';
 import { click, drag, glide, scroll, swipe } from './moves.ts';
@@ -125,26 +125,6 @@ async function loadChecked(
   const problems = problemsOf(module.default);
   if (problems.length > 0) throw new Error(`pr-gif: ${file}: ${problems.join('; ')}`);
   return module.default;
-}
-
-/**
- * The app's Playwright: `@playwright/test`, or else `playwright`.
- */
-export async function appPlaywright(root: string): Promise<typeof import('playwright')> {
-  let module: unknown;
-  try {
-    module = await importFromApp('@playwright/test', root);
-  } catch {
-    module = await importFromApp('playwright', root);
-  }
-  // Resolved as CommonJS, its exports come as the default export (Playwright
-  // Test's is a function, `test`, carrying the rest).
-  const { default: cjs } = module as { default?: unknown };
-  return (
-    (typeof cjs === 'object' || typeof cjs === 'function') && cjs !== null && 'webkit' in cjs
-      ? cjs
-      : module
-  ) as typeof import('playwright');
 }
 
 /**
