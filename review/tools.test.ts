@@ -20,17 +20,12 @@ import {
   show,
   splitParts,
 } from './tools.ts';
+import type { Context } from './tools.ts';
 
-/** @type {string} */
-let repoDir;
-/** @type {string} */
-let prSha;
+let repoDir: string;
+let prSha: string;
 
-/**
- * @param {string[]} args
- * @returns {string}
- */
-const git = (args) =>
+const git = (args: string[]): string =>
   execFileSync('git', ['-C', repoDir, ...args], {
     encoding: 'utf8',
     env: {
@@ -59,12 +54,10 @@ beforeAll(() => {
   prSha = git(['rev-parse', 'HEAD']).trim();
 });
 
-/**
- * @param {Record<string, [number, unknown, string?]>} [routes]
- * @param {{ url: string, method?: string, body?: string }[]} [calls]
- * @returns {import('./tools.ts').Context}
- */
-const ctx = (routes = {}, calls = []) => ({
+const ctx = (
+  routes: Record<string, [number, unknown, string?]> = {},
+  calls: { url: string; method?: string; body?: string }[] = [],
+): Context => ({
   repoDir,
   base: 'main',
   repo: 'o/r',
@@ -178,8 +171,7 @@ describe('GitHub tools', () => {
     ]);
   });
   it('replaces the earlier summary, or posts one, always with the marker', async () => {
-    /** @type {{ url: string, method?: string, body?: string }[]} */
-    const calls = [];
+    const calls: { url: string; method?: string; body?: string }[] = [];
     const replaced = await postSummary(
       ctx(
         {
@@ -213,8 +205,7 @@ describe('GitHub tools', () => {
     expect((await postSummary(ctx(), { body: ' ' })).isError).toBe(true);
   });
   it('comments only on files the PR changes, on the head commit', async () => {
-    /** @type {{ url: string, method?: string, body?: string }[]} */
-    const calls = [];
+    const calls: { url: string; method?: string; body?: string }[] = [];
     const route = 'POST https://api.github.com/repos/o/r/pulls/7/comments';
     const made = await inlineComment(ctx({ [route]: [201, { id: 5 }] }, calls), {
       path: 'src/a.ts',

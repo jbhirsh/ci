@@ -22,17 +22,13 @@ import { testApp, writeFiles } from './testApp.ts';
 const SHA1 = 'a'.repeat(40);
 const SHA2 = 'b'.repeat(40);
 const CONTEXT = 'c'.repeat(64);
-const lines = (/** @type {number} */ n, /** @type {Record<number, string>} */ changes = {}) =>
+const lines = (n: number, changes: Record<number, string> = {}) =>
   Array.from({ length: n }, (_, i) => changes[i + 1] ?? `line ${i + 1}`).join('\n') + '\n';
 
 /**
  * Runs git in a test app, as a fixed author.
- *
- * @param {string} root
- * @param {string[]} args
- * @returns {string}
  */
-function git(root, ...args) {
+function git(root: string, ...args: string[]): string {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')),
   );
@@ -51,11 +47,8 @@ function git(root, ...args) {
 
 /**
  * Commits files on the current branch.
- *
- * @param {string} root
- * @param {Record<string, string>} files
  */
-function commit(root, files) {
+function commit(root: string, files: Record<string, string>) {
   writeFiles(root, files);
   git(root, 'add', '--', ...Object.keys(files));
   git(root, 'commit', '-q', '--no-gpg-sign', '-m', 'c');
@@ -64,10 +57,8 @@ function commit(root, files) {
 /**
  * An app whose origin/main holds a.ts and b.ts (30 lines each), and a PR
  * branch, checked out, changing line 25 of both.
- *
- * @returns {string}
  */
-function prApp() {
+function prApp(): string {
   const root = testApp({ 'a.ts': lines(30), 'b.ts': lines(30), 'c.ts': lines(3) });
   git(root, 'checkout', '-q', '-b', 'pr');
   commit(root, { 'a.ts': lines(30, { 25: 'a changed' }) });
@@ -75,19 +66,15 @@ function prApp() {
   return root;
 }
 
-/** @param {string} root */
-const ids = (root) =>
+const ids = (root: string) =>
   Object.fromEntries(
     changedFiles({ root, base: 'main' }).map((f) => [f, patchId(f, { root, base: 'main' })]),
   );
 
 /**
  * Moves origin/main on by one commit, from main.
- *
- * @param {string} root
- * @param {Record<string, string>} files
  */
-function moveBase(root, files) {
+function moveBase(root: string, files: Record<string, string>) {
   git(root, 'checkout', '-q', 'main');
   commit(root, files);
   git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
@@ -96,12 +83,11 @@ function moveBase(root, files) {
 
 /**
  * The files a run after `before` carries over.
- *
- * @param {Record<string, string | null>} before
- * @param {Record<string, string | null>} after
- * @returns {string[]}
  */
-function carriedAfter(before, after) {
+function carriedAfter(
+  before: Record<string, string | null>,
+  after: Record<string, string | null>,
+): string[] {
   const record = nextRecord(plan(before, null, CONTEXT), SHA1);
   return Object.keys(plan(after, parseRecord(JSON.stringify(record)), CONTEXT).carried);
 }

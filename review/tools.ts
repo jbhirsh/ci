@@ -30,6 +30,7 @@
 // an option.
 
 import { execFileSync } from 'node:child_process';
+import type { GitHub } from './github.ts';
 
 /** The summary comment's first line, by which a later pass finds it. */
 export const SUMMARY_MARKER = '<!-- claude-review-summary -->';
@@ -47,28 +48,26 @@ const EARLIER_POSTERS = [POSTER, 'claude[bot]'];
  */
 export const REVIEW_MARKER = '<!-- claude-review -->';
 
-/**
- * @typedef {object} Context
- * @property {string} repoDir the PR's checkout
- * @property {string} base the base branch's name
- * @property {string} repo owner/name
- * @property {string} pr the PR's number
- * @property {string} headSha the commit inline comments go on
- * @property {import('./github.ts').GitHub} api
- */
+export type Context = {
+  /** the PR's checkout */
+  repoDir: string;
+  /** the base branch's name */
+  base: string;
+  /** owner/name */
+  repo: string;
+  /** the PR's number */
+  pr: string;
+  /** the commit inline comments go on */
+  headSha: string;
+  api: GitHub;
+};
 
-/**
- * @typedef {{ text: string, isError?: boolean }} Result
- */
+export type Result = { text: string; isError?: boolean };
 
 /**
  * git in the checkout, returning what it printed.
- *
- * @param {string} repoDir
- * @param {string[]} args
- * @returns {string}
  */
-function git(repoDir, args) {
+function git(repoDir: string, args: string[]): string {
   return execFileSync('git', ['-C', repoDir, '--literal-pathspecs', '--no-pager', ...args], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -76,24 +75,17 @@ function git(repoDir, args) {
   });
 }
 
-/**
- * @param {Context} ctx
- * @returns {string}
- */
-function range(ctx) {
+function range(ctx: Context): string {
   return `origin/${ctx.base}...HEAD`;
 }
 
 /**
  * The paths the PR changes, rename sources included.
- *
- * @param {Context} ctx
- * @returns {Set<string>}
  */
-export function changedPaths(ctx) {
+export function changedPaths(ctx: Context): Set<string> {
   const out = git(ctx.repoDir, ['diff', '--name-status', '-z', '-M', range(ctx)]);
   const fields = out.split('\0').filter(Boolean);
-  const paths = new Set();
+  const paths = new Set<string>();
   for (let i = 0; i < fields.length; i++) {
     const status = fields[i];
     const count = /^[RC]/.test(status) ? 2 : 1;
@@ -103,31 +95,18 @@ export function changedPaths(ctx) {
   return paths;
 }
 
-/**
- * @param {unknown} value
- * @returns {value is string}
- */
-function isPath(value) {
+function isPath(value: unknown): value is string {
   return (
     typeof value === 'string' && value !== '' && !value.includes('\0') && !value.startsWith('-')
   );
 }
 
-/**
- * @param {string} text
- * @returns {Result}
- */
-const refuse = (text) => ({ text, isError: true });
+const refuse = (text: string): Result => ({ text, isError: true });
 
-/**
- * @param {Context} ctx
- * @param {{ paths?: unknown, part?: unknown }} input
- * @returns {Result}
- */
-export function diff(ctx, { paths, part }) {
+export function diff(ctx: Context, { paths, part }: { paths?: unknown; part?: unknown }): Result {
   const list = paths === undefined ? [] : paths;
   if (!Array.isArray(list) || !list.every(isPath)) return refuse('paths must be a list of paths');
-  if (part !== undefined && (!Number.isInteger(part) || /** @type {number} */ (part) < 1)) {
+  if (part !== undefined && (!Number.isInteger(part) || (part as number) < 1)) {
     return refuse('part must be a part number, from 1');
   }
   if (list.length > 0) {
@@ -148,7 +127,7 @@ export function diff(ctx, { paths, part }) {
       `This diff is ${Buffer.byteLength(text)} bytes, in ${parts.length} parts: read each with part 1 to ${parts.length}, or ask for one file at a time.`,
     );
   }
-  const n = /** @type {number} */ (part);
+  const n = part as number;
   if (n > parts.length) return refuse(`there are only ${parts.length} parts`);
   return { text: `${partHeader(n, parts.length)}${parts[n - 1]}` };
 }
@@ -163,29 +142,20 @@ export const PART_LIMIT = 20_000;
 
 /**
  * The first line of a part of a diff, which coverage.ts reads.
- *
- * @param {number} n
- * @param {number} of
- * @returns {string}
  */
-export function partHeader(n, of) {
+export function partHeader(n: number, of: number): string {
   return `Part ${n} of ${of} of this diff.\n`;
 }
 
 /**
  * A diff cut into parts of at most PART_LIMIT bytes, at line ends where it
  * can be (a line longer than that is cut inside it).
- *
- * @param {string} text
- * @returns {string[]}
  */
-export function splitParts(text) {
-  /** @type {string[]} */
-  const parts = [];
+export function splitParts(text: string): string[] {
+  const parts: string[] = [];
   let part = '';
   let size = 0;
-  /** @param {string} piece */
-  const add = (piece) => {
+  const add = (piece: string) => {
     const bytes = Buffer.byteLength(piece);
     if (size + bytes > PART_LIMIT && part) {
       parts.push(part);
@@ -215,21 +185,11 @@ export function splitParts(text) {
   return parts;
 }
 
-/**
- * @param {Context} ctx
- * @param {'--name-status' | '--stat'} flag
- * @returns {Result}
- */
-export function listing(ctx, flag) {
+export function listing(ctx: Context, flag: '--name-status' | '--stat'): Result {
   return { text: git(ctx.repoDir, ['diff', flag, '-M', range(ctx)]) || '(no changes)' };
 }
 
-/**
- * @param {Context} ctx
- * @param {{ ref?: unknown, path?: unknown }} input
- * @returns {Result}
- */
-export function show(ctx, { ref, path }) {
+export function show(ctx: Context, { ref, path }: { ref?: unknown; path?: unknown }): Result {
   const refs = ['HEAD', `origin/${ctx.base}`];
   if (typeof ref !== 'string' || !refs.includes(ref))
     return refuse(`ref must be ${refs.join(' or ')}`);
@@ -241,11 +201,7 @@ export function show(ctx, { ref, path }) {
   }
 }
 
-/**
- * @param {Context} ctx
- * @returns {Result}
- */
-export function log(ctx) {
+export function log(ctx: Context): Result {
   const text = git(ctx.repoDir, [
     'log',
     '--reverse',
@@ -256,12 +212,7 @@ export function log(ctx) {
   return { text: text || '(no commits)' };
 }
 
-/**
- * @param {Context} ctx
- * @param {{ sha?: unknown }} input
- * @returns {Result}
- */
-export function commit(ctx, { sha }) {
+export function commit(ctx: Context, { sha }: { sha?: unknown }): Result {
   if (typeof sha !== 'string' || !/^[0-9a-f]{7,40}$/.test(sha))
     return refuse('sha must be a commit hash');
   const ours = git(ctx.repoDir, ['rev-list', `origin/${ctx.base}..HEAD`]).split('\n');
@@ -273,18 +224,15 @@ export function commit(ctx, { sha }) {
 /**
  * The review's newest earlier summary comment by one of these authors, if
  * any.
- *
- * @param {Context} ctx
- * @param {string[]} authors
- * @returns {Promise<{ id: number, body: string } | null>}
  */
-async function findSummary(ctx, authors) {
+async function findSummary(
+  ctx: Context,
+  authors: string[],
+): Promise<{ id: number; body: string } | null> {
   const comments = await ctx.api.list(`/repos/${ctx.repo}/issues/${ctx.pr}/comments`);
   let found = null;
   for (const c of comments) {
-    const comment = /** @type {{ id?: unknown, body?: unknown, user?: { login?: unknown } }} */ (
-      c ?? {}
-    );
+    const comment = (c ?? {}) as { id?: unknown; body?: unknown; user?: { login?: unknown } };
     if (
       typeof comment.user?.login === 'string' &&
       authors.includes(comment.user.login) &&
@@ -298,20 +246,20 @@ async function findSummary(ctx, authors) {
   return found;
 }
 
-/**
- * @param {Context} ctx
- * @returns {Promise<Result>}
- */
-export async function pr(ctx) {
-  const pull =
-    /** @type {{ title?: unknown, body?: unknown, user?: { login?: unknown }, head?: { ref?: unknown } }} */ (
-      await ctx.api.get(`/repos/${ctx.repo}/pulls/${ctx.pr}`)
-    );
+export async function pr(ctx: Context): Promise<Result> {
+  const pull = (await ctx.api.get(`/repos/${ctx.repo}/pulls/${ctx.pr}`)) as {
+    title?: unknown;
+    body?: unknown;
+    user?: { login?: unknown };
+    head?: { ref?: unknown };
+  };
   const threads = (await ctx.api.list(`/repos/${ctx.repo}/pulls/${ctx.pr}/comments`)).map((c) => {
-    const comment =
-      /** @type {{ path?: unknown, line?: unknown, body?: unknown, user?: { login?: unknown } }} */ (
-        c ?? {}
-      );
+    const comment = (c ?? {}) as {
+      path?: unknown;
+      line?: unknown;
+      body?: unknown;
+      user?: { login?: unknown };
+    };
     return {
       path: comment.path,
       line: comment.line,
@@ -332,12 +280,7 @@ export async function pr(ctx) {
   return { text: JSON.stringify(data, null, 2) };
 }
 
-/**
- * @param {Context} ctx
- * @param {{ body?: unknown }} input
- * @returns {Promise<Result>}
- */
-export async function postSummary(ctx, { body }) {
+export async function postSummary(ctx: Context, { body }: { body?: unknown }): Promise<Result> {
   if (typeof body !== 'string' || body.trim() === '') return refuse('body must be the summary');
   const text = body.startsWith(SUMMARY_MARKER) ? body : `${SUMMARY_MARKER}\n${body}`;
   const earlier = await findSummary(ctx, [POSTER]);
@@ -345,26 +288,28 @@ export async function postSummary(ctx, { body }) {
     await ctx.api.send('PATCH', `/repos/${ctx.repo}/issues/comments/${earlier.id}`, { body: text });
     return { text: `Replaced the summary comment (${earlier.id}).` };
   }
-  const made = /** @type {{ id?: unknown }} */ (
-    await ctx.api.send('POST', `/repos/${ctx.repo}/issues/${ctx.pr}/comments`, { body: text })
-  );
+  const made = (await ctx.api.send('POST', `/repos/${ctx.repo}/issues/${ctx.pr}/comments`, {
+    body: text,
+  })) as { id?: unknown };
   return { text: `Posted the summary comment (${String(made.id)}).` };
 }
 
-/**
- * @param {Context} ctx
- * @param {{ path?: unknown, line?: unknown, startLine?: unknown, side?: unknown, body?: unknown }} input
- * @returns {Promise<Result>}
- */
-export async function inlineComment(ctx, { path, line, startLine, side, body }) {
+export async function inlineComment(
+  ctx: Context,
+  {
+    path,
+    line,
+    startLine,
+    side,
+    body,
+  }: { path?: unknown; line?: unknown; startLine?: unknown; side?: unknown; body?: unknown },
+): Promise<Result> {
   if (!isPath(path) || !changedPaths(ctx).has(path))
     return refuse(`${String(path)} is not a file this PR changes`);
-  if (!Number.isInteger(line) || /** @type {number} */ (line) < 1)
-    return refuse('line must be a line number');
+  if (!Number.isInteger(line) || (line as number) < 1) return refuse('line must be a line number');
   if (
     startLine !== undefined &&
-    (!Number.isInteger(startLine) ||
-      /** @type {number} */ (startLine) >= /** @type {number} */ (line))
+    (!Number.isInteger(startLine) || (startLine as number) >= (line as number))
   ) {
     return refuse('startLine must be a line number before line');
   }
@@ -372,8 +317,7 @@ export async function inlineComment(ctx, { path, line, startLine, side, body }) 
   const at = side === undefined ? 'RIGHT' : side;
   if (typeof at !== 'string' || !sides.includes(at)) return refuse('side must be RIGHT or LEFT');
   if (typeof body !== 'string' || body.trim() === '') return refuse('body must be the comment');
-  /** @type {Record<string, unknown>} */
-  const comment = {
+  const comment: Record<string, unknown> = {
     body: `${body}\n\n${REVIEW_MARKER}`,
     commit_id: ctx.headSha,
     path,
@@ -382,9 +326,11 @@ export async function inlineComment(ctx, { path, line, startLine, side, body }) 
   };
   if (startLine !== undefined) Object.assign(comment, { start_line: startLine, start_side: at });
   try {
-    const made = /** @type {{ id?: unknown }} */ (
-      await ctx.api.send('POST', `/repos/${ctx.repo}/pulls/${ctx.pr}/comments`, comment)
-    );
+    const made = (await ctx.api.send(
+      'POST',
+      `/repos/${ctx.repo}/pulls/${ctx.pr}/comments`,
+      comment,
+    )) as { id?: unknown };
     return { text: `Commented on ${path}:${String(line)} (${String(made.id)}).` };
   } catch (error) {
     // Usually a line outside the diff's hunks: say so, so it can move it.

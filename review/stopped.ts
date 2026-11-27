@@ -32,8 +32,7 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { summary } from '../lib/actions.mjs';
 import { findComment, ghApi } from '../lib/comment.mjs';
-
-/** @typedef {import('../lib/comment.mjs').Api} Api */
+import type { Api } from '../lib/comment.mjs';
 
 /** The hidden first line of the comment. */
 export const MARKER = '<!-- claude-review:stopped -->';
@@ -51,49 +50,42 @@ const RAW_TYPE = /^[a-z0-9_]{1,40}$/;
 const EARLIEST = 1_577_836_800;
 const YEAR = 366 * 24 * 60 * 60;
 
-/**
- * @typedef {object} Limit
- * @property {string | null} name which limit, for a person ("5-hour
- *   limit"), or null when the API didn't say
- * @property {string | null} resets when it resets ("2026-11-14 00:40 UTC"),
- *   or null when the API gave no usable time
- */
+export type Limit = {
+  /** which limit, for a person ("5-hour limit"), or null when the API didn't say */
+  name: string | null;
+  /** when it resets ("2026-11-14 00:40 UTC"), or null when the API gave no usable time */
+  resets: string | null;
+};
 
-/**
- * @typedef {object} Stop
- * @property {'review' | 'followup'} pass which pass stopped
- * @property {'credit' | 'limit'} stopped why (sdk.ts's stoppedBy)
- * @property {boolean} fallback whether the subscription retry ran
- * @property {Limit} limit
- * @property {number} turns the most turns an attempt at the pass ran
- *   (sdk.ts's `turns`; 0 when unknown)
- */
+export type Stop = {
+  /** which pass stopped */
+  pass: 'review' | 'followup';
+  /** why (sdk.ts's stoppedBy) */
+  stopped: 'credit' | 'limit';
+  /** whether the subscription retry ran */
+  fallback: boolean;
+  limit: Limit;
+  /** the most turns an attempt at the pass ran (sdk.ts's `turns`; 0 when unknown) */
+  turns: number;
+};
 
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
- */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * A reset time read from the API, in seconds, as UTC, or null when it isn't
  * a number between 2020 and a year after `now`.
  *
- * @param {unknown} resetsAt
- * @param {number} now milliseconds
- * @returns {string | null}
+ * @param resetsAt
+ * @param now milliseconds
  */
-function resetTime(resetsAt, now) {
+function resetTime(resetsAt: unknown, now: number): string | null {
   if (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt)) return null;
   if (resetsAt < EARLIEST || resetsAt > now / 1000 + YEAR) return null;
   return `${new Date(resetsAt * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
-/**
- * @param {unknown} type
- * @returns {string | null}
- */
-function limitName(type) {
+function limitName(type: unknown): string | null {
   if (typeof type !== 'string') return null;
   return LIMIT_NAMES.get(type) ?? (RAW_TYPE.test(type) ? `${type} limit` : null);
 }
@@ -101,14 +93,12 @@ function limitName(type) {
 /**
  * Of two rejected limits, the one that resets later; one without a usable
  * reset loses to one with, and between two such the newer wins.
- *
- * @param {Record<string, unknown> | undefined} current
- * @param {Record<string, unknown>} next
- * @returns {Record<string, unknown>}
  */
-function later(current, next) {
-  /** @param {unknown} t */
-  const time = (t) => (typeof t === 'number' && Number.isFinite(t) ? t : -Infinity);
+function later(
+  current: Record<string, unknown> | undefined,
+  next: Record<string, unknown>,
+): Record<string, unknown> {
+  const time = (t: unknown) => (typeof t === 'number' && Number.isFinite(t) ? t : -Infinity);
   return current && time(current.resetsAt) > time(next.resetsAt) ? current : next;
 }
 
@@ -118,14 +108,12 @@ function later(current, next) {
  * `rate_limit_event` or window that resets last. With two limits reached,
  * re-running after the later reset is what works.
  *
- * @param {unknown} messages
- * @param {number} now milliseconds
- * @returns {Limit}
+ * @param messages
+ * @param now milliseconds
  */
-export function limitOf(messages, now) {
+export function limitOf(messages: unknown, now: number): Limit {
   const list = Array.isArray(messages) ? messages : [];
-  /** @type {Record<string, unknown> | undefined} */
-  let source;
+  let source: Record<string, unknown> | undefined;
   for (const m of list) {
     if (!isObject(m) || m.type !== 'assistant' || !isObject(m.api_error_params)) continue;
     const info = m.api_error_params.rate_limit_info;
@@ -149,11 +137,8 @@ export function limitOf(messages, now) {
 
 /**
  * What stopped it, in a clause: the credit, or which limit and its reset.
- *
- * @param {Stop} stop
- * @returns {string}
  */
-export function reason({ stopped, limit }) {
+export function reason({ stopped, limit }: Stop): string {
   if (stopped === 'credit') return 'the API credit is spent, and the API gave no time it renews';
   const which = limit.name
     ? `the Claude account hit its ${limit.name}`
@@ -165,11 +150,8 @@ export function reason({ stopped, limit }) {
 
 /**
  * The comment's body.
- *
- * @param {Stop} stop
- * @returns {string}
  */
-export function commentBody(stop) {
+export function commentBody(stop: Stop): string {
   const what =
     stop.pass === 'followup'
       ? "**Claude Review's follow-up stopped before it finished, so this PR isn't fully reviewed**"
@@ -193,13 +175,9 @@ export function commentBody(stop) {
 /**
  * Posts the comment, or edits the one there; a body already there is left.
  *
- * @param {Api} api
- * @param {string} repo
- * @param {number} pr
- * @param {string} body
- * @returns {string} what happened
+ * @returns what happened
  */
-function keepComment(api, repo, pr, body) {
+function keepComment(api: Api, repo: string, pr: number, body: string): string {
   const existing = findComment(api, repo, pr, MARKER);
   if (existing?.body === body) return 'the comment is already up to date';
   if (existing) {
@@ -213,12 +191,9 @@ function keepComment(api, repo, pr, body) {
 /**
  * Deletes the comment, once no pass stopped.
  *
- * @param {Api} api
- * @param {string} repo
- * @param {number} pr
- * @returns {string} what happened
+ * @returns what happened
  */
-function clearComment(api, repo, pr) {
+function clearComment(api: Api, repo: string, pr: number): string {
   const existing = findComment(api, repo, pr, MARKER);
   if (!existing) return 'no stopped-review comment to clear';
   api('DELETE', `repos/${repo}/issues/comments/${existing.id}`);
@@ -227,35 +202,28 @@ function clearComment(api, repo, pr) {
 
 /**
  * A workflow command's message, escaped as the runner expects.
- *
- * @param {string} text
  */
-const escapeData = (text) =>
+const escapeData = (text: string) =>
   text.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
 
 /**
  * The first line of a failure, for a warning.
- *
- * @param {unknown} error
  */
-const firstLine = (error) =>
+const firstLine = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).split('\n')[0].slice(0, 300);
 
 /**
  * The pass that stopped (the follow-up's, when it ran and stopped), as action.yml's
  * outputs give it, with its last attempt's messages.
  *
- * @param {Record<string, string | undefined>} env
- * @param {number} now
- * @returns {Stop | null} null when neither pass stopped
+ * @returns null when neither pass stopped
  */
-export function stopFrom(env, now) {
+export function stopFrom(env: Record<string, string | undefined>, now: number): Stop | null {
   const pass = env.FOLLOWUP_STOPPED ? 'followup' : env.REVIEW_STOPPED ? 'review' : null;
   if (!pass) return null;
   const prefix = pass === 'followup' ? 'FOLLOWUP' : 'REVIEW';
   const stopped = env[`${prefix}_STOPPED`] === 'credit' ? 'credit' : 'limit';
-  /** @type {unknown} */
-  let messages = [];
+  let messages: unknown = [];
   try {
     messages = JSON.parse(readFileSync(env[`${prefix}_FILE`] ?? '', 'utf8'));
   } catch {
@@ -270,23 +238,21 @@ export function stopFrom(env, now) {
   };
 }
 
-/**
- * @typedef {object} Io
- * @property {(line: string) => void} log
- * @property {(markdown: string) => void} summary
- */
+export type Io = {
+  log: (line: string) => void;
+  summary: (markdown: string) => void;
+};
 
 /**
  * Runs one of the CLI's commands; returns the exit code.
- *
- * @param {string | undefined} command
- * @param {Record<string, string | undefined>} env
- * @param {Api} api
- * @param {Io} io
- * @param {number} [now]
- * @returns {number}
  */
-export function main(command, env, api, io, now = Date.now()) {
+export function main(
+  command: string | undefined,
+  env: Record<string, string | undefined>,
+  api: Api,
+  io: Io,
+  now: number = Date.now(),
+): number {
   const repo = env.REPO ?? '';
   const pr = Number(env.PR);
   if (command === 'clear') {

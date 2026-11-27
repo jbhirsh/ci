@@ -56,8 +56,8 @@ describe('the stopped-review comment, for any execution file', () => {
           if (limit.resets !== null)
             expect(limit.resets).toMatch(/^\d{4}-\d\d-\d\d \d\d:\d\d UTC$/);
           const body = commentBody({
-            pass: /** @type {'review' | 'followup'} */ (pass),
-            stopped: /** @type {'credit' | 'limit'} */ (stopped),
+            pass: pass as 'review' | 'followup',
+            stopped: stopped as 'credit' | 'limit',
             fallback,
             limit,
             turns,

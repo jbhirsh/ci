@@ -49,20 +49,18 @@ import {
   stringList,
 } from './config.ts';
 
-/**
- * @typedef {object} ReviewSettings
- * @property {string | null} instructions the guide's path, if the app names one
- * @property {string} guide the guide's text ('' without one)
- * @property {string[]} skip
- * @property {string | null} advisor the advisor model, if any
- * @property {string[]} skipBots
- */
+export type ReviewSettings = {
+  /** the guide's path, if the app names one */
+  instructions: string | null;
+  /** the guide's text ('' without one) */
+  guide: string;
+  skip: string[];
+  /** the advisor model, if any */
+  advisor: string | null;
+  skipBots: string[];
+};
 
-/**
- * @param {{ root: string, ref?: string }} where
- * @returns {ReviewSettings}
- */
-export function reviewSettings(where) {
+export function reviewSettings(where: { root: string; ref?: string }): ReviewSettings {
   const section = loadConfig('review', where);
   onlyKnownKeys('review', section, ['instructions', 'skip', 'engine', 'advisor', 'skipBots']);
   const skip = stringList('review.skip', section.skip, []);

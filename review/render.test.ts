@@ -17,8 +17,7 @@ import { testApp, writeFiles } from './testApp.ts';
 /** The settings' defaults beside the ones each test sets. */
 const DEFAULTS = {
   advisor: null,
-  /** @type {string[]} */
-  skipBots: [],
+  skipBots: [] as string[],
 };
 
 const run = { repo: 'jbhirsh/app', pr: '7', base: 'main', repoDir: '/r' };
@@ -42,7 +41,7 @@ describe('the templates', () => {
       'unreadPaths',
       'carried',
     ];
-    for (const pass of /** @type {const} */ (['review', 'followup'])) {
+    for (const pass of ['review', 'followup'] as const) {
       for (const name of placeholders(template(pass))) expect(given).toContain(name);
     }
   });
@@ -115,7 +114,7 @@ describe('renderPrompt', () => {
     expect(prompt).not.toContain('one file per call');
   });
   it('tells both passes that a one-line change must be read too', () => {
-    for (const pass of /** @type {const} */ (['review', 'followup'])) {
+    for (const pass of ['review', 'followup'] as const) {
       expect(renderPrompt(pass, none, { ...run, unread: ['a.ts'] })).toMatch(
         /A one-line change is a changed\s+file/,
       );
@@ -233,7 +232,7 @@ describe('main', () => {
 
 describe('both prompts', () => {
   it("read and post through the reviewer's own tools, and never through a shell", () => {
-    for (const pass of /** @type {const} */ (['review', 'followup'])) {
+    for (const pass of ['review', 'followup'] as const) {
       const prompt = renderPrompt(pass, none, {
         ...run,
         unread: ['src/a.ts'],

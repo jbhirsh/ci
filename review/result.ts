@@ -12,26 +12,21 @@
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-/**
- * @typedef {object} Outcome
- * @property {boolean} finished
- * @property {string} why
- */
+export type Outcome = {
+  finished: boolean;
+  why: string;
+};
 
 /**
  * Judges a pass's execution file (the SDK's message list) by its last
  * result message.
- *
- * @param {unknown} execution
- * @returns {Outcome}
  */
-export function judge(execution) {
+export function judge(execution: unknown): Outcome {
   const messages = Array.isArray(execution) ? execution : [];
-  /** @type {Record<string, unknown> | undefined} */
-  let result;
+  let result: Record<string, unknown> | undefined;
   for (const m of messages) {
-    if (m && typeof m === 'object' && /** @type {{ type?: unknown }} */ (m).type === 'result') {
-      result = /** @type {Record<string, unknown>} */ (m);
+    if (m && typeof m === 'object' && (m as { type?: unknown }).type === 'result') {
+      result = m as Record<string, unknown>;
     }
   }
   if (!result) return { finished: false, why: 'the pass gave no result' };
@@ -42,11 +37,7 @@ export function judge(execution) {
   return { finished: false, why: `the pass ended with ${String(result.subtype)}${turns}` };
 }
 
-/**
- * @param {string | undefined} file
- * @returns {Outcome}
- */
-export function main(file) {
+export function main(file: string | undefined): Outcome {
   if (!file) return { finished: false, why: 'no execution file' };
   try {
     return judge(JSON.parse(readFileSync(file, 'utf8')));

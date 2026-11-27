@@ -16,22 +16,22 @@
 import { pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { github } from './github.ts';
+import type { Fetch } from './github.ts';
 
 /**
  * Whether every commit is by one of the bots (no commits: false).
  *
- * @param {unknown[]} commits GitHub's list of a PR's commits
- * @param {string[]} bots
- * @returns {boolean}
+ * @param commits GitHub's list of a PR's commits
+ * @param bots
  */
-export function allByBots(commits, bots) {
+export function allByBots(commits: unknown[], bots: string[]): boolean {
   if (bots.length === 0 || commits.length === 0) return false;
   const wanted = new Set(bots.map((b) => b.toLowerCase()));
   return commits.every((c) => {
-    const commit =
-      /** @type {{ author?: { login?: unknown } | null, committer?: { login?: unknown } | null }} */ (
-        c && typeof c === 'object' ? c : {}
-      );
+    const commit = (c && typeof c === 'object' ? c : {}) as {
+      author?: { login?: unknown } | null;
+      committer?: { login?: unknown } | null;
+    };
     const login = commit.author?.login ?? commit.committer?.login;
     return typeof login === 'string' && wanted.has(login.toLowerCase());
   });
@@ -39,12 +39,11 @@ export function allByBots(commits, bots) {
 
 /**
  * The CLI, minus process handling.
- *
- * @param {Record<string, string | undefined>} env
- * @param {import('./github.ts').Fetch} [fetchImpl]
- * @returns {Promise<boolean>}
  */
-export async function main(env, fetchImpl) {
+export async function main(
+  env: Record<string, string | undefined>,
+  fetchImpl?: Fetch,
+): Promise<boolean> {
   const bots = (env.BOTS ?? '')
     .split('\n')
     .map((b) => b.trim())
@@ -53,9 +52,7 @@ export async function main(env, fetchImpl) {
   const { REPO, PR, GH_TOKEN } = env;
   if (!REPO || !PR) throw new Error('REPO and PR must be set');
   const api = github(GH_TOKEN ?? '', fetchImpl);
-  const pull = /** @type {{ user?: { login?: unknown } }} */ (
-    await api.get(`/repos/${REPO}/pulls/${PR}`)
-  );
+  const pull = (await api.get(`/repos/${REPO}/pulls/${PR}`)) as { user?: { login?: unknown } };
   const author = pull.user?.login;
   const wanted = bots.map((b) => b.toLowerCase());
   if (typeof author !== 'string' || !wanted.includes(author.toLowerCase())) return false;

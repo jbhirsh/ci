@@ -56,8 +56,7 @@ describe('reviewSettings', () => {
     expect(reviewSettings({ root: off }).advisor).toBeNull();
   });
   it('fails on an engine other than "sdk", a bad advisor or bad bots', () => {
-    /** @param {unknown} review */
-    const with_ = (review) => testApp({ '.github/ci.json': JSON.stringify({ review }) });
+    const with_ = (review: unknown) => testApp({ '.github/ci.json': JSON.stringify({ review }) });
     for (const engine of ['action', 'managed', null]) {
       expect(() => reviewSettings({ root: with_({ engine }) })).toThrow(
         '"review.engine" must be "sdk", the only engine, or be left out',

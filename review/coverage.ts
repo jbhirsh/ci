@@ -116,24 +116,22 @@ const READ_ONLY = {
 const CUT_OFF = /^\s*(<persisted-output>|Output too large)/i;
 const SAVED_TO = /saved to:?\s*(\S+)/i;
 
-/**
- * @typedef {object} ToolCall
- * @property {string} name
- * @property {Record<string, unknown>} input
- * @property {string} [result] The call's result as text, when the execution file had one.
- * @property {boolean} [failed] The call failed (denied, cancelled, an error).
- */
+export type ToolCall = {
+  name: string;
+  input: Record<string, unknown>;
+  /** The call's result as text, when the execution file had one. */
+  result?: string;
+  /** The call failed (denied, cancelled, an error). */
+  failed?: boolean;
+};
 
 /**
  * A glob (`*` within a folder, `**` across folders) as a regular expression
  * over a whole repo-relative path. It matches inside dot folders (`**` covers
  * `.github/`), which lib/match.mjs doesn't, so an app's review `skip` globs
  * keep their meaning: that's why review has its own.
- *
- * @param {string} glob
- * @returns {RegExp}
  */
-export function globToRegExp(glob) {
+export function globToRegExp(glob: string): RegExp {
   let source = '';
   for (let i = 0; i < glob.length; i++) {
     const ch = glob[i];
@@ -156,34 +154,31 @@ export function globToRegExp(glob) {
 /**
  * The files a review must read: the changed ones less the skippable (and
  * less what matches one of the app's `skip` globs: its generated files).
- *
- * @param {string[]} changed
- * @param {string[]} [skip]
- * @returns {string[]}
  */
-export function filesToRead(changed, skip = []) {
+export function filesToRead(changed: string[], skip: string[] = []): string[] {
   const extra = skip.map(globToRegExp);
   return changed.filter((f) => f && !SKIPPABLE.test(f) && !extra.some((re) => re.test(f)));
 }
 
-/**
- * @typedef {object} CommandLine
- * @property {string | null} cd The leading `cd`'s directory, if any.
- * @property {string[][]} commands The words of each command the line runs
- *   alone (not in a pipe), in order: the ones that may count as reads.
- * @property {boolean} alone The line runs one command (after its `cd`).
- */
+export type CommandLine = {
+  /** The leading `cd`'s directory, if any. */
+  cd: string | null;
+  /**
+   * The words of each command the line runs alone (not in a pipe), in order: the ones that may
+   * count as reads.
+   */
+  commands: string[][];
+  /** The line runs one command (after its `cd`). */
+  alone: boolean;
+};
 
 /**
  * A command line's commands, quotes honoured: plain commands joined by `&&`,
  * after an optional leading `cd <dir>`, a command possibly piped into
  * another. Null for anything else, or for a line of several commands of
  * which one could change what a later one prints (READ_ONLY).
- *
- * @param {string} command
- * @returns {CommandLine | null}
  */
-export function commandLine(command) {
+export function commandLine(command: string): CommandLine | null {
   const line = parseLine(command);
   if (!line) return null;
   const all = line.parts.flat();
@@ -196,16 +191,11 @@ export function commandLine(command) {
  * A command line's `&&` parts, each a list of pipe stages, each a list of
  * words, after its leading `cd <dir>` (its directory apart): null for any
  * other shell syntax, or a `cd` anywhere else.
- *
- * @param {string} command
- * @returns {{ cd: string | null, parts: string[][][] } | null}
  */
-function parseLine(command) {
-  /** @type {string[][][]} */
-  const parts = [[[]]];
+function parseLine(command: string): { cd: string | null; parts: string[][][] } | null {
+  const parts: string[][][] = [[[]]];
   let word = '';
-  /** @type {'"' | "'" | null} */
-  let quote = null;
+  let quote: '"' | "'" | null = null;
   let inWord = false;
   const chars = [...command.trim()];
   const stage = () => {
@@ -262,11 +252,8 @@ function parseLine(command) {
 
 /**
  * Whether a command changes nothing a later command in its line prints.
- *
- * @param {string[]} words
- * @returns {boolean}
  */
-function readOnly([tool, sub, next, ...rest]) {
+function readOnly([tool, sub, next, ...rest]: string[]): boolean {
   if (tool === 'git') {
     // `--output=<file>` writes a file, which could be one of git's own.
     return READ_ONLY.git.has(sub) && ![next, ...rest].some((w) => w?.startsWith('--output'));
@@ -275,23 +262,14 @@ function readOnly([tool, sub, next, ...rest]) {
   return READ_ONLY.tools.has(tool);
 }
 
-/**
- * @param {string} s
- * @returns {string}
- */
-function escapeRegExp(s) {
+function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
  * Which of the files one call read (none: an empty list).
- *
- * @param {string[]} words
- * @param {string[]} files
- * @param {string} base
- * @returns {string[]}
  */
-function filesReadBy(words, files, base) {
+function filesReadBy(words: string[], files: string[], base: string): string[] {
   const [tool, sub, ...rest] = words;
   if (tool === 'gh' && sub === 'pr' && rest[0] === 'diff') {
     return rest.some((w) => w.startsWith('--name') || w === '--stat') ? [] : files;
@@ -317,14 +295,8 @@ function filesReadBy(words, files, base) {
 /**
  * Which of the files a `git diff` with these revisions and paths covers:
  * none unless the range is the PR's own.
- *
- * @param {string[]} revisions
- * @param {string[]} paths
- * @param {string[]} files
- * @param {string} base
- * @returns {string[]}
  */
-function inPrDiff(revisions, paths, files, base) {
+function inPrDiff(revisions: string[], paths: string[], files: string[], base: string): string[] {
   // The PR's diff and nothing else: origin/<base> to HEAD, three dots or
   // two, or the two ends given apart.
   const range = revisions.join(' ');
@@ -344,21 +316,25 @@ function inPrDiff(revisions, paths, files, base) {
  * command. A `--stat` or `--numstat` lists only the files whose stat line
  * the call's output holds by their whole path.
  *
- * @param {string[]} words
- * @param {string[]} removed
- * @param {string} base
- * @param {string | null} output The call's output, when this command is
+ * @param words
+ * @param removed
+ * @param base
+ * @param output The call's output, when this command is
  *   all it ran: null when other commands' output is mixed in.
- * @returns {string[]}
  */
-function filesListedBy(words, removed, base, output) {
+function filesListedBy(
+  words: string[],
+  removed: string[],
+  base: string,
+  output: string | null,
+): string[] {
   const [tool, sub, ...rest] = words;
   if (tool !== 'git' || sub !== 'diff') return [];
   const dashes = rest.indexOf('--');
   const args = dashes === -1 ? rest : rest.slice(0, dashes);
   const paths = dashes === -1 ? [] : rest.slice(dashes + 1);
   const flags = args.filter((w) => w.startsWith('-'));
-  const listed = (/** @type {string} */ w) => LISTING_FLAGS.has(w) || STAT_FLAGS.has(w);
+  const listed = (w: string) => LISTING_FLAGS.has(w) || STAT_FLAGS.has(w);
   if (!flags.some(listed)) return [];
   if (!flags.every((w) => listed(w) || LISTING_ALLOWED.test(w))) return [];
   const revisions = args.filter((w) => !w.startsWith('-'));
@@ -370,12 +346,8 @@ function filesListedBy(words, removed, base, output) {
 /**
  * A file's line in `--stat` (`<path> | <n> ---`) or `--numstat`
  * (`<added>\t<deleted>\t<path>`) output, by its whole path.
- *
- * @param {string} file
- * @param {string[]} flags
- * @returns {RegExp}
  */
-function statLine(file, flags) {
+function statLine(file: string, flags: string[]): RegExp {
   const path = escapeRegExp(file);
   // The leading space may be trimmed off the output's first line.
   const stat = `^ ?${path} +\\| `;
@@ -390,25 +362,17 @@ const PART = /^Part (\d+) of (\d+) of this diff\.\n/;
 /**
  * Whether a call asked the reviewer's diff tool for one part of a long
  * diff.
- *
- * @param {ToolCall} call
- * @returns {boolean}
  */
-function isPart(call) {
+function isPart(call: ToolCall): boolean {
   return call.name === 'mcp__review__diff' && call.input.part !== undefined;
 }
 
 /**
  * The diffs read whole in parts: every part of the same paths, 1 to N,
  * came back without being cut. Each as the words of the git command.
- *
- * @param {ToolCall[]} calls
- * @param {string} base
- * @returns {string[][]}
  */
-function partedDiffs(calls, base) {
-  /** @type {Map<string, { of: number, seen: Set<number>, words: string[] }>} */
-  const byPaths = new Map();
+function partedDiffs(calls: ToolCall[], base: string): string[][] {
+  const byPaths: Map<string, { of: number; seen: Set<number>; words: string[] }> = new Map();
   for (const call of calls) {
     if (call.failed || !isPart(call)) continue;
     // A part the SDK cut after all reads nothing. Parts are kept to 20 KB,
@@ -434,12 +398,8 @@ function partedDiffs(calls, base) {
  * words a Bash call of it would have, so it's credited the same way: the
  * tools always run in the checkout, on the PR's own range. Null for any
  * other call.
- *
- * @param {ToolCall} call
- * @param {string} base
- * @returns {string[] | null}
  */
-export function mcpCommand(call, base) {
+export function mcpCommand(call: ToolCall, base: string): string[] | null {
   const range = `origin/${base}...HEAD`;
   const { input } = call;
   switch (call.name) {
@@ -465,34 +425,25 @@ export function mcpCommand(call, base) {
  * the checkout's own path. A `cd` elsewhere would read its paths from
  * there, or another repository's diff, so its line reads nothing.
  *
- * @param {string | null} cd The line's leading `cd` directory, quotes gone.
- * @param {string} repoDir
- * @returns {boolean}
+ * @param cd The line's leading `cd` directory, quotes gone.
+ * @param repoDir
  */
-function inCheckout(cd, repoDir) {
+function inCheckout(cd: string | null, repoDir: string): boolean {
   return cd === null || cd.replace(/\/+$/, '') === repoDir.replace(/\/+$/, '');
 }
 
 /**
  * Path relative to the repo, for a Read of an absolute path inside it.
- *
- * @param {string} path
- * @param {string} repoDir
- * @returns {string}
  */
-function relative(path, repoDir) {
+function relative(path: string, repoDir: string): string {
   const root = repoDir.replace(/\/+$/, '');
   return path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path.replace(/^\.\//, '');
 }
 
 /**
  * The path a Read that worked opened, whole or (with `part`) in part.
- *
- * @param {ToolCall} call
- * @param {boolean} part
- * @returns {string | null}
  */
-function readPath(call, part) {
+function readPath(call: ToolCall, part: boolean): string | null {
   if (call.name !== 'Read' || call.failed || typeof call.input.file_path !== 'string') return null;
   if (!part && (call.input.offset !== undefined || call.input.limit !== undefined)) return null;
   return call.input.file_path;
@@ -501,24 +452,28 @@ function readPath(call, part) {
 /**
  * The changed files the review never read, in the order given.
  *
- * @param {string[]} changed
- * @param {ToolCall[]} calls
- * @param {{ repoDir: string, base?: string, skip?: string[], carried?: string[], removed?: string[] }} options
- *   removed: the changed files the PR deletes, which a listing covers
- * @returns {string[]}
+ * @param changed
+ * @param calls
+ * @param options removed: the changed files the PR deletes, which a listing
+ *   covers
  */
 export function unreadFiles(
-  changed,
-  calls,
-  { repoDir, base = 'main', skip = [], carried = [], removed = [] },
-) {
+  changed: string[],
+  calls: ToolCall[],
+  {
+    repoDir,
+    base = 'main',
+    skip = [],
+    carried = [],
+    removed = [],
+  }: { repoDir: string; base?: string; skip?: string[]; carried?: string[]; removed?: string[] },
+): string[] {
   const done = new Set(carried);
   const needed = filesToRead(changed, skip).filter((f) => !done.has(f));
   const gone = new Set(removed);
   const deleted = needed.filter((f) => gone.has(f));
-  /** @param {boolean} part */
-  const paths = (part) =>
-    calls.map((c) => readPath(c, part)).filter(/** @returns {p is string} */ (p) => p !== null);
+  const paths = (part: boolean) =>
+    calls.map((c) => readPath(c, part)).filter((p): p is string => p !== null);
   // A saved full output too long for one Read is read in parts.
   const opened = new Set(paths(true));
   const read = new Set(paths(false).map((p) => relative(p, repoDir)));
@@ -540,7 +495,7 @@ export function unreadFiles(
     }
     const line = own
       ? { cd: null, commands: [own], alone: true }
-      : commandLine(/** @type {string} */ (call.input.command));
+      : commandLine(call.input.command as string);
     if (!line || !inCheckout(line.cd, repoDir)) continue;
     // A stat line counts only from a whole output that is one command's.
     const output = !cut && line.alone ? result : null;
@@ -552,19 +507,13 @@ export function unreadFiles(
   return needed.filter((f) => !read.has(f));
 }
 
-/**
- * @param {unknown} content
- * @returns {string}
- */
-function resultText(content) {
+function resultText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
-    /** @type {unknown[]} */
-    const parts = content;
+    const parts: unknown[] = content;
     return parts
       .map((part) => {
-        const text =
-          part && typeof part === 'object' ? /** @type {{ text?: unknown }} */ (part).text : '';
+        const text = part && typeof part === 'object' ? (part as { text?: unknown }).text : '';
         return typeof text === 'string' ? text : '';
       })
       .join('\n');
@@ -575,23 +524,17 @@ function resultText(content) {
 /**
  * The tool calls in a pass's execution file (the SDK's message list), each
  * with its result. Unknown shapes are skipped, not fatal.
- *
- * @param {unknown} execution
- * @returns {ToolCall[]}
  */
-export function toolCalls(execution) {
-  /** @type {{ id: string, call: ToolCall }[]} */
-  const uses = [];
-  /** @type {Map<string, { text: string, failed: boolean }>} */
-  const results = new Map();
-  /** @param {unknown} node */
-  const visit = (node) => {
+export function toolCalls(execution: unknown): ToolCall[] {
+  const uses: { id: string; call: ToolCall }[] = [];
+  const results: Map<string, { text: string; failed: boolean }> = new Map();
+  const visit = (node: unknown) => {
     if (Array.isArray(node)) {
       node.forEach(visit);
       return;
     }
     if (!node || typeof node !== 'object') return;
-    const o = /** @type {Record<string, unknown>} */ (node);
+    const o = node as Record<string, unknown>;
     if (
       o.type === 'tool_use' &&
       typeof o.name === 'string' &&
@@ -600,7 +543,7 @@ export function toolCalls(execution) {
     ) {
       uses.push({
         id: String(o.id ?? ''),
-        call: { name: o.name, input: /** @type {Record<string, unknown>} */ (o.input) },
+        call: { name: o.name, input: o.input as Record<string, unknown> },
       });
     } else if (o.type === 'tool_result' && typeof o.tool_use_id === 'string') {
       results.set(o.tool_use_id, { text: resultText(o.content), failed: o.is_error === true });
@@ -620,30 +563,27 @@ export function toolCalls(execution) {
 /**
  * The CLI: the unread files, given the changed ones (stdin's text), the
  * execution files and the environment.
- *
- * @param {string[]} executionFiles
- * @param {string} stdin
- * @param {Record<string, string | undefined>} env
- * @param {(message: string) => void} warn
- * @returns {string[]}
  */
-export function main(executionFiles, stdin, env, warn) {
+export function main(
+  executionFiles: string[],
+  stdin: string,
+  env: Record<string, string | undefined>,
+  warn: (message: string) => void,
+): string[] {
   const changed = stdin
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
   const calls = executionFiles.flatMap((file) => {
     try {
-      /** @type {unknown} */
-      const parsed = JSON.parse(readFileSync(file, 'utf8'));
+      const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
       return toolCalls(parsed);
     } catch {
       warn(`Could not read the execution file ${file}.\n`);
       return [];
     }
   });
-  /** @param {string | undefined} value */
-  const lines = (value) =>
+  const lines = (value: string | undefined) =>
     (value ?? '')
       .split('\n')
       .map((line) => line.trim())

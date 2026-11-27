@@ -5,25 +5,24 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { AUTHOR } from '../lib/comment.mjs';
 import { MARKER, commentBody, limitOf, main, reason, stopFrom } from './stopped.ts';
+import type { Api } from '../lib/comment.mjs';
+import type { Stop } from './stopped.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = path.join(HERE, 'fixtures', 'usage-limit.json');
 /** #320's run, the 13th of November 2026. */
 const NOW = Date.UTC(2026, 10, 13, 22);
-/** @type {unknown[]} */
-const limited = JSON.parse(readFileSync(FIXTURE, 'utf8'));
+const limited: unknown[] = JSON.parse(readFileSync(FIXTURE, 'utf8'));
 
 /**
  * A fake GitHub API holding a PR's comments, recording each write.
- *
- * @param {{ id: number, body: string, user: { login: string } }[]} [comments]
- * @param {{ fails?: boolean }} [behaviour]
  */
-function fakeApi(comments = [], behaviour = {}) {
-  /** @type {[string, string, unknown][]} */
-  const writes = [];
-  /** @type {import('../lib/comment.mjs').Api} */
-  const api = (method, route, body) => {
+function fakeApi(
+  comments: { id: number; body: string; user: { login: string } }[] = [],
+  behaviour: { fails?: boolean } = {},
+) {
+  const writes: [string, string, unknown][] = [];
+  const api: Api = (method, route, body) => {
     if (behaviour.fails) throw new Error('gh: Forbidden (HTTP 403)\nmore');
     if (method === 'GET') return route.endsWith('page=1') ? comments : [];
     writes.push([method, route, body]);
@@ -33,16 +32,14 @@ function fakeApi(comments = [], behaviour = {}) {
 }
 
 function io() {
-  /** @type {string[]} */
-  const lines = [];
-  /** @type {string[]} */
-  const summaries = [];
+  const lines: string[] = [];
+  const summaries: string[] = [];
   return {
     lines,
     summaries,
     io: {
-      log: (/** @type {string} */ l) => lines.push(l),
-      summary: (/** @type {string} */ m) => summaries.push(m),
+      log: (l: string) => lines.push(l),
+      summary: (m: string) => summaries.push(m),
     },
   };
 }
@@ -68,7 +65,7 @@ describe('limitOf', () => {
     expect(limitOf(events, NOW)).toEqual({ name: 'weekly limit', resets: '2026-11-15 03:00 UTC' });
   });
   it('gives no name or time it cannot trust', () => {
-    const odd = (/** @type {unknown} */ info) => [
+    const odd = (info: unknown) => [
       { type: 'assistant', api_error_params: { rate_limit_info: info } },
     ];
     expect(limitOf(odd({ rateLimitType: 'new_window', resetsAt: 1 }), NOW)).toEqual({
@@ -84,13 +81,13 @@ describe('limitOf', () => {
 });
 
 describe('commentBody', () => {
-  const stop = /** @type {import('./stopped.ts').Stop} */ ({
+  const stop = {
     pass: 'review',
     stopped: 'limit',
     fallback: true,
     limit: { name: '5-hour limit', resets: '2026-11-14 00:40 UTC' },
     turns: 1,
-  });
+  } as Stop;
   it('says the PR is not reviewed, the retry, the limit, its reset, and to re-run', () => {
     expect(commentBody(stop)).toBe(
       [
@@ -200,7 +197,7 @@ describe('main', () => {
   it('updates the comment in place, and leaves one already up to date', () => {
     const { api: first, writes: posted } = fakeApi();
     main('report', env, first, io().io, NOW);
-    const body = /** @type {{ body: string }} */ (posted[0][2]).body;
+    const body = (posted[0][2] as { body: string }).body;
     const same = fakeApi([{ id: 4, body, user: { login: AUTHOR } }]);
     main('report', env, same.api, io().io, NOW);
     expect(same.writes).toEqual([]);

@@ -7,9 +7,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { github } from './github.ts';
 import { fakeFetch } from './fakeFetch.ts';
 import { commit, diff, inlineComment, show } from './tools.ts';
+import type { Context } from './tools.ts';
 
-/** @type {import('./tools.ts').Context} */
-let ctx;
+let ctx: Context;
 
 beforeAll(() => {
   const repoDir = mkdtempSync(path.join(tmpdir(), 'review-tools-prop-'));
@@ -20,8 +20,8 @@ beforeAll(() => {
     GIT_COMMITTER_NAME: 'A',
     GIT_COMMITTER_EMAIL: 'a@x',
   };
-  /** @param {string[]} args */
-  const git = (args) => execFileSync('git', ['-C', repoDir, ...args], { encoding: 'utf8', env });
+  const git = (args: string[]) =>
+    execFileSync('git', ['-C', repoDir, ...args], { encoding: 'utf8', env });
   git(['init', '-q', '-b', 'main']);
   writeFileSync(path.join(repoDir, 'a.ts'), 'a\n');
   git(['add', '.']);

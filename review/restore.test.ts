@@ -46,13 +46,8 @@ describe('restoreFromBase', () => {
       GIT_COMMITTER_NAME: 'A',
       GIT_COMMITTER_EMAIL: 'a@x',
     };
-    /** @param {string[]} args */
-    const git = (args) => execFileSync('git', ['-C', root, ...args], { env });
-    /**
-     * @param {string} file
-     * @param {string} text
-     */
-    const write = (file, text) => {
+    const git = (args: string[]) => execFileSync('git', ['-C', root, ...args], { env });
+    const write = (file: string, text: string) => {
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       writeFileSync(path.join(root, file), text);
     };
@@ -96,8 +91,7 @@ describe('restoreFromBase', () => {
       GIT_COMMITTER_NAME: 'A',
       GIT_COMMITTER_EMAIL: 'a@x',
     };
-    /** @param {string[]} args */
-    const git = (args) => execFileSync('git', ['-C', root, ...args], { env });
+    const git = (args: string[]) => execFileSync('git', ['-C', root, ...args], { env });
     git(['init', '-q', '-b', 'main']);
     writeFileSync(path.join(root, 'CLAUDE.md'), 'base rules');
     mkdirSync(path.join(root, '.claude'));

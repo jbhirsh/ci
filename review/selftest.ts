@@ -28,32 +28,22 @@ import { judge } from './result.ts';
 import { stoppedBy } from './sdk.ts';
 import { reviewSettings } from './settings.ts';
 import { limitOf } from './stopped.ts';
+import type { ToolCall } from './coverage.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/**
- * @param {string} name
- * @returns {unknown}
- */
-function execution(name) {
+function execution(name: string): unknown {
   return JSON.parse(readFileSync(path.join(HERE, 'fixtures', name), 'utf8'));
 }
 
-/**
- * @param {string} name
- * @returns {import('./coverage.ts').ToolCall[]}
- */
-function fixture(name) {
+function fixture(name: string): ToolCall[] {
   return toolCalls(execution(name));
 }
 
 /**
  * The app's tracked files, or null when it isn't a git checkout.
- *
- * @param {string} root
- * @returns {string[] | null}
  */
-function trackedFiles(root) {
+function trackedFiles(root: string): string[] | null {
   try {
     return execFileSync('git', ['-C', root, 'ls-files', '-z'], {
       encoding: 'utf8',
@@ -69,11 +59,8 @@ function trackedFiles(root) {
 
 /**
  * Runs every check; returns the lines to print, throwing on a failure.
- *
- * @param {string} root
- * @returns {string[]}
  */
-export function selftest(root) {
+export function selftest(root: string): string[] {
   const log = [];
   const settings = reviewSettings({ root });
   log.push(
@@ -94,7 +81,7 @@ export function selftest(root) {
   }
 
   const run = { repo: 'jbhirsh/app', pr: '1', base: 'main', repoDir: root };
-  for (const pass of /** @type {const} */ (['review', 'followup'])) {
+  for (const pass of ['review', 'followup'] as const) {
     const prompt = renderPrompt(pass, settings, { ...run, unread: ['src/a.ts'] });
     if (settings.guide && !prompt.includes(settings.guide)) {
       throw new Error(`the ${pass} prompt is missing the app's guide`);
@@ -128,7 +115,7 @@ export function selftest(root) {
   }
   log.push("carry-over: the app's context hashes; the fixture review finished");
 
-  const limited = /** @type {unknown[]} */ (execution('usage-limit.json'));
+  const limited = execution('usage-limit.json') as unknown[];
   const limit = limitOf(limited, Date.UTC(2026, 10, 13, 22));
   if (stoppedBy(limited, '') !== 'limit' || limit.name !== '5-hour limit' || !limit.resets) {
     throw new Error("stopped: usage-limit.json isn't read as a 5-hour limit with a reset");

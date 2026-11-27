@@ -21,6 +21,7 @@ import { appRoot } from '../lib/app.mjs';
 import { readPlan } from './carry.ts';
 import { reviewSettings } from './settings.ts';
 import { bullets, fill } from './template.ts';
+import type { ReviewSettings } from './settings.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,7 +33,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  */
 export const CI_DIR = path.resolve(HERE, '..');
 
-/** @typedef {'review' | 'followup'} Pass */
+export type Pass = 'review' | 'followup';
 
 /**
  * The follow-up's turn cap (sdk.ts's MAX_TURNS), from the number of files left to read: a
@@ -40,23 +41,19 @@ export const CI_DIR = path.resolve(HERE, '..');
  * plus the summary's, between a floor and a ceiling. A fixed 100 ran out on
  * fog-and-frontier #304. A pass that runs past it and still finishes
  * doesn't fail the check (result.ts); the cap only stops a runaway.
- *
- * @param {number} unread
- * @returns {number}
  */
-export function followupTurns(unread) {
+export function followupTurns(unread: number): number {
   return Math.min(300, Math.max(40, 20 + 4 * unread));
 }
 
 /**
  * The prompt's section on files carried over from an earlier review, or ''
  * when there are none.
- *
- * @param {{ file: string, sha: string }[]} carried
- * @param {{ base: string }} run
- * @returns {string}
  */
-export function carriedSection(carried, { base }) {
+export function carriedSection(
+  carried: { file: string; sha: string }[],
+  { base }: { base: string },
+): string {
   if (carried.length === 0) return '';
   const list = bullets(
     carried.map(({ file, sha }) => `\`${file}\`, reviewed at ${sha.slice(0, 7)}`),
@@ -78,34 +75,32 @@ export function carriedSection(carried, { base }) {
   ].join('\n');
 }
 
-/**
- * @param {Pass} pass
- * @returns {string}
- */
-export function template(pass) {
+export function template(pass: Pass): string {
   return readFileSync(path.join(HERE, pass === 'review' ? 'prompt.md' : 'followup.md'), 'utf8');
 }
 
 /**
  * The app's guide as a prompt section.
- *
- * @param {import('./settings.ts').ReviewSettings} settings
- * @returns {string}
  */
-export function appGuide(settings) {
+export function appGuide(settings: ReviewSettings): string {
   if (!settings.instructions) {
     return '## This app\n\nThe app names no review guide (`review.instructions` in `.github/ci.json`): its CLAUDE.md holds its conventions.';
   }
   return `## This app (from \`${settings.instructions}\`)\n\n${settings.guide}`;
 }
 
-/**
- * @param {Pass} pass
- * @param {import('./settings.ts').ReviewSettings} settings
- * @param {{ repo: string, pr: string, base: string, repoDir: string, unread?: string[], carried?: { file: string, sha: string }[] }} run
- * @returns {string}
- */
-export function renderPrompt(pass, settings, run) {
+export function renderPrompt(
+  pass: Pass,
+  settings: ReviewSettings,
+  run: {
+    repo: string;
+    pr: string;
+    base: string;
+    repoDir: string;
+    unread?: string[];
+    carried?: { file: string; sha: string }[];
+  },
+): string {
   const skippable =
     settings.skip.length > 0
       ? `Lockfiles, images, fonts and the generated files ${settings.skip.map((g) => `\`${g}\``).join(', ')}`
@@ -123,12 +118,7 @@ export function renderPrompt(pass, settings, run) {
   });
 }
 
-/**
- * @param {string} name
- * @param {Record<string, string | undefined>} env
- * @returns {string}
- */
-function required(name, env) {
+function required(name: string, env: Record<string, string | undefined>): string {
   const value = env[name];
   if (!value) throw new Error(`${name} is not set`);
   return value;
@@ -136,13 +126,12 @@ function required(name, env) {
 
 /**
  * The CLI, minus process handling.
- *
- * @param {string | undefined} pass
- * @param {Record<string, string | undefined>} env
- * @param {string} root
- * @returns {{ prompt: string, skip: string, maxTurns: string }}
  */
-export function main(pass, env, root) {
+export function main(
+  pass: string | undefined,
+  env: Record<string, string | undefined>,
+  root: string,
+): { prompt: string; skip: string; maxTurns: string } {
   if (pass !== 'review' && pass !== 'followup') {
     throw new Error('usage: render.ts review|followup');
   }

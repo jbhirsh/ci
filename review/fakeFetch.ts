@@ -1,14 +1,15 @@
 // A fetch for tests of the code that calls GitHub (github.ts): it answers
 // from a table of routes and records each call.
 
+import type { Fetch } from './github.ts';
+
 /**
  * A fetch that answers from a table of URL → [status, body, link header].
- *
- * @param {Record<string, [number, unknown, string?]>} routes
- * @param {{ url: string, method?: string, body?: string, headers?: Record<string, string> }[]} [calls]
- * @returns {import('./github.ts').Fetch}
  */
-export function fakeFetch(routes, calls = []) {
+export function fakeFetch(
+  routes: Record<string, [number, unknown, string?]>,
+  calls: { url: string; method?: string; body?: string; headers?: Record<string, string> }[] = [],
+): Fetch {
   return async (url, init = {}) => {
     calls.push({ url, ...init });
     const key = `${init.method ?? 'GET'} ${url}`;

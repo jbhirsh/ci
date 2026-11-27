@@ -4,10 +4,8 @@ import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createGuard, normalUrl, resolved } from './guard.ts';
 
-/** @type {string} */
-let repo;
-/** @type {string} */
-let ci;
+let repo: string;
+let ci: string;
 
 beforeAll(() => {
   const top = mkdtempSync(path.join(tmpdir(), 'review-guard-'));

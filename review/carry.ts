@@ -69,31 +69,27 @@ export const RECORD_VERSION = 1;
 const MAX_FILES = 20000;
 const HEX = /^[0-9a-f]+$/;
 
-/**
- * @typedef {object} Entry
- * @property {string} patchId the file's patch-id when it was read
- * @property {string} sha the PR's head commit when it was read
- */
-/**
- * @typedef {object} ReviewRecord
- * @property {number} version
- * @property {string} context see contextHash
- * @property {Record<string, Entry>} files
- */
-/**
- * @typedef {object} Plan
- * @property {string} context
- * @property {Record<string, string | null>} patchIds every file the review must cover
- * @property {Record<string, Entry>} carried the ones it needn't read again
- */
+export type Entry = {
+  /** the file's patch-id when it was read */
+  patchId: string;
+  /** the PR's head commit when it was read */
+  sha: string;
+};
+export type ReviewRecord = {
+  version: number;
+  /** see contextHash */
+  context: string;
+  files: Record<string, Entry>;
+};
+export type Plan = {
+  context: string;
+  /** every file the review must cover */
+  patchIds: Record<string, string | null>;
+  /** the ones it needn't read again */
+  carried: Record<string, Entry>;
+};
 
-/**
- * @param {string} root
- * @param {string[]} args
- * @param {string} [input]
- * @returns {string}
- */
-function git(root, args, input) {
+function git(root: string, args: string[], input?: string): string {
   return execFileSync('git', ['-C', root, '--literal-pathspecs', ...args], {
     encoding: 'utf8',
     input,
@@ -105,11 +101,16 @@ function git(root, args, input) {
 /**
  * The PR's changed files, as action.yml lists them for coverage.ts, or with
  * `deleted` only those it deletes (renames found, so a moved file isn't one).
- *
- * @param {{ root: string, base: string, deleted?: boolean }} where
- * @returns {string[]}
  */
-export function changedFiles({ root, base, deleted = false }) {
+export function changedFiles({
+  root,
+  base,
+  deleted = false,
+}: {
+  root: string;
+  base: string;
+  deleted?: boolean;
+}): string[] {
   const filter = deleted ? ['--diff-filter=D'] : [];
   return git(root, ['diff', '--name-only', '-z', '-M', ...filter, `origin/${base}...HEAD`])
     .split('\0')
@@ -119,12 +120,11 @@ export function changedFiles({ root, base, deleted = false }) {
 /**
  * The patch-id of one file's part of the PR's diff, or null when git gives
  * none (no diff at all): such a file is never carried over.
- *
- * @param {string} file
- * @param {{ root: string, base: string }} where
- * @returns {string | null}
  */
-export function patchId(file, { root, base }) {
+export function patchId(
+  file: string,
+  { root, base }: { root: string; base: string },
+): string | null {
   const diff = git(root, ['diff', '-M', `origin/${base}...HEAD`, '--', file]);
   if (!diff) return null;
   const id = git(root, ['patch-id', '--verbatim'], diff).split(' ')[0];
@@ -134,11 +134,16 @@ export function patchId(file, { root, base }) {
 /**
  * A hash of everything that decides what a review looks for; a record made
  * under another is void.
- *
- * @param {{ prompt: string, followup: string, system: string, rules: string, settings: unknown, claudeMd: string | null, base: string }} parts
- * @returns {string}
  */
-export function contextHash(parts) {
+export function contextHash(parts: {
+  prompt: string;
+  followup: string;
+  system: string;
+  rules: string;
+  settings: unknown;
+  claudeMd: string | null;
+  base: string;
+}): string {
   const { prompt, followup, system, rules, settings, claudeMd, base } = parts;
   return createHash('sha256')
     .update(
@@ -147,25 +152,17 @@ export function contextHash(parts) {
     .digest('hex');
 }
 
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
- */
-function isObject(value) {
+function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**
  * A record read back, or null when it is missing, unreadable or not exactly
  * the shape this module writes: then everything is read.
- *
- * @param {string | null} text
- * @returns {ReviewRecord | null}
  */
-export function parseRecord(text) {
+export function parseRecord(text: string | null): ReviewRecord | null {
   if (text === null) return null;
-  /** @type {unknown} */
-  let value;
+  let value: unknown;
   try {
     value = JSON.parse(text);
   } catch {
@@ -177,8 +174,7 @@ export function parseRecord(text) {
   if (!isObject(files)) return null;
   const entries = Object.entries(files);
   if (entries.length > MAX_FILES) return null;
-  /** @type {Record<string, Entry>} */
-  const out = {};
+  const out: Record<string, Entry> = {};
   for (const [file, entry] of entries) {
     if (!file || file.includes('\0') || !isObject(entry)) return null;
     const { patchId: id, sha } = entry;
@@ -192,15 +188,13 @@ export function parseRecord(text) {
 /**
  * Which files may be carried over: those whose patch-id is the one a
  * completed review read, under the same context.
- *
- * @param {Record<string, string | null>} patchIds
- * @param {ReviewRecord | null} record
- * @param {string} context
- * @returns {Plan}
  */
-export function plan(patchIds, record, context) {
-  /** @type {Record<string, Entry>} */
-  const carried = {};
+export function plan(
+  patchIds: Record<string, string | null>,
+  record: ReviewRecord | null,
+  context: string,
+): Plan {
+  const carried: Record<string, Entry> = {};
   if (record && record.context === context) {
     for (const [file, id] of Object.entries(patchIds)) {
       const entry = Object.hasOwn(record.files, file) ? record.files[file] : undefined;
@@ -213,14 +207,9 @@ export function plan(patchIds, record, context) {
 /**
  * The record a review that read every file its plan left it makes: each
  * file it read, at this head, and each it carried, as it was.
- *
- * @param {Plan} done
- * @param {string} head
- * @returns {ReviewRecord}
  */
-export function nextRecord(done, head) {
-  /** @type {Record<string, Entry>} */
-  const files = {};
+export function nextRecord(done: Plan, head: string): ReviewRecord {
+  const files: Record<string, Entry> = {};
   for (const [file, id] of Object.entries(done.patchIds)) {
     if (id === null) continue;
     files[file] = Object.hasOwn(done.carried, file)
@@ -233,14 +222,10 @@ export function nextRecord(done, head) {
 /**
  * A plan file read back (it is written by this job, but checked as a record
  * is): null when it is missing or malformed, and then nothing is carried.
- *
- * @param {string | undefined} file
- * @returns {Plan | null}
  */
-export function readPlan(file) {
+export function readPlan(file: string | undefined): Plan | null {
   if (!file) return null;
-  /** @type {unknown} */
-  let value;
+  let value: unknown;
   try {
     value = JSON.parse(readFileSync(file, 'utf8'));
   } catch {
@@ -255,16 +240,12 @@ export function readPlan(file) {
     return null;
   return {
     context: record.context,
-    patchIds: /** @type {Record<string, string | null>} */ (Object.fromEntries(ids)),
+    patchIds: Object.fromEntries(ids) as Record<string, string | null>,
     carried: record.files,
   };
 }
 
-/**
- * @param {string | undefined} file
- * @returns {string | null}
- */
-function readOrNull(file) {
+function readOrNull(file: string | undefined): string | null {
   if (!file) return null;
   try {
     return readFileSync(file, 'utf8');
@@ -276,11 +257,16 @@ function readOrNull(file) {
 /**
  * The context of this run: the prompts, the shared rules, the app's settings and CLAUDE.md
  * as the base branch holds them, and the base's name.
- *
- * @param {{ root: string, ref?: string, base: string }} where
- * @returns {string}
  */
-export function currentContext({ root, ref, base }) {
+export function currentContext({
+  root,
+  ref,
+  base,
+}: {
+  root: string;
+  ref?: string;
+  base: string;
+}): string {
   return contextHash({
     prompt: readFileSync(path.join(HERE, 'prompt.md'), 'utf8'),
     followup: readFileSync(path.join(HERE, 'followup.md'), 'utf8'),
@@ -295,12 +281,8 @@ export function currentContext({ root, ref, base }) {
 /**
  * The job summary's note on what was carried over, and how many deleted
  * files a listing covers.
- *
- * @param {Plan} p
- * @param {number} [deleted]
- * @returns {string}
  */
-export function summaryNote(p, deleted = 0) {
+export function summaryNote(p: Plan, deleted = 0): string {
   const carried = Object.entries(p.carried);
   const total = Object.keys(p.patchIds).length;
   const gone = deleted > 0 ? ` (and ${deleted} deleted, which a listing of the diff covers)` : '';
@@ -316,14 +298,14 @@ export function summaryNote(p, deleted = 0) {
 /**
  * The CLI, minus process handling.
  *
- * @param {string | undefined} command
- * @param {Record<string, string | undefined>} env
- * @param {string} root
- * @returns {{ note: string, carried: string[], removed: string[] }} the job
- *   summary's note, the files carried over and the files the PR deletes
- *   (for coverage.ts's CARRIED and REMOVED)
+ * @returns the job summary's note, the files carried over and the files the PR
+ *   deletes (for coverage.ts's CARRIED and REMOVED)
  */
-export function main(command, env, root) {
+export function main(
+  command: string | undefined,
+  env: Record<string, string | undefined>,
+  root: string,
+): { note: string; carried: string[]; removed: string[] } {
   const recordFile = env.RECORD;
   const planFile = env.PLAN;
   if (!recordFile || !planFile) throw new Error('RECORD and PLAN must be set');

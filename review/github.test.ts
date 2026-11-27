@@ -7,8 +7,12 @@ describe('github', () => {
     expect(() => github('')).toThrow('no GitHub token');
   });
   it('gets, sends and follows every page of a list', async () => {
-    /** @type {{ url: string, method?: string, body?: string, headers?: Record<string, string> }[]} */
-    const calls = [];
+    const calls: {
+      url: string;
+      method?: string;
+      body?: string;
+      headers?: Record<string, string>;
+    }[] = [];
     const api = github(
       't0k',
       fakeFetch(

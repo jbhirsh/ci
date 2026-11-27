@@ -9,14 +9,9 @@
 
 const PLACEHOLDER = /\{\{(\w+)\}\}/g;
 
-/**
- * @param {string} template
- * @param {Record<string, string>} values
- * @returns {string}
- */
-export function fill(template, values) {
+export function fill(template: string, values: Record<string, string>): string {
   const missing = new Set();
-  const out = template.replace(PLACEHOLDER, (_, /** @type {string} */ name) => {
+  const out = template.replace(PLACEHOLDER, (_, name: string) => {
     if (!Object.hasOwn(values, name)) {
       missing.add(name);
       return '';
@@ -33,21 +28,14 @@ export function fill(template, values) {
 
 /**
  * The names a template asks for, in order of first use.
- *
- * @param {string} template
- * @returns {string[]}
  */
-export function placeholders(template) {
+export function placeholders(template: string): string[] {
   return [...new Set([...template.matchAll(PLACEHOLDER)].map((m) => m[1]))];
 }
 
 /**
  * A Markdown bullet list, one item per line.
- *
- * @param {string[]} items
- * @param {string} [indent]
- * @returns {string}
  */
-export function bullets(items, indent = '') {
+export function bullets(items: string[], indent = ''): string {
   return items.map((item) => `${indent}- ${item}`).join('\n');
 }

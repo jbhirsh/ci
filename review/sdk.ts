@@ -74,6 +74,10 @@ import { createGuard } from './guard.ts';
 import { github } from './github.ts';
 import * as tools from './tools.ts';
 import { z } from 'zod';
+import type { Fetch } from './github.ts';
+import type { Context, Result } from './tools.ts';
+import type { Options } from '@anthropic-ai/claude-agent-sdk';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -99,26 +103,21 @@ export const RETRY_NOTE = [
   "that's already there.",
 ].join('\n');
 
-/**
- * @typedef {'api' | 'subscription'} Auth how an attempt signs in: the API
- *   (a key, or federation), or the owner's Claude subscription
- */
+/** how an attempt signs in: the API (a key, or federation), or the owner's Claude subscription */
+export type Auth = 'api' | 'subscription';
 
 /**
  * The reviewer's environment: the allowlist, its one credential and where
  * its config folder is. The API attempt gets the key, or else the
  * federation variables and the OIDC token file; the subscription retry
  * gets CLAUDE_CODE_OAUTH_TOKEN and nothing else that signs in.
- *
- * @param {Record<string, string | undefined>} env
- * @param {{ auth: Auth, tokenFile: string | null, configDir: string }} files
- * @returns {Record<string, string>}
  */
-export function reviewerEnv(env, { auth, tokenFile, configDir }) {
-  /** @type {Record<string, string>} */
-  const out = {};
-  /** @param {string} name */
-  const pass = (name) => {
+export function reviewerEnv(
+  env: Record<string, string | undefined>,
+  { auth, tokenFile, configDir }: { auth: Auth; tokenFile: string | null; configDir: string },
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const pass = (name: string) => {
     const value = env[name];
     if (value) out[name] = value;
   };
@@ -139,12 +138,11 @@ export function reviewerEnv(env, { auth, tokenFile, configDir }) {
 /**
  * A fresh GitHub OIDC token for the Anthropic exchange, from the Actions
  * runtime (the job needs `id-token: write`).
- *
- * @param {Record<string, string | undefined>} env
- * @param {import('./github.ts').Fetch} fetchImpl
- * @returns {Promise<string>}
  */
-export async function oidcToken(env, fetchImpl) {
+export async function oidcToken(
+  env: Record<string, string | undefined>,
+  fetchImpl: Fetch,
+): Promise<string> {
   const url = env.ACTIONS_ID_TOKEN_REQUEST_URL;
   const bearer = env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
   if (!url || !bearer) {
@@ -157,7 +155,7 @@ export async function oidcToken(env, fetchImpl) {
     },
   );
   if (!res.ok) throw new Error(`the GitHub OIDC token request failed: ${res.status}`);
-  const { value } = /** @type {{ value?: unknown }} */ (await res.json());
+  const { value } = (await res.json()) as { value?: unknown };
   if (typeof value !== 'string' || value === '') throw new Error('GitHub gave no OIDC token');
   return value;
 }
@@ -178,16 +176,14 @@ const USAGE_LIMIT = 'usage_limit_reached';
  * rate limit or overload isn't a stop: it's a failure, re-run like any
  * other.
  *
- * @param {unknown[]} messages the pass's messages
- * @param {string} failure what the query threw, or ''
- * @returns {'credit' | 'limit' | null}
+ * @param messages the pass's messages
+ * @param failure what the query threw, or ''
  */
-export function stoppedBy(messages, failure) {
+export function stoppedBy(messages: unknown[], failure: string): 'credit' | 'limit' | null {
   const result = lastResult(messages);
   const failed = failure !== '' || result?.is_error === true;
   if (!failed) return null;
-  /** @type {string[]} */
-  const errors = [failure];
+  const errors: string[] = [failure];
   if (result?.is_error === true) {
     if (typeof result.result === 'string') errors.push(result.result);
     if (Array.isArray(result.errors)) errors.push(...result.errors.map(String));
@@ -195,9 +191,11 @@ export function stoppedBy(messages, failure) {
   let billing = false;
   let usage = result?.is_error === true && result.api_error === USAGE_LIMIT;
   for (const m of messages) {
-    const message = /** @type {{ type?: unknown, error?: unknown, api_error?: unknown }} */ (
-      m && typeof m === 'object' ? m : {}
-    );
+    const message = (m && typeof m === 'object' ? m : {}) as {
+      type?: unknown;
+      error?: unknown;
+      api_error?: unknown;
+    };
     if (message.type === 'assistant' && typeof message.error === 'string') {
       if (message.error === 'billing_error') billing = true;
       if (message.api_error === USAGE_LIMIT) usage = true;
@@ -212,16 +210,12 @@ export function stoppedBy(messages, failure) {
 
 /**
  * The last result message of a pass, if any.
- *
- * @param {unknown[]} messages
- * @returns {Record<string, unknown> | undefined}
  */
-export function lastResult(messages) {
-  /** @type {Record<string, unknown> | undefined} */
-  let result;
+export function lastResult(messages: unknown[]): Record<string, unknown> | undefined {
+  let result: Record<string, unknown> | undefined;
   for (const m of messages) {
-    if (m && typeof m === 'object' && /** @type {{ type?: unknown }} */ (m).type === 'result') {
-      result = /** @type {Record<string, unknown>} */ (m);
+    if (m && typeof m === 'object' && (m as { type?: unknown }).type === 'result') {
+      result = m as Record<string, unknown>;
     }
   }
   return result;
@@ -230,11 +224,8 @@ export function lastResult(messages) {
 /**
  * The step summary's lines for a pass: how it ended, what it cost, and each
  * model's share (the advisor's shows as its own row when it ran).
- *
- * @param {Record<string, unknown> | undefined} result
- * @returns {string}
  */
-export function report(result) {
+export function report(result: Record<string, unknown> | undefined): string {
   if (!result) return 'Claude Review (SDK): the pass gave no result.';
   const cost =
     typeof result.total_cost_usd === 'number' ? `$${result.total_cost_usd.toFixed(3)}` : 'unknown';
@@ -244,11 +235,11 @@ export function report(result) {
     '| Model | Cost | Input | Cache write | Cache read | Output |',
     '| --- | --- | --- | --- | --- | --- |',
   ];
-  const usage = /** @type {Record<string, Record<string, unknown>>} */ (
+  const usage = (
     result.modelUsage && typeof result.modelUsage === 'object' ? result.modelUsage : {}
-  );
+  ) as Record<string, Record<string, unknown>>;
   for (const [model, u] of Object.entries(usage)) {
-    const n = (/** @type {string} */ key) => (typeof u[key] === 'number' ? String(u[key]) : '');
+    const n = (key: string) => (typeof u[key] === 'number' ? String(u[key]) : '');
     const c = typeof u.costUSD === 'number' ? `$${u.costUSD.toFixed(3)}` : '';
     lines.push(
       `| ${model} | ${c} | ${n('inputTokens')} | ${n('cacheCreationInputTokens')} | ${n('cacheReadInputTokens')} | ${n('outputTokens')} |`,
@@ -259,21 +250,20 @@ export function report(result) {
 
 /**
  * The SDK's query options for one pass.
- *
- * @param {object} p
- * @param {typeof import('@anthropic-ai/claude-agent-sdk')} p.sdk
- * @param {import('./tools.ts').Context} p.ctx
- * @param {ReturnType<typeof createGuard>} p.guard
- * @param {{ maxTurns: number, advisor: string | null, ciDir: string, env: Record<string, string> }} p.run
- * @returns {import('@anthropic-ai/claude-agent-sdk').Options}
  */
-export function queryOptions({ sdk, ctx, guard, run }) {
+export function queryOptions({
+  sdk,
+  ctx,
+  guard,
+  run,
+}: {
+  sdk: typeof import('@anthropic-ai/claude-agent-sdk');
+  ctx: Context;
+  guard: ReturnType<typeof createGuard>;
+  run: { maxTurns: number; advisor: string | null; ciDir: string; env: Record<string, string> };
+}): Options {
   const { createSdkMcpServer, tool } = sdk;
-  /**
-   * @param {import('./tools.ts').Result | Promise<import('./tools.ts').Result>} r
-   * @returns {Promise<import('@modelcontextprotocol/sdk/types.js').CallToolResult>}
-   */
-  const wrap = async (r) => {
+  const wrap = async (r: Result | Promise<Result>): Promise<CallToolResult> => {
     const { text, isError } = await r;
     return { content: [{ type: 'text', text }], isError: isError === true };
   };
@@ -369,8 +359,7 @@ export function queryOptions({ sdk, ctx, guard, run }) {
         {
           hooks: [
             async (input) => {
-              const { tool_name, tool_input } =
-                /** @type {{ tool_name: string, tool_input: unknown }} */ (input);
+              const { tool_name, tool_input } = input as { tool_name: string; tool_input: unknown };
               const decision = guard.before(tool_name, tool_input);
               return decision.allow
                 ? { continue: true }
@@ -389,8 +378,10 @@ export function queryOptions({ sdk, ctx, guard, run }) {
         {
           hooks: [
             async (input) => {
-              const { tool_name, tool_response } =
-                /** @type {{ tool_name: string, tool_response: unknown }} */ (input);
+              const { tool_name, tool_response } = input as {
+                tool_name: string;
+                tool_response: unknown;
+              };
               guard.after(tool_name, tool_response);
               return { continue: true };
             },
@@ -401,28 +392,32 @@ export function queryOptions({ sdk, ctx, guard, run }) {
   };
 }
 
-/**
- * @typedef {object} Attempt
- * @property {unknown[]} messages
- * @property {'credit' | 'limit' | null} stopped
- * @property {boolean} finished
- * @property {number} turns how many turns it ran (0 when it gave no count)
- * @property {string} report
- */
+export type Attempt = {
+  messages: unknown[];
+  stopped: 'credit' | 'limit' | null;
+  finished: boolean;
+  /** how many turns it ran (0 when it gave no count) */
+  turns: number;
+  report: string;
+};
 
 /**
  * Runs one attempt at the pass, signed in as `auth`, with its own config
  * folder and guard.
- *
- * @param {object} p
- * @param {typeof import('@anthropic-ai/claude-agent-sdk')} p.sdk
- * @param {import('./tools.ts').Context} p.ctx
- * @param {Record<string, string | undefined>} p.env
- * @param {{ auth: Auth, tokenFile: string | null, configDir: string }} p.as
- * @param {{ prompt: string, maxTurns: number, advisor: string | null, ciDir: string }} p.run
- * @returns {Promise<Attempt>}
  */
-async function attempt({ sdk, ctx, env, as, run }) {
+async function attempt({
+  sdk,
+  ctx,
+  env,
+  as,
+  run,
+}: {
+  sdk: typeof import('@anthropic-ai/claude-agent-sdk');
+  ctx: Context;
+  env: Record<string, string | undefined>;
+  as: { auth: Auth; tokenFile: string | null; configDir: string };
+  run: { prompt: string; maxTurns: number; advisor: string | null; ciDir: string };
+}): Promise<Attempt> {
   mkdirSync(as.configDir, { recursive: true });
   // The SDK saves long tool output under its config folder; the reviewer
   // reads it back, so it's one of the guard's roots.
@@ -433,8 +428,7 @@ async function attempt({ sdk, ctx, env, as, run }) {
     guard,
     run: { ...run, env: reviewerEnv(env, as) },
   });
-  /** @type {unknown[]} */
-  const messages = [];
+  const messages: unknown[] = [];
   let failure = '';
   try {
     for await (const message of sdk.query({ prompt: run.prompt, options })) messages.push(message);
@@ -446,7 +440,7 @@ async function attempt({ sdk, ctx, env, as, run }) {
     messages,
     stopped: stoppedBy(messages, failure),
     finished: !failure && result?.subtype === 'success' && result.is_error !== true,
-    turns: Number.isSafeInteger(result?.num_turns) ? /** @type {number} */ (result?.num_turns) : 0,
+    turns: Number.isSafeInteger(result?.num_turns) ? (result?.num_turns as number) : 0,
     report: failure ? `${report(result)}\n\nThe pass failed: ${failure}` : report(result),
   };
 }
@@ -454,17 +448,26 @@ async function attempt({ sdk, ctx, env, as, run }) {
 /**
  * Runs one pass, and retries a stopped one on the subscription. Returns the
  * outputs and whether it finished.
- *
- * @param {Record<string, string | undefined>} env
- * @param {{ sdk?: typeof import('@anthropic-ai/claude-agent-sdk'), fetchImpl?: import('./github.ts').Fetch, root?: string }} [deps]
- * @returns {Promise<{ executionFile: string, stopped: 'credit' | 'limit' | null, finished: boolean, fallback: boolean, turns: number, report: string }>}
  */
-export async function main(env, deps = {}) {
-  const fetchImpl =
-    deps.fetchImpl ?? /** @type {import('./github.ts').Fetch} */ (/** @type {unknown} */ (fetch));
+export async function main(
+  env: Record<string, string | undefined>,
+  deps: {
+    sdk?: typeof import('@anthropic-ai/claude-agent-sdk');
+    fetchImpl?: Fetch;
+    root?: string;
+  } = {},
+): Promise<{
+  executionFile: string;
+  stopped: 'credit' | 'limit' | null;
+  finished: boolean;
+  fallback: boolean;
+  turns: number;
+  report: string;
+}> {
+  const fetchImpl = deps.fetchImpl ?? (fetch as unknown as Fetch);
   const sdk = deps.sdk ?? (await import('@anthropic-ai/claude-agent-sdk'));
   const root = deps.root ?? appRoot();
-  const need = (/** @type {string} */ name) => {
+  const need = (name: string) => {
     const value = env[name];
     if (!value) throw new Error(`${name} is not set`);
     return value;

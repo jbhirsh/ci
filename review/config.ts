@@ -19,11 +19,13 @@ import { appConfig } from '../lib/app.mjs';
  * A file of the app as `ref` holds it (`origin/main`), or as the working
  * tree holds it when there's no ref; null when it doesn't exist there.
  *
- * @param {string} file repo-relative path
- * @param {{ root: string, ref?: string }} where
- * @returns {string | null}
+ * @param file repo-relative path
+ * @param where
  */
-export function readAppFile(file, { root, ref }) {
+export function readAppFile(
+  file: string,
+  { root, ref }: { root: string; ref?: string },
+): string | null {
   try {
     if (!ref) return readFileSync(path.join(root, file), 'utf8');
     return execFileSync('git', ['-C', root, 'show', `${ref}:${file}`], {
@@ -38,12 +40,11 @@ export function readAppFile(file, { root, ref }) {
 /**
  * The app's settings for one tool (its key in `.github/ci.json`), read as
  * `ref` holds them.
- *
- * @param {string} tool
- * @param {{ root: string, ref?: string }} where
- * @returns {Record<string, unknown>}
  */
-export function loadConfig(tool, { root, ref }) {
+export function loadConfig(
+  tool: string,
+  { root, ref }: { root: string; ref?: string },
+): Record<string, unknown> {
   if (!ref) return appConfig(tool, root);
   const text = readAppFile('.github/ci.json', { root, ref });
   if (text === null) return {};
@@ -57,12 +58,8 @@ export function loadConfig(tool, { root, ref }) {
 /**
  * Throws on a key the tool doesn't read, so a typo in `.github/ci.json`
  * fails the self-test instead of silently doing nothing.
- *
- * @param {string} tool
- * @param {Record<string, unknown>} section
- * @param {string[]} known
  */
-export function onlyKnownKeys(tool, section, known) {
+export function onlyKnownKeys(tool: string, section: Record<string, unknown>, known: string[]) {
   for (const key of Object.keys(section)) {
     if (!known.includes(key)) {
       throw new Error(`.github/ci.json: "${tool}.${key}" is not a setting (${known.join(', ')})`);
@@ -73,17 +70,16 @@ export function onlyKnownKeys(tool, section, known) {
 /**
  * A setting that must be a list of non-empty strings, or the default.
  *
- * @param {string} name e.g. `review.skip`
- * @param {unknown} value
- * @param {string[]} fallback
- * @returns {string[]}
+ * @param name e.g. `review.skip`
+ * @param value
+ * @param fallback
  */
-export function stringList(name, value, fallback) {
+export function stringList(name: string, value: unknown, fallback: string[]): string[] {
   if (value === undefined) return fallback;
   if (!Array.isArray(value) || !value.every((v) => typeof v === 'string' && v.trim() !== '')) {
     throw new Error(`.github/ci.json: "${name}" must be a list of non-empty strings`);
   }
-  return /** @type {string[]} */ (value);
+  return value as string[];
 }
 
 /**
@@ -92,10 +88,10 @@ export function stringList(name, value, fallback) {
  * still sets "sdk", so the key is accepted, as "sdk" alone, and ignored; a
  * later change drops it once no repo sets it.
  *
- * @param {string} name e.g. `review.engine`
- * @param {unknown} value
+ * @param name e.g. `review.engine`
+ * @param value
  */
-export function checkEngine(name, value) {
+export function checkEngine(name: string, value: unknown) {
   if (value === undefined || value === 'sdk') return;
   throw new Error(`.github/ci.json: "${name}" must be "sdk", the only engine, or be left out`);
 }
@@ -103,11 +99,10 @@ export function checkEngine(name, value) {
 /**
  * A tool's `advisor` setting: a model name, or null for none.
  *
- * @param {string} name e.g. `review.advisor`
- * @param {unknown} value
- * @returns {string | null}
+ * @param name e.g. `review.advisor`
+ * @param value
  */
-export function advisorSetting(name, value) {
+export function advisorSetting(name: string, value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value === 'string' && /^[a-z0-9][a-z0-9.-]*$/.test(value)) return value;
   throw new Error(`.github/ci.json: "${name}" must be a model name, such as "opus", or null`);
