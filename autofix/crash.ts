@@ -5,7 +5,7 @@
 // that head to wake another run (BoardGames #298: a 504 while the step set
 // up, then exit 127, and the PR sat red under "Attempt 1 of 2").
 //
-// So a failure is read from the fixer's execution file (sdk.mjs's), the
+// So a failure is read from the fixer's execution file (sdk.ts's), the
 // messages of the Claude run:
 //   - crashed: Claude never took a turn. No file, or no assistant message
 //     in it: the step died setting up or the model wasn't reachable.
@@ -27,10 +27,10 @@
 // CLI, run from the app's checkout with GH_TOKEN, GITHUB_REPOSITORY, PR and
 // HEAD_SHA set, and EXECUTION_FILE (the step's `execution_file` output;
 // empty: RUNNER_TEMP's default file):
-//   node crash.mjs retry      step outputs `retry` (crashed: resets the
+//   node crash.ts retry      step outputs `retry` (crashed: resets the
 //                             checkout to HEAD_SHA for it) and `report`
 //                             (ran and failed)
-//   node crash.mjs report ci|review   after the last try failed (RUN_URL):
+//   node crash.ts report ci|review   after the last try failed (RUN_URL):
 //                             releases the marker or comments, as above, and
 //                             exits 1 so the job shows the failure
 
@@ -148,7 +148,7 @@ export function main(args, env, io) {
   const [mode, fixer] = args;
   const report = mode === 'report' && (fixer === 'ci' || fixer === 'review');
   if (mode !== 'retry' && !report) {
-    throw new Error('usage: crash.mjs retry | crash.mjs report ci|review');
+    throw new Error('usage: crash.ts retry | crash.ts report ci|review');
   }
   const repo = required('GITHUB_REPOSITORY', env);
   const pr = required('PR', env);

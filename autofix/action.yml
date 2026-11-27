@@ -12,29 +12,29 @@
 # later completion can replace the one that saw the event), and does at
 # most one of:
 #   - CI fixer, on an npm bump's current head once no pull-request
-#     workflow run there is still going (gate.mjs: a run that finds one
+#     workflow run there is still going (gate.ts: a run that finds one
 #     exits, and the last to finish wakes the run that acts, since
-#     check-triggers.mjs holds every pull-request workflow the app doesn't
+#     check-triggers.ts holds every pull-request workflow the app doesn't
 #     exempt to the stub's list), so its one attempt sees every failure, a
 #     slow one's included: has Claude fix
 #     mechanical breakage from the bump (ci-fix.md), or comment when the fix
 #     is a behaviour decision or not the bump's fault. One attempt per head,
 #     two per PR, counted from its marker comments.
 #   - Review fixer, once CI (ci.yml) and Claude Review (claude-review.yml)
-#     are both green on the head (gate.mjs again): has Claude fix each
+#     are both green on the head (gate.ts again): has Claude fix each
 #     unresolved review thread Claude Review or the owner opened, as fixup
 #     commits folded into the commits they fix (review-fix.md), and resolve
 #     those threads. One round per head, two per PR.
 # A fixer whose Claude step crashed before taking a turn (a timeout setting
 # it up) is tried once more in the same job, straight away; one that ran
-# and failed isn't, but says so on the PR (crash.mjs).
+# and failed isn't, but says so on the PR (crash.ts).
 # Before either, on a Dependabot npm bump, it turns auto-merge on, once
 # per PR (../dependabot-merge/enable.ts), whatever its labels say: a run
 # here puts no check on the PR, where a workflow of its own would.
 # Nothing polls or waits: the completions are the clock.
 # Each fixer proves its fix before pushing with the app's own commands, the
 # steps of its CI that can run here (`autofix` in `.github/ci.json`,
-# settings.mjs and commands.mjs), read from the default branch. A person's
+# settings.ts and commands.ts), read from the default branch. A person's
 # PR, a fork's PR and a PR labelled `no-auto-fix` are left alone, and so are
 # the red checks (not the review threads) of a PR from an app's Dependabot
 # group named `blocked-<package>`: a major that waits on another package,
@@ -47,7 +47,7 @@
 # workflow_run event runs the stub from the default branch, so a PR can't
 # change it.
 #
-# Claude runs on the Claude Agent SDK (sdk.mjs), which the Max plan's API
+# Claude runs on the Claude Agent SDK (sdk.ts), which the Max plan's API
 # credit pays for (jbhirsh/ci#68). Claude pushes and posts itself, with the
 # app's BOT_PR_TOKEN (`bot_token`). That token lasts longer than the Claude
 # app's token it replaced, and the bump's npm scripts run in this job: a
@@ -107,7 +107,7 @@ inputs:
       The app's BOT_PR_TOKEN, a fine-grained token on the app with Contents
       and Pull requests read and write (the push, the fixer's comment,
       resolving threads) and Actions read (the failed runs' logs), which the
-      fixer pushes with and runs gh with (sdk.mjs). Pushes by it start the
+      fixer pushes with and runs gh with (sdk.ts). Pushes by it start the
       PR's workflows, as the Claude app's did. No Workflows permission: it
       mustn't push workflow files.
     required: false
@@ -214,7 +214,7 @@ runs:
         node-version: 24
         cache: npm
 
-    # The advisor (settings.mjs), from the default branch. It reads the
+    # The advisor (settings.ts), from the default branch. It reads the
     # app's autofix settings on every run, so a bad autofix key in
     # .github/ci.json fails even a run with nothing to fix.
     - name: Read autofix's settings
@@ -223,7 +223,7 @@ runs:
       shell: bash
       env:
         CONFIG_REF: origin/${{ github.event.repository.default_branch }}
-      run: node "$GITHUB_ACTION_PATH/settings.mjs"
+      run: node "$GITHUB_ACTION_PATH/settings.ts"
 
     # Red checks on a Dependabot PR have no one else to fix them: Dependabot
     # can't fix its own PRs, Claude Review only comments, and the review
@@ -280,8 +280,8 @@ runs:
         fi
         # Act only once no pull-request run on the head is still going
         # (autofix's own and the app's exempt workflows aside); the last of
-        # them to finish wakes the run that gets past here (gate.mjs).
-        PENDING=$(node "$GITHUB_ACTION_PATH/gate.mjs" pending)
+        # them to finish wakes the run that gets past here (gate.ts).
+        PENDING=$(node "$GITHUB_ACTION_PATH/gate.ts" pending)
         if [ -n "$PENDING" ]; then
           echo "Still running on $RUN_SHA: $PENDING — the last of them to finish starts the fix"
           exit 0
@@ -339,9 +339,9 @@ runs:
           echo "Run is for $RUN_SHA but the PR head is $CURRENT — skipping"
           exit 0
         fi
-        # The latest run of each on this head (gate.mjs); whichever listed
+        # The latest run of each on this head (gate.ts); whichever listed
         # workflow finishes last, once both are green, gets past here.
-        NOT_GREEN=$(node "$GITHUB_ACTION_PATH/gate.mjs" green ci.yml claude-review.yml)
+        NOT_GREEN=$(node "$GITHUB_ACTION_PATH/gate.ts" green ci.yml claude-review.yml)
         if [ -n "$NOT_GREEN" ]; then
           echo "Not green on $RUN_SHA: $NOT_GREEN — the review fixer waits for CI and Claude Review to both be green"
           exit 0
@@ -367,8 +367,8 @@ runs:
             -F name="$NAME" \
             -F number="$PR" \
             -F after="$CURSOR")
-          # Only threads Claude Review or the owner opened (threads.mjs).
-          COUNT=$(echo "$PAGE" | node "$GITHUB_ACTION_PATH/threads.mjs" "$OWNER")
+          # Only threads Claude Review or the owner opened (threads.ts).
+          COUNT=$(echo "$PAGE" | node "$GITHUB_ACTION_PATH/threads.ts" "$OWNER")
           UNRESOLVED=$((UNRESOLVED + COUNT))
           HAS_NEXT=$(echo "$PAGE" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')
           if [ "$HAS_NEXT" != "true" ]; then break; fi
@@ -388,7 +388,7 @@ runs:
         gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$BODY"
         echo "count=$UNRESOLVED" >> "$GITHUB_OUTPUT"
 
-    # Either fixer pushes with the bot token (sdk.mjs), as git's credential
+    # Either fixer pushes with the bot token (sdk.ts), as git's credential
     # for github.com in this checkout, and commits as github-actions[bot],
     # whose commits the review exempts from its one-design rule. Only when
     # there's a fix to make, so a run with nothing to do installs nothing.
@@ -419,7 +419,7 @@ runs:
         BRANCH: ${{ steps.pr.outputs.branch }}
         HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         FAILED_CHECKS: ${{ steps.ci.outputs.failed_checks }}
-      run: node "$GITHUB_ACTION_PATH/render.mjs" ci-fix
+      run: node "$GITHUB_ACTION_PATH/render.ts" ci-fix
 
     - name: Fix with the Agent SDK (ci-fix)
       id: ci-fix
@@ -436,12 +436,12 @@ runs:
         ANTHROPIC_ORGANIZATION_ID: ${{ inputs.anthropic_organization_id }}
         ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
         ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
-      run: node "$GITHUB_ACTION_PATH/sdk.mjs"
+      run: node "$GITHUB_ACTION_PATH/sdk.ts"
 
     # The marker went up before Claude started, so a fixer that dies before
     # doing anything (a timeout setting the step up) would spend the head's
     # one attempt with nothing to show and nothing left to wake another run.
-    # crash.mjs tells that apart from a fixer that ran and failed: only a
+    # crash.ts tells that apart from a fixer that ran and failed: only a
     # crash is tried again, once and at once; a run that failed was the
     # attempt. A push before the failure starts new runs on the new head.
     - name: Decide whether to retry the CI fixer
@@ -453,7 +453,7 @@ runs:
         PR: ${{ steps.pr.outputs.number }}
         HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         EXECUTION_FILE: ${{ steps.ci-fix.outputs.execution_file }}
-      run: node "$GITHUB_ACTION_PATH/crash.mjs" retry
+      run: node "$GITHUB_ACTION_PATH/crash.ts" retry
 
     - name: Fix with the Agent SDK (ci-fix-again)
       id: ci-fix-again
@@ -470,10 +470,10 @@ runs:
         ANTHROPIC_ORGANIZATION_ID: ${{ inputs.anthropic_organization_id }}
         ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
         ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
-      run: node "$GITHUB_ACTION_PATH/sdk.mjs"
+      run: node "$GITHUB_ACTION_PATH/sdk.ts"
 
     # The last try failed without pushing: say so on the PR, and fail the
-    # job, which continue-on-error above would otherwise hide (crash.mjs).
+    # job, which continue-on-error above would otherwise hide (crash.ts).
     - name: Report the CI fixer's failure
       if: steps.ci-retry.outputs.report == 'true' || steps.ci-fix-again.outcome == 'failure'
       shell: bash
@@ -483,7 +483,7 @@ runs:
         HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         EXECUTION_FILE: ${{ steps.ci-fix-again.outputs.execution_file || steps.ci-fix.outputs.execution_file }}
-      run: node "$GITHUB_ACTION_PATH/crash.mjs" report ci
+      run: node "$GITHUB_ACTION_PATH/crash.ts" report ci
 
     - name: Render the review fixer's prompt
       id: review-prompt
@@ -493,7 +493,7 @@ runs:
         REPO: ${{ github.repository }}
         PR: ${{ steps.pr.outputs.number }}
         BASE_REF: ${{ github.event.repository.default_branch }}
-      run: node "$GITHUB_ACTION_PATH/render.mjs" review-fix
+      run: node "$GITHUB_ACTION_PATH/render.ts" review-fix
 
     - name: Fix with the Agent SDK (review-fix)
       id: review-fix
@@ -510,7 +510,7 @@ runs:
         ANTHROPIC_ORGANIZATION_ID: ${{ inputs.anthropic_organization_id }}
         ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
         ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
-      run: node "$GITHUB_ACTION_PATH/sdk.mjs"
+      run: node "$GITHUB_ACTION_PATH/sdk.ts"
 
     # As for the CI fixer above: a crash is tried once more, at once, a run
     # that failed was the round, and the last failure is said on the PR.
@@ -523,7 +523,7 @@ runs:
         PR: ${{ steps.pr.outputs.number }}
         HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         EXECUTION_FILE: ${{ steps.review-fix.outputs.execution_file }}
-      run: node "$GITHUB_ACTION_PATH/crash.mjs" retry
+      run: node "$GITHUB_ACTION_PATH/crash.ts" retry
 
     - name: Fix with the Agent SDK (review-fix-again)
       id: review-fix-again
@@ -540,7 +540,7 @@ runs:
         ANTHROPIC_ORGANIZATION_ID: ${{ inputs.anthropic_organization_id }}
         ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.anthropic_service_account_id }}
         ANTHROPIC_WORKSPACE_ID: ${{ inputs.anthropic_workspace_id }}
-      run: node "$GITHUB_ACTION_PATH/sdk.mjs"
+      run: node "$GITHUB_ACTION_PATH/sdk.ts"
 
     - name: Report the review fixer's failure
       if: steps.review-retry.outputs.report == 'true' || steps.review-fix-again.outcome == 'failure'
@@ -551,4 +551,4 @@ runs:
         HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         EXECUTION_FILE: ${{ steps.review-fix-again.outputs.execution_file || steps.review-fix.outputs.execution_file }}
-      run: node "$GITHUB_ACTION_PATH/crash.mjs" report review
+      run: node "$GITHUB_ACTION_PATH/crash.ts" report review

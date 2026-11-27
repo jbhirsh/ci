@@ -13,7 +13,7 @@
 //
 // - ciFixChecks: what the CI fixer (ci-fix.md) must get green before it
 //   pushes a fix for a red Dependabot bump, one Markdown list item each
-//   (a command in backticks, with a note if it needs one; commands.mjs says
+//   (a command in backticks, with a note if it needs one; commands.ts says
 //   which forms, and the self-test fails one the app can't run). Not a
 //   second CI: autofix proving its own fix, so it never pushes what CI will
 //   reject. So the list mirrors the steps of the app's CI that can run in
@@ -28,16 +28,16 @@
 // - exempt: pull-request workflows that must not wake autofix, by `name:`,
 //   each with the reason (a comment JSON can't hold otherwise). Every other
 //   one must be in the stub's `on.workflow_run.workflows`
-//   (check-triggers.mjs), and the CI fixer doesn't wait for an exempt one's
-//   runs (gate.mjs), since its completion wakes nothing. Default: none.
+//   (check-triggers.ts), and the CI fixer doesn't wait for an exempt one's
+//   runs (gate.ts), since its completion wakes nothing. Default: none.
 // - engine: ignored, as `review.engine` is (../review/settings.ts): the
-//   fixer runs on the Claude Agent SDK (sdk.mjs), the only engine. "sdk" is
+//   fixer runs on the Claude Agent SDK (sdk.ts), the only engine. "sdk" is
 //   accepted and anything else fails; a later change drops the key once no
 //   repo sets it.
 // - advisor: the model Sonnet may consult on a hard call, e.g. "opus".
 //   Default: none.
 //
-// CLI: `node settings.mjs`, run from the app's checkout, with CONFIG_REF
+// CLI: `node settings.ts`, run from the app's checkout, with CONFIG_REF
 // (where to read them). Step output `advisor`.
 
 import { pathToFileURL } from 'node:url';

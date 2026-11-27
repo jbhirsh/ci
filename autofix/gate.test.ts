@@ -7,13 +7,13 @@ import {
   pendingWorkflows,
   runsFromApi,
   workflowPath,
-} from './gate.mjs';
+} from './gate.ts';
 
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 
 /**
- * @param {Partial<import('./gate.mjs').Run>} over
- * @returns {import('./gate.mjs').Run}
+ * @param {Partial<import('./gate.ts').Run>} over
+ * @returns {import('./gate.ts').Run}
  */
 function run(over) {
   return {

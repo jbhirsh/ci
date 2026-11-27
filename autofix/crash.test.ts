@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { crashed, failedBody, main, markerFor, releasedBody } from './crash.mjs';
+import { crashed, failedBody, main, markerFor, releasedBody } from './crash.ts';
 
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 const NEW = 'fedcba9876543210fedcba9876543210fedcba98';
@@ -73,7 +73,7 @@ function fakeIo(over = {}) {
   const outputs = {};
   /** @type {string[]} */
   const calls = [];
-  /** @type {import('./crash.mjs').Io} */
+  /** @type {import('./crash.ts').Io} */
   const io = {
     head: () => over.head ?? SHA,
     read: (file) => {

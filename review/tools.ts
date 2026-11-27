@@ -44,7 +44,7 @@ const EARLIER_POSTERS = [POSTER, 'claude[bot]'];
 /**
  * The hidden line ending each inline comment, by which autofix's review
  * fixer knows Claude Review's threads from other github-actions[bot]
- * comments (autofix/threads.mjs holds the same string).
+ * comments (autofix/threads.ts holds the same string).
  */
 export const REVIEW_MARKER = '<!-- claude-review -->';
 

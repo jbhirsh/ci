@@ -1,9 +1,9 @@
 // Renders Claude autofix's prompts: ci-fix.md for the CI fixer (a red
 // Dependabot bump) and review-fix.md for the review fixer (unresolved
 // review threads), each with the app's own validation commands
-// (settings.mjs).
+// (settings.ts).
 //
-// CLI: `node render.mjs ci-fix|review-fix`, run from the app's checkout, with
+// CLI: `node render.ts ci-fix|review-fix`, run from the app's checkout, with
 //   REPO           owner/name
 //   PR             the PR's number
 //   BASE_REF       the default branch (`main`); the settings are read from
@@ -18,7 +18,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setOutput } from '../lib/actions.mjs';
 import { appRoot } from '../lib/app.mjs';
 import { bullets, fill } from '../review/template.ts';
-import { autofixSettings } from './settings.mjs';
+import { autofixSettings } from './settings.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -34,7 +34,7 @@ export function template(fixer) {
 
 /**
  * @param {Fixer} fixer
- * @param {import('./settings.mjs').AutofixSettings} settings
+ * @param {import('./settings.ts').AutofixSettings} settings
  * @param {{ repo: string, pr: string, base: string, repoDir: string, branch?: string, head?: string, failedChecks?: string }} run
  * @returns {string}
  */
@@ -76,7 +76,7 @@ function required(name, env) {
  */
 export function main(fixer, env, root) {
   if (fixer !== 'ci-fix' && fixer !== 'review-fix') {
-    throw new Error('usage: render.mjs ci-fix|review-fix');
+    throw new Error('usage: render.ts ci-fix|review-fix');
   }
   const repo = required('REPO', env);
   if (!/^[^/]+\/[^/]+$/.test(repo)) throw new Error(`REPO must be owner/name, not ${repo}`);

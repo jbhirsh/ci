@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from '../review/testApp.ts';
-import { autofixSettings, DEFAULT_CANNOT_RUN, DEFAULT_CHECKS } from './settings.mjs';
+import { autofixSettings, DEFAULT_CANNOT_RUN, DEFAULT_CHECKS } from './settings.ts';
 
 const app = (/** @type {unknown} */ autofix) =>
   testApp({ '.github/ci.json': JSON.stringify({ autofix }) });
