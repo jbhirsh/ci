@@ -536,6 +536,32 @@ describe('main', () => {
       rmSync(copy, { recursive: true, force: true });
     }
   });
+  it("doesn't take a reusable workflow's name for one an attach caller can wait for", () => {
+    const copy = mkdtempSync(path.join(tmpdir(), 'ci-'));
+    try {
+      cpSync(root, copy, {
+        recursive: true,
+        filter: (from) => !/[/\\](node_modules|\.git|\.claude|coverage)$/.test(from),
+      });
+      const dir = path.join(copy, '.github', 'workflows');
+      rmSync(path.join(dir, 'gifs.yml'), { force: true });
+      writeFileSync(
+        path.join(dir, 'gifs-attach.yml'),
+        readFileSync(path.join(root, 'gif', 'callers', 'pr-gif-attach.yml'), 'utf8'),
+      );
+      // Only the reusable pr-gif.yml is named "PR GIFs" now.
+      expect(main(copy, null)).toEqual([
+        '.github/workflows/gifs-attach.yml: job gif: workflow_run waits for "PR GIFs", which no workflow of the app is named',
+      ]);
+      writeFileSync(
+        path.join(dir, 'gifs.yml'),
+        readFileSync(path.join(root, 'gif', 'callers', 'pr-gif.yml'), 'utf8'),
+      );
+      expect(main(copy, null)).toEqual([]);
+    } finally {
+      rmSync(copy, { recursive: true, force: true });
+    }
+  });
   it("lints an app's calls into this repo", () => {
     const app = mkdtempSync(path.join(tmpdir(), 'app-'));
     mkdirSync(path.join(app, '.github', 'workflows'), { recursive: true });

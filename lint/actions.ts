@@ -43,7 +43,7 @@ import { existsSync, globSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parse } from 'yaml';
-import { lintGifCallers } from './gif-callers.ts';
+import { lintGifCallers, triggers } from './gif-callers.ts';
 
 export type Doc = Record<string, unknown>;
 export type Target = { inputs: Map<string, boolean>; secrets: Map<string, boolean> | null };
@@ -600,10 +600,18 @@ export function main(root: string, app: string | null) {
     const dir = path.join(base, '.github', 'workflows');
     return existsSync(dir) ? files(dir, (name) => /\.ya?ml$/.test(name)) : [];
   };
-  // GitHub names a workflow with no `name:` by its path.
+  // The names a workflow_run can wait for: GitHub names a workflow with no
+  // `name:` by its path. A reusable workflow (only `workflow_call`) never
+  // runs on its own, so its name wakes nothing: this repo's pr-gif.yml is
+  // named "PR GIFs" as its callers are, and counting it would pass an attach
+  // caller whose recording workflow is gone (ci#176).
   const named = (base: string) => {
     const docs = workflows(base).map((file) => [file, read(file)] as const);
-    const names = new Set(docs.map(([file, doc]) => String(doc?.name ?? rel(base, file))));
+    const runs = docs.filter(([, doc]) => {
+      const on = isObject(doc) ? triggers(doc as Doc) : new Set<string>();
+      return !(on.size === 1 && on.has('workflow_call'));
+    });
+    const names = new Set(runs.map(([file, doc]) => String(doc?.name ?? rel(base, file))));
     return { docs, names };
   };
   // This repo's own callers of the PR GIF workflows are held to the apps'
