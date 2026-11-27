@@ -21,19 +21,20 @@
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-/** @typedef {(args: string[]) => string} Gh */
+export type Gh = (args: string[]) => string;
 
 /** Dependabot's npm branches; github-actions bumps are merged by hand. */
 export const NPM_BRANCH = 'dependabot/npm_and_yarn/';
 
-/**
- * @typedef {object} Pr
- * @property {string} state
- * @property {{ login: string }} author
- * @property {string} headRefName
- * @property {unknown} autoMergeRequest null when auto-merge is off
- * @property {string} [headRefOid] the head commit
- */
+export type Pr = {
+  state: string;
+  author: { login: string };
+  headRefName: string;
+  /** null when auto-merge is off */
+  autoMergeRequest: unknown;
+  /** the head commit */
+  headRefOid?: string;
+};
 
 /** The descriptions of `Visual changes` that let a PR merge itself. */
 const NO_VISUAL_CHANGE = ['No visual changes', 'No screens taken'];
@@ -41,14 +42,17 @@ const NO_VISUAL_CHANGE = ['No visual changes', 'No screens taken'];
 /**
  * Whether to turn auto-merge on, and why (not).
  *
- * @param {Pr} pr
- * @param {string[]} events the PR's timeline event names
- * @param {string | null} [visual] in an app with visual review, the
+ * @param pr
+ * @param events the PR's timeline event names
+ * @param visual in an app with visual review, the
  *   `Visual changes` description on the head (null: none yet); undefined
  *   in an app without it
- * @returns {{ enable: boolean, reason: string }}
  */
-export function decide(pr, events, visual) {
+export function decide(
+  pr: Pr,
+  events: string[],
+  visual?: string | null,
+): { enable: boolean; reason: string } {
   if (pr.state !== 'OPEN') return { enable: false, reason: 'the PR is not open' };
   if (!/^(app\/)?dependabot(\[bot\])?$/.test(pr.author.login)) {
     return { enable: false, reason: 'not a Dependabot PR' };
@@ -74,21 +78,16 @@ export function decide(pr, events, visual) {
 /**
  * The `Visual changes` description on a commit, when main's settings use
  * visual review: undefined when they don't, null before the status.
- *
- * @param {string} repo
- * @param {string} sha
- * @param {Gh} gh
  */
-function visualStatus(repo, sha, gh) {
-  /** @type {string} */
-  let text;
+function visualStatus(repo: string, sha: string, gh: Gh) {
+  let text: string;
   try {
     text = gh(['api', `repos/${repo}/contents/.github/ci.json`, '--jq', '.content']).trim();
   } catch (error) {
     // A repository with no .github/ci.json (this one) uses no visual review.
     if (
       /\b404\b|Not Found/.test(
-        `${/** @type {Error} */ (error).message}${String(/** @type {{ stderr?: unknown }} */ (error).stderr ?? '')}`,
+        `${(error as Error).message}${String((error as { stderr?: unknown }).stderr ?? '')}`,
       )
     ) {
       return undefined;
@@ -96,8 +95,7 @@ function visualStatus(repo, sha, gh) {
     throw error;
   }
   if (!text) return undefined;
-  /** @type {unknown} */
-  const config = JSON.parse(Buffer.from(text, 'base64').toString('utf8'));
+  const config: unknown = JSON.parse(Buffer.from(text, 'base64').toString('utf8'));
   if (typeof config !== 'object' || config === null || !('visual-review' in config)) {
     return undefined;
   }
@@ -112,11 +110,9 @@ function visualStatus(repo, sha, gh) {
 }
 
 /**
- * @param {Record<string, string | undefined>} env
- * @param {Gh} gh
- * @returns {string} what it did
+ * @returns what it did
  */
-export function enable(env, gh) {
+export function enable(env: Record<string, string | undefined>, gh: Gh): string {
   const repo = env.GITHUB_REPOSITORY ?? '';
   if (!repo) throw new Error('GITHUB_REPOSITORY is not set');
   let number = env.PR_NUMBER ?? '';
@@ -137,8 +133,7 @@ export function enable(env, gh) {
     ]).trim();
   }
   if (!number) return 'no open PR for this run';
-  /** @type {Pr} */
-  const pr = JSON.parse(
+  const pr: Pr = JSON.parse(
     gh([
       'pr',
       'view',
