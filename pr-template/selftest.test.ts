@@ -10,12 +10,12 @@ const master = readFileSync(
   'utf8',
 );
 
-const app = (/** @type {Record<string, string>} */ files) => {
+const app = (files: Record<string, string>) => {
   const root = mkdtempSync(path.join(tmpdir(), 'app-'));
   writeFiles(root, files);
   return root;
 };
-const ci = (/** @type {Record<string, unknown>} */ c) => JSON.stringify(c);
+const ci = (c: Record<string, unknown>) => JSON.stringify(c);
 const TEMPLATE = '.github/pull_request_template.md';
 const review = { workflow: 'v.yml', job: 'v', folders: ['shots'] };
 
@@ -45,8 +45,7 @@ describe('selftest', () => {
   });
 
   it('prints the self-test and returns its exit code', () => {
-    /** @type {string[]} */
-    const out = [];
+    const out: string[] = [];
     const good = app({ '.github/ci.json': ci({ 'visual-review': review }), [TEMPLATE]: master });
     expect(cli([good], (l) => out.push(l))).toBe(0);
     const bad = app({ '.github/ci.json': ci({}) });

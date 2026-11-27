@@ -30,13 +30,9 @@ export const PAIRS = ['describe:visual-review', 'pr-changes:change:1', 'pr-chang
 
 /**
  * What is wrong with a template, in plain words; empty when nothing is.
- *
- * @param {string} template
- * @returns {string[]}
  */
-export function problems(template) {
-  /** @type {string[]} */
-  const found = [];
+export function problems(template: string): string[] {
+  const found: string[] = [];
   const seen = [...template.matchAll(/^## (.+?)\s*$/gm)].map((m) => m[1]);
   // Revisions is optional: a PR has the section once it has a revision (ci#111: the changes tool writes it).
   const wanted = seen.includes('Revisions') ? HEADINGS : HEADINGS.slice(0, -1);
@@ -67,10 +63,8 @@ export function problems(template) {
  * Drops HTML comments the way GitHub's renderer hides them: from each `<!--`
  * to the next `-->`, and an unclosed one hides the rest. A scan, not a regex
  * replace, so no `<!--` can survive the removal.
- *
- * @param {string} text
  */
-function withoutComments(text) {
+function withoutComments(text: string) {
   let out = '';
   let from = 0;
   for (;;) {
@@ -88,10 +82,8 @@ function withoutComments(text) {
  * tag quoted in code isn't a picture, so neither may count. Code goes first,
  * as in GitHub's renderer, so a `<!--` quoted in it can't hide the rest of
  * the description; an unclosed fence runs to the end.
- *
- * @param {string | undefined} body
  */
-export function visibleText(body) {
+export function visibleText(body: string | undefined) {
   return withoutComments(
     (body ?? '')
       .replace(/```[\s\S]*?(```|$)/g, '')
