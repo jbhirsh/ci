@@ -7,6 +7,7 @@ import {
   settleReruns,
   unescapeXml,
 } from './junit.ts';
+import type { TestCase } from './junit.ts';
 
 describe('unescapeXml and escapeXml', () => {
   it('replaces named and numeric entities, and leaves unknown ones', () => {
@@ -265,13 +266,7 @@ Received: 0
 });
 
 describe('settleReruns', () => {
-  /**
-   * @param {string} name
-   * @param {import('./junit.ts').TestCase['result']} result
-   * @param {string} file
-   * @returns {import('./junit.ts').TestCase}
-   */
-  const tc = (name, result, file) => ({
+  const tc = (name: string, result: TestCase['result'], file: string): TestCase => ({
     name,
     seconds: 1,
     result,

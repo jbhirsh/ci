@@ -13,6 +13,11 @@
 //
 // It never fails the job: a sampler that won't start is a warning.
 //
+// Plain JavaScript, typed in JSDoc, where the rest of this repo is
+// TypeScript (ci#155): the action runs on the runner's own Node, which may
+// be older than 22.18 and strip no types, so this file and what it imports
+// (telemetry.mjs, Node's built-ins only) stay .mjs.
+//
 //   node sample-load.mjs          start the sampler (env: RUNNER_TEMP)
 //   node sample-load.mjs --loop <file>   the sampler itself
 

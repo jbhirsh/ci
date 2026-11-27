@@ -10,18 +10,14 @@ import {
   pastJob,
   pastRuns,
 } from './history.ts';
+import type { Gh, Run } from './history.ts';
 
 const env = { GITHUB_REPOSITORY: 'jbhirsh/sift', GITHUB_RUN_ID: '42', GITHUB_RUN_ATTEMPT: '' };
 
 /**
  * A run as the Actions API gives it.
- *
- * @param {number} id
- * @param {string | null} branch
- * @param {string} created
- * @returns {import('./history.ts').Run}
  */
-const run = (id, branch, created) => ({
+const run = (id: number, branch: string | null, created: string): Run => ({
   id,
   run_number: id,
   html_url: `https://github.com/jbhirsh/sift/actions/runs/${id}`,
@@ -33,13 +29,9 @@ const run = (id, branch, created) => ({
 
 /**
  * A fake gh answering API paths from a table, throwing for any other.
- *
- * @param {Record<string, unknown>} answers
- * @param {string[][]} [calls]
- * @returns {import('./history.ts').Gh}
  */
 const fakeGh =
-  (answers, calls = []) =>
+  (answers: Record<string, unknown>, calls: string[][] = []): Gh =>
   (args) => {
     calls.push(args);
     const key = args[0] === 'api' ? args[1] : args.join(' ');
@@ -57,8 +49,7 @@ describe('artifactName', () => {
 
 describe('current', () => {
   it("reads this attempt's jobs, the run and the default branch, attempt 1 by default", () => {
-    /** @type {string[][]} */
-    const calls = [];
+    const calls: string[][] = [];
     const gh = fakeGh(
       {
         'repos/jbhirsh/sift/actions/runs/42/attempts/1/jobs?per_page=100': {
@@ -113,7 +104,7 @@ describe('current', () => {
 });
 
 describe('pastRuns', () => {
-  const runs = (/** @type {string} */ branch) =>
+  const runs = (branch: string) =>
     `repos/o/r/actions/workflows/7/runs?branch=${branch}&status=completed&created=%3C2026-10-29T10%3A00%3A00Z&per_page=2`;
 
   it("merges this branch's earlier runs and the default branch's, newest first", () => {
@@ -143,8 +134,7 @@ describe('pastRuns', () => {
   });
 
   it('asks once when the run is on the default branch, and skips a page that fails', () => {
-    /** @type {string[][]} */
-    const calls = [];
+    const calls: string[][] = [];
     expect(
       pastRuns('o/r', run(42, null, ''), 'main', 2, fakeGh({}, calls)).concat(
         pastRuns('o/r', run(42, 'main', ''), 'main', 2, fakeGh({}, calls)),
@@ -212,8 +202,7 @@ describe('parseRecord', () => {
 
 describe('downloadRecord', () => {
   it('downloads the artifact with gh and reads its JSON', () => {
-    /** @type {string[][]} */
-    const calls = [];
+    const calls: string[][] = [];
     const text = downloadRecord(
       (args) => {
         calls.push(args);
@@ -268,8 +257,7 @@ describe('history', () => {
   });
 
   it("gives each earlier run with the job its job and record's tests, skipping runs without it", () => {
-    /** @type {[number, string][]} */
-    const asked = [];
+    const asked: [number, string][] = [];
     const past = history('o/r', now, 'main', 'E2E', 3, gh, (id, artifact) => {
       asked.push([id, artifact]);
       return id === 3

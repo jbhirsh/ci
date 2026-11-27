@@ -1,3 +1,5 @@
+import type { Model, ModelTest } from './model.ts';
+
 // The job summary's Markdown, for job-summary (summary.ts): the verdict,
 // what needs attention and a link to the run's full report (report.html,
 // on the repository's GitHub Pages), where the steps, tests and history
@@ -11,9 +13,6 @@
 // it's written: shown as written, with nothing that would end a line or
 // open Markdown or HTML of its own.
 
-/** @typedef {import('./model.ts').Model} Model */
-/** @typedef {import('./model.ts').ModelTest} ModelTest */
-
 /** Each list in Needs attention names at most this many. */
 export const ATTENTION = 5;
 /** The most a summary may hold: GitHub drops one over 1 MiB. */
@@ -22,10 +21,8 @@ export const MAX_BYTES = 900_000;
 /**
  * Inline text: one line, shown as written (no Markdown or HTML of its own,
  * so a test named "renders <Card />" keeps its tag).
- *
- * @param {string} text
  */
-export function cell(text) {
+export function cell(text: string) {
   return text
     .replace(/\s+/g, ' ')
     .trim()
@@ -37,10 +34,8 @@ export function cell(text) {
 
 /**
  * A time as people read it: 40ms, 3.2s, 12s, 3m 05s, 1h 02m.
- *
- * @param {number} seconds
  */
-export function duration(seconds) {
+export function duration(seconds: number) {
   if (seconds === 0) return '0s';
   if (seconds < 1) return `${Math.max(1, Math.round(seconds * 1000))}ms`;
   if (seconds < 10) return `${Math.round(seconds * 10) / 10}s`;
@@ -53,41 +48,31 @@ export function duration(seconds) {
 /**
  * How much over its usual time, as "+18%", or "+40s" over a usual time of
  * nothing (the API times steps to the second).
- *
- * @param {number} seconds
- * @param {number} typical
  */
-export function over(seconds, typical) {
+export function over(seconds: number, typical: number) {
   if (typical <= 0) return `+${duration(seconds - typical)}`;
   return `+${Math.round((seconds / typical - 1) * 100)}%`;
 }
 
 /**
  * A noun, plural unless one.
- *
- * @param {number} n
- * @param {string} noun
  */
-function count(n, noun) {
+function count(n: number, noun: string) {
   return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }
 
 /**
  * A test's name in a sentence: its title, and where it is.
- *
- * @param {ModelTest} t
  */
-function testName(t) {
+function testName(t: ModelTest) {
   const where = [t.folder + t.file, t.block].filter(Boolean).join(' › ');
   return where ? `${cell(t.title)} (${cell(where)})` : cell(t.title);
 }
 
 /**
  * Lists capped at ATTENTION, saying how many more the report has.
- *
- * @param {string[]} items
  */
-function capped(items) {
+function capped(items: string[]) {
   return items.length > ATTENTION
     ? [...items.slice(0, ATTENTION), `…and ${items.length - ATTENTION} more in the report`]
     : items;
@@ -96,10 +81,8 @@ function capped(items) {
 /**
  * The verdict: what failed, or that everything passed, then the job's time
  * and how it compares with its usual time.
- *
- * @param {Model} model
  */
-export function verdict(model) {
+export function verdict(model: Model) {
   const tests = model.tests ?? [];
   const ran = tests.filter((t) => t.result !== 'skipped');
   const failed = tests.filter((t) => t.result === 'failed');
@@ -107,8 +90,7 @@ export function verdict(model) {
   const failedSteps = model.steps.filter((s) => s.conclusion === 'failure');
   const unfinished = model.steps.some((s) => s.conclusion === 'running');
   const passed = `${count(ran.length, model.noun)} passed${rerun.length ? `, ${rerun.length} on re-run` : ''}`;
-  /** @type {string[]} */
-  const parts = [];
+  const parts: string[] = [];
   if (failed.length) parts.push(`❌ ${failed.length} of ${count(ran.length, model.noun)} failed`);
   else if (failedSteps.length) {
     // A step can fail after every test passed (a coverage threshold).
@@ -135,18 +117,14 @@ export function verdict(model) {
  * (or else the failed steps), those passed on a re-run, the flaky ones and
  * what got slower. Shared by the summary and the pull request's comment
  * (comment.ts), so both say the same.
- *
- * @param {Model} model
- * @returns {string[]}
  */
-export function attention(model) {
+export function attention(model: Model): string[] {
   const tests = model.tests ?? [];
   const failed = tests.filter((t) => t.result === 'failed');
   const rerun = tests.filter((t) => t.result === 'passed on re-run');
   const flaky = tests.filter((t) => t.flaky);
   const failedSteps = model.steps.filter((s) => s.conclusion === 'failure');
-  /** @type {string[]} */
-  const items = [];
+  const items: string[] = [];
   for (const t of failed.slice(0, ATTENTION)) {
     const first = t.message.split('\n').find((l) => l.trim()) ?? '';
     items.push(
@@ -197,11 +175,10 @@ export function attention(model) {
 /**
  * The summary's Markdown.
  *
- * @param {Model} model
- * @param {string} reportLink the run's report ('' when there's none)
- * @returns {string}
+ * @param model
+ * @param reportLink the run's report ('' when there's none)
  */
-export function render(model, reportLink) {
+export function render(model: Model, reportLink: string): string {
   const lines = [`### ${cell(model.job)}: ${verdict(model)}`, ''];
   if (reportLink) {
     lines.push(
@@ -220,11 +197,10 @@ export function render(model, reportLink) {
  * job's together): the verdict and the report on one line, then what needs
  * attention, as in the summary but without its headings.
  *
- * @param {Model} model
- * @param {string} reportLink the run's report ('' when there's none)
- * @returns {string}
+ * @param model
+ * @param reportLink the run's report ('' when there's none)
  */
-export function section(model, reportLink) {
+export function section(model: Model, reportLink: string): string {
   const head = [verdict(model), reportLink ? `[Full report](${reportLink})` : '']
     .filter(Boolean)
     .join(' · ');
@@ -234,10 +210,8 @@ export function section(model, reportLink) {
 
 /**
  * The summary, cut to MAX_BYTES at a line, saying so.
- *
- * @param {string} text
  */
-export function fit(text) {
+export function fit(text: string) {
   if (Buffer.byteLength(text) <= MAX_BYTES) return text;
   const note = "\n\n…cut here: the summary would be over GitHub's 1 MiB limit.";
   const cut = Buffer.from(text)

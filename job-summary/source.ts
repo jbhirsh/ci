@@ -7,19 +7,17 @@
 // out, never an error.
 
 import { execFileSync } from 'node:child_process';
+import type { TestCase } from './junit.ts';
 
-/** @typedef {import('./junit.ts').TestCase} TestCase */
-/** @typedef {(args: string[]) => string} Git */
+export type Git = (args: string[]) => string;
 
 /** How many lines a snippet shows at most. */
 export const SNIPPET_LINES = 16;
 
 /**
  * Git, from the checkout, or throwing when it fails.
- *
- * @type {Git}
  */
-export function realGit(args) {
+export function realGit(args: string[]): string {
   return execFileSync('git', args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -30,11 +28,8 @@ export function realGit(args) {
 
 /**
  * The repository's files as git tracks them, or none outside a checkout.
- *
- * @param {Git} git
- * @returns {string[]}
  */
-export function trackedFiles(git) {
+export function trackedFiles(git: Git): string[] {
   try {
     return git(['ls-files']).split('\n').filter(Boolean);
   } catch {
@@ -47,11 +42,11 @@ export function trackedFiles(git) {
  * Vitest gives it as the suite, Playwright gives it relative to its test
  * folder, so it's the tracked file that the suite's path ends.
  *
- * @param {Pick<TestCase, 'suite' | 'source'>} test
- * @param {string[]} files tracked files
- * @returns {string} '' when none matches
+ * @param test
+ * @param files tracked files
+ * @returns '' when none matches
  */
-export function testPath(test, files) {
+export function testPath(test: Pick<TestCase, 'suite' | 'source'>, files: string[]): string {
   const known = new Set(files);
   for (const candidate of [test.source, test.suite]) {
     const clean = candidate.replace(/^\.\//, '');
@@ -68,10 +63,10 @@ export function testPath(test, files) {
  * and Playwright's `it('title', …)`), or 1 for a file that is the test
  * (a Maestro flow).
  *
- * @param {string[]} lines the file's
- * @param {string} title
+ * @param lines the file's
+ * @param title
  */
-export function testLine(lines, title) {
+export function testLine(lines: string[], title: string) {
   if (!title) return 1;
   const quoted = ["'", '"', '`'].map((q) => `${q}${title}${q}`);
   const at = lines.findIndex((l) => quoted.some((q) => l.includes(q)));
@@ -81,11 +76,8 @@ export function testLine(lines, title) {
 /**
  * The line a failure points at in the test's file, from its message's
  * stack (`render.test.ts:142:18`), or 0 when it names none.
- *
- * @param {string} detail
- * @param {string} path
  */
-export function failureLine(detail, path) {
+export function failureLine(detail: string, path: string) {
   const base = path.split('/').pop() ?? '';
   if (!base) return 0;
   const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -98,19 +90,18 @@ export function failureLine(detail, path) {
  * points at, at most SNIPPET_LINES, stopping after the line that closes the
  * test (back to its first line's indent) when that comes first.
  *
- * @param {string[]} lines the file's
- * @param {number} start the test's first line
- * @param {number} hit the failure's line, or 0
- * @returns {[number, string, boolean][]} line number, text, and whether it's the failure's
+ * @param lines the file's
+ * @param start the test's first line
+ * @param hit the failure's line, or 0
+ * @returns line number, text, and whether it's the failure's
  */
-export function snippet(lines, start, hit) {
+export function snippet(lines: string[], start: number, hit: number): [number, string, boolean][] {
   if (!lines.length) return [];
   let from = start;
   if (hit && (hit < start || hit >= start + SNIPPET_LINES)) from = Math.max(1, hit - 8);
-  const indent = (/** @type {string} */ l) => l.length - l.trimStart().length;
+  const indent = (l: string) => l.length - l.trimStart().length;
   const base = indent(lines[from - 1] ?? '');
-  /** @type {[number, string, boolean][]} */
-  const out = [];
+  const out: [number, string, boolean][] = [];
   for (let n = from; n <= lines.length && out.length < SNIPPET_LINES; n++) {
     const line = lines[n - 1];
     out.push([n, line, n === hit]);
@@ -121,29 +112,32 @@ export function snippet(lines, start, hit) {
   return out;
 }
 
-/**
- * Where a test is, and its snippet when it's worth one.
- *
- * @typedef {object} Located
- * @property {string} path '' when not found
- * @property {number} line
- * @property {[number, string, boolean][] | null} code
- */
+/** Where a test is, and its snippet when it's worth one. */
+export type Located = {
+  /** '' when not found */
+  path: string;
+  line: number;
+  code: [number, string, boolean][] | null;
+};
 
 /**
  * Finds each test: its path and line, and a snippet for the ones `wanted`
  * names. Each file is read once.
  *
- * @param {(TestCase & { title: string })[]} tests
- * @param {Set<string>} wanted the names of the tests to show code for
- * @param {string[]} files tracked files
- * @param {(path: string) => string} read
- * @returns {Map<string, Located>} by test name
+ * @param tests
+ * @param wanted the names of the tests to show code for
+ * @param files tracked files
+ * @param read
+ * @returns by test name
  */
-export function locate(tests, wanted, files, read) {
-  /** @type {Map<string, string[]>} */
-  const cache = new Map();
-  const linesOf = (/** @type {string} */ path) => {
+export function locate(
+  tests: (TestCase & { title: string })[],
+  wanted: Set<string>,
+  files: string[],
+  read: (path: string) => string,
+): Map<string, Located> {
+  const cache: Map<string, string[]> = new Map();
+  const linesOf = (path: string) => {
     if (!cache.has(path)) {
       try {
         cache.set(path, read(path).split('\n'));
@@ -153,8 +147,7 @@ export function locate(tests, wanted, files, read) {
     }
     return cache.get(path) ?? [];
   };
-  /** @type {Map<string, Located>} */
-  const found = new Map();
+  const found: Map<string, Located> = new Map();
   for (const t of tests) {
     const path = testPath(t, files);
     if (!path) {
@@ -180,14 +173,18 @@ export function locate(tests, wanted, files, read) {
  * is all a diff of two commits needs; nothing is fetched or diffed once
  * `until` has passed.
  *
- * @param {{ sha: string, branch: string }[]} runs oldest first, this run last
- * @param {Git} git
- * @param {number} [until] milliseconds
- * @param {() => number} [clock]
- * @returns {(Set<string> | null)[]}
+ * @param runs oldest first, this run last
+ * @param git
+ * @param until milliseconds
+ * @param clock
  */
-export function changedFiles(runs, git, until = Infinity, clock = Date.now) {
-  const attempt = (/** @type {string[]} */ args) => {
+export function changedFiles(
+  runs: { sha: string; branch: string }[],
+  git: Git,
+  until: number = Infinity,
+  clock: () => number = Date.now,
+): (Set<string> | null)[] {
+  const attempt = (args: string[]) => {
     try {
       git(args);
       return true;
@@ -195,7 +192,7 @@ export function changedFiles(runs, git, until = Infinity, clock = Date.now) {
       return false;
     }
   };
-  const present = (/** @type {string} */ sha) => attempt(['cat-file', '-e', `${sha}^{commit}`]);
+  const present = (sha: string) => attempt(['cat-file', '-e', `${sha}^{commit}`]);
   const before = runs.map((r, i) => {
     for (let j = i - 1; j >= 0; j--) if (runs[j].branch === r.branch) return runs[j].sha;
     return '';

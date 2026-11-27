@@ -12,8 +12,7 @@ function runnerTemp() {
   return { temp, file: path.join(temp, 'job-summary', 'notes.json') };
 }
 
-/** @param {string} file */
-const read = (file) => Object.entries(JSON.parse(readFileSync(file, 'utf8')));
+const read = (file: string) => Object.entries(JSON.parse(readFileSync(file, 'utf8')));
 
 describe('note main', () => {
   vi.spyOn(console, 'log').mockImplementation(() => {});

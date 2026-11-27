@@ -9,78 +9,66 @@
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import type { TestCase } from './junit.ts';
 
-/** @typedef {(args: string[]) => string} Gh */
-/** @typedef {import('./junit.ts').TestCase} TestCase */
+export type Gh = (args: string[]) => string;
 
-/**
- * A job's step, as the Actions API gives it.
- *
- * @typedef {object} Step
- * @property {string} name
- * @property {string | null} conclusion
- * @property {string | null} started_at
- * @property {string | null} completed_at
- */
+/** A job's step, as the Actions API gives it. */
+export type Step = {
+  name: string;
+  conclusion: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+};
 
-/**
- * A job, as the Actions API gives it.
- *
- * @typedef {object} Job
- * @property {string} name
- * @property {string | null} conclusion
- * @property {string | null} started_at
- * @property {string | null} completed_at
- * @property {string} [html_url]
- * @property {Step[]} [steps]
- */
+/** A job, as the Actions API gives it. */
+export type Job = {
+  name: string;
+  conclusion: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  html_url?: string;
+  steps?: Step[];
+};
 
-/**
- * A workflow run, as the Actions API gives it.
- *
- * @typedef {object} Run
- * @property {number} id
- * @property {number} run_number
- * @property {string} html_url
- * @property {string | null} head_branch
- * @property {string} head_sha
- * @property {string} created_at
- * @property {number} [workflow_id]
- * @property {{ full_name: string } | null} [head_repository] where its
- *   commit came from: a fork's, for a fork's pull request
- */
+/** A workflow run, as the Actions API gives it. */
+export type Run = {
+  id: number;
+  run_number: number;
+  html_url: string;
+  head_branch: string | null;
+  head_sha: string;
+  created_at: string;
+  workflow_id?: number;
+  /** where its commit came from: a fork's, for a fork's pull request */
+  head_repository?: { full_name: string } | null;
+};
 
-/**
- * A test as a run's record keeps it.
- *
- * @typedef {Pick<TestCase, 'name' | 'seconds' | 'result'>} RecordTest
- */
+/** A test as a run's record keeps it. */
+export type RecordTest = Pick<TestCase, 'name' | 'seconds' | 'result'>;
 
-/**
- * One earlier run of the job.
- *
- * @typedef {object} PastRun
- * @property {Run} run
- * @property {Job} job
- * @property {RecordTest[] | null} tests null when its
- *   record couldn't be read (older than the tool, expired, or not uploaded)
- * @property {boolean} recorded whether the run left a record, and so a report
- * @property {number | null} seconds the job's time when its summary was
- *   written, from its record: the same span as this run's (null without one)
- */
+/** One earlier run of the job. */
+export type PastRun = {
+  run: Run;
+  job: Job;
+  /** null when its record couldn't be read (older than the tool, expired, or not uploaded) */
+  tests: RecordTest[] | null;
+  /** whether the run left a record, and so a report */
+  recorded: boolean;
+  /**
+   * the job's time when its summary was written, from its record: the same span as this run's (null
+   * without one)
+   */
+  seconds: number | null;
+};
 
-/**
- * What a run's record holds.
- *
- * @typedef {{ tests: PastRun['tests'], seconds: number | null }} RunRecord
- */
+/** What a run's record holds. */
+export type RunRecord = { tests: PastRun['tests']; seconds: number | null };
 
 /**
  * The artifact a run's record of its tests goes in: one per job, by name.
- *
- * @param {string} job
  */
-export function artifactName(job) {
+export function artifactName(job: string) {
   const slug = job
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -90,13 +78,8 @@ export function artifactName(job) {
 
 /**
  * JSON from gh, or null when the call or the parse fails.
- *
- * @template T
- * @param {Gh} gh
- * @param {string[]} args
- * @returns {T | null}
  */
-function api(gh, args) {
+function api<T>(gh: Gh, args: string[]): T | null {
   try {
     return JSON.parse(gh(['api', ...args]));
   } catch {
@@ -107,12 +90,11 @@ function api(gh, args) {
 /**
  * The run this is in, the repository's default branch and this attempt's
  * jobs, or why they couldn't be read.
- *
- * @param {Record<string, string | undefined>} env
- * @param {Gh} gh
- * @returns {{ run: Run, defaultBranch: string, jobs: Job[] } | { problem: string }}
  */
-export function current(env, gh) {
+export function current(
+  env: Record<string, string | undefined>,
+  gh: Gh,
+): { run: Run; defaultBranch: string; jobs: Job[] } | { problem: string } {
   const repo = env.GITHUB_REPOSITORY;
   const attempt = env.GITHUB_RUN_ATTEMPT || '1';
   let jobs;
@@ -128,10 +110,8 @@ export function current(env, gh) {
     const reason = error instanceof Error ? error.message.split('\n')[0] : String(error);
     return { problem: `the run's jobs couldn't be read (${reason}); the job needs actions: read.` };
   }
-  /** @type {Run | null} */
-  const run = api(gh, [`repos/${repo}/actions/runs/${env.GITHUB_RUN_ID}`]);
-  /** @type {{ default_branch?: string } | null} */
-  const repository = api(gh, [`repos/${repo}`]);
+  const run: Run | null = api(gh, [`repos/${repo}/actions/runs/${env.GITHUB_RUN_ID}`]);
+  const repository: { default_branch?: string } | null = api(gh, [`repos/${repo}`]);
   if (!run) return { problem: "this run couldn't be read." };
   return { run, defaultBranch: repository?.default_branch ?? '', jobs };
 }
@@ -142,22 +122,19 @@ export function current(env, gh) {
  * an old run compares with what came before it, not after. Runs of a
  * fork's commits are left out, as a fork's branch can share a name with
  * this repository's (a fork's `main`).
- *
- * @param {string} repo
- * @param {Run} run
- * @param {string} defaultBranch
- * @param {number} count
- * @param {Gh} gh
- * @returns {Run[]}
  */
-export function pastRuns(repo, run, defaultBranch, count, gh) {
-  const named = /** @type {(b: string | null) => b is string} */ ((b) => Boolean(b));
+export function pastRuns(
+  repo: string,
+  run: Run,
+  defaultBranch: string,
+  count: number,
+  gh: Gh,
+): Run[] {
+  const named = (b: string | null): b is string => Boolean(b);
   const branches = [...new Set([run.head_branch, defaultBranch].filter(named))];
-  /** @type {Map<number, Run>} */
-  const found = new Map();
+  const found: Map<number, Run> = new Map();
   for (const branch of branches) {
-    /** @type {{ workflow_runs?: Run[] } | null} */
-    const page = api(gh, [
+    const page: { workflow_runs?: Run[] } | null = api(gh, [
       `repos/${repo}/actions/workflows/${run.workflow_id}/runs?branch=${encodeURIComponent(branch)}&status=completed&created=${encodeURIComponent(`<${run.created_at}`)}&per_page=${count}`,
     ]);
     for (const r of page?.workflow_runs ?? []) {
@@ -174,16 +151,11 @@ export function pastRuns(repo, run, defaultBranch, count, gh) {
 
 /**
  * The job, by name, in an earlier run's latest attempt.
- *
- * @param {string} repo
- * @param {Run} run
- * @param {string} name
- * @param {Gh} gh
- * @returns {Job | null}
  */
-export function pastJob(repo, run, name, gh) {
-  /** @type {{ jobs?: Job[] } | null} */
-  const data = api(gh, [`repos/${repo}/actions/runs/${run.id}/jobs?per_page=100`]);
+export function pastJob(repo: string, run: Run, name: string, gh: Gh): Job | null {
+  const data: { jobs?: Job[] } | null = api(gh, [
+    `repos/${repo}/actions/runs/${run.id}/jobs?per_page=100`,
+  ]);
   return data?.jobs?.find((j) => j.name === name && j.completed_at) ?? null;
 }
 
@@ -191,13 +163,11 @@ export function pastJob(repo, run, name, gh) {
  * The tests a run's record holds, and the job's time it wrote, or null when
  * it can't be read.
  *
- * @param {string} text the record's JSON
- * @returns {RunRecord | null}
+ * @param text the record's JSON
  */
-export function parseRecord(text) {
+export function parseRecord(text: string): RunRecord | null {
   try {
-    /** @type {unknown} */
-    const data = JSON.parse(text);
+    const data: unknown = JSON.parse(text);
     if (typeof data !== 'object' || data === null) return null;
     const seconds =
       'seconds' in data && typeof data.seconds === 'number' && data.seconds >= 0
@@ -224,14 +194,8 @@ export function parseRecord(text) {
 
 /**
  * Downloads a run's record with gh, returning its JSON, or null.
- *
- * @param {Gh} gh
- * @param {string} repo
- * @param {number} runId
- * @param {string} name
- * @returns {string | null}
  */
-export function downloadRecord(gh, repo, runId, name) {
+export function downloadRecord(gh: Gh, repo: string, runId: number, name: string): string | null {
   const dir = mkdtempSync(path.join(tmpdir(), 'job-summary-'));
   try {
     gh(['run', 'download', String(runId), '--repo', repo, '--name', name, '--dir', dir]);
@@ -250,31 +214,29 @@ export function downloadRecord(gh, repo, runId, name) {
  * `until` has passed, keeping what it has read: each call has its own time
  * limit, but a slow API could otherwise hold the job past its own.
  *
- * @param {string} repo
- * @param {Run} run
- * @param {string} defaultBranch
- * @param {string} name the job's name
- * @param {number} count
- * @param {Gh} gh
- * @param {(runId: number, artifact: string) => string | null} [record]
- * @param {number} [until] milliseconds
- * @param {() => number} [clock]
- * @returns {PastRun[]}
+ * @param repo
+ * @param run
+ * @param defaultBranch
+ * @param name the job's name
+ * @param count
+ * @param gh
+ * @param record
+ * @param until milliseconds
+ * @param clock
  */
 export function history(
-  repo,
-  run,
-  defaultBranch,
-  name,
-  count,
-  gh,
-  record,
-  until = Infinity,
-  clock = Date.now,
-) {
+  repo: string,
+  run: Run,
+  defaultBranch: string,
+  name: string,
+  count: number,
+  gh: Gh,
+  record?: (runId: number, artifact: string) => string | null,
+  until: number = Infinity,
+  clock: () => number = Date.now,
+): PastRun[] {
   const read = record ?? ((id, artifact) => downloadRecord(gh, repo, id, artifact));
-  /** @type {PastRun[]} */
-  const past = [];
+  const past: PastRun[] = [];
   for (const r of pastRuns(repo, run, defaultBranch, count, gh)) {
     if (clock() > until) break;
     const job = pastJob(repo, r, name, gh);

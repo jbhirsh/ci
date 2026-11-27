@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel, noteworthy, parts } from './model.ts';
+import type { TestCase } from './junit.ts';
+import type { PastRun } from './history.ts';
+import type { Input } from './model.ts';
 
 const T0 = Date.parse('2026-10-29T10:00:00Z');
-/** @param {number} s seconds after T0 */
-const at = (s) => new Date(T0 + s * 1000).toISOString();
+/** @param s seconds after T0 */
+const at = (s: number) => new Date(T0 + s * 1000).toISOString();
 
 /**
  * A test case as junit.ts reads it.
- *
- * @param {Partial<import('./junit.ts').TestCase>} over
- * @returns {import('./junit.ts').TestCase}
  */
-const tc = (over) => ({
+const tc = (over: Partial<TestCase>): TestCase => ({
   name: 'T',
   seconds: 1,
   result: 'passed',
@@ -66,14 +66,13 @@ describe('parts', () => {
 
 /**
  * An earlier run.
- *
- * @param {number} id
- * @param {string} conclusion
- * @param {import('./history.ts').PastRun['tests']} tests
- * @param {number | null} [seconds]
- * @returns {import('./history.ts').PastRun}
  */
-const pastRun = (id, conclusion, tests, seconds = null) => ({
+const pastRun = (
+  id: number,
+  conclusion: string,
+  tests: PastRun['tests'],
+  seconds: number | null = null,
+): PastRun => ({
   run: {
     id,
     run_number: id,
@@ -97,11 +96,8 @@ const pastRun = (id, conclusion, tests, seconds = null) => ({
 
 /**
  * A model's input, with what a test changes.
- *
- * @param {Partial<import('./model.ts').Input>} over
- * @returns {import('./model.ts').Input}
  */
-const input = (over = {}) => ({
+const input = (over: Partial<Input> = {}): Input => ({
   repo: 'jbhirsh/ci',
   workflow: 'CI',
   job: 'Check',
@@ -287,8 +283,7 @@ describe('noteworthy', () => {
     const base = buildModel(input());
     const one = base.tests?.[0];
     if (!one) throw new Error('no test');
-    /** @type {[string, import('./junit.ts').TestCase['result'], boolean, boolean][]} */
-    const cases = [
+    const cases: [string, TestCase['result'], boolean, boolean][] = [
       ['a', 'failed', false, false],
       ['b', 'passed on re-run', false, false],
       ['c', 'passed', true, false],

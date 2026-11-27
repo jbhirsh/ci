@@ -7,6 +7,11 @@
 // `load` inputs are empty (summary.ts). This file holds where they go and
 // the pure parts: reading `Label: value` lines, the machine's own notes, and
 // a CPU sample's maths.
+//
+// Plain JavaScript, typed in JSDoc, where the rest of this repo is
+// TypeScript (ci#155): note.mjs and sample-load.mjs import it, and their
+// actions run on the runner's own Node, which may strip no types. So it
+// imports only Node's built-ins.
 
 import path from 'node:path';
 
