@@ -12,24 +12,23 @@
 import { pathToFileURL } from 'node:url';
 import { bodyProblems } from './body.ts';
 
-/**
- * @typedef {object} Pr
- * @property {string | undefined} body
- * @property {string} [author]
- * @property {string} [state] open or closed
- * @property {string} [headRef]
- * @property {string} [headSha] Revisions' current row must name it
- * @property {string} [action] the event's action: `synchronize` is a push
- */
+export type Pr = {
+  body: string | undefined;
+  author?: string;
+  /** open or closed */
+  state?: string;
+  headRef?: string;
+  /** Revisions' current row must name it */
+  headSha?: string;
+  /** the event's action: `synchronize` is a push */
+  action?: string;
+};
 
 /**
  * The check's exit code and what to print.
- *
- * @param {Pr} pr
- * @returns {{ code: number, message: string }}
  */
-export function report(pr) {
-  const pass = (/** @type {string} */ why) => ({
+export function report(pr: Pr): { code: number; message: string } {
+  const pass = (why: string) => ({
     code: 0,
     message: `PR description: ok (${why}).`,
   });
@@ -52,10 +51,8 @@ export function report(pr) {
 
 /**
  * The check for the PR in `env`.
- *
- * @param {Record<string, string | undefined>} env
  */
-export function run(env) {
+export function run(env: Record<string, string | undefined>) {
   return report({
     body: env.PR_BODY,
     author: env.PR_AUTHOR,
@@ -68,12 +65,11 @@ export function run(env) {
 
 /**
  * Runs the check for the PR in `env` and returns the exit code.
- *
- * @param {Record<string, string | undefined>} env
- * @param {(line: string) => void} [log]
- * @returns {number}
  */
-export function main(env, log = console.log) {
+export function main(
+  env: Record<string, string | undefined>,
+  log: (line: string) => void = console.log,
+): number {
   const { code, message } = run(env);
   log(message);
   return code;

@@ -19,10 +19,9 @@ import { problems } from './structure.ts';
 const TEMPLATE = '.github/pull_request_template.md';
 
 /**
- * @param {string} root
- * @returns {string[]} what to print; throws on the first problem
+ * @returns what to print; throws on the first problem
  */
-export function selftest(root) {
+export function selftest(root: string): string[] {
   if (Object.keys(appConfig('visual-review', root)).length === 0) {
     throw new Error('the shared template needs visual review (a `visual-review` key)');
   }
@@ -35,12 +34,8 @@ export function selftest(root) {
 
 /**
  * Runs the self-test on the app at `argv[0]` and returns the exit code.
- *
- * @param {string[]} argv
- * @param {(line: string) => void} [log]
- * @returns {number}
  */
-export function cli(argv, log = console.log) {
+export function cli(argv: string[], log: (line: string) => void = console.log): number {
   try {
     for (const line of selftest(path.resolve(argv[0] ?? '.'))) log(line);
     return 0;

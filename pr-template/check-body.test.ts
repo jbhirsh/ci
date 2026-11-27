@@ -46,7 +46,7 @@ describe('report', () => {
 
   it('fails a current revision with no filled row, saying what to do, and passes closed, Dependabot and bot PRs (ci#140)', () => {
     const head = 'abcdef0'.padEnd(40, '1');
-    const rows = (/** @type {string} */ row) =>
+    const rows = (row: string) =>
       `${GOOD}\n<!-- pr-changes:revisions -->\n<details open>\n<summary><b>👉 <a href="https://github.com/o/r/commit/${head}"><code>abcdef0</code></a></b> (current)</summary>\n\n| What changed | Why |\n| --- | --- |\n${row}\n\n</details>\n<!-- /pr-changes:revisions -->\n`;
     const empty = rows('|  |  |');
     for (const action of ['synchronize', 'edited']) {
@@ -87,8 +87,7 @@ describe('run', () => {
 
 describe('main', () => {
   it('prints the verdict and returns the exit code', () => {
-    /** @type {string[]} */
-    const out = [];
+    const out: string[] = [];
     expect(main({ PR_BODY: BAD, PR_STATE: 'open' }, (l) => out.push(l))).toBe(1);
     expect(out[0]).toMatch(/^::error::/);
     expect(main({ PR_BODY: GOOD, PR_STATE: 'open' }, (l) => out.push(l))).toBe(0);

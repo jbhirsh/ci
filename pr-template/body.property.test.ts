@@ -35,10 +35,10 @@ const anything = fc.oneof(
 
 describe('bodyProblems and changes the tool titles', () => {
   /**
-   * @param {boolean[]} filled whether each change's pair has its title in it
-   * @param {string} why the author's text under every pair
+   * @param filled whether each change's pair has its title in it
+   * @param why the author's text under every pair
    */
-  const changes = (filled, why) =>
+  const changes = (filled: boolean[], why: string) =>
     GOOD.replace(
       /### 1\. The change[\s\S]*?\n\n## Checklist/,
       // A function, so a `$&` in the author's text is text, not a pattern.
@@ -93,7 +93,7 @@ describe('bodyProblems', () => {
         (body, ev) => {
           for (const p of bodyProblems(body, 'abcdef0123', ev)) expect(p.length).toBeGreaterThan(5);
           const pair = '<!-- pr-changes:revisions -->\n<!-- /pr-changes:revisions -->';
-          const asked = (/** @type {string} */ b) =>
+          const asked = (b: string) =>
             bodyProblems(b, undefined, ev).filter((x) => /pr-changes:revisions/.test(x));
           // A description that shows the pair once, outside code, never gets a pair problem.
           if (!/pr-changes:revisions|```|~~~/.test(body)) {
@@ -212,8 +212,7 @@ const ORACLE_LINK =
 const ORACLE_BOLD = new RegExp(`^\\|[ \\t]*\\*\\*(?:👉 )?${ORACLE_LINK}\\*\\* \\(current\\)`, 'm');
 const ORACLE_PLAIN = new RegExp(`^\\|[ \\t]*${ORACLE_LINK} \\(current\\)`, 'm');
 const ORACLE_OLD = /^\|[^|\n[]*\(current\)[^|\n[]*\|([^|\n]*)\|/m;
-/** @param {string} text */
-function mainCurrent(text) {
+function mainCurrent(text: string) {
   const bold = ORACLE_BOLD.exec(text);
   const plain = ORACLE_PLAIN.exec(text);
   const row = bold && (!plain || bold.index <= plain.index) ? bold : plain;
@@ -224,8 +223,7 @@ function mainCurrent(text) {
 
 describe('the current revision of an old-shape description', () => {
   const hex7 = fc.stringMatching(/^[0-9a-f]{7}$/);
-  /** @param {string} s */
-  const link = (s) => `[\`${s}\`](https://github.com/o/r/commit/${s.padEnd(40, '0')})`;
+  const link = (s: string) => `[\`${s}\`](https://github.com/o/r/commit/${s.padEnd(40, '0')})`;
   const head = hex7.chain((s) =>
     fc.constantFrom(
       link(s),
@@ -317,23 +315,21 @@ describe("the current revision's rows", () => {
     fc.constantFrom('修正', 'é', '`x`', '<code>x</code>', 'n/a', 'a \\| b', '7', 'Ωmega'),
   );
   const noise = fc.array(empties, { maxLength: 3 }).map((parts) => parts.join(' '));
-  /** @type {fc.Arbitrary<{ text: string, filled: boolean }>} */
-  const cell = fc.oneof(
+  const cell: fc.Arbitrary<{ text: string; filled: boolean }> = fc.oneof(
     fc.tuple(noise, words, noise).map(([a, w, b]) => ({ text: `${a} ${w} ${b}`, filled: true })),
     noise.map((text) => ({ text, filled: false })),
   );
   const row = fc.tuple(cell, cell);
   const rows = fc.array(fc.tuple(row, fc.boolean()), { maxLength: 6 });
-  const render = (/** @type {[[{ text: string }, { text: string }], boolean][]} */ list) =>
+  const render = (list: [[{ text: string }, { text: string }], boolean][]) =>
     list.flatMap(([[what, why], gap]) => [...(gap ? [''] : []), `| ${what.text} | ${why.text} |`]);
-  const html = (/** @type {string} */ sha) =>
+  const html = (sha: string) =>
     `<a href="https://github.com/o/r/commit/${sha}"><code>${sha.slice(0, 7)}</code></a>`;
-  const body = (/** @type {string[]} */ lines, crlf = false) => {
+  const body = (lines: string[], crlf = false) => {
     const text = `${GOOD.slice(0, GOOD.indexOf('## Revisions'))}<!-- pr-changes:revisions -->\n## Revisions\n\n<details open>\n<summary><b>👉 ${html(HEAD)}</b> (current)</summary>\n\n| What changed | Why |\n| --- | --- |\n${lines.join('\n')}\n\n</details>\n\n<details>\n<summary>${html(OLD)} · Opened</summary>\n\n|  |  |\n\n</details>\n<!-- /pr-changes:revisions -->\n`;
     return crlf ? text.replace(/\n/g, '\r\n') : text;
   };
-  const passes = (/** @type {string} */ text) =>
-    !bodyProblems(text, HEAD).some((p) => /Revisions/.test(p));
+  const passes = (text: string) => !bodyProblems(text, HEAD).some((p) => /Revisions/.test(p));
   const RUN = { numRuns: Number(process.env.REVISIONS_FUZZ_RUNS ?? 1000) };
 
   it('reads a cell as holding text exactly when it was built with some', () => {
@@ -390,12 +386,7 @@ describe('renderedLines against its old scans (property)', () => {
   // paragraph for a `-->`; both quadratic, so the bodies here stay short.
   const FENCE = /^ {0,3}(`{3,}|~{3,})/;
   const TOOL_START = /^ *<!-- ([a-z][a-z0-9-]*:[^\s<>]+) -->\s*$/;
-  /**
-   * @param {string} text
-   * @param {number} from
-   * @param {number} n
-   */
-  const findRun = (text, from, n) => {
+  const findRun = (text: string, from: number, n: number) => {
     for (let at = text.indexOf('`', from); at !== -1; at = text.indexOf('`', at)) {
       let len = 0;
       while (text[at + len] === '`') len++;
@@ -404,8 +395,7 @@ describe('renderedLines against its old scans (property)', () => {
     }
     return -1;
   };
-  /** @param {string[]} paragraph */
-  const withoutSpans = (paragraph) => {
+  const withoutSpans = (paragraph: string[]) => {
     const text = paragraph.join('\n');
     let out = '';
     for (let at = 0; at < text.length;) {
@@ -435,10 +425,8 @@ describe('renderedLines against its old scans (property)', () => {
     }
     return out.split('\n');
   };
-  /** @param {string[]} lines */
-  const inline = (lines) => {
-    /** @type {string[]} */
-    const out = [];
+  const inline = (lines: string[]) => {
+    const out: string[] = [];
     let start = 0;
     for (let i = 0; i <= lines.length; i++) {
       const marker = i < lines.length && lines[i].startsWith('@@tool:');
@@ -450,14 +438,15 @@ describe('renderedLines against its old scans (property)', () => {
     }
     return out;
   };
-  /**
-   * @param {string} body
-   * @param {{ keepTools?: boolean, onBlock?: (key: string, inner: string[], at: number) => void }} [options]
-   */
-  const reference = (body, { keepTools = false, onBlock } = {}) => {
+  const reference = (
+    body: string,
+    {
+      keepTools = false,
+      onBlock,
+    }: { keepTools?: boolean; onBlock?: (key: string, inner: string[], at: number) => void } = {},
+  ) => {
     const lines = body.replace(/\r\n?/g, '\n').split('\n');
-    /** @type {string[]} */
-    const kept = [];
+    const kept: string[] = [];
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const fence = FENCE.exec(line);
@@ -547,10 +536,8 @@ describe('renderedLines against its old scans (property)', () => {
   it('reads every body as the old scans did, its tool blocks heard the same, with keepTools or not', () => {
     fc.assert(
       fc.property(body, fc.boolean(), (text, keepTools) => {
-        /** @type {unknown[][]} */
-        const heard = [];
-        /** @type {unknown[][]} */
-        const expected = [];
+        const heard: unknown[][] = [];
+        const expected: unknown[][] = [];
         const got = renderedLines(text, { keepTools, onBlock: (...a) => heard.push(a) });
         const want = reference(text, { keepTools, onBlock: (...a) => expected.push(a) });
         expect(got).toEqual(want);

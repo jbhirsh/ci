@@ -93,27 +93,20 @@ const EXAMPLE = /^ {0,3}\*\*Example:?\*\*/m;
  * and the check below build their patterns from these two (and `htmlLink` with
  * `htmlLeadBold` and `htmlLeadPlain` for the HTML table), so they accept the
  * same forms.
- *
- * @param {string} link
  */
-export const leadBold = (link) => `\\*\\*(?:👉 )?${link}\\*\\*`;
-/** @param {string} link */
-export const leadPlain = (link) => link;
+export const leadBold = (link: string) => `\\*\\*(?:👉 )?${link}\\*\\*`;
+export const leadPlain = (link: string) => link;
 /**
  * The head link of the HTML table, a pattern source for `where`, the pattern of
  * `owner/name` (the parser's is its repo, escaped; the check's any repo): the
  * commit link around the sha's first seven characters in code. Group 1 is the
  * whole sha, group 2 its first seven, which the link text must repeat, so a
  * pattern holds it once: the bold and the plain lead below are two patterns.
- *
- * @param {string} where
  */
-export const htmlLink = (where) =>
+export const htmlLink = (where: string) =>
   `<a href="https://github\\.com/${where}/commit/(([0-9a-f]{7})[0-9a-f]{33})"><code>\\2</code></a>`;
-/** @param {string} link */
-export const htmlLeadBold = (link) => `<b>(?:👉 )?${link}</b>`;
-/** @param {string} link */
-export const htmlLeadPlain = (link) => link;
+export const htmlLeadBold = (link: string) => `<b>(?:👉 )?${link}</b>`;
+export const htmlLeadPlain = (link: string) => link;
 /** A head link to a GitHub commit whose sha opens with the seven characters shown, capturing them. */
 const ANY_LINK =
   '\\[`([0-9a-f]{7})`\\]\\(https://github\\.com/[\\w.-]+/[\\w.-]+/commit/\\1[0-9a-f]{33}\\)';
@@ -150,17 +143,12 @@ const CURRENT_ROW_OLD = /^\|[^|\n[]*\(current\)[^|\n[]*\|([^|\n]*)\|/m;
  *
  * `back` turns a position in what is left into the same position in `text`, so that the current
  * revision found here can have its rows read where they are.
- *
- * @param {string} text
- * @returns {{ text: string, back: (at: number) => number }}
  */
-function withoutTables(text) {
-  /** @type {{ at: number, length: number }[][]} each pass's cuts, where each is in what the pass left */
-  const passes = [];
+function withoutTables(text: string): { text: string; back: (at: number) => number } {
+  const passes: { at: number; length: number }[][] = [];
   // One pattern for each lead: the link's back-reference counts groups from its own start.
   const left = [htmlLeadBold(HTML_ANY), htmlLeadPlain(HTML_ANY)].reduce((t, lead) => {
-    /** @type {{ at: number, length: number }[]} */
-    const cuts = [];
+    const cuts: { at: number; length: number }[] = [];
     let gone = 0;
     const next = t.replace(
       new RegExp(
@@ -171,7 +159,7 @@ function withoutTables(text) {
       (m, ...rest) => {
         const keep = m.indexOf('</summary>') + '</summary>'.length;
         cuts.push({
-          at: /** @type {number} */ (rest.at(-2)) - gone + keep,
+          at: (rest.at(-2) as number) - gone + keep,
           length: m.length - keep,
         });
         gone += m.length - keep;
@@ -197,13 +185,11 @@ function withoutTables(text) {
  * shape since ci#132) whose summary closes on its line, the rows of its table
  * (`revisionRows`); null when the table has no current row.
  *
- * @param {string} description the description, fenced code aside
- * @returns {{ head: string, rows: string[] | null } | null}
+ * @param description the description, fenced code aside
  */
-function currentRevision(description) {
+function currentRevision(description: string): { head: string; rows: string[] | null } | null {
   const { text, back } = withoutTables(description);
-  /** @type {{ index: number, head: string, summary?: number }[]} */
-  const found = [];
+  const found: { index: number; head: string; summary?: number }[] = [];
   for (const re of [CURRENT_BOLD, CURRENT_PLAIN]) {
     const m = re.exec(text);
     if (m) found.push({ index: m.index, head: m[1] });
@@ -231,9 +217,9 @@ function currentRevision(description) {
 /**
  * The text of Revisions' current row that names its head, or null.
  *
- * @param {string} description the description, fenced code aside
+ * @param description the description, fenced code aside
  */
-const currentHead = (description) => currentRevision(description)?.head ?? null;
+const currentHead = (description: string) => currentRevision(description)?.head ?? null;
 
 /** The header, the rule and the empty row of a revision's table, the frame the changes tool writes (a trimmed line): not rows the author wrote. pr-changes/revisions.mjs reads the frame with these too. */
 export const TABLE_HEAD_LINE = /^\|\s*What changed\s*\|\s*Why\s*\|$/i;
@@ -243,7 +229,7 @@ export const TABLE_EMPTY_LINE = /^\|(?:\s*\|)+$/;
 const REVISIONS_END_ALONE = /^<!-- \/pr-changes:revisions -->$/;
 
 /** A line that ends a revision's block for the changes tool (a trimmed line): `</details>` alone, the next `<details>`, or the end marker. */
-const blockEnds = (/** @type {string} */ row) =>
+const blockEnds = (row: string) =>
   row.toLowerCase() === '</details>' || /^<details\b/i.test(row) || REVISIONS_END_ALONE.test(row);
 
 /**
@@ -255,11 +241,10 @@ const blockEnds = (/** @type {string} */ row) =>
  * `</details>` is a block of one line, with no rows, as the tool reads it. Null when the summary
  * never closes before the block ends: not a block.
  *
- * @param {string} text the description, fenced code aside
- * @param {number} at
- * @returns {string[] | null}
+ * @param text the description, fenced code aside
+ * @param at
  */
-function revisionRows(text, at) {
+function revisionRows(text: string, at: number): string[] | null {
   const from = text.lastIndexOf('\n', at - 1) + 1;
   const lines = text.slice(from).split('\n');
   // The summary may wrap: its rows start after the line that closes it.
@@ -270,8 +255,7 @@ function revisionRows(text, at) {
   }
   if (close === 0 && /^\s*<details\b/i.test(lines[0]) && /<\/details>\s*$/i.test(lines[0]))
     return [];
-  /** @type {string[]} */
-  const rows = [];
+  const rows: string[] = [];
   let comment = false;
   for (const raw of lines.slice(close + 1)) {
     const row = raw.trim();
@@ -304,10 +288,8 @@ const LETTER = /[\p{L}\p{N}]/u;
  * (`&#65;`), an autolink or an `<img>` alone empty: rows are for words. Whichever opens first
  * wins, as in Markdown. A pass along the cell, with no pattern that backtracks: once no `>` (or
  * `-->`) is left, a `<` is only text.
- *
- * @param {string} cell
  */
-export function holdsText(cell) {
+export function holdsText(cell: string) {
   let out = '';
   let code = '';
   let tags = true;
@@ -354,10 +336,9 @@ export function holdsText(cell) {
  * A row's two cells, What changed and Why, split at each `|` not written `\|`, as GitHub reads
  * them: a cell after the second is not shown, and a missing one is empty.
  *
- * @param {string} row a trimmed line starting `|`
- * @returns {[string, string]}
+ * @param row a trimmed line starting `|`
  */
-const rowCells = (row) => {
+const rowCells = (row: string): [string, string] => {
   const parts = row.split(/(?<!\\)\|/);
   return [parts[1] ?? '', parts[2] ?? ''];
 };
@@ -367,11 +348,10 @@ const rowCells = (row) => {
  * filled, or one has only one (ci#140). A row with neither filled, beside a filled one, is no
  * concern.
  *
- * @param {string[]} rows the revision's rows, its table's frame aside
- * @param {string} head the PR's head sha
- * @returns {string[]}
+ * @param rows the revision's rows, its table's frame aside
+ * @param head the PR's head sha
  */
-export function revisionRowProblems(rows, head) {
+export function revisionRowProblems(rows: string[], head: string): string[] {
   const sha = head.slice(0, 7);
   const filled = rows.map((row) => rowCells(row).map(holdsText));
   if (!filled.some(([what, why]) => what && why)) {
@@ -411,14 +391,11 @@ const REVISIONS_END_LINE = /^([ \t]*)<!-- \/pr-changes:revisions -->[ \t]*\r?$/g
  * The description with every line of fenced code blanked and the rest kept as
  * it was, line endings and offsets included, so a position found in it is a
  * position in the description (CRLF too: a `\r` stays).
- *
- * @param {string} body
  */
-export function maskFences(body) {
+export function maskFences(body: string) {
   const lines = body.split('\n');
-  /** @type {string[]} */
-  const out = [];
-  const blank = (/** @type {string} */ line) => line.replace(/[^\r]/g, ' ');
+  const out: string[] = [];
+  const blank = (line: string) => line.replace(/[^\r]/g, ' ');
   for (let i = 0; i < lines.length; i++) {
     const fence = FENCE.exec(lines[i]);
     if (!fence) {
@@ -428,7 +405,7 @@ export function maskFences(body) {
     // The closing fence: its own character, at least as long, nothing after it. No
     // pattern is built from the opening fence, so nothing in a description is ever
     // read as part of one.
-    const closes = (/** @type {string} */ line) => {
+    const closes = (line: string) => {
       const m = /^ {0,3}(`{3,}|~{3,}) *\r?$/.exec(line);
       return m !== null && m[1][0] === fence[1][0] && m[1].length >= fence[1].length;
     };
@@ -447,15 +424,15 @@ export function maskFences(body) {
  * in a sentence or shown in a fence is no marker. `at` is the pair, from its
  * start marker to the end of its end marker, when there is exactly one of
  * each in that order, else null (none, or torn or repeated).
- *
- * @param {string} body
- * @returns {{ starts: number[], ends: number[], at: { from: number, to: number } | null }}
  */
-export function revisionsPair(body) {
+export function revisionsPair(body: string): {
+  starts: number[];
+  ends: number[];
+  at: { from: number; to: number } | null;
+} {
   const masked = maskFences(body);
-  /** @param {RegExp} line */
-  const find = (line) =>
-    [...masked.matchAll(line)].map((m) => /** @type {number} */ (m.index) + m[1].length);
+  const find = (line: RegExp) =>
+    [...masked.matchAll(line)].map((m) => (m.index as number) + m[1].length);
   const starts = find(REVISIONS_START_LINE);
   const ends = find(REVISIONS_END_LINE);
   const clean = starts.length === 1 && ends.length === 1 && starts[0] < ends[0];
@@ -470,13 +447,10 @@ export function revisionsPair(body) {
  * A description without its fenced code, and nothing else taken out: the
  * Revisions table is inside a tool's block, which renderedLines drops, and
  * its cells hold code spans, which it strips.
- *
- * @param {string | null | undefined} body
  */
-function withoutFences(body) {
+function withoutFences(body: string | null | undefined) {
   const lines = (body ?? '').replace(/\r\n?/g, '\n').split('\n');
-  /** @type {string[]} */
-  const kept = [];
+  const kept: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const fence = FENCE.exec(lines[i]);
     if (!fence) {
@@ -503,19 +477,22 @@ function withoutFences(body) {
  * With `keepTools`, a tool's block stays as one `@@tool:<key>@@` line, so a
  * check can tell a slot is there without reading what a tool wrote in it.
  *
- * @param {string | null | undefined} body
+ * @param body
  * `onBlock` hears each complete tool block as it is skipped: its key, the
  * lines between its markers, as written, and the line it stands at.
  *
- * @param {{ keepTools?: boolean, onBlock?: (key: string, inner: string[], at: number) => void }} [options]
- * @returns {string[]}
+ * @param options
  */
-export function renderedLines(body, { keepTools = false, onBlock } = {}) {
+export function renderedLines(
+  body: string | null | undefined,
+  {
+    keepTools = false,
+    onBlock,
+  }: { keepTools?: boolean; onBlock?: (key: string, inner: string[], at: number) => void } = {},
+): string[] {
   const lines = (body ?? '').replace(/\r\n?/g, '\n').split('\n');
-  /** @type {string[]} */
-  const kept = [];
-  /** @type {((key: string, after: number) => number) | undefined} */
-  let endOf;
+  const kept: string[] = [];
+  let endOf: ((key: string, after: number) => number) | undefined;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const fence = FENCE.exec(line);
@@ -562,16 +539,12 @@ export function renderedLines(body, { keepTools = false, onBlock } = {}) {
  * fence too, as a scan from the start marker would find it. Each start marker scanning the lines after it was quadratic on a body of
  * unclosed ones (`'<!-- x:y -->\n'.repeat(5000)`, ci#157); `after` only grows between calls, so
  * each end's list is read once in all.
- *
- * @param {string[]} lines
- * @returns {(key: string, after: number) => number}
  */
-function endMarkers(lines) {
+function endMarkers(lines: string[]): (key: string, after: number) => number {
   // Every end marker opens so, and only its key and its close follow: `end` below.
   const open = '<!-- /';
-  const end = (/** @type {string} */ key) => `${open}${key} -->`;
-  /** @type {Map<string, { at: number[], next: number }>} */
-  const ends = new Map();
+  const end = (key: string) => `${open}${key} -->`;
+  const ends: Map<string, { at: number[]; next: number }> = new Map();
   lines.forEach((line, n) => {
     const text = line.trim();
     if (!text.startsWith(open)) return;
@@ -590,13 +563,9 @@ function endMarkers(lines) {
 /**
  * Code spans and inline comments gone, a paragraph (lines up to a blank one)
  * at a time.
- *
- * @param {string[]} lines
- * @returns {string[]}
  */
-function inline(lines) {
-  /** @type {string[]} */
-  const out = [];
+function inline(lines: string[]): string[] {
+  const out: string[] = [];
   let start = 0;
   for (let i = 0; i <= lines.length; i++) {
     // A tool's marker line ends a paragraph, as the blank line it stands for does.
@@ -613,11 +582,8 @@ function inline(lines) {
 /**
  * A paragraph's lines with its code spans and closed comments removed
  * (newlines kept, so line numbers hold).
- *
- * @param {string[]} paragraph
- * @returns {string[]}
  */
-function withoutSpans(paragraph) {
+function withoutSpans(paragraph: string[]): string[] {
   const text = paragraph.join('\n');
   let out = '';
   // Once no `-->` is left after an unclosed `<!--`, none is after a later one: searching again from
@@ -654,12 +620,8 @@ function withoutSpans(paragraph) {
 
 /**
  * Where a run of exactly `n` backticks starts, from `from`, or -1.
- *
- * @param {string} text
- * @param {number} from
- * @param {number} n
  */
-function findRun(text, from, n) {
+function findRun(text: string, from: number, n: number) {
   for (let at = text.indexOf('`', from); at !== -1; at = text.indexOf('`', at)) {
     let len = 0;
     while (text[at + len] === '`') len++;
@@ -673,10 +635,10 @@ function findRun(text, from, n) {
  * A heading's text from its line, or null: two hashes and a space, up to
  * three spaces of indent, closing hashes and trailing space dropped.
  *
- * @param {string} line
- * @param {number} level 2 or 3
+ * @param line
+ * @param level 2 or 3
  */
-function headingText(line, level) {
+function headingText(line: string, level: number) {
   let at = 0;
   while (line[at] === ' ' && at < 4) at++;
   if (at > 3 || !line.startsWith('#'.repeat(level), at) || line[at + level] !== ' ') return null;
@@ -691,10 +653,10 @@ function headingText(line, level) {
 }
 
 /**
- * @param {string} name a heading's text
- * @returns {number} its place in HEADINGS, or -1
+ * @param name a heading's text
+ * @returns its place in HEADINGS, or -1
  */
-const place = (name) => HEADINGS.findIndex((names) => names.includes(name.trim()));
+const place = (name: string): number => HEADINGS.findIndex((names) => names.includes(name.trim()));
 
 /**
  * What is wrong with a Plan's table: it must be the template's HTML one, so
@@ -702,17 +664,15 @@ const place = (name) => HEADINGS.findIndex((names) => names.includes(name.trim()
  * so each step is a `<tbody>` of its own and only this PR's starts with an
  * empty `<tr></tr>`; a Markdown table is one body, and shades every other row.
  *
- * @param {string} plan the Plan section
- * @returns {string[]}
+ * @param plan the Plan section
  */
-function planTableProblems(plan) {
+function planTableProblems(plan: string): string[] {
   if (plan.split('\n').some((l) => /^[ \t]*\|.*\|[ \t]*$/.test(l)) || !/<table\b/i.test(plan)) {
     return [
       "write the Plan as the template's HTML table, not a Markdown one: GitHub shades every other row of a Markdown table, and only this PR's row of the template's",
     ];
   }
-  /** @type {string[]} */
-  const found = [];
+  const found: string[] = [];
   const bodies = [...plan.matchAll(/<tbody>([\s\S]*?)<\/tbody>/gi)].map((m) => m[1]);
   if (bodies.some((b) => (b.match(/<tr>\s*<td/gi) ?? []).length > 1)) {
     found.push("put each step in its own `<tbody>`, as the template's table does");
@@ -744,14 +704,16 @@ const NUMBERED = /^ {0,3}### +\d+\.[ \t]+\S/;
  * with the block half written, its table edit runs none, and what it holds
  * can't be told from its summary line.
  *
- * @param {{ key: string, inner: string[], at: number }[]} blocks every complete tool block
- * @param {{ at: number, line: number }[]} found the known headings
- * @param {string[]} lines what a reader sees
- * @returns {string[]}
+ * @param blocks every complete tool block
+ * @param found the known headings
+ * @param lines what a reader sees
  */
-function pictureProblems(blocks, found, lines) {
-  /** @type {string[]} */
-  const problems = [];
+function pictureProblems(
+  blocks: { key: string; inner: string[]; at: number }[],
+  found: { at: number; line: number }[],
+  lines: string[],
+): string[] {
+  const problems: string[] = [];
   const changes = found.find((f) => f.at === 2);
   const after = changes ? found.find((f) => f.line > changes.line && f.at !== 2) : undefined;
   const end = after ? after.line : lines.length;
@@ -798,22 +760,17 @@ function pictureProblems(blocks, found, lines) {
   return problems;
 }
 
-/**
- * What the PR event says about the PR's heads.
- *
- * @typedef {object} PrEvent
- * @property {boolean} [pushed] a push moved the head (`synchronize`)
- */
+/** What the PR event says about the PR's heads. */
+export type PrEvent = {
+  /** a push moved the head (`synchronize`) */
+  pushed?: boolean;
+};
 
 /**
  * What is wrong with the description's Revisions marker pair, for a PR that has
  * had more than one head.
- *
- * @param {string | null | undefined} body
- * @param {PrEvent} event
- * @returns {string[]}
  */
-function revisionsProblems(body, { pushed = false }) {
+function revisionsProblems(body: string | null | undefined, { pushed = false }: PrEvent): string[] {
   // A push is the proof of a second head the event gives: a PR opened, edited,
   // reopened or marked ready has one, whatever its commits.
   if (!pushed) return [];
@@ -839,27 +796,27 @@ function revisionsProblems(body, { pushed = false }) {
 /**
  * What is wrong with a description, each as a sentence that says how to fix it.
  *
- * @param {string | null | undefined} body
- * @param {string} [head] the PR's head sha, when known: Revisions' current row must name it
- * @param {PrEvent} [event] what the PR event says about the PR's heads
- * @returns {string[]}
+ * @param body
+ * @param head the PR's head sha, when known: Revisions' current row must name it
+ * @param event what the PR event says about the PR's heads
  */
-export function bodyProblems(body, head, event = {}) {
-  /** @type {{ key: string, inner: string[], at: number }[]} */
-  const blocks = [];
+export function bodyProblems(
+  body: string | null | undefined,
+  head?: string,
+  event: PrEvent = {},
+): string[] {
+  const blocks: { key: string; inner: string[]; at: number }[] = [];
   const lines = renderedLines(body, {
     onBlock: (key, inner, at) => blocks.push({ key, inner, at }),
   });
   // The same lines with each tool's block kept as a marker, line for line.
   const withTools = renderedLines(body, { keepTools: true });
-  /** @type {{ at: number, line: number, name: string }[]} the known headings, in the order written */
-  const found = [];
+  const found: { at: number; line: number; name: string }[] = [];
   lines.forEach((text, line) => {
     const name = headingText(text, 2);
     if (name !== null && place(name) !== -1) found.push({ at: place(name), line, name });
   });
-  /** @type {string[]} */
-  const problems = [];
+  const problems: string[] = [];
   HEADINGS.forEach((names, at) => {
     const n = found.filter((f) => f.at === at).length;
     const wanted = names.map((name) => `\`## ${name}\``).join(' or ');
@@ -873,11 +830,8 @@ export function bodyProblems(body, head, event = {}) {
   }
   /**
    * The lines under a heading, up to the next known one.
-   *
-   * @param {number} at
-   * @param {string[]} [source]
    */
-  const section = (at, source = lines) => {
+  const section = (at: number, source: string[] = lines) => {
     const from = found.find((f) => f.at === at);
     if (!from) return [];
     const next = found.find((f) => f.line > from.line && f.at !== at);
@@ -906,10 +860,8 @@ export function bodyProblems(body, head, event = {}) {
   if (found.some((f) => f.at === 2)) {
     const changes = section(2);
     const kept = section(2, withTools);
-    /** @type {number[]} */
-    const headings = [];
-    /** @type {{ at: number, n: number }[]} */
-    const pairs = [];
+    const headings: number[] = [];
+    const pairs: { at: number; n: number }[] = [];
     kept.forEach((l, i) => {
       if (NUMBERED.test(l)) headings.push(i);
       const slot = /^@@tool:pr-changes:change:([1-9]\d*)@@$/.exec(l);

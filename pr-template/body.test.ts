@@ -9,7 +9,7 @@ import {
   revisionsPair,
 } from './body.ts';
 
-const fixture = (/** @type {string} */ name) =>
+const fixture = (name: string) =>
   readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 const master = readFileSync(
   new URL('../.github/pull_request_template.md', import.meta.url),
@@ -110,7 +110,7 @@ describe('bodyProblems', () => {
   });
 
   it('wants the goal to say its issue: Closes or Part of, or that there is none', () => {
-    const goal = (/** @type {string} */ text) => GOOD.replace('Closes #1.', text);
+    const goal = (text: string) => GOOD.replace('Closes #1.', text);
     for (const ok of [
       'Closes #1.',
       'Part of [#9](https://x/9).',
@@ -137,11 +137,10 @@ describe('bodyProblems', () => {
   });
 
   it("wants the plan as the template's HTML table, so only this PR's row is shaded", () => {
-    const row = (/** @type {string} */ n) =>
-      `<tr><td>${n}</td><td>x</td><td>y</td><td>next</td></tr>`;
+    const row = (n: string) => `<tr><td>${n}</td><td>x</td><td>y</td><td>next</td></tr>`;
     const mine =
       '<tbody><tr></tr><tr><td><b>2</b></td><td><b>this PR</b></td><td><b>y</b></td><td><b>👉 this PR</b></td></tr></tbody>';
-    const plan = (/** @type {string} */ rows) =>
+    const plan = (rows: string) =>
       GOOD.replace('## Changes', `## Plan\n\n<table>\n${rows}\n</table>\n\n## Changes`);
     expect(bodyProblems(plan(`<tbody>${row('1')}</tbody>\n${mine}`))).toEqual([]);
     // Two steps in one body: GitHub shades every other row of it.
@@ -191,7 +190,7 @@ describe('bodyProblems', () => {
   });
 
   it("wants Revisions' current row to name the head, when the head is known", () => {
-    const table = (/** @type {string} */ head) =>
+    const table = (head: string) =>
       `${GOOD}\n| Rev | Head | What |\n| --- | --- | --- |\n| 2 (current) | [\`${head}\`](https://x/${head}) | \`1111111\` → \`${head}\` |\n| 1 | [\`1111111\`](https://x/1111111) | Opened |\n`;
     const head = 'abcdef0123456789abcdef0123456789abcdef01';
     expect(bodyProblems(table('abcdef0'), head)).toEqual([]);
@@ -243,11 +242,11 @@ describe('bodyProblems', () => {
 
   describe('the GIF and screen blocks the tools write', () => {
     const gif = (
-      /** @type {string} */ name,
-      /** @type {string} */ text = 'Recorded automatically at `abc1234`.\n\n![GIF: x after](https://github.com/user-attachments/assets/1)',
+      name: string,
+      text = 'Recorded automatically at `abc1234`.\n\n![GIF: x after](https://github.com/user-attachments/assets/1)',
     ) => `<!-- pr-gif:${name} -->\n${text}\n<!-- /pr-gif:${name} -->`;
-    const under = (/** @type {string} */ block) => GOOD.replace('Why.', `Why.\n\n${block}`);
-    const atEnd = (/** @type {string} */ block) => `${GOOD}\n${block}\n`;
+    const under = (block: string) => GOOD.replace('Why.', `Why.\n\n${block}`);
+    const atEnd = (block: string) => `${GOOD}\n${block}\n`;
 
     it('passes a GIF or a screen under a change, and an empty pair waiting for one', () => {
       expect(bodyProblems(under(gif('rules')))).toEqual([]);
@@ -420,17 +419,17 @@ describe("the template's Example", () => {
 
 describe("bodyProblems: Revisions' current revision, in its details block and every shape before", () => {
   const base = GOOD.slice(0, GOOD.indexOf('## Revisions')).trimEnd();
-  const link = (/** @type {string} */ sha) =>
+  const link = (sha: string) =>
     `[\`${sha.slice(0, 7)}\`](https://github.com/o/r/commit/${sha.padEnd(40, '0')})`;
-  const wrap = (/** @type {string} */ table) =>
+  const wrap = (table: string) =>
     `${base}\n\n<!-- pr-changes:revisions -->\n## Revisions\n\n${table}\n<!-- /pr-changes:revisions -->\n`;
-  const fresh = (/** @type {string[]} */ ...lines) =>
+  const fresh = (...lines: string[]) =>
     ['| What changed | Why |', '| --- | --- |', ...lines].join('\n');
-  const revisions = (/** @type {string} */ body, /** @type {string} */ head) =>
+  const revisions = (body: string, head: string) =>
     bodyProblems(body, head).filter((p) => /Revisions/.test(p));
-  const html = (/** @type {string} */ sha, /** @type {string} */ repo = 'o/r') =>
+  const html = (sha: string, repo = 'o/r') =>
     `<a href="https://github.com/${repo}/commit/${sha.padEnd(40, '0')}"><code>${sha.slice(0, 7)}</code></a>`;
-  const htmlTable = (/** @type {string[]} */ ...rows) =>
+  const htmlTable = (...rows: string[]) =>
     [
       '<table width="100%">',
       '<thead><tr><th width="30%">Revision</th><th width="70%">Why</th></tr></thead>',
@@ -439,7 +438,7 @@ describe("bodyProblems: Revisions' current revision, in its details block and ev
       '</tbody>',
       '</table>',
     ].join('\n');
-  const summaryOf = (/** @type {string} */ lead, /** @type {string} */ rows = '| a | b |') =>
+  const summaryOf = (lead: string, rows = '| a | b |') =>
     `<details open>\n<summary>${lead}</summary>\n\n| What changed | Why |\n| --- | --- |\n${rows}\n\n</details>`;
   const tables = {
     'the details block, the head bold with a pointer': [
@@ -506,7 +505,7 @@ describe("bodyProblems: Revisions' current revision, in its details block and ev
   });
 
   it('reads the old four-column row as it always was: whatever its Head cell holds is compared with the head', () => {
-    const row = (/** @type {string} */ head) => wrap(fresh(`| 2 (current) | ${head} | w | y |`));
+    const row = (head: string) => wrap(fresh(`| 2 (current) | ${head} | w | y |`));
     const bare = 'bbbbbbb';
     for (const head of [
       `[bbbbbbb](https://github.com/o/r/commit/${'b'.repeat(40)})`,
@@ -531,7 +530,7 @@ describe("bodyProblems: Revisions' current revision, in its details block and ev
     ).toEqual([]);
   });
   it('takes out only what the tool wrote: an author details block, closed or not, hides nothing', () => {
-    const old = (/** @type {string} */ head) =>
+    const old = (head: string) =>
       fresh(`| 2 (current) | ${link(head)} | w | y |`, `| 1 | ${link('1111111')} | Opened | |`);
     // An author's own <details> that is never closed, ahead of the old table.
     expect(
@@ -607,7 +606,7 @@ describe("bodyProblems: Revisions' current revision, in its details block and ev
   });
 
   it('does not read (current) after text in the cell, or a row that is no row, as the current row', () => {
-    const cell = (/** @type {string} */ c) => wrap(htmlTable(`<tr><td>${c}</td></tr>`));
+    const cell = (c: string) => wrap(htmlTable(`<tr><td>${c}</td></tr>`));
     expect(revisions(cell(`see ${html('abcdef0')} (current)`), '2222222333')).toEqual([]);
     expect(revisions(cell(`${html('abcdef0')} now`), '2222222333')).toEqual([]);
     expect(
@@ -654,7 +653,7 @@ describe("bodyProblems: Revisions' marker pair, once a push has moved the head",
   const row = '| 2 (current) | [`abcdef0`](https://github.com/o/r/commit/abcdef0123) | w | y |';
   const withPair = `${base}\n\n${START}\n${END}\n`;
   const withTable = `${base}\n\n${START}\n## Revisions\n\n| Rev | Head | What changed | Why |\n| --- | --- | --- | --- |\n${row}\n${END}\n`;
-  const revisions = (/** @type {string} */ body, /** @type {{ pushed?: boolean }} */ event) =>
+  const revisions = (body: string, event: { pushed?: boolean }) =>
     bodyProblems(body, head, event).filter((p) =>
       /pr-changes:revisions|Revisions:|update Revisions/.test(p),
     );
@@ -735,12 +734,11 @@ describe('revisionsPair and maskFences, with backslashes in the description', ()
 });
 
 describe('bodyProblems for changes the tool titles (no numbered heading)', () => {
-  const pair = (/** @type {number} */ n, /** @type {string} */ inner = '') =>
+  const pair = (n: number, inner = '') =>
     `<!-- pr-changes:change:${n} -->\n${inner}<!-- /pr-changes:change:${n} -->`;
-  const title = (/** @type {number} */ n) =>
+  const title = (n: number) =>
     `**${n}. Do a thing** [\`abc1234\`](https://github.com/o/r/commit/abc1234)\n`;
-  /** @param {string} changes */
-  const withChanges = (changes) =>
+  const withChanges = (changes: string) =>
     GOOD.replace(/### 1\. The change[\s\S]*?\n\n## Checklist/, () => `${changes}\n\n## Checklist`);
 
   it('passes a change that is a filled pair with its why under it', () => {
@@ -829,7 +827,7 @@ describe('bodyProblems for changes the tool titles (no numbered heading)', () =>
   });
 
   it('wants the pairs numbered 1, 2, 3 in order when no heading carries the numbers', () => {
-    const numbered = (/** @type {number[]} */ ns) =>
+    const numbered = (ns: number[]) =>
       withChanges(ns.map((n) => `${pair(n, title(n))}\n\n- Why.`).join('\n\n'));
     expect(bodyProblems(numbered([1, 2, 3]))).toEqual([]);
     for (const ns of [[2, 1], [1, 3], [1, 1], [2]]) {
@@ -852,10 +850,10 @@ describe("bodyProblems: the current revision's rows (ci#140)", () => {
   const base = GOOD.slice(0, GOOD.indexOf('## Revisions')).trimEnd();
   const HEAD = 'abcdef0'.padEnd(40, '1');
   const OLD = '1111111'.padEnd(40, '0');
-  const html = (/** @type {string} */ sha) =>
+  const html = (sha: string) =>
     `<a href="https://github.com/o/r/commit/${sha}"><code>${sha.slice(0, 7)}</code></a>`;
   /** A revision as the tool writes it: the current one bold, its table's rows as given. */
-  const block = (/** @type {string} */ sha, /** @type {string[]} */ rows, current = true) =>
+  const block = (sha: string, rows: string[], current = true) =>
     [
       current ? '<details open>' : '<details>',
       current
@@ -868,15 +866,15 @@ describe("bodyProblems: the current revision's rows (ci#140)", () => {
       '',
       '</details>',
     ].join('\n');
-  const wrap = (/** @type {string} */ inner) =>
+  const wrap = (inner: string) =>
     `${base}\n\n<!-- pr-changes:revisions -->\n## Revisions\n\n${inner}\n<!-- /pr-changes:revisions -->\n`;
-  const revisions = (/** @type {string} */ body, head = HEAD) =>
+  const revisions = (body: string, head = HEAD) =>
     bodyProblems(body, head).filter((p) => /Revisions/.test(p));
   const NONE =
     "fill Revisions' current revision, `abcdef0`: its table has no row with both cells filled. In the description, write one row for each change this push made, both cells in plain words, such as `| The cap fails closed | It's the only paid API |` (each row opens with `|`; write a pipe in a cell as `\\|`). Do it once this push's `PR changes` run has ended: a run still going can write an older copy over your edit";
-  const HALF = (/** @type {number} */ n) =>
+  const HALF = (n: number) =>
     `fill both cells of every row in Revisions' current revision, \`abcdef0\`: ${n === 1 ? '1 row has' : `${n} rows have`} an empty What changed or Why`;
-  const rowsOf = (/** @type {string[]} */ ...rows) =>
+  const rowsOf = (...rows: string[]) =>
     revisions(wrap(`${block(HEAD, rows)}\n\n${block(OLD, ['|  |  |'], false)}`));
 
   it.each([
@@ -955,8 +953,7 @@ describe("bodyProblems: the current revision's rows (ci#140)", () => {
   });
 
   it('reads the rows after a summary that wraps onto a second line', () => {
-    const wrapped = (/** @type {string} */ row) =>
-      block(HEAD, [row]).replace(' · <a href=', '\n· <a href=');
+    const wrapped = (row: string) => block(HEAD, [row]).replace(' · <a href=', '\n· <a href=');
     expect(wrapped('|  |  |')).toContain('(current)\n· <a');
     expect(revisions(wrap(wrapped('|  |  |')))).toEqual([NONE]);
     expect(revisions(wrap(wrapped('| The cap | Paid |')))).toEqual([]);

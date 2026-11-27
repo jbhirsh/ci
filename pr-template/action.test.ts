@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
-const read = (/** @type {string} */ name) => readFileSync(new URL(name, import.meta.url), 'utf8');
-/** @type {{ runs: { steps: { uses?: string, env?: Record<string, string>, run?: string }[] } }} */
-const action = parse(read('./action.yml'));
+const read = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf8');
+const action: { runs: { steps: { uses?: string; env?: Record<string, string>; run?: string }[] } } =
+  parse(read('./action.yml'));
 const script = read('./check-body.ts');
 
 describe('the PR description action', () => {
