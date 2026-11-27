@@ -70,7 +70,7 @@ describe('decide', () => {
 
 describe('changedSince', () => {
   it('lists the files changed since the commit, or null when it is gone', () => {
-    const run = vi.fn((/** @type {string} */ _, /** @type {string[]} */ args) =>
+    const run = vi.fn((_: string, args: string[]) =>
       args[0] === 'diff' ? 'a.ts\nsrc/b.tsx\n' : '',
     );
     expect(changedSince(SHA, run)).toEqual(['a.ts', 'src/b.tsx']);
@@ -92,7 +92,7 @@ describe('main', () => {
   };
 
   it('finds the last successful run of this workflow on main, and diffs from it', () => {
-    const calls = /** @type {string[][]} */ ([]);
+    const calls = [] as string[][];
     const lines = main(
       env,
       (command, args) => {

@@ -8,18 +8,16 @@ import { cli, selftest } from './selftest.ts';
 
 /**
  * A git checkout holding these files, with two commits.
- *
- * @param {Record<string, string | Buffer>} files
  */
-function app(files) {
+function app(files: Record<string, string | Buffer>) {
   const root = mkdtempSync(path.join(tmpdir(), 'readme-app-'));
-  const write = (/** @type {string} */ file, /** @type {string | Buffer} */ text) => {
+  const write = (file: string, text: string | Buffer) => {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     writeFileSync(path.join(root, file), text);
   };
   write('package.json', '{}');
   for (const [file, text] of Object.entries(files)) write(file, text);
-  const git = (/** @type {string[]} */ ...args) =>
+  const git = (...args: string[]) =>
     execFileSync('git', ['-c', 'user.name=a', '-c', 'user.email=a@b.c', ...args], { cwd: root });
   git('init', '-q');
   git('commit', '-q', '--allow-empty', '-m', 'first');
@@ -69,7 +67,7 @@ describe('selftest', () => {
 
 describe('cli', () => {
   it('prints the self-test and returns its exit code', async () => {
-    const lines = /** @type {string[]} */ ([]);
+    const lines = [] as string[];
     expect(await cli([app(SHOTS)], (l) => lines.push(l))).toBe(0);
     expect(await cli([app({ 'src/App.tsx': '' })], (l) => lines.push(l))).toBe(1);
     expect(lines.at(-1)).toBe(

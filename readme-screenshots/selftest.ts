@@ -18,15 +18,15 @@ import { matchesAny } from '../lib/match.mjs';
 import { diffRatio } from './compare.ts';
 import { changedSince, decide } from './decide.ts';
 import { isShotName, settings } from './settings.ts';
+import type { Run } from './decide.ts';
 
 /** How far back decide's rules are tried. */
 export const DEPTH = 20;
 
 /**
- * @param {string} root
- * @returns {Promise<string[]>} what to print; throws on the first problem
+ * @returns what to print; throws on the first problem
  */
-export async function selftest(root) {
+export async function selftest(root: string): Promise<string[]> {
   const config = appConfig('readme-screenshots', root);
   const s = settings(config);
   const docs = path.join(root, s.dir);
@@ -39,8 +39,7 @@ export async function selftest(root) {
   if (bad.length > 0) throw new Error(`screenshot names the bot can't write: ${bad.join(', ')}`);
   const lines = [`readme-screenshots: ${shots.length} screenshots in ${s.dir}.`];
 
-  /** @type {import('./decide.ts').Run} */
-  const run = (command, args) =>
+  const run: Run = (command, args) =>
     execFileSync(command, args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   const tracked = run('git', ['ls-files']).split('\n').filter(Boolean);
   // Only globs the app chose: the defaults are a guess at a web app's layout.
@@ -72,12 +71,11 @@ export async function selftest(root) {
 
 /**
  * Runs the self-test on the app at `argv[0]` and returns the exit code.
- *
- * @param {string[]} argv
- * @param {(line: string) => void} [log]
- * @returns {Promise<number>}
  */
-export async function cli(argv, log = console.log) {
+export async function cli(
+  argv: string[],
+  log: (line: string) => void = console.log,
+): Promise<number> {
   try {
     for (const line of await selftest(path.resolve(argv[0] ?? '.'))) log(line);
     return 0;

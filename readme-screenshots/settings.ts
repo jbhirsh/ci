@@ -27,21 +27,17 @@ export const DEFAULT_SOURCE = 'a fresh capture of the app';
  */
 export const CHANGED_RATIO = 0.005;
 
-/**
- * @typedef {object} Settings
- * @property {string} dir
- * @property {string[]} shows
- * @property {string[]} ignore
- * @property {string} source
- */
+export type Settings = {
+  dir: string;
+  shows: string[];
+  ignore: string[];
+  source: string;
+};
 
 /**
  * The settings, checked, with the defaults filled in.
- *
- * @param {Record<string, unknown>} config
- * @returns {Settings}
  */
-export function settings(config) {
+export function settings(config: Record<string, unknown>): Settings {
   const { dir = DEFAULT_DIR, source = DEFAULT_SOURCE } = config;
   if (
     typeof dir !== 'string' ||
@@ -66,9 +62,7 @@ export function settings(config) {
  * Whether a file name is one this bot may write: a PNG directly in the
  * screenshots folder, no path. Names cross from the capture job to the job
  * holding the token, so they're checked on both sides.
- *
- * @param {string} name
  */
-export function isShotName(name) {
+export function isShotName(name: string) {
   return /^[\w][\w.-]*\.png$/.test(name);
 }
