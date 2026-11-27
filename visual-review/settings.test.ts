@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mockupMayChange, settings } from './settings.ts';
+import type { Settings } from './settings.ts';
 
 const ok = { workflow: 'visual.yml', job: 'visual', folders: ['tests/visual/*-snapshots/'] };
 
@@ -30,7 +31,7 @@ describe('settings', () => {
   });
 
   it('refuses what it can not use', () => {
-    for (const [bad, why] of /** @type {[Record<string, unknown>, RegExp][]} */ ([
+    for (const [bad, why] of [
       [{ ...ok, extra: 1 }, /unknown key: extra/],
       [{ ...ok, workflow: 'CI' }, /workflow/],
       [{ ...ok, job: '' }, /job/],
@@ -41,7 +42,7 @@ describe('settings', () => {
       [{ ...ok, folders: ['../x'] }, /folders/],
       [{ ...ok, mockupPaths: ['/abs'] }, /mockupPaths/],
       [{ ...ok, columns: [] }, /visual-review\.columns/],
-    ])) {
+    ] as [Record<string, unknown>, RegExp][]) {
       expect(() => settings(bad)).toThrow(why);
     }
   });
@@ -49,9 +50,10 @@ describe('settings', () => {
 
 describe('mockupMayChange', () => {
   it('takes only mockupPaths, and never a lockfile', () => {
-    const s = /** @type {import('./settings.ts').Settings} */ (
-      settings({ ...ok, mockupPaths: ['src/**', 'package-lock.json', 'web/**'] })
-    );
+    const s = settings({
+      ...ok,
+      mockupPaths: ['src/**', 'package-lock.json', 'web/**'],
+    }) as Settings;
     expect(mockupMayChange('src/App.tsx', s)).toBe(true);
     expect(mockupMayChange('.github/workflows/ci.yml', s)).toBe(false);
     expect(mockupMayChange('package-lock.json', s)).toBe(false);

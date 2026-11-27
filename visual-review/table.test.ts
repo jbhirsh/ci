@@ -1,21 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { parseUpload, SECTION, uploadMarker, withSections } from '../describe/describe.ts';
 import { isMinor, keyOf, lines, pick, renderTable, share, summary } from './table.ts';
+import type { Change } from './compare.ts';
+import type { Look } from './zoom.ts';
+import type { Line } from './table.ts';
 
 const columns = [
   { label: 'Mobile', file: ['{state}-mobile-linux.png'] },
   { label: 'Desktop', file: ['{state}-desktop-linux.png'], width: 400 },
 ];
 const DIFF = Buffer.from('d');
-/** @type {import('./compare.ts').Change[]} */
-const changes = [
+const changes: Change[] = [
   { file: 'm/trips-desktop-linux.png', kind: 'changed', ratio: 0.1, diff: DIFF, after: 'a1' },
   { file: 'm/trips-mobile-linux.png', kind: 'changed', ratio: 0.2, diff: DIFF, after: 'a2' },
   { file: 'm/new-mobile-linux.png', kind: 'added', after: 'a3' },
   { file: 'odd.png', kind: 'removed', after: '' },
 ];
-/** @type {import('./zoom.ts').Look} */
-const LOOK = {
+const LOOK: Look = {
   places: [{ x: 10, y: 10, w: 20, h: 12 }],
   zoom: { x: 2, y: 2, w: 36, h: 30 },
   scale: 6,
@@ -23,8 +24,7 @@ const LOOK = {
   width: 402,
   height: 800,
 };
-/** @type {import('./compare.ts').Change} */
-const small = {
+const small: Change = {
   file: 'm/menu-mobile-linux.png',
   kind: 'changed',
   ratio: 0.0004,
@@ -34,10 +34,9 @@ const small = {
 };
 const REPO = 'jbhirsh/app';
 const BASE = '0123456789abcdef0123456789abcdef01234567';
-const keysOf = (/** @type {string} */ md) =>
+const keysOf = (md: string) =>
   [...md.matchAll(/^<!-- describe-part:(\S+) -->$/gm)].map((m) => m[1]);
-const urls = (/** @type {import('./table.ts').Line[]} */ rows) =>
-  new Map(pick(rows).map((p) => [keyOf(p), `https://u/${keyOf(p)}`]));
+const urls = (rows: Line[]) => new Map(pick(rows).map((p) => [keyOf(p), `https://u/${keyOf(p)}`]));
 
 describe('lines', () => {
   it('puts the largest change first: new, gone and resized, then by share', () => {
@@ -85,7 +84,7 @@ describe('summary', () => {
 });
 
 describe('the summary', () => {
-  const rend = (/** @type {import('./compare.ts').Change[]} */ list, omitted = 0) => {
+  const rend = (list: Change[], omitted = 0) => {
     const rows = lines(list, columns);
     return renderTable({ rows, links: new Map(), base: BASE, repo: REPO, minor: 0.001, omitted });
   };
@@ -133,8 +132,7 @@ describe('pick', () => {
 });
 
 describe('renderTable', () => {
-  /** @param {import('./compare.ts').Change[]} list */
-  const render = (list) => {
+  const render = (list: Change[]) => {
     const rows = lines(list, columns);
     return renderTable({ rows, links: urls(rows), base: BASE, repo: REPO, minor: 0.001 });
   };
@@ -183,11 +181,11 @@ describe('renderTable', () => {
       {
         label: 'a|b @x',
         width: 300,
-        change: /** @type {import('./compare.ts').Change} */ ({
+        change: {
           file: 'x.png',
           kind: 'added',
           after: '',
-        }),
+        } as Change,
       },
     ];
     const md = renderTable({
@@ -227,16 +225,16 @@ describe('renderTable', () => {
   });
 
   it("keeps a state a marker can't hold out of the parts", () => {
-    const mk = (/** @type {string} */ state) => ({
+    const mk = (state: string) => ({
       label: `${state}, mobile`,
       width: 300,
       state,
       size: 'mobile',
-      change: /** @type {import('./compare.ts').Change} */ ({
+      change: {
         file: 'x.png',
         kind: 'added',
         after: '',
-      }),
+      } as Change,
     });
     const md = renderTable({
       rows: [mk('a--b'), mk('a b'), mk('<x>'), mk('ok')],
@@ -269,12 +267,9 @@ describe('renderTable, written by describe', () => {
     },
     'o',
   );
-  const write = (/** @type {string} */ body) =>
-    withSections(
-      body,
-      new Map([['visual-review', /** @type {NonNullable<typeof upload>} */ (upload)]]),
-    );
-  const slot = (/** @type {string} */ state) =>
+  const write = (body: string) =>
+    withSections(body, new Map([['visual-review', upload as NonNullable<typeof upload>]]));
+  const slot = (state: string) =>
     `<!-- describe:visual-review:${state} -->\n<!-- /describe:visual-review:${state} -->`;
 
   it('takes a section describe accepts', () => {
@@ -327,10 +322,7 @@ describe('renderTable, written by describe', () => {
       },
       'o',
     );
-    const out = withSections(
-      'Body',
-      new Map([['visual-review', /** @type {NonNullable<typeof u>} */ (u)]]),
-    );
+    const out = withSections('Body', new Map([['visual-review', u as NonNullable<typeof u>]]));
     expect(out).toContain(
       '<details open><summary>Minor edge differences (under 0.1%): 1 screen</summary>',
     );

@@ -35,15 +35,16 @@ import path from 'node:path';
 import { isScreenState, partMarker } from '../describe/describe.ts';
 import { pairBaselines } from '../lib/baselines.mjs';
 import { WHERE_WIDTH, zoomWidth } from './zoom.ts';
+import type { Change } from './compare.ts';
+import type { Column } from '../lib/baselines.mjs';
+import type { Look } from './zoom.ts';
 
 /**
  * Text as HTML, safe in a table cell: a `|` would end the cell, and GitHub
  * still reads Markdown inside HTML, so its marks (code, emphasis, links,
  * escapes) are entities too, and an `@` can't mention anyone.
- *
- * @param {string} text
  */
-function html(text) {
+function html(text: string) {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -59,43 +60,30 @@ const UPLOAD_LIMIT = 50;
 /** A picture's width when its column sets none, in pixels. */
 export const DEFAULT_WIDTH = 300;
 
-/**
- * A picture to upload: which side of which shot.
- *
- * @typedef {{ file: string, side: 'before' | 'after' | 'diff' | 'where' | 'zoom' }} Picture
- */
+/** A picture to upload: which side of which shot. */
+export type Picture = { file: string; side: 'before' | 'after' | 'diff' | 'where' | 'zoom' };
 
 /**
- * One row: its label, and the change it shows. A paired row also has its
- * screen's state and its column's name; a shot no column takes has neither.
- *
- * @typedef {{ label: string, width: number, state?: string, size?: string,
- *   change: import('./compare.ts').Change }} Line
+ * One row: its label, and the change it shows. A paired row also has its screen's state and its
+ * column's name; a shot no column takes has neither.
  */
+export type Line = { label: string; width: number; state?: string; size?: string; change: Change };
 
 /**
  * How far a change goes, for putting the largest first: a new, gone or
  * resized shot is the whole screen.
- *
- * @param {import('./compare.ts').Change} c
  */
-const weight = (c) => (c.kind !== 'changed' || c.resized ? 2 : (c.ratio ?? 0));
+const weight = (c: Change) => (c.kind !== 'changed' || c.resized ? 2 : (c.ratio ?? 0));
 
 /**
  * Whether a row is a minor one: its change has a look (compare.ts).
- *
- * @param {Line} row
  */
-export const isMinor = (row) => row.change.look !== undefined;
+export const isMinor = (row: Line) => row.change.look !== undefined;
 
 /**
  * The changes as rows, in the table's order.
- *
- * @param {readonly import('./compare.ts').Change[]} changes
- * @param {readonly import('../lib/baselines.mjs').Column[]} columns
- * @returns {Line[]}
  */
-export function lines(changes, columns) {
+export function lines(changes: readonly Change[], columns: readonly Column[]): Line[] {
   const byFile = new Map(changes.map((c) => [c.file, c]));
   const { rows, unpaired } = pairBaselines(
     changes.map((c) => ({
@@ -106,15 +94,12 @@ export function lines(changes, columns) {
     })),
     columns,
   );
-  /** @type {Line[]} */
-  const out = [];
+  const out: Line[] = [];
   for (const row of rows) {
     for (const column of columns) {
       const cell = row.cells[column.label];
       if (!cell) continue;
-      const change = /** @type {import('./compare.ts').Change} */ (
-        byFile.get(/** @type {string} */ (cell.after ?? cell.before))
-      );
+      const change = byFile.get((cell.after ?? cell.before) as string) as Change;
       out.push({
         label: `${row.state}, ${column.label.toLowerCase()}`,
         width: column.width ?? DEFAULT_WIDTH,
@@ -125,11 +110,11 @@ export function lines(changes, columns) {
     }
   }
   for (const cell of unpaired) {
-    const file = /** @type {string} */ (cell.after ?? cell.before);
+    const file = (cell.after ?? cell.before) as string;
     out.push({
       label: file,
       width: DEFAULT_WIDTH,
-      change: /** @type {import('./compare.ts').Change} */ (byFile.get(file)),
+      change: byFile.get(file) as Change,
     });
   }
   return out.sort(
@@ -142,20 +127,11 @@ export function lines(changes, columns) {
  * The pictures to upload, at most `limit`, in the order that matters: one a
  * row (a big row's after, a minor row's zoom, or its diff when the change is
  * too large to zoom), then the rest of each row, then the diffs.
- *
- * @param {readonly Line[]} rows
- * @param {number} [limit]
- * @returns {Picture[]}
  */
-export function pick(rows, limit = UPLOAD_LIMIT) {
-  /** @type {Picture[][]} */
-  const tiers = [[], [], []];
-  /**
-   * @param {number} tier
-   * @param {string} file
-   * @param {Picture['side']} side
-   */
-  const add = (tier, file, side) => tiers[tier].push({ file, side });
+export function pick(rows: readonly Line[], limit: number = UPLOAD_LIMIT): Picture[] {
+  const tiers: Picture[][] = [[], [], []];
+  const add = (tier: number, file: string, side: Picture['side']) =>
+    tiers[tier].push({ file, side });
   for (const row of rows) {
     const c = row.change;
     const { look } = c;
@@ -178,17 +154,13 @@ export function pick(rows, limit = UPLOAD_LIMIT) {
 
 /**
  * A picture's key in the uploaded links.
- *
- * @param {Picture} p
  */
-export const keyOf = (p) => `${p.side}:${p.file}`;
+export const keyOf = (p: Picture) => `${p.side}:${p.file}`;
 
 /**
  * A share of the screen as a short label: `6.6%`, `0.07%`, `<0.01%`.
- *
- * @param {number} ratio
  */
-export function share(ratio) {
+export function share(ratio: number) {
   const pct = ratio * 100;
   if (pct >= 10) return `${Math.round(pct)}%`;
   if (pct >= 1) return `${pct.toFixed(1)}%`;
@@ -199,10 +171,18 @@ export function share(ratio) {
 /**
  * The summary line above a table: how many screens, and what they were
  * compared with, the base commit linked.
- *
- * @param {{ count: number, base: string, repo: string, allMinor?: boolean }} input
  */
-export function summary({ count, base, repo, allMinor = false }) {
+export function summary({
+  count,
+  base,
+  repo,
+  allMinor = false,
+}: {
+  count: number;
+  base: string;
+  repo: string;
+  allMinor?: boolean;
+}) {
   const what =
     count === 0
       ? 'none'
@@ -219,25 +199,32 @@ const HEADERS = {
 /**
  * The section's Markdown: the summary, then the rows as parts.
  *
- * @param {{ rows: Line[], links: Map<string, string>, base: string, repo: string,
- *   minor: number, omitted?: number }} input
- *   `links`: each uploaded picture's attachment URL, by keyOf; `minor`: the
- *   share that makes a change minor, for the fold's label; `omitted`: how
- *   many more screens changed that `rows` leaves out to fit (review.ts)
+ * @param input `links`: each uploaded picture's attachment URL, by keyOf;
+ *   `minor`: the share that makes a change minor, for the fold's label;
+ *   `omitted`: how many more screens changed that `rows` leaves out to fit
+ *   (review.ts)
  */
-export function renderTable({ rows, links, base, repo, minor, omitted = 0 }) {
-  /**
-   * @param {Line} row
-   * @param {Picture['side']} side
-   * @param {number} width
-   */
-  const picture = (row, side, width) => {
+export function renderTable({
+  rows,
+  links,
+  base,
+  repo,
+  minor,
+  omitted = 0,
+}: {
+  rows: Line[];
+  links: Map<string, string>;
+  base: string;
+  repo: string;
+  minor: number;
+  omitted?: number;
+}) {
+  const picture = (row: Line, side: Picture['side'], width: number) => {
     const url = links.get(keyOf({ file: row.change.file, side }));
     if (!url) return 'not shown (too many pictures)';
     return `<img src="${html(url)}" alt="${html(`${row.label}, ${side}`)}" width="${width}">`;
   };
-  /** @param {Line} row */
-  const name = (row) => {
+  const name = (row: Line) => {
     const c = row.change;
     const how =
       c.kind === 'added'
@@ -249,17 +236,15 @@ export function renderTable({ rows, links, base, repo, minor, omitted = 0 }) {
             : share(c.ratio ?? 0);
     return `<b>${html(row.label)}</b><br><sub>${how}</sub>`;
   };
-  /** @param {Line} row */
-  const bigRow = (row) => {
+  const bigRow = (row: Line) => {
     const c = row.change;
     const before = c.kind === 'added' ? 'new' : picture(row, 'before', row.width);
     const after = c.kind === 'removed' ? 'removed' : picture(row, 'after', row.width);
     const diff = c.kind === 'changed' && c.diff ? picture(row, 'diff', row.width) : '–';
     return `| ${name(row)} | ${before} | ${after} | ${diff} |`;
   };
-  /** @param {Line} row */
-  const minorRow = (row) => {
-    const look = /** @type {import('./zoom.ts').Look} */ (row.change.look);
+  const minorRow = (row: Line) => {
+    const look = row.change.look as Look;
     const where = picture(row, 'where', Math.min(WHERE_WIDTH, look.width));
     const zoom = look.large
       ? picture(row, 'diff', row.width)
@@ -275,7 +260,7 @@ export function renderTable({ rows, links, base, repo, minor, omitted = 0 }) {
   ];
   if (smalls.length > 0) {
     // The largest small change, so a reader knows how small "small" is.
-    const top = /** @type {Line} */ (smalls[0]);
+    const top = smalls[0] as Line;
     const { look, ratio } = top.change;
     const px = Math.max(1, Math.round((ratio ?? 0) * (look?.width ?? 0) * (look?.height ?? 0)));
     out.push(
@@ -286,12 +271,11 @@ export function renderTable({ rows, links, base, repo, minor, omitted = 0 }) {
   if (omitted > 0) {
     out.push('', `${omitted} more screen${omitted === 1 ? '' : 's'} changed, not shown.`);
   }
-  for (const kind of /** @type {const} */ (['big', 'minor'])) {
+  for (const kind of ['big', 'minor'] as const) {
     const ofKind = rows.filter((r) => isMinor(r) === (kind === 'minor'));
     if (ofKind.length === 0) continue;
     out.push('', partMarker(`header:${kind}`), ...HEADERS[kind]);
-    /** @type {Map<string, Line[]>} a screen's key (its state, when a slot can hold it), in row order */
-    const groups = new Map();
+    const groups: Map<string, Line[]> = new Map();
     for (const row of ofKind) {
       const key = row.state !== undefined && isScreenState(row.state) ? row.state : '';
       groups.set(key, [...(groups.get(key) ?? []), row]);

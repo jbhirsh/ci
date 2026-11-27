@@ -37,30 +37,28 @@ const ASSET = /^[0-9a-f][0-9a-f-]{7,63}$/;
 const LINE =
   /^<!-- visual-review:upload sha=([0-9a-f]{40}) fingerprint=([0-9a-f]{8}) format=(\d{1,4}) layout=([0-9a-f]{8}) run=(\d{1,20}) assets=([0-9a-f,-]*) -->$/m;
 
-/**
- * What the record line says.
- *
- * @typedef {{ sha: string, fingerprint: string, format: number, layout: string,
- *   run: number, assets: string[] }} Record
- */
+/** What the record line says. */
+export type Record = {
+  sha: string;
+  fingerprint: string;
+  format: number;
+  layout: string;
+  run: number;
+  assets: string[];
+};
 
 /**
  * The record line for a result.
- *
- * @param {Record} record
  */
-export function recordLine({ sha, fingerprint, format, layout, run, assets }) {
+export function recordLine({ sha, fingerprint, format, layout, run, assets }: Record) {
   return `<!-- visual-review:upload sha=${sha} fingerprint=${fingerprint} format=${format} layout=${layout} run=${run} assets=${assets.join(',')} -->`;
 }
 
 /**
  * The record in a description's visual-review block, or null when it has
  * none (or none that reads as one).
- *
- * @param {string} body
- * @returns {Record | null}
  */
-export function parseRecord(body) {
+export function parseRecord(body: string): Record | null {
   const at = blocks.find(body, BOT);
   if (!at) return null;
   const m = LINE.exec(body.slice(at.from, at.to));
@@ -78,17 +76,14 @@ export function parseRecord(body) {
 }
 
 /** The link to an attachment by its id. */
-export const assetLink = (/** @type {string} */ id) =>
-  `https://github.com/user-attachments/assets/${id}`;
+export const assetLink = (id: string) => `https://github.com/user-attachments/assets/${id}`;
 
 /**
  * A description without visual review's block, its slots emptied (their
  * marker lines kept) and its end trimmed: what an edit must change for it
  * to be more than the upload's own.
- *
- * @param {string} body
  */
-export function outsideOwnBlocks(body) {
+export function outsideOwnBlocks(body: string) {
   return body
     .replace(/<!-- describe:visual-review -->[\s\S]*?<!-- \/describe:visual-review -->/g, '')
     .replace(

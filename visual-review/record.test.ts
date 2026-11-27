@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { blocks } from '../describe/describe.ts';
 import { assetLink, BOT, outsideOwnBlocks, parseRecord, recordLine } from './record.ts';
+import type { Record as RecordLine } from './record.ts';
 
-/** @type {import('./record.ts').Record} */
-const RECORD = {
+const RECORD: RecordLine = {
   sha: 'a'.repeat(40),
   fingerprint: '203b5d6e',
   format: 4,

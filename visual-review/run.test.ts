@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { gitHubIo, main, parseTarget } from './run.ts';
+import type { Api } from '../lib/comment.mjs';
+import type { Handoff } from './review.ts';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -43,10 +45,8 @@ describe('main', () => {
       JSON.stringify({ 'visual-review': { workflow: 'v.yml', job: 'v', folders: ['f'] } }),
     );
     vi.stubEnv('APP_ROOT', root);
-    /** @type {unknown[]} */
-    const posted = [];
-    /** @type {import('../lib/comment.mjs').Api} */
-    const api = (method, route, body) => {
+    const posted: unknown[] = [];
+    const api: Api = (method, route, body) => {
       if (method === 'POST') posted.push(body);
       return { head_sha: 'a'.repeat(40) };
     };
@@ -81,8 +81,7 @@ describe('main', () => {
     );
     vi.stubEnv('APP_ROOT', root);
     const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
-    /** @type {import('../lib/comment.mjs').Api} */
-    const api = () => {
+    const api: Api = () => {
       throw new Error('HTTP 502');
     };
     expect(() =>
@@ -104,15 +103,13 @@ describe('main, against a fake gh', () => {
       JSON.stringify({ 'visual-review': { workflow: 'v.yml', job: 'v', folders: ['f'] } }),
     );
     vi.stubEnv('APP_ROOT', root);
-    /** @type {[string, string[]][]} */
-    const calls = [];
-    const gh = (/** @type {string} */ token, /** @type {string[]} */ args) => {
+    const calls: [string, string[]][] = [];
+    const gh = (token: string, args: string[]) => {
       calls.push([token, args]);
       if (args[1] === 'user') return 'jbhirsh\n';
       return '';
     };
-    /** @type {import('../lib/comment.mjs').Api} */
-    const api = (method, route) => {
+    const api: Api = (method, route) => {
       if (route.endsWith('/actions/runs/1')) {
         return { id: 1, head_sha: 'a'.repeat(40), conclusion: 'success' };
       }
@@ -128,7 +125,7 @@ describe('main, against a fake gh', () => {
       throw new Error(route);
     };
     // A gh that answers GraphQL for the PR.
-    const withGraphql = (/** @type {string} */ token, /** @type {string[]} */ args) =>
+    const withGraphql = (token: string, args: string[]) =>
       args[1] === 'graphql'
         ? JSON.stringify({
             data: {
@@ -164,13 +161,10 @@ describe('main, against a fake gh', () => {
 });
 
 describe('gitHubIo', () => {
-  /** @type {[string, string[]][]} */
-  let calls;
-  /** @type {number} */
-  let told;
+  let calls: [string, string[]][];
+  let told: number;
   const dir = mkdtempSync(path.join(tmpdir(), 'handoff-'));
-  /** @param {(args: string[]) => string} answer */
-  const io = (answer) => {
+  const io = (answer: (args: string[]) => string) => {
     calls = [];
     told = 0;
     return gitHubIo({
@@ -198,9 +192,7 @@ describe('gitHubIo', () => {
     const g = io(() => '');
     expect(g.main).toBe('trunk');
     expect(g.uploader).toBe('jbhirsh');
-    const handoff = /** @type {import('./review.ts').Handoff} */ (
-      /** @type {unknown} */ ({ version: 1, pictures: ['01.png'] })
-    );
+    const handoff = { version: 1, pictures: ['01.png'] } as unknown as Handoff;
     g.handoff(handoff, [{ name: '01.png', bytes: Buffer.from('png') }]);
     expect(readFileSync(path.join(dir, 'out', '01.png'), 'utf8')).toBe('png');
     expect(JSON.parse(readFileSync(path.join(dir, 'out', 'attach.json'), 'utf8'))).toEqual(handoff);

@@ -13,12 +13,8 @@ import {
 
 /**
  * A mask `w`×`h` with these pixels set.
- *
- * @param {number} w
- * @param {number} h
- * @param {[number, number][]} set
  */
-function mask(w, h, set) {
+function mask(w: number, h: number, set: [number, number][]) {
   const m = new Uint8Array(w * h);
   for (const [x, y] of set) m[y * w + x] = 1;
   return m;
@@ -43,9 +39,7 @@ describe('places', () => {
   });
 
   it('outlines at most five places', () => {
-    const set = /** @type {[number, number][]} */ (
-      Array.from({ length: 9 }, (_, i) => [i * 30, 5])
-    );
+    const set = Array.from({ length: 9 }, (_, i) => [i * 30, 5]) as [number, number][];
     expect(places(mask(300, 20, set), 300, 20)).toHaveLength(5);
   });
 });
@@ -124,9 +118,9 @@ describe('the zoom picture', () => {
     expect([out.width, out.height]).toEqual([6 + 12, 1]);
     expect([...out.data.subarray(0, 4)]).toEqual([1, 2, 3, 255]);
     expect([...out.data.subarray(8, 12)]).toEqual([255, 255, 255, 255]);
-    const look = /** @type {NonNullable<ReturnType<typeof lookAt>>} */ (
-      lookAt(mask(200, 100, [[10, 10]]), 200, 100)
-    );
+    const look = lookAt(mask(200, 100, [[10, 10]]), 200, 100) as NonNullable<
+      ReturnType<typeof lookAt>
+    >;
     expect(zoomWidth(look)).toBe(3 * 30 * 7 + 12);
     expect(look.zoom.w * look.scale).toBeLessThanOrEqual(220);
   });

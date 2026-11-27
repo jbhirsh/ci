@@ -5,24 +5,28 @@ import { describe, expect, it } from 'vitest';
 import { blocks, partMarker } from '../describe/describe.ts';
 import { attach, main, readHandoff, withoutAppended } from './attach.ts';
 import { parseRecord, recordLine } from './record.ts';
+import type { Handoff } from './review.ts';
+import type { Io } from './attach.ts';
 
 const REPO = 'jbhirsh/app';
 const HEAD = 'a'.repeat(40);
 const OTHER = 'b'.repeat(40);
-const LINK = (/** @type {number} */ i) =>
+const LINK = (i: number) =>
   `https://github.com/user-attachments/assets/0000000${i}-aaaa-bbbb-cccc-dddddddddddd`;
 
-/** @type {import('./review.ts').Handoff['record']} */
-const RECORD = { sha: HEAD, fingerprint: '1234abcd', format: 4, layout: 'abcd1234', run: 7 };
+const RECORD: Handoff['record'] = {
+  sha: HEAD,
+  fingerprint: '1234abcd',
+  format: 4,
+  layout: 'abcd1234',
+  run: 7,
+};
 
 /**
  * A hand-off with two pictures, in a folder of its own.
- *
- * @param {Partial<import('./review.ts').Handoff>} [over]
  */
-function handoff(over = {}) {
-  /** @type {import('./review.ts').Handoff} */
-  const h = {
+function handoff(over: Partial<Handoff> = {}) {
+  const h: Handoff = {
     version: 1,
     kind: 'pr',
     number: 5,
@@ -50,31 +54,32 @@ function handoff(over = {}) {
  * A fake GitHub: one description, a PR's head or an issue's state, and a
  * gh that uploads as gh does, rewriting each Markdown image's local path.
  *
- * @param {{ body?: string, head?: string, state?: string, pull?: boolean,
- *   gh?: (body: string, files: string[]) => string }} [o]
- *   gh: what gh leaves of the body it's given, with the files attached
+ * @param o gh: what gh leaves of the body it's given, with the files attached
  */
-function github(o = {}) {
+function github(
+  o: {
+    body?: string;
+    head?: string;
+    state?: string;
+    pull?: boolean;
+    gh?: (body: string, files: string[]) => string;
+  } = {},
+) {
   let body = o.body ?? 'Goal.';
-  /** @type {{ token: string, body: string }[]} */
-  const edits = [];
-  /** @type {string[][]} */
-  const ghCalls = [];
-  /** @type {string[]} */
-  const hidden = [];
-  /** @type {string[]} */
-  const logs = [];
+  const edits: { token: string; body: string }[] = [];
+  const ghCalls: string[][] = [];
+  const hidden: string[] = [];
+  const logs: string[] = [];
   const upload =
     o.gh ??
-    ((/** @type {string} */ text, /** @type {string[]} */ files) => {
+    ((text: string, files: string[]) => {
       let next = text;
       files.forEach((f, i) => {
         next = next.replaceAll(`](${f})`, `](${LINK(i + 1)})`);
       });
       return next;
     });
-  /** @type {import('./attach.ts').Io} */
-  const io = {
+  const io: Io = {
     repo: REPO,
     dir: '',
     api: (method, route, data) => {
@@ -86,7 +91,7 @@ function github(o = {}) {
           return { body, state: o.state ?? 'open', ...(o.pull ? { pull_request: {} } : {}) };
         }
         if (method === 'PATCH') {
-          body = /** @type {{ body: string }} */ (data).body;
+          body = (data as { body: string }).body;
           edits.push({ token: 'actions', body });
           return {};
         }
@@ -168,7 +173,7 @@ describe('attach', () => {
   });
 
   it("uploads to a mockup's issue, unless it closed or shows a newer run's table", () => {
-    const issue = /** @type {const} */ ({ kind: 'issue', number: 9 });
+    const issue = { kind: 'issue', number: 9 } as const;
     const { h, dir } = handoff(issue);
     const g = github();
     g.io.dir = dir;
@@ -265,7 +270,7 @@ describe('readHandoff', () => {
       { record: { ...RECORD, fingerprint: 'zz' } },
       { section: 3 },
     ]) {
-      const { dir } = handoff(/** @type {never} */ (bad));
+      const { dir } = handoff(bad as never);
       expect(() => readHandoff(dir)).toThrow(/isn't a hand-off/);
     }
     const { dir } = handoff();
@@ -281,10 +286,8 @@ describe('main', () => {
   it('needs its folder and repository, and attaches nothing when the review handed nothing off', () => {
     expect(() => main({})).toThrow(/needs HANDOFF_DIR/);
     const none = path.join(tmpdir(), 'vr-absent-never-made');
-    /** @type {string[]} */
-    const asked = [];
-    /** @param {number} count */
-    const api = (count) => (/** @type {string} */ _m, /** @type {string} */ route) => {
+    const asked: string[] = [];
+    const api = (count: number) => (_m: string, route: string) => {
       asked.push(route);
       return { total_count: count };
     };

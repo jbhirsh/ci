@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { fingerprint, mark, MAX_DESCRIPTION, readMark, shownAt, status } from './status.ts';
+import type { Pull } from './status.ts';
 
 const OWNER = 'jbhirsh';
-const changed = { kind: /** @type {const} */ ('compared'), screens: 3, fingerprint: 'abcdef12' };
-const none = { kind: /** @type {const} */ ('compared'), screens: 0, fingerprint: '00000000' };
-/** @param {Partial<import('./status.ts').Pull>} over */
-const pull = (over = {}) => ({ author: OWNER, bot: false, autoMerge: null, ...over });
+const changed = { kind: 'compared' as const, screens: 3, fingerprint: 'abcdef12' };
+const none = { kind: 'compared' as const, screens: 0, fingerprint: '00000000' };
+const pull = (over: Partial<Pull> = {}) => ({
+  author: OWNER,
+  bot: false,
+  autoMerge: null,
+  ...over,
+});
 
 describe('status', () => {
   it('passes when nothing changed', () => {

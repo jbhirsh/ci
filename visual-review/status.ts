@@ -29,31 +29,29 @@ export const MAX_DESCRIPTION = 140;
 /** The status's name: the required check. */
 export const CONTEXT = 'Visual changes';
 
-/**
- * What the comparison found for the head.
- *
- * @typedef {{ kind: 'compared', screens: number, fingerprint: string }
- *   | { kind: 'no-shots' }
- *   | { kind: 'job-failed', job: string }
- *   | { kind: 'waiting', base: string }
- *   | { kind: 'no-reference', base: string }} Result
- */
+/** What the comparison found for the head. */
+export type Result =
+  | { kind: 'compared'; screens: number; fingerprint: string }
+  | { kind: 'no-shots' }
+  | { kind: 'job-failed'; job: string }
+  | { kind: 'waiting'; base: string }
+  | { kind: 'no-reference'; base: string };
 
-/**
- * The PR, as the rule reads it.
- *
- * @typedef {object} Pull
- * @property {string} author its author's login
- * @property {boolean} bot a bot's PR: its author is a bot, or its branch is `bot/*`
- * @property {{ by: string, at: number } | null} autoMerge who turned
- *   auto-merge on and when (epoch seconds), or null when it's off
- */
+/** The PR, as the rule reads it. */
+export type Pull = {
+  /** its author's login */
+  author: string;
+  /** a bot's PR: its author is a bot, or its branch is `bot/*` */
+  bot: boolean;
+  /** who turned auto-merge on and when (epoch seconds), or null when it's off */
+  autoMerge: { by: string; at: number } | null;
+};
 
-/**
- * @typedef {object} Status
- * @property {'success' | 'failure' | 'pending'} state
- * @property {string} description at most MAX_DESCRIPTION characters
- */
+export type Status = {
+  state: 'success' | 'failure' | 'pending';
+  /** at most MAX_DESCRIPTION characters */
+  description: string;
+};
 
 /**
  * The fingerprint of a result: the first 8 hex digits of a SHA-256 over
@@ -61,10 +59,10 @@ export const CONTEXT = 'Visual changes';
  * screen that's gone), in name order. The same changes give the same
  * fingerprint, whatever order they come in.
  *
- * @param {{ name: string, after: string }[]} changes `after`: the picture's
- *   SHA-256 in hex, or '' for a removed screen
+ * @param changes `after`: the picture's SHA-256 in hex, or '' for a removed
+ *   screen
  */
-export function fingerprint(changes) {
+export function fingerprint(changes: { name: string; after: string }[]) {
   const lines = changes
     .map(({ name, after }) => `${name}\t${after}`)
     .sort()
@@ -75,44 +73,48 @@ export function fingerprint(changes) {
 /**
  * The mark a description ends with, for a result with a fingerprint.
  *
- * @param {string} hash
- * @param {number} shown epoch seconds
+ * @param hash
+ * @param shown epoch seconds
  */
-export function mark(hash, shown) {
+export function mark(hash: string, shown: number) {
   return `[vr:${hash}@${Math.floor(shown)}]`;
 }
 
 /**
  * The fingerprint and first-shown time a description ends with, or null.
  * The description is read back from GitHub, so anything else is null.
- *
- * @param {string | null | undefined} description
- * @returns {{ hash: string, shown: number } | null}
  */
-export function readMark(description) {
+export function readMark(
+  description: string | null | undefined,
+): { hash: string; shown: number } | null {
   const m = /\[vr:([0-9a-f]{8})@(\d{1,12})\]$/.exec(description ?? '');
   return m ? { hash: m[1], shown: Number(m[2]) } : null;
 }
 
 /**
  * "1 screen" or "3 screens".
- *
- * @param {number} n
  */
-const screens = (n) => `${n} screen${n === 1 ? '' : 's'}`;
+const screens = (n: number) => `${n} screen${n === 1 ? '' : 's'}`;
 
 /**
  * The status for a head.
- *
- * @param {object} facts
- * @param {Result} facts.result
- * @param {Pull} facts.pull
- * @param {string} facts.owner the repository owner's login
- * @param {number} facts.shown when this result was first shown, epoch
- *   seconds: from the previous status with the same fingerprint, else now
- * @returns {Status}
  */
-export function status({ result, pull, owner, shown }) {
+export function status({
+  result,
+  pull,
+  owner,
+  shown,
+}: {
+  result: Result;
+  pull: Pull;
+  /** the repository owner's login */
+  owner: string;
+  /**
+   * when this result was first shown, epoch seconds: from the previous status with the same
+   * fingerprint, else now
+   */
+  shown: number;
+}): Status {
   switch (result.kind) {
     case 'waiting':
       return {
@@ -167,10 +169,8 @@ export function status({ result, pull, owner, shown }) {
 /**
  * A description cut to fit, for one that holds text from elsewhere (a job's
  * name).
- *
- * @param {string} text
  */
-function clip(text) {
+function clip(text: string) {
   return text.length <= MAX_DESCRIPTION ? text : `${text.slice(0, MAX_DESCRIPTION - 1)}…`;
 }
 
@@ -179,11 +179,11 @@ function clip(text) {
  * status: the same fingerprint keeps its time (and so any acceptance);
  * anything else is shown now.
  *
- * @param {string} hash this result's fingerprint
- * @param {string | null | undefined} previous the previous status's description
- * @param {number} now epoch seconds
+ * @param hash this result's fingerprint
+ * @param previous the previous status's description
+ * @param now epoch seconds
  */
-export function shownAt(hash, previous, now) {
+export function shownAt(hash: string, previous: string | null | undefined, now: number) {
   const before = readMark(previous);
   return before && before.hash === hash ? before.shown : now;
 }

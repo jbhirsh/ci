@@ -8,10 +8,8 @@ import { compareShots, isShotPath, MAX_SHOT_BYTES, shotsIn } from './compare.ts'
 
 /**
  * A folder tree holding these files.
- *
- * @param {Record<string, string | Buffer>} files
  */
-function tree(files) {
+function tree(files: Record<string, string | Buffer>) {
   const dir = mkdtempSync(path.join(tmpdir(), 'shots-'));
   for (const [name, bytes] of Object.entries(files)) {
     mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
