@@ -1,0 +1,28 @@
+# One-off trial for jbhirsh/ci#164, on its own branch, never merged: does a
+# run started by the Actions token's workflow dispatch wake a workflow_run
+# listener when it ends? This dispatches CI on this branch with the job's
+# own token; Dependabot Auto-Merge (workflow_run on CI, on main) getting a
+# run for it is the answer. Its job is skipped by its `if:` (not a PR's run).
+name: Trial 164
+
+on:
+  push:
+    branches: [trial/164-dispatch-wakes-workflow-run]
+
+permissions: {}
+
+jobs:
+  dispatch:
+    name: Dispatch CI with the Actions token
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch CI on this branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.ref_name }}
+        run: >-
+          gh api -X POST "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/dispatches"
+          -f ref="$REF" -F return_run_details=true
