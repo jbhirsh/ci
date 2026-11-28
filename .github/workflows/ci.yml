@@ -13,8 +13,8 @@
 #     app's own CI. A tool an app doesn't use yet (no key in its
 #     `.github/ci.json`) is checked against its defaults.
 # Both job names are this repo's required checks. A third job, Mutation Tests
-# (Stryker), mutation-tests this repo's own scripts (below); it reports only,
-# and is not yet required (ci#157).
+# (Stryker), mutation-tests this repo's own scripts (below); it gates a PR, and
+# is required once ruleset main lists it (ci#157).
 name: CI
 
 on:
@@ -98,8 +98,11 @@ jobs:
   # PR: a PR's changed lines, and on a push to main main's baseline (its
   # action.yml says what runs when). The settings are this repo's
   # `.github/ci.json` `mutation` key; the monthly sweep is
-  # self-mutation-sweep.yml. No score fails it until stryker.config.json
-  # sets `thresholds.break`; Stryker failing to run still does. The limit is
+  # self-mutation-sweep.yml. A PR's scope (its changed lines; a whole module
+  # when its test changed; the smoke modules for wiring, scope.ts says which)
+  # fails it under stryker.config.json's `thresholds.break`, as does Stryker
+  # failing to run. The threshold started at the first sweep's score rounded
+  # down to a multiple of 5, to be raised as survivors are fixed. The limit is
   # the worst case, a test-only PR, which mutates its subject whole
   # (pr-template/body.ts: about 25 minutes), as in the apps; a push's run
   # stops as a pass before it (`push.timeoutMinutes`). The action checks out
