@@ -1,12 +1,18 @@
 // A stand-in browser for drive.ts's and run.ts's tests: just enough of
 // Playwright's Browser, BrowserContext, Page, Route, Request and Response
 // for the driver, with a made-up app answering each request. Not part of
-// any tool. A page's goto makes the navigation request and then the
-// requests the test says the page makes, each through the context's route
-// handler; a waitForResponse nothing answered fails once goto is done, as
-// the real one does at its hang limit. The context's API client
-// (context.request) answers with `bypass`'s status (and headers, when it
-// has them), or throws its message.
+// any tool. A page's goto makes the navigation request and then, as a
+// browser does, sends every request the test says the page makes at once
+// (all started, then awaited), each through the context's route handler;
+// the made-up app answers a request only once the handler lets it leave
+// the browser, so the order `answer` sees is the order requests left. A
+// waitForResponse nothing has answered fails, as the real one does at its
+// hang limit, once every request that can go on has: after a yield to the
+// next turn of the event loop, by which the handler has let go every
+// request it isn't holding (all of this fake is promises), and before the
+// page's requests are awaited, so a request held until such a wait ends
+// goes on. The context's API client (context.request) answers with
+// `bypass`'s status (and headers, when it has them), or throws its message.
 
 import type { Browser } from 'playwright';
 
@@ -62,6 +68,14 @@ interface Waiter {
   reject: (error: Error) => void;
 }
 
+/**
+ * A yield to the next turn of the event loop, waiting for no duration (the
+ * shared rules allow it in a unit test): every promise this fake and the
+ * route handler can settle has settled by then. Not a loophole in probe/'s
+ * no-timers lint, which bans setTimeout and setInterval.
+ */
+const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
+
 export function testBrowser({
   page,
   answer,
@@ -95,14 +109,16 @@ export function testBrowser({
       async function send(sent: Sent) {
         const method = sent.method ?? 'GET';
         const body = sent.body ?? null;
-        const answered = answer({ ...sent, method, body }, load);
-        const timing = answered.timing ?? { requestStart: 1, responseStart: 5, responseEnd: 9 };
+        let answered: Answer = {};
         const request: FakeRequest = {
           url: () => sent.url,
           method: () => method,
           postData: () => body,
           headers: () => ({ accept: '*/*' }),
-          timing: () => ({ startTime: 0, ...timing }),
+          timing: () => ({
+            startTime: 0,
+            ...(answered.timing ?? { requestStart: 1, responseStart: 5, responseEnd: 9 }),
+          }),
         };
         let fate: 'sent' | 'aborted' | null = null;
         let headers = request.headers();
@@ -122,6 +138,7 @@ export function testBrowser({
           return;
         }
         seen.push({ url: sent.url, method, headers });
+        answered = answer({ ...sent, method, body }, load);
         const response: FakeResponse = {
           request: () => request,
           status: () => answered.status ?? 200,
@@ -172,9 +189,11 @@ export function testBrowser({
           goto: async (url: string) => {
             if (gotoFails) throw new Error(gotoFails);
             await send({ url });
-            for (const sent of page(url, load)) await send(sent);
+            const sending = page(url, load).map(send);
+            await nextTurn();
             for (const w of waiters) w.reject(new Error('hang limit'));
             waiters = [];
+            await Promise.all(sending);
           },
         }),
       };
