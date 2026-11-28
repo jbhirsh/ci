@@ -21,7 +21,13 @@
 // long as its covering tests (sift's SiftContext.tsx runs about a hundred a
 // mutant, and was a quarter of a sweep alone). Ignored mutants never run. A
 // file the results don't have weighs its line count at the known files'
-// weight per line (its line count when none is known).
+// weight per line (its line count when none is known). With
+// `sweep.ignoreStatic` false, a static mutant (Stryker's `static`: code run
+// as a module loads) weighs one run plus every test in the results, as
+// Stryker reruns the whole suite for it, even where the last results ignored
+// it for being static: main's baseline comes from PR-style runs that skip
+// static mutants. One ignored for another reason (an excluded mutator, a
+// disable comment) still never runs, and weighs nothing.
 //
 // Merging: each shard mutated its own files, so the reports' files are
 // disjoint; a file in two means the split went wrong, and the merge stops.
@@ -39,7 +45,11 @@
 // merged results are written only when every shard reported, since they
 // become main's baseline, which PR runs start from: one missing a shard
 // would send PRs to re-test its files, or score them on nothing. A partial
-// sweep's score is still shown, for information, and fails the run.
+// sweep's score is still shown, for information, and fails the run. With
+// `sweep.ignoreStatic` false, static mutants are left out of the score, the
+// break and the per-file gate, and shown in a row of their own: PR runs skip
+// them, so they get no threshold until a sweep has measured them. The merged
+// results still hold every mutant.
 //
 // Usage (in the app's checkout, or APP_ROOT):
 //   node sweep.ts plan [results]
@@ -49,7 +59,8 @@
 //     comma-joined as `mutate`) and `count`, and the table to the summary.
 //   node sweep.ts config <out>
 //     Writes the Stryker config to <out> with no break threshold: a shard's
-//     score is one part's, and only the merge judges.
+//     score is one part's, and only the merge judges. `sweep.ignoreStatic`,
+//     when set, becomes its `ignoreStatic`.
 //   node sweep.ts merge <dir> <count> <out>
 //     Merges the shards' results (one directory per shard in <dir>, each
 //     with its stryker-incremental.json) into <out>, written only when all
@@ -70,19 +81,38 @@ import type { Counts, Mutant, Report, Test } from './report.ts';
 export type Shard = { files: string[]; weight: number };
 
 /**
- * What testing one mutant took: one run, plus each test covering it.
+ * Whether a run testing static mutants reruns the whole suite for this one:
+ * it is static, and not ignored for anything but that (Stryker's reason).
  */
-export function mutantWeight(mutant: Mutant) {
+export function runsSuite(mutant: Mutant) {
+  if (mutant.static !== true) return false;
+  return mutant.status !== 'Ignored' || String(mutant.statusReason).startsWith('Static mutant');
+}
+
+/**
+ * What testing one mutant took: one run, plus each test covering it. Given
+ * `suite`, the whole suite's test count, a static mutant runs all of them.
+ */
+export function mutantWeight(mutant: Mutant, suite: number | null = null) {
+  if (suite !== null && runsSuite(mutant)) return 1 + suite;
   return mutant.status === 'Ignored' ? 0 : 1 + (mutant.coveredBy?.length ?? 0);
 }
 
 /**
- * Each file's weight in a set of results, by cwd-relative name.
+ * Each file's weight in a set of results, by cwd-relative name; with
+ * `testsStatic`, its static mutants weigh the whole suite.
  */
-export function reportWeights(report: Report, cwd: string): Map<string, number> {
+export function reportWeights(
+  report: Report,
+  cwd: string,
+  testsStatic = false,
+): Map<string, number> {
+  const suite = testsStatic
+    ? Object.values(report.testFiles ?? {}).reduce((n, file) => n + (file.tests?.length ?? 0), 0)
+    : null;
   const weights: Map<string, number> = new Map();
   for (const [name, file] of Object.entries(report.files ?? {})) {
-    const weight = (file.mutants ?? []).reduce((sum, m) => sum + mutantWeight(m), 0);
+    const weight = (file.mutants ?? []).reduce((sum, m) => sum + mutantWeight(m, suite), 0);
     weights.set(relativeName(name, cwd), weight);
   }
   return weights;
@@ -142,6 +172,7 @@ export function plan({
   lines,
   count,
   cwd,
+  testsStatic = false,
 }: {
   tracked: string[];
   mutate: string[];
@@ -149,6 +180,7 @@ export function plan({
   lines: (file: string) => number;
   count: number;
   cwd: string;
+  testsStatic?: boolean;
 }) {
   const files = tracked.filter((file) => inMutateScope(file, mutate)).sort();
   // No file means no shard, and GitHub fails an empty matrix with a message
@@ -156,7 +188,7 @@ export function plan({
   if (files.length === 0) {
     throw new Error(`no tracked file matches the mutate globs (${mutate.join(', ')})`);
   }
-  const known = results ? reportWeights(results, cwd) : new Map();
+  const known = results ? reportWeights(results, cwd, testsStatic) : new Map();
   return {
     shards: splitShards(fileWeights(files, lines, known), count),
     fromResults: known.size > 0,
@@ -173,19 +205,36 @@ export function shardMatrix(shards: Shard[]) {
 /**
  * The split as a Markdown table.
  */
-export function shardTable(shards: Shard[], fromResults: boolean) {
-  const unit = fromResults ? 'mutants plus covering tests, last results' : 'lines';
+export function shardTable(shards: Shard[], fromResults: boolean, testsStatic = false) {
+  const tested = testsStatic ? ', static ones as the whole suite' : '';
+  const unit = fromResults ? `mutants plus covering tests${tested}, last results` : 'lines';
   const rows = shards.map(({ files, weight }, i) => `| ${i + 1} | ${files.length} | ${weight} |`);
   return [`| Shard | Files | Weight (${unit}) |`, '| --- | --- | --- |', ...rows, ''].join('\n');
 }
 
 /**
- * The Stryker config for one shard: no break threshold.
+ * The Stryker config for one shard: no break threshold, and `ignoreStatic`
+ * when the sweep sets one (null keeps the config's).
  */
-export function shardConfig(config: Record<string, unknown>) {
+export function shardConfig(config: Record<string, unknown>, ignoreStatic: boolean | null = null) {
   const thresholds =
     typeof config.thresholds === 'object' && config.thresholds !== null ? config.thresholds : {};
-  return { ...config, thresholds: { ...thresholds, break: null } };
+  const shard = { ...config, thresholds: { ...thresholds, break: null } };
+  return ignoreStatic === null ? shard : { ...shard, ignoreStatic };
+}
+
+/**
+ * The results with only their non-static mutants, or only their static ones.
+ */
+export function staticPart(report: Report, wanted: boolean): Report {
+  const files: NonNullable<Report['files']> = {};
+  for (const [name, file] of Object.entries(report.files ?? {})) {
+    files[name] = {
+      ...file,
+      mutants: (file.mutants ?? []).filter((m) => (m.static === true) === wanted),
+    };
+  }
+  return { ...report, files };
 }
 
 /**
@@ -260,23 +309,34 @@ export function verdict({
   counts: c,
   breakAt,
   perFile = null,
+  statics = null,
 }: {
   found: number;
   expected: number;
   counts: Counts;
   breakAt: number | null;
   perFile?: { pass: boolean; lines: string[] } | null;
+  statics?: Counts | null;
 }) {
   const complete = found === expected;
-  const score = c.score === null ? 'none' : `${c.score.toFixed(2)}%`;
+  const row = (k: Counts, limit: string) =>
+    `| ${k.score === null ? 'none' : `${k.score.toFixed(2)}%`} | ${limit} | ${k.killed} | ${k.timeout} | ${k.survived} | ${k.noCoverage} | ${k.errors} | ${k.ignored} |`;
+  const head = '| Score | Break | Killed | Timeout | Survived | No coverage | Errors | Ignored |';
+  const rule = '| --- | --- | --- | --- | --- | --- | --- | --- |';
+  const table = statics
+    ? [
+        `| Mutants ${head}`,
+        `| --- ${rule}`,
+        `| Not static ${row(c, String(breakAt ?? 'none'))}`,
+        `| Static ${row(statics, 'report only')}`,
+      ]
+    : [head, rule, row(c, String(breakAt ?? 'none'))];
   const lines = [
     `### Mutation sweep${complete ? '' : ' (incomplete)'}`,
     '',
     `Shards reported: ${found} of ${expected}.`,
     '',
-    '| Score | Break | Killed | Timeout | Survived | No coverage | Errors | Ignored |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- |',
-    `| ${score} | ${breakAt ?? 'none'} | ${c.killed} | ${c.timeout} | ${c.survived} | ${c.noCoverage} | ${c.errors} | ${c.ignored} |`,
+    ...table,
     '',
   ];
   let pass = true;
@@ -287,7 +347,7 @@ export function verdict({
     );
   } else if (c.score === null) {
     pass = false;
-    lines.push('No mutant was tested.');
+    lines.push(statics ? 'No non-static mutant was tested.' : 'No mutant was tested.');
   } else {
     if (breakAt !== null && c.score < breakAt) {
       pass = false;
@@ -337,6 +397,12 @@ export function main(args: string[], root: string = appRoot()) {
   const [command, ...rest] = args;
   const settings = readSettings(root);
   const config = readStrykerConfig(settings, root);
+  // Scored apart, static mutants are report only because PR runs skip them.
+  if (settings.sweep.ignoreStatic === false && config.raw.ignoreStatic !== true) {
+    throw new Error(
+      `mutation: "sweep.ignoreStatic" false needs ${settings.strykerConfig} to set "ignoreStatic": true, so PR runs skip the static mutants the sweep tests`,
+    );
+  }
   const at = (file: string) => path.resolve(root, file);
   if (command === 'plan') {
     const tracked = gitIn(root)('ls-files', '-z').split('\0').filter(Boolean);
@@ -347,8 +413,9 @@ export function main(args: string[], root: string = appRoot()) {
       lines: (file) => (readText(at(file)) ?? '').split('\n').length,
       count: settings.sweep.shards,
       cwd: root,
+      testsStatic: settings.sweep.ignoreStatic === false,
     });
-    const table = shardTable(shards, fromResults);
+    const table = shardTable(shards, fromResults, settings.sweep.ignoreStatic === false);
     console.log(table);
     for (const [i, { files }] of shards.entries())
       console.log(`Shard ${i + 1}: ${files.join(', ')}`);
@@ -358,7 +425,8 @@ export function main(args: string[], root: string = appRoot()) {
     return 0;
   }
   if (command === 'config' && rest[0]) {
-    write(at(rest[0]), `${JSON.stringify(shardConfig(config.raw), null, 2)}\n`);
+    const shard = shardConfig(config.raw, settings.sweep.ignoreStatic);
+    write(at(rest[0]), `${JSON.stringify(shard, null, 2)}\n`);
     return 0;
   }
   const expected = positive(rest[1]);
@@ -372,13 +440,16 @@ export function main(args: string[], root: string = appRoot()) {
       else console.error(`No readable results from ${shard}.`);
     }
     const merged = mergeReports(reports, config, root);
+    const apart = settings.sweep.ignoreStatic === false;
+    const scored = apart ? staticPart(merged, false) : merged;
     const threshold = settings.perFileThreshold;
     const result = verdict({
       found: reports.length,
       expected,
-      counts: counts(allMutants(merged)),
+      counts: counts(allMutants(scored)),
       breakAt: breakThreshold(config),
-      perFile: threshold === null ? null : judge(merged, null, threshold, root),
+      perFile: threshold === null ? null : judge(scored, null, threshold, root),
+      statics: apart ? counts(allMutants(staticPart(merged, true))) : null,
     });
     if (result.complete) write(at(rest[2]), JSON.stringify(merged));
     console.log(result.summary);

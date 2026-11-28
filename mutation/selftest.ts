@@ -91,7 +91,7 @@ export async function selftest(root: string, log: (line: string) => void = conso
     if (JSON.stringify(planned) !== JSON.stringify(inScope)) {
       throw new Error('the shards do not hold every in-scope file exactly once');
     }
-    const shard = shardConfig(c.raw);
+    const shard = shardConfig(c.raw, s.sweep.ignoreStatic);
     if ((shard.thresholds as { break?: unknown }).break !== null) {
       throw new Error('the shard config keeps a break threshold');
     }

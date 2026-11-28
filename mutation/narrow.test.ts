@@ -32,7 +32,33 @@ const thirteen = Array.from({ length: 13 }, (_, i) => `line ${i + 1}`).join('\n'
  */
 const reads = (text: string | null) => () => text;
 
+// A sweep's static results: one only static (no covering test), one also
+// covered by a test, which a run ignoring static mutants still runs.
+const statics = [
+  { ...at('5', 2), status: 'Survived', static: true, coveredBy: [] },
+  { ...at('6', 3), status: 'Survived', static: true, coveredBy: ['0'] },
+  { ...at('7', 4), status: 'Killed', coveredBy: ['0'] },
+];
+
 describe('narrow', () => {
+  it('drops static results no covering test reaches when the run ignores static mutants', () => {
+    const swept = {
+      files: {
+        'src/a.ts': { source: thirteen, mutants: statics },
+        'src/b.ts': { source: thirteen, mutants: statics },
+      },
+    };
+    const scope = ['src/a.ts', 'src/b.ts:1-13'];
+    const ids = (out: ReturnType<typeof narrow>, file: string) =>
+      out.files?.[file].mutants?.map((m) => m.id);
+    const skips = narrow(swept, scope, '/repo', reads(thirteen), true);
+    expect(ids(skips, 'src/a.ts')).toEqual(['6', '7']);
+    expect(ids(skips, 'src/b.ts')).toEqual(['6', '7']);
+    const tests = narrow(swept, scope, '/repo', reads(thirteen));
+    expect(tests.files?.['src/a.ts']).toBe(swept.files['src/a.ts']);
+    expect(ids(tests, 'src/b.ts')).toEqual(['5', '6', '7']);
+  });
+
   it('drops the files out of scope and keeps a whole file whole, and every test file', () => {
     const out = narrow(report, ['src/a.ts', 'src/c.ts', 'src/App.tsx'], '/repo');
     expect(Object.keys(out.files ?? {})).toEqual(['src/a.ts', 'src/c.ts']);
@@ -234,12 +260,38 @@ describe('main', () => {
     error.mockRestore();
   });
 
+  /**
+   * An app whose Stryker config is `stryker`, with its incremental file.
+   */
+  function app(stryker: Record<string, unknown>, incremental: unknown) {
+    const cwd = scratch();
+    writeFileSync(path.join(cwd, 'stryker.config.json'), JSON.stringify(stryker));
+    const file = path.join(cwd, 'incremental.json');
+    writeFileSync(file, JSON.stringify(incremental));
+    return { cwd, file };
+  }
+
   it('narrows the file to the comma-separated scope', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const file = path.join(scratch(), 'incremental.json');
-    writeFileSync(file, JSON.stringify(report));
-    expect(main([file, 'src/b.ts,'], '/repo')).toBe(0);
+    const { cwd, file } = app({ mutate: ['src/**'] }, report);
+    expect(main([file, 'src/b.ts,'], cwd)).toBe(0);
     expect(Object.keys(JSON.parse(readFileSync(file, 'utf8')).files)).toEqual(['src/b.ts']);
+    log.mockRestore();
+  });
+
+  it("drops the sweep's static results when the Stryker config ignores static mutants", () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const swept = { files: { 'src/b.ts': { mutants: [statics[0], statics[1]] } } };
+    const ids = (file: string) =>
+      JSON.parse(readFileSync(file, 'utf8')).files['src/b.ts'].mutants.map(
+        (m: { id: string }) => m.id,
+      );
+    const skips = app({ mutate: ['src/**'], ignoreStatic: true }, swept);
+    expect(main([skips.file, 'src/b.ts'], skips.cwd)).toBe(0);
+    expect(ids(skips.file)).toEqual(['6']);
+    const tests = app({ mutate: ['src/**'] }, swept);
+    expect(main([tests.file, 'src/b.ts'], tests.cwd)).toBe(0);
+    expect(ids(tests.file)).toEqual(['5', '6']);
     log.mockRestore();
   });
 });

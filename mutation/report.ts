@@ -29,6 +29,7 @@ export type Mutant = {
   location?: Location;
   coveredBy?: string[];
   killedBy?: string[];
+  static?: boolean;
   [key: string]: unknown;
 };
 

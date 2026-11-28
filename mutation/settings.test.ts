@@ -46,8 +46,11 @@ describe('parseSettings', () => {
     expect(s.perFileThreshold).toBe(80);
     expect(s.testSubjects).toBe(false);
     expect(s.cache).toEqual({ prefix: 'stryker-incremental', restoreMain: false, restartOn: [] });
-    expect(s.sweep).toEqual({ shards: 4, timeoutMinutes: 180 });
+    expect(s.sweep).toEqual({ shards: 4, timeoutMinutes: 180, ignoreStatic: null });
     expect(parseSettings({ perFileThreshold: null }).perFileThreshold).toBeNull();
+    for (const ignoreStatic of [false, true, null]) {
+      expect(parseSettings({ sweep: { ignoreStatic } }).sweep.ignoreStatic).toBe(ignoreStatic);
+    }
   });
 
   it('refuses an unknown or mistyped setting, naming it', () => {
@@ -64,6 +67,10 @@ describe('parseSettings', () => {
     expect(() => parseSettings({ formatCheck: 'yes' })).toThrow('must be a boolean');
     expect(() => parseSettings({ perFileThreshold: 101 })).toThrow('from 0 to 100');
     expect(() => parseSettings({ perFileThreshold: '80' })).toThrow('from 0 to 100');
+    expect(() => parseSettings({ sweep: { ignoreStatic: 'no' } })).toThrow(
+      '"sweep.ignoreStatic" must be a boolean, or null',
+    );
+    expect(() => parseSettings({ sweep: { ignoreStatic: 0 } })).toThrow('boolean, or null');
   });
 });
 

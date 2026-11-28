@@ -2,8 +2,10 @@ name: Mutation sweep merge
 description: >-
   The monthly mutation sweep, part 3 (the mutation-sweep workflow's merge
   job): merges the shards' results, judges the whole (Stryker's break
-  threshold on the merged score, and `perFileThreshold` on every file), and
-  saves it as main's baseline when every shard reported (sweep.ts merge).
+  threshold on the merged score, and `perFileThreshold` on every file, both
+  on non-static mutants alone when `sweep.ignoreStatic` is false, static
+  ones shown apart), and saves it as main's baseline, every result kept,
+  when every shard reported (sweep.ts merge).
   A complete sweep that fails its gate is still main's latest results and
   still saved, since PR runs should start from them; a partial one shows
   its score and fails, leaving the baseline as it was. A manual run on
