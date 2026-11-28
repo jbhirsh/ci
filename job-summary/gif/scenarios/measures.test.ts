@@ -5,8 +5,18 @@ import { webkit } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openScenario, runs } from '../test-play.ts';
 import wide from './measures-wide.ts';
-import phone from './measures.ts';
+import phone, { wheelStop } from './measures.ts';
 import type { Browser } from 'playwright';
+
+describe('wheelStop', () => {
+  it('moves by the turn, to the pixel, held between the top and the furthest the page scrolls', () => {
+    expect(wheelStop(100, 50, 2000, 800)).toBe(150);
+    expect(wheelStop(100, 50.6, 2000, 800)).toBe(151);
+    expect(wheelStop(10, -50, 2000, 800)).toBe(0);
+    expect(wheelStop(1150, 100, 2000, 800)).toBe(1200);
+    expect(wheelStop(0, 50, 600, 800)).toBe(0);
+  });
+});
 
 describe.skipIf(!runs)('measures, in WebKit', () => {
   let browser: Browser;
