@@ -83,7 +83,11 @@ describe('checkGh, running gh', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'fake-gh-'));
     if (version) {
       const gh = path.join(dir, 'gh');
-      writeFileSync(gh, `#!/bin/sh\necho "gh version ${version} (2026-09-01)"\n`);
+      // The version only for `--version`, as gh prints its usage otherwise.
+      writeFileSync(
+        gh,
+        `#!/bin/sh\n[ "$1" = --version ] && echo "gh version ${version} (2026-09-01)"\nexit 0\n`,
+      );
       chmodSync(gh, 0o755);
     }
     const saved = process.env.PATH;
@@ -99,6 +103,38 @@ describe('checkGh, running gh', () => {
     expect(() => withFakeGh('2.99.0')).not.toThrow();
     expect(() => withFakeGh('2.89.0')).toThrow('yours is 2.89.0');
     expect(() => withFakeGh(null)).toThrow('none found');
+  });
+
+  /**
+   * Runs checkGh for an issue, its version given, with this gh script (or no
+   * gh at all) first on PATH for `gh issue edit --help`.
+   */
+  function issueHelpFrom(script: string | null) {
+    const dir = mkdtempSync(path.join(tmpdir(), 'fake-gh-'));
+    if (script) {
+      writeFileSync(path.join(dir, 'gh'), `#!/bin/sh\n${script}\n`);
+      chmodSync(path.join(dir, 'gh'), 0o755);
+    }
+    const saved = process.env.PATH;
+    process.env.PATH = script ? `${dir}${path.delimiter}${saved}` : dir;
+    try {
+      checkGh(() => 'gh version 2.104.0 (2026-11-01)', { issue: true });
+    } finally {
+      process.env.PATH = saved;
+    }
+  }
+
+  it("reads gh issue edit's help from stderr as well as stdout", () => {
+    const help = '[ "$1 $2 $3" = "issue edit --help" ] && echo "  --attach file"';
+    expect(() => issueHelpFrom(help)).not.toThrow();
+    expect(() => issueHelpFrom(`${help} >&2`)).not.toThrow();
+    expect(() => issueHelpFrom('echo "  --title string"')).toThrow(
+      'has no `gh issue edit --attach`',
+    );
+  });
+
+  it("throws why gh issue edit's help couldn't run, rather than call it flagless", () => {
+    expect(() => issueHelpFrom(null)).toThrow(/ENOENT/);
   });
 });
 
