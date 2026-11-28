@@ -11,8 +11,14 @@
 // next turn of the event loop, by which the handler has let go every
 // request it isn't holding (all of this fake is promises), and before the
 // page's requests are awaited, so a request held until such a wait ends
-// goes on. The context's API client (context.request) answers with
-// `bypass`'s status (and headers, when it has them), or throws its message.
+// goes on. A request given `fail` fails in the network once it leaves the
+// browser: the page's `requestfailed` listeners hear of it, and nothing
+// answers it. One given `redirectTo` is answered for that URL, by a request
+// the route never sees, whose redirectedFrom() is the first; one given
+// `next` has the page send those once it has read the answer, a turn later
+// (the hang limit waits for that turn). The context's API client
+// (context.request) answers with `bypass`'s status (and headers, when it
+// has them), or throws its message.
 
 import type { Browser } from 'playwright';
 
@@ -24,6 +30,14 @@ export interface Sent {
   url: string;
   method?: string;
   body?: string | null;
+  /** Its request.resourceType(): `fetch` when absent, `document` for the navigation. */
+  type?: string;
+  /** Fails in the network once it leaves the browser, with this errorText: no response. */
+  fail?: string;
+  /** The URL the deployment redirects it to: the response is that request's. */
+  redirectTo?: string;
+  /** The requests the page sends once this one is answered. */
+  next?: Sent[];
 }
 
 /** What the made-up app answers. */
@@ -45,6 +59,9 @@ interface FakeRequest {
   method: () => string;
   postData: () => string | null;
   headers: () => Record<string, string>;
+  resourceType: () => string;
+  failure: () => { errorText: string } | null;
+  redirectedFrom: () => FakeRequest | null;
   timing: () => Record<string, number>;
 }
 
@@ -92,6 +109,7 @@ export function testBrowser({
   const contexts: unknown[] = [];
   const setups: { url: string; options: unknown }[] = [];
   let loads = 0;
+  let hung = 0;
   let closed = false;
 
   const browser = {
@@ -105,6 +123,9 @@ export function testBrowser({
       let handler: Handler | undefined;
       const listeners: ((response: FakeResponse) => void)[] = [];
       let waiters: Waiter[] = [];
+      /** Pages reading a response before they send what comes next. */
+      let reading = 0;
+      const failedListeners: ((request: FakeRequest) => void)[] = [];
 
       async function send(sent: Sent) {
         const method = sent.method ?? 'GET';
@@ -115,6 +136,9 @@ export function testBrowser({
           method: () => method,
           postData: () => body,
           headers: () => ({ accept: '*/*' }),
+          resourceType: () => sent.type ?? 'fetch',
+          failure: () => (sent.fail === undefined ? null : { errorText: sent.fail }),
+          redirectedFrom: () => null,
           timing: () => ({
             startTime: 0,
             ...(answered.timing ?? { requestStart: 1, responseStart: 5, responseEnd: 9 }),
@@ -138,9 +162,17 @@ export function testBrowser({
           return;
         }
         seen.push({ url: sent.url, method, headers });
-        answered = answer({ ...sent, method, body }, load);
+        if (sent.fail !== undefined) {
+          for (const listener of failedListeners) listener(request);
+          return;
+        }
+        // A redirect is followed without the route seeing it, as in Playwright.
+        const final: FakeRequest = sent.redirectTo
+          ? { ...request, url: () => sent.redirectTo as string, redirectedFrom: () => request }
+          : request;
+        answered = answer({ ...sent, url: final.url(), method, body }, load);
         const response: FakeResponse = {
-          request: () => request,
+          request: () => final,
           status: () => answered.status ?? 200,
           allHeaders: async () => answered.headers ?? {},
           finished: async () => null,
@@ -151,6 +183,14 @@ export function testBrowser({
           w.resolve(response);
           return false;
         });
+        if (sent.next) {
+          // The page reads the response before it sends what comes next: a
+          // turn later, as goto's hang limit knows.
+          reading += 1;
+          await nextTurn();
+          reading -= 1;
+          await Promise.all(sent.next.map(send));
+        }
       }
 
       return {
@@ -175,6 +215,8 @@ export function testBrowser({
           listeners.push(listener),
         close: async () => {},
         newPage: async () => ({
+          on: (_event: 'requestfailed', listener: (request: FakeRequest) => void) =>
+            failedListeners.push(listener),
           waitForResponse: (
             predicate: (response: FakeResponse) => boolean,
             options: { timeout: number },
@@ -188,9 +230,11 @@ export function testBrowser({
             }),
           goto: async (url: string) => {
             if (gotoFails) throw new Error(gotoFails);
-            await send({ url });
+            await send({ url, type: 'document' });
             const sending = page(url, load).map(send);
-            await nextTurn();
+            do await nextTurn();
+            while (reading > 0);
+            hung += waiters.length;
             for (const w of waiters) w.reject(new Error('hang limit'));
             waiters = [];
             await Promise.all(sending);
@@ -206,5 +250,7 @@ export function testBrowser({
     contexts,
     setups,
     isClosed: () => closed,
+    /** How many waits have ended at the hang limit. */
+    hung: () => hung,
   };
 }

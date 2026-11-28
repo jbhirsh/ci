@@ -386,3 +386,263 @@ describe('drive', () => {
     ]);
   });
 });
+
+describe('drive, with coldFirst', () => {
+  const HEALTH = `${TARGET}api/health`;
+  const coldFirst = parseSettings({
+    pages: [
+      { path: '/', expect: ['games', 'session'] },
+      { path: '/wishlist', expect: ['games', 'session'] },
+    ],
+    requests: [
+      { name: 'games', path: '/api/graphql', operation: 'Games' },
+      { name: 'session', path: '/api/graphql', method: 'POST', operation: 'Session' },
+      { name: 'vote', path: '/api/graphql', method: 'POST', operation: 'Vote' },
+    ],
+    reads: [{ method: 'POST', path: '/api/graphql', operation: 'Session' }],
+    repeats: 1,
+    coldFirst: 'games',
+  });
+  const without = parseSettings({ ...coldFirst, coldFirst: undefined });
+
+  /**
+   * A deployment whose first API request is cold, and whose page sends the
+   * session query, an unlisted API call and an image before the games query,
+   * all at once; `answered` lists each API request as it reaches the app.
+   */
+  function sessionFirst({
+    sent = [SESSION, { url: HEALTH }, { url: `${TARGET}logo.png`, type: 'image' }, { url: GAMES }],
+    answer,
+  }: {
+    sent?: Sent[];
+    answer?: (r: Sent & { method: string }, load: number) => Answer | undefined;
+  } = {}) {
+    const answered: string[] = [];
+    let served = false;
+    const fake = testBrowser({
+      page: () => sent,
+      answer: (request, load) => {
+        if (request.url.startsWith(`${TARGET}api/`)) {
+          answered.push(
+            request.url === GAMES ? 'games' : request.url === HEALTH ? 'health' : 'session',
+          );
+        }
+        const custom = answer?.(request, load);
+        if (custom) return custom;
+        if (!request.url.startsWith(`${TARGET}api/`)) return {};
+        const cold = !served;
+        served = true;
+        return { headers: { 'server-timing': cold ? 'cold, total;dur=900' : WARM } };
+      },
+    });
+    return { fake, answered };
+  }
+
+  it('sends the named request first on the first load, then the held ones, left out and counted', async () => {
+    const { fake, answered } = sessionFirst();
+    const outcome = await run(fake, { settings: coldFirst });
+    expect(outcome.problems).toEqual([]);
+    expect(answered.slice(0, 3)).toEqual(['games', 'session', 'health']);
+    // The image went out without waiting.
+    expect(fake.seen.map((s) => s.url).slice(0, 3)).toEqual([TARGET, `${TARGET}logo.png`, GAMES]);
+    // Page 2's first load, with no instance starting, is left out as ever.
+    expect(outcome.notes).toEqual([
+      'cold carried by: games',
+      "2 held until games's wait ended, left out",
+      '2 responses on the first load left out: not cold, not a repeat',
+    ]);
+    const rows = outcome.measurements.map((m) => `${m.name} ${m.start} ${m.phase}`);
+    expect(rows.filter((row) => row.includes('cold'))).toEqual([
+      'games cold total',
+      'games cold browser',
+    ]);
+    // The session query is timed on the warm loads.
+    expect(rows.filter((row) => row.startsWith('session'))).toEqual(
+      Array(2).fill(['session warm total', 'session warm browser']).flat(),
+    );
+  });
+
+  it("holds nothing on the other pages' first loads, nor on warm loads", async () => {
+    const { fake, answered } = sessionFirst();
+    await run(fake, { settings: coldFirst });
+    const inOrder = ['session', 'health', 'games'];
+    expect(answered).toEqual(['games', 'session', 'health', ...inOrder, ...inOrder, ...inOrder]);
+  });
+
+  it('holds nothing without the setting, and probes as before', async () => {
+    const { fake, answered } = sessionFirst();
+    const outcome = await run(fake, { settings: without });
+    expect(answered.slice(0, 3)).toEqual(['session', 'health', 'games']);
+    expect(outcome.notes).toEqual([
+      'cold carried by: session',
+      '3 responses on the first load left out: not cold, not a repeat',
+    ]);
+    expect(outcome.problems).toEqual([]);
+  });
+
+  it('notes, naming it and guessing nothing, a named request that carried no cold flag', async () => {
+    const { fake } = sessionFirst({ answer: () => ({ headers: { 'server-timing': WARM } }) });
+    const outcome = await run(fake, { settings: coldFirst });
+    expect(outcome.notes).toEqual([
+      'cold not seen this run: no response carried the cold flag (cold)',
+      'games carried no cold flag on the first load',
+      "2 held until games's wait ended, left out",
+      '3 responses on the first load left out: not cold, not a repeat',
+    ]);
+    expect(outcome.problems).toEqual([]);
+  });
+
+  it('a held request that comes back cold is still left out', async () => {
+    const { fake } = sessionFirst({
+      answer: (r, load) =>
+        r.url === API && load === 0
+          ? { headers: { 'server-timing': 'cold, total;dur=700' } }
+          : undefined,
+    });
+    const outcome = await run(fake, { settings: coldFirst });
+    expect(outcome.notes[0]).toBe('cold carried by: games, session');
+    expect(outcome.measurements.filter((m) => m.start === 'cold').map((m) => m.name)).toEqual([
+      'games',
+      'games',
+    ]);
+  });
+
+  it.each([
+    [
+      'answers 500',
+      { sent: [SESSION, { url: HEALTH }, { url: GAMES }] },
+      (r: Sent) => (r.url === GAMES ? { status: 500 } : undefined),
+      ['games: answered 500'],
+    ],
+    [
+      'is never made',
+      { sent: [SESSION, { url: HEALTH }] },
+      undefined,
+      [
+        'games: / never made this request within 90s',
+        'games: /wishlist never made this request within 90s',
+      ],
+    ],
+  ])(
+    'releases the held requests, with one problem, when the named request %s',
+    async (_, { sent }, answer, problems) => {
+      const { fake, answered } = sessionFirst({ sent, answer });
+      const outcome = await run(fake, { settings: coldFirst });
+      expect(outcome.problems).toEqual(problems);
+      expect(answered.filter((name) => name !== 'games').slice(0, 2)).toEqual([
+        'session',
+        'health',
+      ]);
+      expect(outcome.notes).toContain("2 held until games's wait ended, left out");
+    },
+  );
+
+  it('releases the held requests at once, with one problem, when the named request fails in the network', async () => {
+    const failing = { url: GAMES, fail: 'net::ERR_CONNECTION_RESET' };
+    // How many waits had reached their hang limit as each API request was answered.
+    const hungAt: string[] = [];
+    const { fake, answered } = sessionFirst({
+      sent: [SESSION, { url: HEALTH }, failing],
+      answer: (r, load) => {
+        if (load === 0 && r.url.startsWith(`${TARGET}api/`))
+          hungAt.push(`${r.url}: ${fake.hung()}`);
+        return undefined;
+      },
+    });
+    const outcome = await run(fake, { settings: coldFirst });
+    expect(hungAt).toEqual([`${API}: 0`, `${HEALTH}: 0`]);
+    expect(answered.slice(0, 2)).toEqual(['session', 'health']);
+    // The other loads, which hold nothing, end their waits as ever.
+    expect(outcome.problems).toEqual([
+      'games: failed: net::ERR_CONNECTION_RESET',
+      'games: / never made this request within 90s',
+      'games: /wishlist never made this request within 90s',
+    ]);
+    expect(outcome.notes).toContain("2 held until games's wait ended, left out");
+  });
+
+  it('holds nothing sent after the named request answered: it is measured or left out as usual, and not counted', async () => {
+    const VOTES = { url: API, method: 'POST', body: JSON.stringify({ operationName: 'Votes' }) };
+    const withVotes = parseSettings({
+      pages: [{ path: '/', expect: ['games', 'session', 'votes'] }],
+      requests: [
+        ...coldFirst.requests,
+        { name: 'votes', path: '/api/graphql', method: 'POST', operation: 'Votes' },
+      ],
+      reads: [...coldFirst.reads, { method: 'POST', path: '/api/graphql', operation: 'Votes' }],
+      repeats: 1,
+      coldFirst: 'games',
+    });
+    for (const votesCold of [true, false]) {
+      const { fake } = sessionFirst({
+        sent: [SESSION, { url: HEALTH }, { url: GAMES, next: [VOTES] }],
+        answer: (r, load) =>
+          r.body === VOTES.body && load === 0
+            ? { headers: { 'server-timing': votesCold ? 'cold, total;dur=500' : WARM } }
+            : undefined,
+      });
+      const outcome = await run(fake, { settings: withVotes });
+      expect(outcome.problems).toEqual([]);
+      expect(outcome.notes).toContain("2 held until games's wait ended, left out");
+      const coldRows = outcome.measurements.filter((m) => m.start === 'cold').map((m) => m.name);
+      if (votesCold) {
+        expect(coldRows).toEqual(['games', 'games', 'votes', 'votes']);
+      } else {
+        expect(coldRows).toEqual(['games', 'games']);
+        expect(outcome.notes).toContain(
+          '1 response on the first load left out: not cold, not a repeat',
+        );
+      }
+    }
+  });
+
+  it('leaves out a held request the deployment redirected', async () => {
+    const withHealth = parseSettings({
+      pages: [{ path: '/', expect: ['games', 'health'] }],
+      requests: [...coldFirst.requests, { name: 'health', path: '/api/health' }],
+      repeats: 1,
+      coldFirst: 'games',
+    });
+    const { fake } = sessionFirst({
+      sent: [{ url: `${TARGET}api/old-health`, redirectTo: HEALTH }, { url: GAMES }],
+      // Every response cold, so a held one that were measured would show.
+      answer: () => ({ headers: { 'server-timing': 'cold, total;dur=300' } }),
+    });
+    const outcome = await run(fake, { settings: withHealth });
+    expect(outcome.problems).toEqual([]);
+    expect(outcome.notes).toContain("1 held until games's wait ended, left out");
+    expect(outcome.measurements.filter((m) => m.name === 'health').length).toBe(2);
+    expect(outcome.measurements.slice(0, 2).map((m) => m.name)).toEqual(['games', 'games']);
+  });
+
+  it('goes on holding when one of two named requests fails, while the other is still pending', async () => {
+    const { fake, answered } = sessionFirst({
+      sent: [SESSION, { url: HEALTH }, { url: GAMES, fail: 'net::ERR_ABORTED' }, { url: GAMES }],
+    });
+    const outcome = await run(fake, { settings: coldFirst });
+    expect(answered.slice(0, 3)).toEqual(['games', 'session', 'health']);
+    expect(outcome.problems).toEqual([]);
+    expect(outcome.measurements.filter((m) => m.start === 'cold').map((m) => m.name)).toEqual([
+      'games',
+      'games',
+    ]);
+  });
+
+  it('releases the held requests, with one problem, when the named request is aborted as a write', async () => {
+    const vote = { url: API, method: 'POST', body: JSON.stringify({ operationName: 'Vote' }) };
+    const voteFirst = parseSettings({
+      pages: [{ path: '/', expect: ['vote', 'games'] }],
+      requests: coldFirst.requests,
+      repeats: 1,
+      coldFirst: 'vote',
+    });
+    const { fake, answered } = sessionFirst({ sent: [{ url: GAMES }, vote] });
+    const outcome = await run(fake, { settings: voteFirst });
+    expect(outcome.problems).toEqual([
+      'vote: aborted, as POST /api/graphql (Vote) is not a read (probe.reads)',
+    ]);
+    expect(answered).toEqual(['games', 'games']);
+    expect(outcome.notes).toContain("1 held until vote's wait ended, left out");
+    expect(outcome.measurements.filter((m) => m.start === 'cold')).toEqual([]);
+  });
+});

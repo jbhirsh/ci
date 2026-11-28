@@ -54,13 +54,20 @@ describe('parseSettings', () => {
         cold: 'first-use',
         repeats: 20,
         timeout: 0.5,
+        coldFirst: 'games',
       }),
     ).toMatchObject({
+      coldFirst: 'games',
       previewSafe: [{ method: 'POST', path: '/api/graphql', operation: 'Vote' }],
       cold: 'first-use',
       repeats: 20,
       timeout: 0.5,
     });
+  });
+
+  it('names no request to catch cold by default, and takes one the first page expects', () => {
+    expect(parseSettings(BOARDGAMES)).not.toHaveProperty('coldFirst');
+    expect(parseSettings({ ...BOARDGAMES, coldFirst: 'games' }).coldFirst).toBe('games');
   });
 
   it.each([
@@ -121,6 +128,16 @@ describe('parseSettings', () => {
     [{ ...minimal, headers: { 'x a': 'v' } }, 'probe.headers'],
     [{ ...minimal, timeout: 0 }, 'probe.timeout must be a number of seconds'],
     [{ ...minimal, timeout: 601 }, 'probe.timeout'],
+    [{ ...minimal, coldFirst: 'nope' }, 'probe.coldFirst must be a name from probe.requests'],
+    [{ ...minimal, coldFirst: 1 }, 'probe.coldFirst must be a name'],
+    [
+      {
+        ...BOARDGAMES,
+        pages: [BOARDGAMES.pages[0], { path: '/wishlist', expect: ['votes'] }],
+        coldFirst: 'votes',
+      },
+      'probe.coldFirst must be a request probe.pages[0].expect lists',
+    ],
   ])('refuses %j, naming the setting', (raw, message) => {
     expect(() => parseSettings(raw)).toThrow(`.github/ci.json: ${message}`);
   });
