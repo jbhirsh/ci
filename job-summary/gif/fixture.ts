@@ -321,9 +321,13 @@ function results(): Results {
     target: 'https://board-games.vercel.app',
     environment: 'preview',
     measurements,
+    // As a real run writes them (BoardGames#366's preview): long, unbroken URLs
+    // included, which a phone has to wrap.
     notes: [
-      'Warm: the median of 5 requests after the cold one.',
-      '1 request not sent: POST /_vercel/insights/view, not a read.',
+      'cold carried by: games',
+      '5 requests not sent: POST https://vercel.live/login/validate, not a read or preview-safe',
+      '1 request not sent: POST https://o4511157588918272.ingest.us.sentry.io/api/4511158568353792/envelope/, not a read or preview-safe',
+      '1 response on the first load left out: not cold, not a repeat',
     ],
   };
 }

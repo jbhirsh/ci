@@ -24,7 +24,15 @@ describe.skipIf(!runs)('measures, in WebKit', () => {
     '%s opens games, picks Games.bgg, then the cold start and its database row',
     async (_, scenario) => {
       const { page, play, close } = await openScenario(browser, scenario);
+      // Nothing is wider than the window, closed or open: the page never
+      // scrolls sideways (the notes hold long URLs, as a real run's do).
+      const sideways = () =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+      expect(await sideways()).toBe(0);
       await play();
+      expect(await sideways()).toBe(0);
       const lane = page.locator('#measures-card button.sum[data-op="games"]');
       expect(await lane.getAttribute('aria-expanded')).toBe('true');
       const cold = page.locator('#measures-card .mswitch button[data-mode="cold"]');
