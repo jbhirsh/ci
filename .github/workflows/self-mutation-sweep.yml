@@ -1,0 +1,21 @@
+# This repo's own monthly mutation sweep (ci#157), as each app has one: the
+# reusable mutation-sweep.yml (its header says what the sweep does), called
+# on this repo's scripts with the settings in `.github/ci.json`'s `mutation`
+# key. The sweep tests static mutants (`sweep.ignoreStatic: false`), which PR
+# runs skip, so it runs in 16 shards. On the 2nd at 06:00 UTC, a day after
+# the apps' sweeps, so it never queues behind theirs; by hand as well.
+# No required check depends on its jobs' names.
+name: Mutation sweep
+
+on:
+  schedule:
+    - cron: "0 6 2 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: Mutation sweep
+    uses: ./.github/workflows/mutation-sweep.yml

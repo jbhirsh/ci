@@ -27,14 +27,18 @@ Changing and testing a tool against an app is in `CONTRIBUTING.md`.
   config only through a loader or a flag. An action on the runner's own Node (`job-summary/note`,
   `sample-load`) checks that it strips types first, and warns rather than fails when not.
   `npm run typecheck` runs TypeScript 7 by path (`@typescript/native`), never bare `tsc`:
-  `typescript` is the TypeScript 6 API that typescript-eslint and the audit's tests load, with
-  a `tsc` of its own.
+  `typescript` is the TypeScript 6 API that typescript-eslint, Stryker and the audit's tests
+  load, with a `tsc` of its own.
 - **One composite action per job.** An app's job keeps its `name:` (its required check) and
   calls `jbhirsh/ci/<tool>@main`; a tool that needs several jobs (a matrix) is a reusable
   workflow in `.github/workflows/`, used only where no required check depends on its job
   names. Secrets come in as inputs.
 - **Node 24 and the latest major of each action**, everywhere.
 - **A test beside each module** (`*.test.ts`, Vitest).
+- **Stryker runs the tests over instrumented code** (`stryker.config.json`, ci#157): a function
+  whose source a test sends into a page (`toString()`, `page.evaluate`) can't run there
+  instrumented, so the page gets a binding Node answers (as `gif/overlay.ts` does) or an
+  expression as text (as `job-summary/gif/scenarios/measures.ts` does) instead.
 - **Each test file's temp directory is removed when the file ends**: `lib/test-tmpdir.ts`
   points `TMPDIR` at one of its own, so `tmpdir()` needs no cleanup; a child a test starts with
   an env of its own passes `TMPDIR` on, or what it writes stays in `/tmp`.

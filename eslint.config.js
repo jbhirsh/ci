@@ -15,7 +15,7 @@ const NO_TIMERS =
   'No fixed-time waits in the probe: wait on the event (waitForResponse, finished(), goto) instead.';
 
 export default [
-  { ignores: ['node_modules/', 'coverage/'] },
+  { ignores: ['node_modules/', 'coverage/', 'reports/', '.stryker-tmp/'] },
   js.configs.recommended,
   // Plain JavaScript: types live in JSDoc and TypeScript checks them (checkJs).
   { ...jsdoc.configs['flat/recommended'], files: JS },
