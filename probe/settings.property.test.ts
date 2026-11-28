@@ -13,6 +13,7 @@ const KEYS = [
   'hosts',
   'headers',
   'timeout',
+  'coldFirst',
 ];
 
 // Any JSON, and JSON shaped like the settings with any values in each key.
@@ -46,6 +47,7 @@ const settingsish = fc.oneof(
       timeout: fc.double(),
       hosts: fc.array(fc.oneof(fc.domain(), fc.string())),
       headers: fc.dictionary(fc.string(), fc.string()),
+      coldFirst: fc.oneof(fc.constantFrom('a', 'b', 'c'), fc.jsonValue()),
     },
     { requiredKeys: [] },
   ),
@@ -78,7 +80,66 @@ describe('parseSettings, for any JSON value', () => {
         expect(settings.repeats).toBeGreaterThanOrEqual(1);
         expect(settings.repeats).toBeLessThanOrEqual(20);
         expect(settings.timeout).toBeGreaterThan(0);
+        // The request to catch cold, if any, is one the first page waits for.
+        if (settings.coldFirst !== undefined) {
+          expect(settings.pages[0].expect).toContain(settings.coldFirst);
+        }
       }),
     );
+  });
+});
+
+// BoardGames' settings, which parse, with coldFirst anything: absent, any
+// JSON, a request name the first page expects, or one it doesn't.
+const BOARDGAMES = {
+  pages: [
+    { path: '/', expect: ['Games', 'Session'] },
+    { path: '/wishlist', expect: ['WishlistVotes'] },
+  ],
+  requests: [
+    { name: 'Games', path: '/api/graphql', method: 'GET', operation: 'Games' },
+    { name: 'Session', path: '/api/graphql', method: 'POST', operation: 'Session' },
+    { name: 'WishlistVotes', path: '/api/graphql', method: 'POST', operation: 'WishlistVotes' },
+  ],
+  reads: [
+    { method: 'POST', path: '/api/graphql', operation: 'Session' },
+    { method: 'POST', path: '/api/graphql', operation: 'WishlistVotes' },
+  ],
+  hosts: ['*.vercel.app'],
+  headers: { 'x-synthetic': 'probe' },
+  timeout: 60,
+};
+const coldFirst = fc.option(
+  fc.oneof(
+    fc.jsonValue(),
+    fc.constantFrom('Games', 'Session'),
+    fc.constantFrom('WishlistVotes', 'Nope', 'games'),
+  ),
+  { nil: undefined },
+);
+
+describe('parseSettings, for any coldFirst on settings that parse', () => {
+  it('takes it exactly when it names a request the first page expects, and reads it back', () => {
+    let taken = 0;
+    fc.assert(
+      fc.property(coldFirst, (value) => {
+        const raw = value === undefined ? BOARDGAMES : { ...BOARDGAMES, coldFirst: value };
+        const valid =
+          value === undefined ||
+          (typeof value === 'string' &&
+            BOARDGAMES.requests.some((r) => r.name === value) &&
+            BOARDGAMES.pages[0].expect.includes(value));
+        if (!valid) {
+          expect(() => parseSettings(raw)).toThrow(/^\.github\/ci\.json: probe\.coldFirst /);
+          return;
+        }
+        const settings = parseSettings(raw);
+        expect(settings.coldFirst).toBe(value);
+        if (value !== undefined) taken += 1;
+      }),
+      { numRuns: 300 },
+    );
+    // The valid branch, with a request named, is reached.
+    expect(taken).toBeGreaterThan(0);
   });
 });

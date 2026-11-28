@@ -42,6 +42,19 @@
 //   timeout      each wait's hang limit, in seconds (90, a cold start's
 //                limit in BoardGames' smoke test). Only ever a hang limit:
 //                the probe moves on when the event it waits for happens.
+//   coldFirst    the name of one request (from `requests`, and one the
+//                first page `expect`s) to catch cold: on the first page's
+//                first load, every other same-origin fetch, XHR or
+//                EventSource request is held until that request's wait
+//                ends, so it is the first API call to reach the
+//                deployment, and a fresh instance serves it first (web/
+//                drive.ts). The held requests are left out of that load.
+//                None by default: nothing is held. Two traps: the named
+//                request must not itself wait on another API response
+//                (that one is held, so it would wait the hang limit); and
+//                an app whose root its function serves, rather than a
+//                static file, loses the cold start to the bypass cookie's
+//                request, which is sent before the page.
 
 import { appSettings, SETTINGS_FILE } from '../lib/app.ts';
 
@@ -74,6 +87,8 @@ export interface ProbeSettings {
   headers: Record<string, string>;
   /** Seconds. */
   timeout: number;
+  /** The request to catch cold; none when absent. */
+  coldFirst?: string;
 }
 
 const KEYS = [
@@ -86,6 +101,7 @@ const KEYS = [
   'hosts',
   'headers',
   'timeout',
+  'coldFirst',
 ];
 
 const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
@@ -262,7 +278,29 @@ export function parseSettings(raw: unknown): ProbeSettings {
     timeout = raw.timeout;
   }
 
-  return { pages, requests, reads, previewSafe, cold, repeats, hosts, headers, timeout };
+  let coldFirst: string | undefined;
+  if (raw.coldFirst !== undefined) {
+    if (typeof raw.coldFirst !== 'string' || !names.includes(raw.coldFirst)) {
+      throw fail('coldFirst')('must be a name from probe.requests');
+    }
+    if (!pages[0].expect.includes(raw.coldFirst)) {
+      throw fail('coldFirst')('must be a request probe.pages[0].expect lists');
+    }
+    coldFirst = raw.coldFirst;
+  }
+
+  return {
+    pages,
+    requests,
+    reads,
+    previewSafe,
+    cold,
+    repeats,
+    hosts,
+    headers,
+    timeout,
+    ...(coldFirst === undefined ? {} : { coldFirst }),
+  };
 }
 
 /**

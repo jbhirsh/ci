@@ -202,3 +202,127 @@ describe.skipIf(!runs)('drive, in WebKit', () => {
     expect(deployment.map((hit) => hit.url)).not.toContain('/sw.js');
   });
 });
+
+// coldFirst in WebKit: a page that sends an unlisted API call first and the
+// games query beside it, not waiting on it, against a server that marks
+// cold the first API request it serves (or, `each`, the first to each
+// path, as if each had an instance of its own).
+//
+// The two requests go out over separate connections, so which one reaches
+// the server first is a race. With coldFirst the route decides it: the
+// other request is held until the games query has been answered. The
+// control has no such hold, so its server is `gated`: it answers the
+// games query only once the other request has arrived, which makes the
+// other one the first it serves whatever the arrival order. (Gating the
+// coldFirst run would deadlock it until the hang limit.)
+describe.skipIf(!runs)('drive, in WebKit, with coldFirst', () => {
+  let arrived: string[] = [];
+  let served: string[] = [];
+  let mark: 'first' | 'each' = 'first';
+  let gated = false;
+  let parked: (() => void)[] = [];
+  let app: Listening;
+  let browser: Browser;
+  const origin = () => `http://127.0.0.1:${app.port}`;
+
+  beforeAll(async () => {
+    app = await listen((req, res) => {
+      const url = new URL(req.url ?? '/', 'http://x');
+      if (url.pathname === '/') {
+        res.writeHead(200, { 'content-type': 'text/html' }).end(`<!doctype html>
+<script>
+  fetch('/api/other');
+  fetch('/api/graphql?operationName=Games&query=' + encodeURIComponent('query Games { games }'));
+</script>`);
+        return;
+      }
+      arrived.push(url.pathname);
+      const serve = () => {
+        const cold = mark === 'first' ? served.length === 0 : !served.includes(url.pathname);
+        served.push(url.pathname);
+        res.writeHead(200, {
+          'content-type': 'application/json',
+          'server-timing': cold ? 'cold, total;dur=40' : 'total;dur=2',
+        });
+        res.end('{}');
+      };
+      if (gated && url.pathname === '/api/graphql' && !arrived.includes('/api/other')) {
+        parked.push(serve);
+        return;
+      }
+      serve();
+      if (url.pathname === '/api/other') {
+        for (const waiting of parked) waiting();
+        parked = [];
+      }
+    }, '127.0.0.1');
+    browser = await webkit.launch();
+  });
+
+  afterAll(async () => {
+    await browser?.close();
+    app?.server.close();
+  });
+
+  async function probe(coldFirst: boolean, marking: typeof mark) {
+    arrived = [];
+    served = [];
+    parked = [];
+    mark = marking;
+    gated = !coldFirst;
+    const settings = parseSettings({
+      pages: [{ path: '/', expect: ['games', 'other'] }],
+      requests: [
+        { name: 'games', path: '/api/graphql', operation: 'Games' },
+        { name: 'other', path: '/api/other' },
+      ],
+      repeats: 1,
+      timeout: 20,
+      ...(coldFirst ? { coldFirst: 'games' } : {}),
+    });
+    const outcome = await drive({
+      browser,
+      settings,
+      target: origin(),
+      environment: 'production',
+      secret: '',
+    });
+    const cold = outcome.measurements.filter((m) => m.start === 'cold');
+    return { outcome, cold: cold.map((m) => `${m.name} ${m.phase}`) };
+  }
+
+  it('sends the named request first, so it is the cold one, and leaves out the held one', async () => {
+    const { outcome, cold } = await probe(true, 'first');
+    expect(outcome.problems).toEqual([]);
+    expect(arrived.slice(0, 2)).toEqual(['/api/graphql', '/api/other']);
+    expect(cold).toEqual(['games total', 'games browser']);
+    expect(outcome.notes).toEqual([
+      'cold carried by: games',
+      "1 held until games's wait ended, left out",
+    ]);
+    expect(outcome.measurements.filter((m) => m.start === 'warm').map((m) => m.name)).toEqual([
+      'games',
+      'games',
+      'other',
+      'other',
+    ]);
+  });
+
+  it('without it (the control), the request the server serves first is the cold one', async () => {
+    const { outcome, cold } = await probe(false, 'first');
+    expect(outcome.problems).toEqual([]);
+    expect(served.slice(0, 2)).toEqual(['/api/other', '/api/graphql']);
+    expect(cold).toEqual(['other total', 'other browser']);
+    expect(outcome.notes[0]).toBe('cold carried by: other');
+  });
+
+  it('leaves out a held request even when it comes back cold', async () => {
+    const { outcome, cold } = await probe(true, 'each');
+    expect(outcome.problems).toEqual([]);
+    expect(outcome.notes).toEqual([
+      'cold carried by: games, other',
+      "1 held until games's wait ended, left out",
+    ]);
+    expect(cold).toEqual(['games total', 'games browser']);
+  });
+});

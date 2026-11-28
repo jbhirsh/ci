@@ -35,7 +35,27 @@
 //     the deployment redirects elsewhere takes them there: which is why
 //     the secret never goes this way;
 //   - to any other origin (Sentry's ingest, fonts) it passes a request on
-//     untouched.
+//     untouched;
+//   - with `coldFirst`, on the first page's first load only, it holds
+//     every other request to the deployment's origin that a page's script
+//     sends (`fetch`, `xhr` or `eventsource`, by request.resourceType(),
+//     whatever its path), after the write checks above, until the named
+//     request's own wait (below) ends, whichever way: its response, its
+//     abort as a write, its failure in the network (the page's
+//     `requestfailed`: no response comes, and the failure is the problem),
+//     or its hang limit. No timer of its own. So the
+//     named request is the first API call to reach the deployment, and a
+//     fresh instance serves it first. A held request is left out of that
+//     load, and counted: in WebKit its timing (responseEnd) includes the
+//     hold, and a cold flag it carried would have the named request's
+//     cold start inside it; a redirected one is known by the request it
+//     was redirected from. It gets no problem of its own when its wait
+//     ends unanswered (the named request's is the one that says why), nor
+//     when it's listed and its response would raise one (a 500, or no
+//     `Server-Timing`): the warm loads, which hold nothing, catch that.
+//     A request sent once the named one's wait has ended isn't held, and
+//     a named request that fails while another named one is on its way
+//     (the page cancelled one of two) doesn't end the wait.
 //
 // It waits only on events: page.waitForResponse for each request the page
 // must make, set up before page.goto, then response.finished() so the
@@ -73,6 +93,9 @@ import type { Seen } from '../match.ts';
 import type { Measurement, Start } from '../results.ts';
 import type { PageSpec, ProbeSettings, RequestSpec } from '../settings.ts';
 import type { Browser, BrowserContext, Request, Response, Route } from 'playwright';
+
+/** The requests a page's script sends: what `coldFirst` holds. */
+const SCRIPT_TYPES = new Set(['fetch', 'xhr', 'eventsource']);
 
 /** The header Vercel reads its Protection Bypass for Automation secret from. */
 export const BYPASS_HEADER = 'x-vercel-protection-bypass';
@@ -164,6 +187,8 @@ export async function drive({
   let cached = 0;
   let untimed = 0;
   let leftOut = 0;
+  let held = 0;
+  let coldFirstWarm = false;
   const limit = settings.timeout * 1000;
   const requests = new Map(settings.requests.map((spec) => [spec.name, spec]));
   const unlisted = environment === 'preview' ? 'not a read or preview-safe' : 'not a read';
@@ -294,6 +319,27 @@ export async function drive({
     let closing = false;
     const abortable: { spec: RequestSpec; reject: (error: Error) => void }[] = [];
     const pending: Promise<void>[] = [];
+    // With coldFirst, on the first page's first load: the named request,
+    // the requests held until its wait ends, and that end.
+    const named =
+      first && page === settings.pages[0] && settings.coldFirst !== undefined
+        ? (requests.get(settings.coldFirst) as RequestSpec)
+        : null;
+    const holding = new Set<Request>();
+    // Whether the named request's wait has ended: from then on, nothing is
+    // held (a request sent after it answered is measured as usual).
+    let releasing = false;
+    let resolveReleased = () => {};
+    const released = new Promise<void>((resolve) => (resolveReleased = resolve));
+    const release = () => {
+      releasing = true;
+      resolveReleased();
+    };
+    /** Named requests that have left the browser, unanswered and not failed. */
+    let namedInFlight = 0;
+    /** Whether a response's request, or one it was redirected from, was held. */
+    const wasHeld = (request: Request | null): boolean =>
+      request !== null && (holding.has(request) || wasHeld(request.redirectedFrom()));
 
     async function handle(route: Route, request: Request): Promise<void> {
       try {
@@ -317,6 +363,11 @@ export async function drive({
           }
         }
         if (!sameOrigin(seen.url, target)) return await route.continue();
+        if (named && !releasing && isListed(named, seen, target)) namedInFlight += 1;
+        else if (named && !releasing && SCRIPT_TYPES.has(request.resourceType())) {
+          holding.add(request);
+          await released;
+        }
         await route.continue({
           headers: { ...request.headers(), ...addedHeaders(seen.url, target, settings.headers) },
         });
@@ -336,14 +387,29 @@ export async function drive({
       const waits = page.expect.map((name) => {
         const spec = requests.get(name) as RequestSpec;
         const aborted = new Promise<Response>((_, reject) => abortable.push({ spec, reject }));
+        // The named request failing in the network (no response comes)
+        // ends its wait at once, so the held requests go on: unless another
+        // named request is still on its way (the page cancelled one of two),
+        // whose answer ends it instead.
+        const failed = new Promise<Response>((_, reject) => {
+          if (spec !== named) return;
+          tab.on('requestfailed', (request) => {
+            if (!isListed(spec, seenOf(request), target)) return;
+            namedInFlight -= 1;
+            if (namedInFlight > 0) return;
+            const reason = request.failure()?.errorText ?? 'no reason given';
+            reject(new Error(`${spec.name}: failed: ${reason}`));
+          });
+        });
         const response = tab.waitForResponse((r) => isListed(spec, seenOf(r.request()), target), {
           timeout: limit,
         });
-        return Promise.race([response, aborted]).then(
+        return Promise.race([response, aborted, failed]).then(
           (r) => ({ spec, response: r, error: null }),
           (error: unknown) => ({ spec, response: null, error }),
         );
       });
+      if (named) void waits[page.expect.indexOf(named.name)].then(release);
       try {
         await tab.goto(url.href, { waitUntil: 'load', timeout: limit });
       } catch (error) {
@@ -353,7 +419,19 @@ export async function drive({
         return;
       }
       for (const { spec, response, error } of await Promise.all(waits)) {
+        if (response && wasHeld(response.request())) continue;
+        if (response && spec === named) {
+          const headers = await response.allHeaders();
+          coldFirstWarm = !hasEntry(
+            parseServerTiming(headers['server-timing'] ?? ''),
+            settings.cold,
+          );
+        }
         if (response) await measure(spec, response, first);
+        else if (error instanceof Error && error.message.startsWith(`${spec.name}: failed: `)) {
+          problems.add(error.message);
+        } else if ([...holding].some((request) => isListed(spec, seenOf(request), target)))
+          continue;
         else if (!(error instanceof Error && error.message.startsWith(`${spec.name}: aborted`))) {
           problems.add(
             `${spec.name}: ${page.path} never made this request within ${settings.timeout}s`,
@@ -363,6 +441,8 @@ export async function drive({
       await Promise.all(pending);
     } finally {
       closing = true;
+      held += holding.size;
+      release();
       await context.close();
     }
   }
@@ -376,6 +456,8 @@ export async function drive({
       ? `cold carried by: ${[...coldBy].join(', ')}`
       : `cold not seen this run: no response carried the cold flag (${settings.cold})`,
   ];
+  if (coldFirstWarm) notes.push(`${settings.coldFirst} carried no cold flag on the first load`);
+  if (held > 0) notes.push(`${held} held until ${settings.coldFirst}'s wait ended, left out`);
   for (const [key, n] of notSent)
     notes.push(`${count(n, 'request')} not sent: ${key}, ${unlisted}`);
   if (cached > 0) {
