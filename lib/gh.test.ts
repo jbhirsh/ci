@@ -11,6 +11,10 @@ describe('ghVersion', () => {
     expect(ghVersion('gh version 2.89.0 (2026-03-26)\nhttps://…')).toEqual([2, 89, 0]);
     expect(ghVersion('not gh')).toBe(null);
   });
+
+  it('reads each number whole, however many digits it has', () => {
+    expect(ghVersion('gh version 12.104.13 (2030-01-01)')).toEqual([12, 104, 13]);
+  });
 });
 
 describe('checkGh', () => {
@@ -51,6 +55,12 @@ describe('checkGh, for an issue', () => {
   it('passes 2.104.0 or newer whose gh issue edit lists --attach', () => {
     expect(() => checkGh(at('2.104.0'), { issue: true, help: lists })).not.toThrow();
     expect(() => checkGh(at('2.110.3'), { issue: true, help: lists })).not.toThrow();
+  });
+
+  it('finds --attach at the very start of the help too', () => {
+    expect(() =>
+      checkGh(at('2.104.0'), { issue: true, help: () => '--attach file\n' }),
+    ).not.toThrow();
   });
 
   it('refuses an older gh, and one whose gh issue edit has no --attach', () => {
@@ -148,7 +158,15 @@ describe('commandIn and ghIn', () => {
       stderr: 'nope\n',
     });
     expect(() => commandIn('sh', cwd)(['-c', 'echo nope >&2; exit 3'])).toThrow(
-      'sh -c failed: nope',
+      /^sh -c failed: nope$/,
+    );
+  });
+
+  it("ends a failure's message with the last 800 characters of what it printed, trimmed", () => {
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), 'lib-gh-cwd-')));
+    const long = `${'a'.repeat(900)}${'b'.repeat(800)}`;
+    expect(() => commandIn('sh', cwd)(['-c', `echo ${long} >&2; exit 1`])).toThrow(
+      new RegExp(`^sh -c failed: b{800}$`),
     );
   });
 
@@ -192,8 +210,9 @@ describe('main, the command line', () => {
     const errors: string[] = [];
     expect(main([], { error: (l) => errors.push(l) })).toBe(2);
     expect(main(['check', 'x'], { error: (l) => errors.push(l) })).toBe(2);
+    expect(main(['x'], { error: (l) => errors.push(l) })).toBe(2);
     expect(main(['check', '--issue', 'x'], { error: (l) => errors.push(l) })).toBe(2);
-    expect(errors).toEqual(Array(3).fill('usage: node lib/gh.ts check [--issue]'));
+    expect(errors).toEqual(Array(4).fill('usage: node lib/gh.ts check [--issue]'));
   });
 
   it('checks for an issue with --issue', () => {
