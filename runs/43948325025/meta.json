@@ -1,0 +1,12 @@
+{
+  "id": 43948325025,
+  "number": 194,
+  "workflow": "CI",
+  "branch": "review-reads-unread-at-once",
+  "sha": "54e2d15105fe6b8b789d6e95612a70b614c8d4cb",
+  "created": "2026-11-16T20:17:57Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43948325025",
+  "jobs": [
+    "check"
+  ]
+}

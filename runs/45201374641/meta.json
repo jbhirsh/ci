@@ -1,0 +1,12 @@
+{
+  "id": 45201374641,
+  "number": 352,
+  "workflow": "CI",
+  "branch": "pictures-guidance",
+  "sha": "cc1108253d9dc568cb2e762015098df635fa0896",
+  "created": "2026-11-23T15:05:59Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45201374641",
+  "jobs": [
+    "check"
+  ]
+}

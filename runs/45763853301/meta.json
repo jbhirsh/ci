@@ -1,0 +1,12 @@
+{
+  "id": 45763853301,
+  "number": 369,
+  "workflow": "CI",
+  "branch": "visual-review-attach",
+  "sha": "c4e3326b83a60d10b77aeac27328bf74a42f16b4",
+  "created": "2026-11-26T05:47:15Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45763853301",
+  "jobs": [
+    "check"
+  ]
+}

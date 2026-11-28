@@ -1,0 +1,12 @@
+{
+  "id": 44956766524,
+  "number": 332,
+  "workflow": "CI",
+  "branch": "change-titles",
+  "sha": "72cfde0096e36accbbe44e50362cb5ba445c6b48",
+  "created": "2026-11-21T22:26:35Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44956766524",
+  "jobs": [
+    "check"
+  ]
+}

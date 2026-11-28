@@ -1,0 +1,12 @@
+{
+  "id": 44237818969,
+  "number": 237,
+  "workflow": "CI",
+  "branch": "pr-changes-trials",
+  "sha": "2eea397225887c0b7a1b297eb9b6aa41f7f95baa",
+  "created": "2026-11-18T04:30:41Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44237818969",
+  "jobs": [
+    "check"
+  ]
+}

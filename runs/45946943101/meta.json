@@ -1,0 +1,12 @@
+{
+  "id": 45946943101,
+  "number": 406,
+  "workflow": "CI",
+  "branch": "drop-wait-for-links",
+  "sha": "4e510091842a2e2a5524b429ec30c9789752817f",
+  "created": "2026-11-27T05:37:47Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45946943101",
+  "jobs": [
+    "check"
+  ]
+}

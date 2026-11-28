@@ -1,0 +1,12 @@
+{
+  "id": 46113188332,
+  "number": 450,
+  "workflow": "CI",
+  "branch": "mutation-reporting",
+  "sha": "64871db7101309cb17952636197cfd0db05401c9",
+  "created": "2026-11-28T05:40:46Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/46113188332",
+  "jobs": [
+    "check"
+  ]
+}

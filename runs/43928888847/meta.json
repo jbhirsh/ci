@@ -1,0 +1,12 @@
+{
+  "id": 43928888847,
+  "number": 182,
+  "workflow": "CI",
+  "branch": "no-fixed-waits-rule",
+  "sha": "4badf63ef35edf6ab65fac924816c1518110c6b3",
+  "created": "2026-11-16T18:26:50Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43928888847",
+  "jobs": [
+    "check"
+  ]
+}

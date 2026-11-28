@@ -1,0 +1,12 @@
+{
+  "id": 45047152720,
+  "number": 346,
+  "workflow": "CI",
+  "branch": "chore/revisions-rule",
+  "sha": "dfd46d8c6f90c386b7f5ec3df5a4a01050be794c",
+  "created": "2026-11-22T17:02:21Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45047152720",
+  "jobs": [
+    "check"
+  ]
+}

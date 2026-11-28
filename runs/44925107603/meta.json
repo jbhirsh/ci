@@ -1,0 +1,12 @@
+{
+  "id": 44925107603,
+  "number": 326,
+  "workflow": "CI",
+  "branch": "revisions-edges",
+  "sha": "1f2e9919fb188f9300810720aeafcaaaeba51cd9",
+  "created": "2026-11-21T16:32:15Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44925107603",
+  "jobs": [
+    "check"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": 45946709812,
+  "number": 404,
+  "workflow": "CI",
+  "branch": "serve-vite-line",
+  "sha": "4d026df6f7e86bd44cc83997ed24a6d14d768332",
+  "created": "2026-11-27T05:35:26Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45946709812",
+  "jobs": [
+    "check"
+  ]
+}

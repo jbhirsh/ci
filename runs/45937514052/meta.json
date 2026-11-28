@@ -1,0 +1,12 @@
+{
+  "id": 45937514052,
+  "number": 388,
+  "workflow": "CI",
+  "branch": "ts-leaf-gif",
+  "sha": "005f6a7a0ffc46d88bbcfc8ee37bf86d59d68879",
+  "created": "2026-11-27T04:01:39Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45937514052",
+  "jobs": [
+    "check"
+  ]
+}

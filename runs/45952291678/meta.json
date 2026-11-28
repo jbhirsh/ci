@@ -1,0 +1,12 @@
+{
+  "id": 45952291678,
+  "number": 419,
+  "workflow": "CI",
+  "branch": "test-state-leak",
+  "sha": "f57ad62489238297591513dfc2b17b88760930cf",
+  "created": "2026-11-27T06:30:28Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45952291678",
+  "jobs": [
+    "check"
+  ]
+}

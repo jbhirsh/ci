@@ -1,0 +1,12 @@
+{
+  "id": 45944000857,
+  "number": 392,
+  "workflow": "CI",
+  "branch": "linear-description-parsing",
+  "sha": "63d9529b48fb81bd9fe1588fab2c99238b900782",
+  "created": "2026-11-27T05:08:34Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45944000857",
+  "jobs": [
+    "check"
+  ]
+}

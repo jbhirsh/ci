@@ -1,0 +1,12 @@
+{
+  "id": 43732056488,
+  "number": 158,
+  "workflow": "CI",
+  "branch": "federation-auth",
+  "sha": "535ed03e8c0491ee217a05dad66df0c92119e686",
+  "created": "2026-11-15T15:49:56Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43732056488",
+  "jobs": [
+    "check"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": 44459813309,
+  "number": 262,
+  "workflow": "CI",
+  "branch": "drop-draft-skip",
+  "sha": "d3c37371da225cf5751dc0963bf5ce9053170cb5",
+  "created": "2026-11-19T04:39:25Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44459813309",
+  "jobs": [
+    "check"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": 43684613670,
+  "number": 155,
+  "workflow": "CI",
+  "branch": "claude/upbeat-volta-yt4wfa",
+  "sha": "ef31b5076765d9be7c82b3c6af300503804e93df",
+  "created": "2026-11-15T06:15:32Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43684613670",
+  "jobs": [
+    "check"
+  ]
+}

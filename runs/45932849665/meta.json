@@ -1,0 +1,12 @@
+{
+  "id": 45932849665,
+  "number": 383,
+  "workflow": "CI",
+  "branch": "chore/hyperlink-tickets-and-prs",
+  "sha": "1e3814a2b6d29e30dc27a023ad96f244e8629dd1",
+  "created": "2026-11-27T03:13:00Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45932849665",
+  "jobs": [
+    "check"
+  ]
+}

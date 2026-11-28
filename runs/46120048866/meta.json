@@ -1,0 +1,12 @@
+{
+  "id": 46120048866,
+  "number": 453,
+  "workflow": "CI",
+  "branch": "mutation-gate",
+  "sha": "59b42e1cd563d9de13c67133a73cb4d8ef80fb11",
+  "created": "2026-11-28T07:11:31Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/46120048866",
+  "jobs": [
+    "check"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": 45948610693,
+  "number": 412,
+  "workflow": "CI",
+  "branch": "ts-middle-pr-changes",
+  "sha": "34874603ae2c5e8d5c8a086a4c6173a4c1a5665d",
+  "created": "2026-11-27T05:55:01Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45948610693",
+  "jobs": [
+    "check"
+  ]
+}

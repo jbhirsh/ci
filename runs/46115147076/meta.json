@@ -1,0 +1,12 @@
+{
+  "id": 46115147076,
+  "number": 452,
+  "workflow": "CI",
+  "branch": "gh-measures-mutants",
+  "sha": "89e821a9b5db4579e3accbbd32425a64069982c0",
+  "created": "2026-11-28T06:07:23Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/46115147076",
+  "jobs": [
+    "check"
+  ]
+}

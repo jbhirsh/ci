@@ -1,0 +1,12 @@
+{
+  "id": 43133552695,
+  "number": 110,
+  "workflow": "CI",
+  "branch": "trial-gh-attach",
+  "sha": "6ff9c7b87a2ffc098b82daf44d68718a4c1d5859",
+  "created": "2026-11-12T01:18:04Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43133552695",
+  "jobs": [
+    "check"
+  ]
+}

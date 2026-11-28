@@ -1,0 +1,12 @@
+{
+  "id": 43966538740,
+  "number": 198,
+  "workflow": "CI",
+  "branch": "review-stub-comment",
+  "sha": "4d623c5cfe1ba8786138a24b235fb9444f494c02",
+  "created": "2026-11-16T22:05:10Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43966538740",
+  "jobs": [
+    "check"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": 43508251105,
+  "number": 134,
+  "workflow": "CI",
+  "branch": "pr-gif-automatic",
+  "sha": "08d9f39348dbc3af756fae3ff7a6c3dc82cccea1",
+  "created": "2026-11-13T21:10:13Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43508251105",
+  "jobs": [
+    "check"
+  ]
+}

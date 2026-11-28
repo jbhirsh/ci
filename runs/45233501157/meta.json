@@ -1,0 +1,12 @@
+{
+  "id": 45233501157,
+  "number": 354,
+  "workflow": "CI",
+  "branch": "sync-files",
+  "sha": "ff5b141f28ce1fae9d99511354aa9fb56f5d50dd",
+  "created": "2026-11-23T17:59:15Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45233501157",
+  "jobs": [
+    "check"
+  ]
+}

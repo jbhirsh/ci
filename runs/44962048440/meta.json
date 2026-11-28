@@ -1,0 +1,12 @@
+{
+  "id": 44962048440,
+  "number": 337,
+  "workflow": "CI",
+  "branch": "tmp/pictures-trial",
+  "sha": "98697052255bad7fd1a99ff233a54fa1c3dd4197",
+  "created": "2026-11-21T23:29:37Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44962048440",
+  "jobs": [
+    "check"
+  ]
+}

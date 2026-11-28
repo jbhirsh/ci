@@ -1,0 +1,12 @@
+{
+  "id": 43107071020,
+  "number": 94,
+  "workflow": "CI",
+  "branch": "knip-pixels-own-deps",
+  "sha": "00bf641716465623b5f5372dd1e43cf58cbb5d33",
+  "created": "2026-11-11T21:53:54Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43107071020",
+  "jobs": [
+    "check"
+  ]
+}

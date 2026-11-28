@@ -1,0 +1,12 @@
+{
+  "id": 45951882831,
+  "number": 418,
+  "workflow": "CI",
+  "branch": "claude/gracious-gates-d1ccwf",
+  "sha": "e541d04012ebb6df28228834883099460b93b0ca",
+  "created": "2026-11-27T06:26:34Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45951882831",
+  "jobs": [
+    "check"
+  ]
+}

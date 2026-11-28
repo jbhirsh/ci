@@ -1,0 +1,12 @@
+{
+  "id": 46031982297,
+  "number": 432,
+  "workflow": "CI",
+  "branch": "claude/gracious-gates-d1ccwf-gif-trail",
+  "sha": "475574bda0eaab20c2365489f0f0be49e0e87a31",
+  "created": "2026-11-27T16:15:01Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/46031982297",
+  "jobs": [
+    "check"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": 43509590320,
+  "number": 135,
+  "workflow": "CI",
+  "branch": "review-credit-chained-listings",
+  "sha": "7b2b245edd3d0c783a215adc37ff503ed4c8dc99",
+  "created": "2026-11-13T21:19:03Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43509590320",
+  "jobs": [
+    "check"
+  ]
+}

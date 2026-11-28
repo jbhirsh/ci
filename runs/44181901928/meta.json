@@ -1,0 +1,12 @@
+{
+  "id": 44181901928,
+  "number": 229,
+  "workflow": "CI",
+  "branch": "narrow-unmoved-mutants",
+  "sha": "1b406e5a74ad3e74730a97d263be5a1deafd4515",
+  "created": "2026-11-17T21:38:21Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44181901928",
+  "jobs": [
+    "check"
+  ]
+}

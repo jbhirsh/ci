@@ -1,0 +1,12 @@
+{
+  "id": 44208760721,
+  "number": 231,
+  "workflow": "CI",
+  "branch": "plan-row-shade",
+  "sha": "fd7bf90717671b81ca7828caf4d15d5f7e8b0089",
+  "created": "2026-11-18T00:33:15Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44208760721",
+  "jobs": [
+    "check"
+  ]
+}

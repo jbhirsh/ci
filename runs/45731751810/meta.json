@@ -1,0 +1,12 @@
+{
+  "id": 45731751810,
+  "number": 362,
+  "workflow": "CI",
+  "branch": "tmp/attach-test-1ee6d612",
+  "sha": "4ef3280337e656ad003f27fd5aeb3e00ab04c672",
+  "created": "2026-11-26T00:51:50Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45731751810",
+  "jobs": [
+    "check"
+  ]
+}

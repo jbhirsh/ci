@@ -1,0 +1,12 @@
+{
+  "id": 43943901609,
+  "number": 192,
+  "workflow": "CI",
+  "branch": "subscription-fallback",
+  "sha": "d8b8148ac03ef64720a9d6c43adf1559fed85c64",
+  "created": "2026-11-16T19:52:41Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43943901609",
+  "jobs": [
+    "check"
+  ]
+}

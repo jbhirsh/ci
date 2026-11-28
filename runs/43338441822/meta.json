@@ -1,0 +1,12 @@
+{
+  "id": 43338441822,
+  "number": 116,
+  "workflow": "CI",
+  "branch": "review-baselines-bot",
+  "sha": "eaafdcdf30544126a3ee00657881087f59519b36",
+  "created": "2026-11-13T00:36:50Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43338441822",
+  "jobs": [
+    "check"
+  ]
+}

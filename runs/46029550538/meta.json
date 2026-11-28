@@ -1,0 +1,12 @@
+{
+  "id": 46029550538,
+  "number": 431,
+  "workflow": "CI",
+  "branch": "claude/gracious-gates-d1ccwf-gif-optin",
+  "sha": "c417343ec1331890119ec29cda2ffe958172e051",
+  "created": "2026-11-27T15:58:19Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/46029550538",
+  "jobs": [
+    "check"
+  ]
+}

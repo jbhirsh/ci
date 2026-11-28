@@ -1,0 +1,12 @@
+{
+  "id": 45937364803,
+  "number": 386,
+  "workflow": "CI",
+  "branch": "ts-leaf-tools",
+  "sha": "e7329b717697979f1f4c5a6c66c614de3e9b580b",
+  "created": "2026-11-27T04:00:16Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45937364803",
+  "jobs": [
+    "check"
+  ]
+}

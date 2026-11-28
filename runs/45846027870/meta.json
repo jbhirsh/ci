@@ -1,0 +1,12 @@
+{
+  "id": 45846027870,
+  "number": 373,
+  "workflow": "CI",
+  "branch": "oneoff/ci144-p1",
+  "sha": "4c64fe0486ca17d959db8b5360171dcd20446f7c",
+  "created": "2026-11-26T15:08:17Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45846027870",
+  "jobs": [
+    "check"
+  ]
+}

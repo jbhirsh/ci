@@ -1,0 +1,12 @@
+{
+  "id": 44634747685,
+  "number": 283,
+  "workflow": "CI",
+  "branch": "retire-visuals",
+  "sha": "78074021769e47967f4e2cb746d537f9b56adb45",
+  "created": "2026-11-19T23:06:36Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/44634747685",
+  "jobs": [
+    "check"
+  ]
+}

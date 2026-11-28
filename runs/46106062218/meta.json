@@ -1,0 +1,12 @@
+{
+  "id": 46106062218,
+  "number": 442,
+  "workflow": "CI",
+  "branch": "sweep-static",
+  "sha": "443d5e9a12bf6aefd463489acf81d5129a29e258",
+  "created": "2026-11-28T04:07:32Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/46106062218",
+  "jobs": [
+    "check"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": 45944988754,
+  "number": 397,
+  "workflow": "CI",
+  "branch": "trial/164-dispatch-wakes-workflow-run",
+  "sha": "a49a2810ed758bcdaec01a85ad17e173e4f9d680",
+  "created": "2026-11-27T05:18:08Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/45944988754",
+  "jobs": [
+    "check"
+  ]
+}

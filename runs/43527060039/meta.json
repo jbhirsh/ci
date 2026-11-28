@@ -1,0 +1,12 @@
+{
+  "id": 43527060039,
+  "number": 141,
+  "workflow": "CI",
+  "branch": "knip-no-ignores",
+  "sha": "3c3f164a8a740fd29d3a4f352c8f8ebaedc86eba",
+  "created": "2026-11-13T23:25:55Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43527060039",
+  "jobs": [
+    "check"
+  ]
+}

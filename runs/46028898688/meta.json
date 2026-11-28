@@ -1,0 +1,12 @@
+{
+  "id": 46028898688,
+  "number": 430,
+  "workflow": "CI",
+  "branch": "ts-cleanup",
+  "sha": "67d9ff0407e70aa343f56a5629ea080281442aaf",
+  "created": "2026-11-27T15:53:40Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/46028898688",
+  "jobs": [
+    "check"
+  ]
+}

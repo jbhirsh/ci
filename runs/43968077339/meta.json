@@ -1,0 +1,12 @@
+{
+  "id": 43968077339,
+  "number": 200,
+  "workflow": "CI",
+  "branch": "claude/mockup-no-package-cache",
+  "sha": "0aeb41382d73ba9344b03d84decbe308e7e9b9f2",
+  "created": "2026-11-16T22:14:18Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43968077339",
+  "jobs": [
+    "check"
+  ]
+}

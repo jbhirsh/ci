@@ -1,0 +1,12 @@
+{
+  "id": 43538481648,
+  "number": 145,
+  "workflow": "CI",
+  "branch": "one-off-scripts-rule",
+  "sha": "d3806ed19d9f1ec86fac6f6128f8b2d46ad12dcb",
+  "created": "2026-11-14T01:05:55Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43538481648",
+  "jobs": [
+    "check"
+  ]
+}

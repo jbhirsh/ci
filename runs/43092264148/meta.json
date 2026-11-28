@@ -1,0 +1,12 @@
+{
+  "id": 43092264148,
+  "number": 89,
+  "workflow": "CI",
+  "branch": "plan-mockups",
+  "sha": "59de415670cccc74179dd2f3944fbb739b5508d6",
+  "created": "2026-11-11T19:59:27Z",
+  "url": "https://github.com/jbhirsh/ci/actions/runs/43092264148",
+  "jobs": [
+    "check"
+  ]
+}
