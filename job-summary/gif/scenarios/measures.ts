@@ -22,6 +22,15 @@ const row = (page: Page, name: string) => page.locator('#measures .wrow', { hasT
 const MARGIN = 16;
 
 /**
+ * Where the wheel stops, to the pixel: `dy` on from `scrollY`, held between
+ * the page's top and the furthest it scrolls (`scrollHeight - innerHeight`,
+ * or the top on a page shorter than its window).
+ */
+export function wheelStop(scrollY: number, dy: number, scrollHeight: number, innerHeight: number) {
+  return Math.round(Math.max(Math.min(scrollY + dy, scrollHeight - innerHeight), 0));
+}
+
+/**
  * Scrolls `target` into the window, its top MARGIN below the window's top
  * when it's above or `top` is set, or its bottom MARGIN above the window's
  * bottom when it's below, with the wheel as a person would. Returns once the
@@ -42,8 +51,10 @@ async function bring(page: Page, gif: Helpers, target: Locator, { top = false } 
   const [scrollY, scrollHeight, innerHeight] = (await page.evaluate(
     '[window.scrollY, document.documentElement.scrollHeight, window.innerHeight]',
   )) as [number, number, number];
-  const to = Math.round(Math.min(Math.max(scrollY + dy, 0), scrollHeight - innerHeight));
-  await gif.scroll(page, Math.round(dy));
+  // The turn the wheel makes, whole pixels, and where it stops.
+  const turn = Math.round(dy);
+  const to = wheelStop(scrollY, turn, scrollHeight, innerHeight);
+  await gif.scroll(page, turn);
   await page.waitForFunction(`Math.abs(window.scrollY - ${to}) < 1`);
 }
 
