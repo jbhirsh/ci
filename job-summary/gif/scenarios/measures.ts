@@ -36,18 +36,15 @@ async function bring(page: Page, gif: Helpers, target: Locator, { top = false } 
   if (top || box.y < MARGIN) dy = box.y - MARGIN;
   else if (box.y + box.height > height - MARGIN) dy = box.y + box.height - (height - MARGIN);
   if (Math.abs(dy) < 1) return;
-  const to = await page.evaluate(
-    (by) =>
-      Math.round(
-        Math.min(
-          Math.max(window.scrollY + by, 0),
-          document.documentElement.scrollHeight - window.innerHeight,
-        ),
-      ),
-    dy,
-  );
+  // Where the wheel stops, worked out here from the page's numbers: the
+  // page gets only expressions as text, never a function's source, which
+  // Stryker instruments with helpers the page lacks (CLAUDE.md).
+  const [scrollY, scrollHeight, innerHeight] = (await page.evaluate(
+    '[window.scrollY, document.documentElement.scrollHeight, window.innerHeight]',
+  )) as [number, number, number];
+  const to = Math.round(Math.min(Math.max(scrollY + dy, 0), scrollHeight - innerHeight));
   await gif.scroll(page, Math.round(dy));
-  await page.waitForFunction((y) => Math.abs(window.scrollY - y) < 1, to);
+  await page.waitForFunction(`Math.abs(window.scrollY - ${to}) < 1`);
 }
 
 /** Glides to `target`, brought into view first, and clicks it. */
