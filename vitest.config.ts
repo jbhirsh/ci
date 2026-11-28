@@ -3,7 +3,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['**/*.test.ts'],
-    exclude: ['node_modules/**'],
+    // .stryker-tmp holds Stryker's sandbox copies of the repo, left behind by
+    // an interrupted run: they are not this checkout's tests.
+    exclude: ['node_modules/**', '.stryker-tmp/**'],
     // A test never writes to the runner's own summary or outputs: on CI a
     // tool's test (a compare action's, say) would otherwise put its
     // made-up result on the run's page. A test that checks them points
@@ -24,7 +26,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['**/*.ts'],
-      exclude: ['**/*.test.ts', '*.config.*', 'node_modules/**', 'coverage/**'],
+      exclude: ['**/*.test.ts', '*.config.*', 'node_modules/**', 'coverage/**', '.stryker-tmp/**'],
       // Every file on its own, as in the apps.
       thresholds: { perFile: true, lines: 80 },
     },

@@ -12,7 +12,9 @@
 #     with the app's dependencies installed, as the tools see them in the
 #     app's own CI. A tool an app doesn't use yet (no key in its
 #     `.github/ci.json`) is checked against its defaults.
-# Both job names are this repo's required checks.
+# Both job names are this repo's required checks. A third job, Mutation Tests
+# (Stryker), mutation-tests this repo's own scripts (below); it reports only,
+# and is not yet required (ci#157).
 name: CI
 
 on:
@@ -24,9 +26,11 @@ on:
 permissions:
   contents: read
 
+# A PR's newer push cancels its older run. A push to main waits instead:
+# cancelled, its mutation job would save none of main's baseline.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
@@ -88,6 +92,25 @@ jobs:
       actions: read
       pull-requests: write
     uses: ./.github/workflows/job-reports.yml
+
+  # Mutation testing of this repo's own scripts (ci#157), with the action the
+  # apps call, from this checkout so a change to mutation/ shows on its own
+  # PR: a PR's changed lines, and on a push to main main's baseline (its
+  # action.yml says what runs when). The settings are this repo's
+  # `.github/ci.json` `mutation` key; the monthly sweep is
+  # self-mutation-sweep.yml. No score fails it until stryker.config.json
+  # sets `thresholds.break`; Stryker failing to run still does. The limit is
+  # the worst case, a test-only PR, which mutates its subject whole
+  # (pr-template/body.ts: about 25 minutes), as in the apps; a push's run
+  # stops as a pass before it (`push.timeoutMinutes`). The action checks out
+  # again itself.
+  mutation:
+    name: Mutation Tests (Stryker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./mutation
 
   apps:
     name: Against ${{ matrix.app }}

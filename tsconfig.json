@@ -20,5 +20,5 @@
     "skipLibCheck": true
   },
   "include": ["**/*.ts", "eslint.config.js"],
-  "exclude": ["node_modules", "coverage"]
+  "exclude": ["node_modules", "coverage", ".stryker-tmp"]
 }

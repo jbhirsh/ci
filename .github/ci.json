@@ -7,5 +7,35 @@
     "page": "job-summary/gif/page.ts",
     "scenarios": "job-summary/gif/scenarios",
     "scale": 2
+  },
+  "mutation": {
+    "install": "npm ci && npx playwright install --with-deps webkit",
+    "wiring": [
+      "vitest.config.ts",
+      "lib/test-tmpdir.ts",
+      "tsconfig.json",
+      "package.json",
+      "package-lock.json",
+      ".github/workflows/ci.yml",
+      ".github/workflows/self-mutation-sweep.yml",
+      "mutation/**/action.yml"
+    ],
+    "smoke": ["mutation/narrow.ts", "mutation/cache.ts"],
+    "cache": {
+      "restartOn": [
+        "package-lock.json",
+        "stryker.config.json",
+        "vitest.config.ts",
+        "lib/test-tmpdir.ts"
+      ]
+    },
+    "push": {
+      "timeoutMinutes": 80
+    },
+    "sweep": {
+      "shards": 16,
+      "timeoutMinutes": 180,
+      "ignoreStatic": false
+    }
   }
 }
