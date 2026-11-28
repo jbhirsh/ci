@@ -13,14 +13,18 @@
 //     go (or the press is cancelled), and fading dots trail a drag.
 //   - A wheel turn shows an arrow by the pointer, pointing the way the page
 //     scrolls.
-//   - A key press shows its name (timeline.ts's keyLabel) by what has
-//     focus, a frame after the key has done its work (a Tab's focus, the
-//     scroll or animation it set off): under it, or over it if that would
+//   - A key press shows its name by what has focus, a frame after its name
+//     comes back and the key has done its work (a Tab's focus, the scroll or
+//     animation it set off): under it, or over it if that would
 //     leave the recorded area (window.__prGifClip, set by recordFrames; the
 //     viewport otherwise), and inside that area either way. With nothing
 //     focused in shot, it sits at the bottom of the area, in the middle.
 //     Characters typed one after another build up into the text typed. The
-//     label fades 600 ms after the last key.
+//     label fades 600 ms after the last key. Node names the key
+//     (timeline.ts's keyLabel, through the KEY_LABEL binding record.ts
+//     exposes), so no function's source goes into the page: under Stryker a
+//     module's functions call its helpers, which the page lacks. Labels are
+//     shown in the order their keys went down, whatever order Node answers.
 //   - Pointer moves are kept on window.__prGifMoves, for recordFrames to
 //     tell when the pointer rested out of shot, and while recording, each
 //     animation frame notes whether anything in shot moved
@@ -28,14 +32,21 @@
 // A <dialog> opened with showModal(), or a popover, sits in the browser's
 // top layer, above any z-index: over one, the pointer can't be drawn.
 
-import { keyLabel } from './timeline.ts';
-
 /** The id of the layer the overlay draws on. */
 export const LAYER_ID = 'pr-gif-pointer';
 
+/**
+ * The page's binding that names a key press (record.ts's showPointer exposes
+ * it): called with the press's fields, it answers timeline.ts's keyLabel.
+ */
+export const KEY_LABEL = '__prGifKeyLabel';
+
+/**
+ * The overlay, for record.ts's showPointer to install: it calls the KEY_LABEL
+ * binding showPointer exposes beside it.
+ */
 export const OVERLAY_SCRIPT = `
 (() => {
-const keyLabel = ${keyLabel.toString()};
 const ARROW = 'M4 2 L4 20 L9 15.5 L12.5 22.5 L15.5 21 L12 14 L19 14 Z';
 const start = () => {
   if (document.getElementById('${LAYER_ID}')) return;
@@ -138,36 +149,40 @@ const start = () => {
   addEventListener('pointercancel', release, capture);
   let keyFade;
   let typed = '';
+  // Each label waits for the one before, so typing keeps its order.
+  let shown = Promise.resolve();
   addEventListener('keydown', (e) => {
     stirred = true;
-    const label = keyLabel(e);
-    if (!label) return;
-    // A character, or a space between characters, adds to what's being typed.
-    const char = e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey && (e.key !== ' ' || typed !== '');
-    typed = char ? typed + e.key : '';
-    const text = char ? typed : label;
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      key.textContent = text;
-      const area = window.__prGifClip || { x: 0, y: 0, width: innerWidth, height: innerHeight };
-      const right = area.x + area.width, bottom = area.y + area.height;
-      const focused = document.activeElement;
-      // What has focus, if any of it is in shot: one off it (scrolled away,
-      // or a stand-in on screen for it) would pin the label to an edge, far
-      // from anything the GIF shows.
-      const r = focused && focused !== document.body ? focused.getBoundingClientRect() : null;
-      const box = r && r.width > 0 && r.right > area.x && r.left < right && r.bottom > area.y && r.top < bottom ? r : null;
-      const w = key.offsetWidth, h = key.offsetHeight;
-      let x = box ? box.left + box.width / 2 - w / 2 : area.x + area.width / 2 - w / 2;
-      let y = box ? box.bottom + 8 : bottom - h - 12;
-      if (box && y + h > bottom - 4) y = box.top - h - 8;
-      x = Math.max(area.x + 4, Math.min(x, right - w - 4));
-      y = Math.max(area.y + 4, Math.min(y, bottom - h - 4));
-      key.style.left = x + 'px';
-      key.style.top = y + 'px';
-      key.style.opacity = '1';
-      clearTimeout(keyFade);
-      keyFade = setTimeout(() => { key.style.opacity = '0'; typed = ''; }, 600);
-    }));
+    const named = window.${KEY_LABEL}({ key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey });
+    shown = shown.then(() => named).then((label) => {
+      if (!label) return;
+      // A character, or a space between characters, adds to what's being typed.
+      const char = e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey && (e.key !== ' ' || typed !== '');
+      typed = char ? typed + e.key : '';
+      const text = char ? typed : label;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        key.textContent = text;
+        const area = window.__prGifClip || { x: 0, y: 0, width: innerWidth, height: innerHeight };
+        const right = area.x + area.width, bottom = area.y + area.height;
+        const focused = document.activeElement;
+        // What has focus, if any of it is in shot: one off it (scrolled away,
+        // or a stand-in on screen for it) would pin the label to an edge, far
+        // from anything the GIF shows.
+        const r = focused && focused !== document.body ? focused.getBoundingClientRect() : null;
+        const box = r && r.width > 0 && r.right > area.x && r.left < right && r.bottom > area.y && r.top < bottom ? r : null;
+        const w = key.offsetWidth, h = key.offsetHeight;
+        let x = box ? box.left + box.width / 2 - w / 2 : area.x + area.width / 2 - w / 2;
+        let y = box ? box.bottom + 8 : bottom - h - 12;
+        if (box && y + h > bottom - 4) y = box.top - h - 8;
+        x = Math.max(area.x + 4, Math.min(x, right - w - 4));
+        y = Math.max(area.y + 4, Math.min(y, bottom - h - 4));
+        key.style.left = x + 'px';
+        key.style.top = y + 'px';
+        key.style.opacity = '1';
+        clearTimeout(keyFade);
+        keyFade = setTimeout(() => { key.style.opacity = '0'; typed = ''; }, 600);
+      }));
+    });
   }, true);
 };
 if (document.readyState === 'loading') addEventListener('DOMContentLoaded', start, { once: true });

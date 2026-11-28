@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { jpegSize } from './timeline.ts';
+import { jpegSize, keyLabel, pageKeyLabel } from './timeline.ts';
 
 // A frame is whatever the browser's screencast sends: any bytes at all.
 describe('jpegSize, for any bytes', () => {
@@ -53,6 +53,30 @@ describe('jpegSize, for any bytes', () => {
           3,
         ]);
         expect(jpegSize(jpeg)).toEqual({ width: w, height: h });
+      }),
+    );
+  });
+});
+
+// What the overlay's binding gets: whatever the page's code sends it.
+describe('pageKeyLabel, for anything the page sends', () => {
+  it("never throws, and names only a key press's fields, as keyLabel does", () => {
+    const press = fc.record({
+      key: fc.string({ maxLength: 12 }),
+      shiftKey: fc.boolean(),
+      ctrlKey: fc.boolean(),
+      altKey: fc.boolean(),
+      metaKey: fc.boolean(),
+    });
+    fc.assert(
+      fc.property(fc.oneof(press, fc.anything()), (sent) => {
+        const fields = Object(sent) as Record<string, unknown>;
+        const isPress =
+          typeof fields.key === 'string' &&
+          ['shiftKey', 'ctrlKey', 'altKey', 'metaKey'].every((m) => typeof fields[m] === 'boolean');
+        const label = pageKeyLabel(sent);
+        if (isPress) expect(label).toBe(keyLabel(sent as Parameters<typeof keyLabel>[0]));
+        else expect(label).toBeNull();
       }),
     );
   });

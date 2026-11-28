@@ -299,8 +299,7 @@ export type KeyPress = {
  * own, a character already shows Shift (a capital, "?"), so it isn't named;
  * in a shortcut it is, and a letter is a capital, as shortcuts are written.
  * A modifier on its own names nothing: it shows with the key it modifies.
- * The overlay inlines this function's source, so it must stay
- * self-contained.
+ * The overlay asks for it through a binding (record.ts's showPointer).
  */
 export function keyLabel(e: KeyPress): string | null {
   const names: Record<string, string> = {
@@ -322,4 +321,23 @@ export function keyLabel(e: KeyPress): string | null {
   ].filter(Boolean);
   const name = names[e.key] ?? (printable && chord ? e.key.toUpperCase() : e.key);
   return [...mods, name].join('+');
+}
+
+/**
+ * The overlay binding's answer (record.ts's showPointer): keyLabel's name
+ * for what the page sent, or null for anything that isn't a key press's
+ * fields. The page's own code, or any frame's, can call the binding with
+ * any value, as a plain Event('keydown') has no key.
+ */
+export function pageKeyLabel(sent: unknown): string | null {
+  const { key, shiftKey, ctrlKey, altKey, metaKey } = Object(sent) as Partial<
+    Record<keyof KeyPress, unknown>
+  >;
+  return typeof key === 'string' &&
+    typeof shiftKey === 'boolean' &&
+    typeof ctrlKey === 'boolean' &&
+    typeof altKey === 'boolean' &&
+    typeof metaKey === 'boolean'
+    ? keyLabel({ key, shiftKey, ctrlKey, altKey, metaKey })
+    : null;
 }
