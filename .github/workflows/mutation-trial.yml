@@ -1,0 +1,42 @@
+# One-off (ci#157, PR 7's trial): this repo's first full mutation sweep,
+# static mutants included, and the three pr-template speed tests timed over
+# Stryker's instrumented code on a runner (Q6's fallback if one passes
+# 20 s). It runs from its own branch, on a push to it, and never goes on
+# main; its results go in the issue, then the branch is deleted.
+name: Mutation trial
+
+on:
+  push:
+    branches: [mutation-trial]
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: Mutation sweep
+    uses: ./.github/workflows/mutation-sweep.yml
+
+  speed:
+    name: Speed tests, instrumented
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit
+      - name: Plain
+        run: npx vitest run pr-template/body.test.ts --reporter=verbose
+      # Stryker's initial run alone, its sandbox kept: body.ts instrumented,
+      # no mutant active.
+      - name: Stryker's initial run, sandbox kept
+        run: npx stryker run --mutate pr-template/body.ts,job-summary/gif/scenarios/measures.ts --dryRunOnly --cleanTempDir false --reporters clear-text
+      - name: Instrumented
+        run: |
+          cd .stryker-tmp/sandbox-*
+          grep -c stryMutAct_ pr-template/body.ts
+          npx vitest run pr-template/body.test.ts job-summary/gif/scenarios/measures.test.ts --reporter=verbose
