@@ -45,6 +45,13 @@
 //   sweep.shards       How many shards the monthly sweep splits into
 //                      (default 8).
 //   sweep.timeoutMinutes  Each shard job's limit (default 180).
+//   sweep.ignoreStatic  Stryker's `ignoreStatic` for the sweep's shards alone,
+//                      so PR runs can skip static mutants (code run as a
+//                      module loads, each one a rerun of the whole suite) and
+//                      the sweep still tests them (null, the default, keeps
+//                      the Stryker config's own value). With it false, the
+//                      sweep weighs static mutants as the whole suite and
+//                      scores them apart (sweep.ts).
 //
 // `node settings.ts` writes them as step outputs for the composite actions.
 
@@ -65,7 +72,7 @@ export type Settings = {
   install: string;
   cache: { prefix: string; restoreMain: boolean; restartOn: string[] };
   push: { timeoutMinutes: number };
-  sweep: { shards: number; timeoutMinutes: number };
+  sweep: { shards: number; timeoutMinutes: number; ignoreStatic: boolean | null };
 };
 
 export function defaults(): Settings {
@@ -80,7 +87,7 @@ export function defaults(): Settings {
     install: 'npm ci',
     cache: { prefix: 'stryker-incremental', restoreMain: true, restartOn: [] },
     push: { timeoutMinutes: 170 },
-    sweep: { shards: 8, timeoutMinutes: 180 },
+    sweep: { shards: 8, timeoutMinutes: 180, ignoreStatic: null },
   };
 }
 
@@ -105,6 +112,10 @@ function merge<T extends Record<string, unknown>>(
     if (key === 'perFileThreshold') {
       if (value !== null && !(typeof value === 'number' && value >= 0 && value <= 100)) {
         throw new Error(`mutation: "${name}" must be a score from 0 to 100, or null`);
+      }
+    } else if (key === 'ignoreStatic') {
+      if (value !== null && typeof value !== 'boolean') {
+        throw new Error(`mutation: "${name}" must be a boolean, or null`);
       }
     } else if (Array.isArray(fallback)) {
       if (!isStrings(value)) throw new Error(`mutation: "${name}" must be a list of strings`);

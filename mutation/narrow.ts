@@ -27,6 +27,11 @@
 // is re-tested if it's in range, which costs time but never a wrong score; a
 // file named whole keeps every mutant, as Stryker re-places them itself.
 //
+// When the Stryker config ignores static mutants, a static one with no
+// covering test is dropped wherever it is: a run like this one ignores it,
+// but a sweep testing them (`sweep.ignoreStatic` false) left a result that
+// Stryker would carry into this run's score.
+//
 // Usage: node narrow.ts <incremental file> <comma-separated scope>
 
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
@@ -34,7 +39,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appRoot } from '../lib/app.ts';
 import { inRanges, parseReport, parseScope, readText, relativeName } from './report.ts';
-import type { Report } from './report.ts';
+import { readSettings, readStrykerConfig } from './settings.ts';
+import type { Mutant, Report } from './report.ts';
 
 /**
  * Which end lines (1-based) stay where they were when Stryker diffs the
@@ -61,24 +67,31 @@ export function staysPut(before: string, now: string): (end: number) => boolean 
 /**
  * The report with only the files, and lines, named in `scope` left in it. A
  * line range keeps a mutant only where it stays put between the report's
- * source and `read`'s text (null when the file can't be read).
+ * source and `read`'s text (null when the file can't be read). With
+ * `ignoresStatic`, a static mutant with no covering test is dropped too.
  *
  * @param report
  * @param scope
  * @param cwd
  * @param read a file's text now, by its scope name
+ * @param ignoresStatic whether this run's Stryker config ignores static mutants
  */
 export function narrow(
   report: Report,
   scope: string[],
   cwd: string,
   read: (file: string) => string | null = (file) => readText(path.resolve(cwd, file)),
+  ignoresStatic = false,
 ): Report {
   const wanted = parseScope(scope, cwd);
   const files: NonNullable<Report['files']> = {};
-  for (const [name, file] of Object.entries(report.files ?? {})) {
+  const kept = (m: Mutant) => !ignoresStatic || m.static !== true || Boolean(m.coveredBy?.length);
+  for (const [name, original] of Object.entries(report.files ?? {})) {
     const key = relativeName(name, cwd);
     if (!wanted.has(key)) continue;
+    const file = ignoresStatic
+      ? { ...original, mutants: (original.mutants ?? []).filter(kept) }
+      : original;
     const ranges = wanted.get(key);
     if (!ranges) {
       files[name] = file;
@@ -111,6 +124,7 @@ export function narrowFile(
   scope: string[],
   cwd: string,
   log: (line: string) => void = console.log,
+  ignoresStatic = false,
 ) {
   if (!existsSync(file)) {
     log(`No incremental file at ${file}: every mutant in scope will run.`);
@@ -122,7 +136,7 @@ export function narrowFile(
     log(`Unreadable incremental file at ${file}, removed: every mutant in scope will run.`);
     return;
   }
-  const narrowed = narrow(report, scope, cwd);
+  const narrowed = narrow(report, scope, cwd, undefined, ignoresStatic);
   writeFileSync(file, JSON.stringify(narrowed));
   const kept = Object.keys(narrowed.files ?? {}).length;
   const total = Object.keys(report.files ?? {}).length;
@@ -138,7 +152,8 @@ export function main(args: string[], cwd: string = appRoot()) {
     console.error('Usage: narrow.ts <incremental file> <comma-separated files or file:lines>');
     return 2;
   }
-  narrowFile(file, scope.split(','), cwd);
+  const config = readStrykerConfig(readSettings(cwd), cwd);
+  narrowFile(file, scope.split(','), cwd, console.log, config.raw.ignoreStatic === true);
   return 0;
 }
 

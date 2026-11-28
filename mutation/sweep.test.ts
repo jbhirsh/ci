@@ -13,6 +13,7 @@ import {
   shardMatrix,
   shardTable,
   splitShards,
+  staticPart,
   testKey,
   verdict,
 } from './sweep.ts';
@@ -21,6 +22,8 @@ import { cleanRepos, isolateGit, repo, writeFiles } from './test-repo.ts';
 import type { Report } from './report.ts';
 
 const CWD = '/home/runner/work/sift/sift';
+// Stryker's reason for a static mutant it skipped under ignoreStatic.
+const STATIC = 'Static mutant (and "ignoreStatic" was enabled)';
 
 describe('mutantWeight', () => {
   it('counts one run plus each covering test', () => {
@@ -30,6 +33,22 @@ describe('mutantWeight', () => {
 
   it('counts nothing for an ignored mutant, which never runs', () => {
     expect(mutantWeight({ status: 'Ignored', coveredBy: ['1'] })).toBe(0);
+    expect(mutantWeight({ status: 'Ignored', static: true })).toBe(0);
+  });
+
+  it('counts the whole suite for a static mutant, even one ignored for being static', () => {
+    const skipped = { status: 'Ignored', static: true, statusReason: STATIC };
+    expect(mutantWeight(skipped, 40)).toBe(41);
+    expect(mutantWeight(skipped)).toBe(0);
+    expect(mutantWeight({ status: 'Killed', static: true, coveredBy: ['1'] }, 40)).toBe(41);
+    expect(mutantWeight({ status: 'Killed', static: false, coveredBy: ['1'] }, 40)).toBe(2);
+    expect(mutantWeight({ status: 'Ignored', coveredBy: ['1'] }, 40)).toBe(0);
+  });
+
+  it('counts nothing for a static mutant ignored for another reason', () => {
+    const excluded = 'Ignored because of excluded mutation "StringLiteral"';
+    expect(mutantWeight({ status: 'Ignored', static: true, statusReason: excluded }, 40)).toBe(0);
+    expect(mutantWeight({ status: 'Ignored', static: true }, 40)).toBe(0);
   });
 });
 
@@ -59,6 +78,34 @@ describe('reportWeights', () => {
 
   it('knows nothing from results with no files', () => {
     expect(reportWeights({}, CWD).size).toBe(0);
+  });
+
+  it('weighs static mutants as every test in the results when testing them', () => {
+    const report: Report = {
+      files: {
+        'src/a.ts': {
+          mutants: [
+            { status: 'Ignored', static: true, statusReason: STATIC },
+            { status: 'Survived', coveredBy: ['0'] },
+          ],
+        },
+      },
+      testFiles: {
+        'a.test.ts': {
+          tests: [
+            { id: '0', name: 'a' },
+            { id: '1', name: 'b' },
+          ],
+        },
+        'b.test.ts': { tests: [{ id: '2', name: 'c' }] },
+        'c.test.ts': {},
+      },
+    };
+    expect(reportWeights(report, CWD, true)).toEqual(new Map([['src/a.ts', 4 + 2]]));
+    expect(reportWeights(report, CWD)).toEqual(new Map([['src/a.ts', 2]]));
+    expect(reportWeights({ files: report.files }, CWD, true)).toEqual(
+      new Map([['src/a.ts', 1 + 2]]),
+    );
   });
 });
 
@@ -235,6 +282,10 @@ describe('shardMatrix and shardTable', () => {
       ].join('\n'),
     );
     expect(shardTable(shards, false)).toContain('| Weight (lines) |');
+    expect(shardTable(shards, true, true)).toContain(
+      '| Weight (mutants plus covering tests, static ones as the whole suite, last results) |',
+    );
+    expect(shardTable(shards, false, true)).toContain('| Weight (lines) |');
   });
 });
 
@@ -254,6 +305,14 @@ describe('shardConfig', () => {
       thresholds: { break: null },
     });
   });
+
+  it("sets ignoreStatic when the sweep sets it, and keeps the config's otherwise", () => {
+    const own = { ignoreStatic: true, thresholds: {} };
+    expect(shardConfig(own, false)).toEqual({ ignoreStatic: false, thresholds: { break: null } });
+    expect(shardConfig({}, true)).toEqual({ ignoreStatic: true, thresholds: { break: null } });
+    expect(shardConfig(own, null)).toEqual({ ignoreStatic: true, thresholds: { break: null } });
+    expect(shardConfig({})).not.toHaveProperty('ignoreStatic');
+  });
 });
 
 const at = (line: number, column = 1) => ({ start: { line, column } });
@@ -269,6 +328,8 @@ const config = {
   mutate: ['src/**/*.ts', '!**/*.d.ts'],
   thresholds: { high: 80, low: 60, break: 68 },
 };
+// A config whose PR runs skip static mutants, as one testing them in the sweep needs.
+const skipsStatic = { ...config, ignoreStatic: true };
 
 // Two shards whose runs met the same three tests in different orders.
 const shardA: Report = {
@@ -426,6 +487,33 @@ describe('mergeReports', () => {
   });
 });
 
+describe('staticPart', () => {
+  const report: Report = {
+    schemaVersion: '1.0',
+    files: {
+      'src/a.ts': {
+        source: 'a',
+        mutants: [
+          mutant('1', 'Survived', { static: true }),
+          mutant('2', 'Killed', { static: false }),
+          mutant('3', 'Killed'),
+        ],
+      },
+      'src/b.ts': {},
+    },
+  };
+
+  it('keeps only the non-static mutants, or only the static ones, and the rest as it was', () => {
+    const rest = staticPart(report, false);
+    expect(rest.schemaVersion).toBe('1.0');
+    expect(rest.files?.['src/a.ts'].source).toBe('a');
+    expect(rest.files?.['src/a.ts'].mutants?.map((m) => m.id)).toEqual(['2', '3']);
+    expect(staticPart(report, true).files?.['src/a.ts'].mutants?.map((m) => m.id)).toEqual(['1']);
+    expect(rest.files?.['src/b.ts'].mutants).toEqual([]);
+    expect(report.files?.['src/a.ts'].mutants).toHaveLength(3);
+  });
+});
+
 describe('verdict', () => {
   const c = { killed: 7, timeout: 0, survived: 3, noCoverage: 0, errors: 2, ignored: 4, score: 70 };
 
@@ -465,11 +553,42 @@ describe('verdict', () => {
     ).toBe(true);
   });
 
+  it('shows static mutants in a row of their own, judged by the rest alone', () => {
+    const statics = { ...c, killed: 1, survived: 9, score: 10 };
+    const v = verdict({ found: 4, expected: 4, counts: c, breakAt: 70, statics });
+    expect(v.pass).toBe(true);
+    expect(v.summary).toContain(
+      [
+        '| Mutants | Score | Break | Killed | Timeout | Survived | No coverage | Errors | Ignored |',
+        '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+        '| Not static | 70.00% | 70 | 7 | 0 | 3 | 0 | 2 | 4 |',
+        '| Static | 10.00% | report only | 1 | 0 | 9 | 0 | 2 | 4 |',
+        '',
+      ].join('\n'),
+    );
+    const none = verdict({ found: 1, expected: 1, counts: c, breakAt: null, statics });
+    expect(none.summary).toContain('| Not static | 70.00% | none |');
+    const empty = { ...c, score: null };
+    expect(
+      verdict({ found: 1, expected: 1, counts: c, breakAt: 1, statics: empty }).summary,
+    ).toContain('| Static | none | report only |');
+  });
+
   it('fails a complete sweep that tested nothing', () => {
     const v = verdict({ found: 2, expected: 2, counts: { ...c, score: null }, breakAt: 68 });
     expect(v.pass).toBe(false);
     expect(v.summary).toContain('| none | 68 |');
     expect(v.summary).toContain('No mutant was tested.');
+    const statics = { ...c, score: 50 };
+    const apart = verdict({
+      found: 2,
+      expected: 2,
+      counts: { ...c, score: null },
+      breakAt: 68,
+      statics,
+    });
+    expect(apart.pass).toBe(false);
+    expect(apart.summary).toContain('No non-static mutant was tested.');
   });
 
   it('fails an incomplete sweep whatever its score, saying the baseline is kept', () => {
@@ -495,7 +614,7 @@ describe('main', () => {
     vi.unstubAllEnvs();
   });
 
-  function app(mutation: Record<string, unknown> = {}) {
+  function app(mutation: Record<string, unknown> = {}, stryker: Record<string, unknown> = config) {
     const dir = mkdtempSync(path.join(tmpdir(), 'sweep-out-'));
     out = path.join(dir, 'out');
     writeFileSync(out, '');
@@ -505,7 +624,7 @@ describe('main', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     return repo({
       '.github/ci.json': JSON.stringify({ mutation: { sweep: { shards: 2 }, ...mutation } }),
-      'stryker.config.json': JSON.stringify(config),
+      'stryker.config.json': JSON.stringify(stryker),
       'src/a.ts': 'a\nb\nc',
       'src/b.ts': 'a',
       'src/c.ts': 'a\nb',
@@ -535,6 +654,53 @@ describe('main', () => {
     expect(main(['config', 'reports/shard.json'], root)).toBe(0);
     const written = JSON.parse(readFileSync(path.join(root, 'reports/shard.json'), 'utf8'));
     expect(written).toEqual({ ...config, thresholds: { ...config.thresholds, break: null } });
+  });
+
+  it('refuses to test static mutants in the sweep alone when PR runs test them too', () => {
+    const root = app({ sweep: { shards: 2, ignoreStatic: false } });
+    expect(() => main(['config', 'shard.json'], root)).toThrow(
+      '"sweep.ignoreStatic" false needs stryker.config.json to set "ignoreStatic": true',
+    );
+  });
+
+  it("writes the sweep's ignoreStatic into the shard config", () => {
+    const root = app({ sweep: { shards: 2, ignoreStatic: false } }, skipsStatic);
+    expect(main(['config', 'shard.json'], root)).toBe(0);
+    expect(JSON.parse(readFileSync(path.join(root, 'shard.json'), 'utf8')).ignoreStatic).toBe(
+      false,
+    );
+  });
+
+  it('plans static mutants as the whole suite only when the sweep tests them', () => {
+    // a.ts's one static mutant, ignored last time, runs both tests: 3, against
+    // b.ts's 2; ignored, it weighs nothing, and b.ts is the heavier.
+    const last = {
+      files: {
+        'src/a.ts': { mutants: [{ status: 'Ignored', static: true, statusReason: STATIC }] },
+        'src/b.ts': { mutants: [{ status: 'Killed', coveredBy: ['0'] }] },
+        'src/c.ts': { mutants: [] },
+      },
+      testFiles: {
+        't.ts': {
+          tests: [
+            { id: '0', name: 'x' },
+            { id: '1', name: 'y' },
+          ],
+        },
+      },
+    };
+    const split = (root: string) => {
+      writeFiles(root, { 'last.json': JSON.stringify(last) });
+      writeFileSync(out, '');
+      expect(main(['plan', 'last.json'], root)).toBe(0);
+      return readFileSync(out, 'utf8');
+    };
+    expect(split(app({ sweep: { shards: 2, ignoreStatic: false } }, skipsStatic))).toContain(
+      '{"include":[{"shard":1,"mutate":"src/a.ts"},{"shard":2,"mutate":"src/b.ts,src/c.ts"}]}',
+    );
+    expect(split(app())).toContain(
+      '{"include":[{"shard":1,"mutate":"src/b.ts"},{"shard":2,"mutate":"src/a.ts,src/c.ts"}]}',
+    );
   });
 
   const shardDir = (root: string, shards: Record<string, unknown>) => {
@@ -569,6 +735,36 @@ describe('main', () => {
     shardDir(root, { 'shard-1': good, 'shard-2': fine });
     // 3 of 4: 75%, over 68; b.ts at 50% clears 50.
     expect(main(['merge', 'shards', '2', 'merged.json'], root)).toBe(0);
+  });
+
+  it('judges a sweep testing static mutants by the rest, and keeps every result', () => {
+    const shard = {
+      files: {
+        'src/a.ts': {
+          mutants: [
+            mutant('1', 'Killed'),
+            mutant('2', 'Survived', { static: true }),
+            mutant('3', 'Survived', { static: true }),
+          ],
+        },
+      },
+    };
+    const apart = app(
+      { perFileThreshold: 90, sweep: { shards: 1, ignoreStatic: false } },
+      skipsStatic,
+    );
+    shardDir(apart, { 'shard-1': shard });
+    // 1 of 1 not static: 100%, over the break (68) and the per-file 90.
+    expect(main(['merge', 'shards', '1', 'merged.json'], apart)).toBe(0);
+    const merged = JSON.parse(readFileSync(path.join(apart, 'merged.json'), 'utf8'));
+    expect(merged.files['src/a.ts'].mutants).toHaveLength(3);
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('| Static | 0.00% |'));
+    // Unset, as in every app, the static survivors count: 1 of 3.
+    const together = app({ perFileThreshold: 90, sweep: { shards: 1 } });
+    shardDir(together, { 'shard-1': shard });
+    expect(main(['merge', 'shards', '1', 'merged.json'], together)).toBe(1);
+    expect(console.log).toHaveBeenLastCalledWith(expect.stringContaining('| 33.33% | 68 |'));
+    expect(console.log).not.toHaveBeenLastCalledWith(expect.stringContaining('Static'));
   });
 
   it('writes nothing and fails when a shard is missing or unreadable', () => {
