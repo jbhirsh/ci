@@ -935,6 +935,9 @@
          whose server part fans out into a waterfall of its own; and a row's
          details (its runs on main, its usual, its Server-Timing entry). */
       #measures-card {
+        /* Never wider than the page, whatever a part's text: a grid's one
+           column otherwise grows to its widest unbreakable content. */
+        grid-template-columns: minmax(0, 1fr);
         --k-net: #b4bdcc;
         --k-cold: #8b5cf6;
         --k-server: #2f5fd0;
@@ -991,6 +994,7 @@
         margin: 2px 0 0;
         font-size: 12px;
         color: var(--muted);
+        overflow-wrap: anywhere;
       }
       .mswitch {
         display: inline-flex;
@@ -1083,6 +1087,7 @@
       .sum .opn {
         font-size: 15px;
         font-weight: 650;
+        overflow-wrap: anywhere;
       }
       .sum .opn small {
         font-weight: 400;
@@ -1378,6 +1383,7 @@
         grid-column: 1 / -1;
         margin: 0;
         font-size: 13px;
+        overflow-wrap: anywhere;
       }
       .detail .what code,
       .detail pre {
@@ -1408,6 +1414,8 @@
         padding-left: 18px;
         font-size: 12px;
         color: var(--muted);
+        /* A note can hold a long URL with nothing to break at. */
+        overflow-wrap: anywhere;
       }
 
       /* A phone: a lane's name and time on one line, its bar under them;
