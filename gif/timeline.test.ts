@@ -7,6 +7,7 @@ import {
   frameName,
   jpegSize,
   keyLabel,
+  pageKeyLabel,
   restsOutside,
   scaledHeight,
   stillTime,
@@ -329,6 +330,7 @@ describe('keyLabel', () => {
     expect(press('K', { metaKey: true, shiftKey: true })).toBe('Meta+Shift+K');
     expect(press('K', { ctrlKey: true, shiftKey: true })).toBe('Ctrl+Shift+K');
     expect(press('ArrowLeft', { altKey: true })).toBe('Alt+←');
+    expect(press(' ', { shiftKey: true })).toBe('Shift+Space');
   });
 
   it('names nothing for a modifier on its own', () => {
@@ -352,5 +354,35 @@ describe('keyLabel', () => {
         },
       ),
     );
+  });
+});
+
+describe('pageKeyLabel', () => {
+  const press = { key: 'k', shiftKey: false, ctrlKey: true, altKey: false, metaKey: false };
+
+  it("names a key press's fields as keyLabel does", () => {
+    expect(pageKeyLabel(press)).toBe('Ctrl+K');
+    expect(pageKeyLabel({ ...press, ctrlKey: false, shiftKey: true, key: 'Tab' })).toBe(
+      'Shift+Tab',
+    );
+  });
+
+  it('names nothing for what is not a key press, a field missing or of another type', () => {
+    for (const sent of [
+      null,
+      undefined,
+      'k',
+      7,
+      [],
+      {},
+      { ...press, key: undefined },
+      { ...press, key: 7 },
+      { ...press, shiftKey: 'true' },
+      { ...press, ctrlKey: 1 },
+      { ...press, altKey: null },
+      { ...press, metaKey: undefined },
+    ]) {
+      expect(pageKeyLabel(sent)).toBeNull();
+    }
   });
 });

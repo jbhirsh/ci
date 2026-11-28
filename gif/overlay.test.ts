@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LAYER_ID, OVERLAY_SCRIPT } from './overlay.ts';
+import { KEY_LABEL, LAYER_ID, OVERLAY_SCRIPT } from './overlay.ts';
+import { keyLabel } from './timeline.ts';
+import type { KeyPress } from './timeline.ts';
 
 // jsdom's globals, which this file runs in (the repo's lint knows Node's).
 const {
@@ -16,12 +18,14 @@ const {
 
 // overlay.ts's script as it runs in the page: once, in this file's jsdom
 // window. jsdom has no layout, so boxes are stubbed where the label is placed.
+// The window gets the key-naming binding record.ts's showPointer exposes,
+// answering as Playwright's does (a promise) with the real keyLabel.
 
 type Win = typeof globalThis & {
   __prGifMoves: { x: number; y: number; t: number }[];
   __prGifTicks: { t: number; moving: boolean }[];
   __prGifClip?: unknown;
-};
+} & Record<typeof KEY_LABEL, (press: KeyPress) => Promise<string | null>>;
 const win = window as unknown as Win;
 const part = (name: string) => {
   const el = document.querySelector(`[data-pr-gif="${name}"]`);
@@ -29,6 +33,10 @@ const part = (name: string) => {
   return el;
 };
 const frames = () => vi.advanceTimersByTime(40);
+/** Two frames, after the binding has answered. */
+const labelled = () => vi.advanceTimersByTimeAsync(40);
+const named = (press: KeyPress) => Promise.resolve(keyLabel(press));
+let naming = named;
 const pointer = (type: string, x = 0, y = 0) =>
   window.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: y }));
 
@@ -36,6 +44,7 @@ beforeAll(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'Date'] });
   // As if the page before had the pointer here.
   sessionStorage.setItem('prGif:pointer', JSON.stringify({ x: 7, y: 9 }));
+  win[KEY_LABEL] = (press) => naming(press);
   new Function(OVERLAY_SCRIPT)();
 });
 afterAll(() => vi.useRealTimers());
@@ -195,11 +204,11 @@ describe('a key press', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key, ...init }));
   const label = () => part('key');
 
-  it('is labelled under what has focus, a frame after the key', () => {
+  it('is labelled under what has focus, a frame after its name comes back', async () => {
     focusOn({ left: 300, top: 100, width: 100, height: 40 });
     press('Tab');
     expect(label().style.opacity).not.toBe('1');
-    frames();
+    await labelled();
     expect(label().textContent).toBe('Tab');
     expect(label().style.opacity).toBe('1');
     expect(label().style.left).toBe('350px');
@@ -208,59 +217,93 @@ describe('a key press', () => {
     expect(label().style.opacity).toBe('0');
   });
 
-  it('goes over what has focus when under it would leave the recorded area, and stays inside it', () => {
+  it('goes over what has focus when under it would leave the recorded area, and stays inside it', async () => {
     win.__prGifClip = { x: 0, y: 50, width: 400, height: 100 };
     focusOn({ left: 380, top: 100, width: 100, height: 40 });
     press('Enter');
-    frames();
+    await labelled();
     expect(label().textContent).toBe('Enter');
     expect(label().style.top).toBe('92px');
     expect(label().style.left).toBe('396px');
   });
 
-  it('sits at the bottom of the recorded area with nothing focused', () => {
+  it('sits at the bottom of the recorded area with nothing focused', async () => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     win.__prGifClip = { x: 0, y: 50, width: 400, height: 110 };
     press('Escape');
-    frames();
+    await labelled();
     expect(label().textContent).toBe('Esc');
     expect(label().style.top).toBe('148px');
     expect(label().style.left).toBe('200px');
   });
 
-  it('sits at the bottom of the recorded area, not on its edge, when what has focus is out of shot', () => {
+  it('sits at the bottom of the recorded area, not on its edge, when what has focus is out of shot', async () => {
     win.__prGifClip = { x: 0, y: 50, width: 400, height: 110 };
     focusOn({ left: -3000, top: 100, width: 100, height: 40 });
     press('ArrowRight');
-    frames();
+    await labelled();
     expect(label().textContent).toBe('→');
     expect(label().style.left).toBe('200px');
     expect(label().style.top).toBe('148px');
   });
 
-  it('builds up characters typed one after another, spaces and all, into one label', () => {
+  it('builds up characters typed one after another, spaces and all, into one label', async () => {
     for (const key of ['c', 'a', 't', ' ', 'm']) {
       press(key);
-      frames();
+      await labelled();
     }
     expect(label().textContent).toBe('cat m');
     vi.advanceTimersByTime(600);
     press('d');
-    frames();
+    await labelled();
     expect(label().textContent).toBe('d');
   });
 
-  it('names a shortcut or a space on its own, and nothing for a modifier on its own', () => {
+  it('names a shortcut or a space on its own, and nothing for a modifier on its own', async () => {
     press('k', { ctrlKey: true });
-    frames();
+    await labelled();
     expect(label().textContent).toBe('Ctrl+K');
     vi.advanceTimersByTime(600);
     press(' ');
-    frames();
+    await labelled();
     expect(label().textContent).toBe('Space');
     press('Shift', { shiftKey: true });
-    frames();
+    await labelled();
     expect(label().textContent).toBe('Space');
+  });
+
+  it("asks Node to name it with the key's fields", async () => {
+    const asked: KeyPress[] = [];
+    naming = (p) => (asked.push(p), named(p));
+    try {
+      press('k', { shiftKey: true, altKey: true, metaKey: true });
+      await labelled();
+    } finally {
+      naming = named;
+    }
+    expect(asked).toEqual([
+      { key: 'k', shiftKey: true, ctrlKey: false, altKey: true, metaKey: true },
+    ]);
+    expect(label().textContent).toBe('Alt+Meta+Shift+K');
+  });
+
+  it('shows labels in the order their keys went down, whatever order Node answers in', async () => {
+    const asked: { press: KeyPress; answer: (label: string | null) => void }[] = [];
+    naming = (p) => new Promise((answer) => asked.push({ press: p, answer }));
+    try {
+      press('o');
+      press('k');
+      expect(asked.map(({ press: p }) => p.key)).toEqual(['o', 'k']);
+      asked[1].answer(keyLabel(asked[1].press));
+      await labelled();
+      expect(label().style.opacity).toBe('0');
+      asked[0].answer(keyLabel(asked[0].press));
+      await labelled();
+    } finally {
+      naming = named;
+    }
+    expect(label().textContent).toBe('ok');
+    expect(label().style.opacity).toBe('1');
   });
 });
 

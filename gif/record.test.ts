@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { OVERLAY_SCRIPT } from './overlay.ts';
+import { KEY_LABEL, OVERLAY_SCRIPT } from './overlay.ts';
 import {
   FIRST_FRAME_MS,
   PICTURES_LOADED,
@@ -27,8 +27,27 @@ const as = (fake: unknown) => fake as never;
 describe('showPointer', () => {
   it('draws the overlay from an init script, on every page the context opens', async () => {
     const addInitScript = vi.fn(() => Promise.resolve());
-    await showPointer({ addInitScript });
+    await showPointer({ exposeBinding: () => Promise.resolve(), addInitScript });
     expect(addInitScript).toHaveBeenCalledWith({ content: OVERLAY_SCRIPT });
+  });
+
+  it("answers the overlay's key names from Node, bound before the overlay's first page", async () => {
+    const calls: string[] = [];
+    let binding: ((source: unknown, sent: unknown) => unknown) | undefined;
+    await showPointer({
+      exposeBinding: (name, fn) => {
+        calls.push(`bind ${name}`);
+        binding = fn;
+        return Promise.resolve();
+      },
+      addInitScript: () => Promise.resolve(calls.push('script')),
+    });
+    expect(calls).toEqual([`bind ${KEY_LABEL}`, 'script']);
+    const press = { key: 'k', shiftKey: true, ctrlKey: true, altKey: false, metaKey: false };
+    expect(binding?.({}, press)).toBe('Ctrl+Shift+K');
+    expect(binding?.({}, { ...press, key: 'Shift', ctrlKey: false })).toBeNull();
+    // What a plain Event('keydown') sends: no key.
+    expect(binding?.({}, { ...press, key: undefined })).toBeNull();
   });
 });
 

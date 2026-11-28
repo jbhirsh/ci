@@ -23,13 +23,14 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { OVERLAY_SCRIPT } from './overlay.ts';
+import { KEY_LABEL, OVERLAY_SCRIPT } from './overlay.ts';
 import {
   HOLDS,
   concatList,
   cropFilter,
   frameName,
   jpegSize,
+  pageKeyLabel,
   restsOutside,
   thinner,
   timeline,
@@ -87,11 +88,18 @@ export const QUALITY = 90;
 
 /**
  * Draws the pointer and key presses on every page `context` opens after
- * this call: call it before the first page loads.
+ * this call: call it once, before the first page loads (Playwright refuses
+ * a binding's name twice). The overlay asks Node to name each key (the
+ * KEY_LABEL binding), so no function's source goes into the page.
  */
 export async function showPointer(context: {
+  exposeBinding(
+    name: string,
+    binding: (source: unknown, sent: unknown) => unknown,
+  ): Promise<unknown>;
   addInitScript(script: { content: string }): Promise<unknown>;
 }) {
+  await context.exposeBinding(KEY_LABEL, (_, sent) => pageKeyLabel(sent));
   await context.addInitScript({ content: OVERLAY_SCRIPT });
 }
 

@@ -1,4 +1,6 @@
-// The overlay's arrow in real WebKit, through the screencast record.ts takes
+// The overlay in real WebKit, installed by record.ts's showPointer. Its key
+// labels, which Node names through showPointer's binding. Its arrow, through
+// the screencast record.ts takes
 // its frames from: the screencast sends only what a repaint changed, so an
 // arrow whose old place isn't repainted stays in every frame after, and a
 // glide leaves a trail of arrows. A screenshot repaints the whole page and
@@ -12,8 +14,7 @@
 import { existsSync } from 'node:fs';
 import { webkit } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { OVERLAY_SCRIPT } from './overlay.ts';
-import { FIRST_FRAME_MS } from './record.ts';
+import { FIRST_FRAME_MS, showPointer } from './record.ts';
 import type { Browser, Page } from 'playwright';
 
 const runs = Boolean(process.env.CI) || existsSync(webkit.executablePath());
@@ -60,7 +61,7 @@ describe.skipIf(!runs)('the overlay, in WebKit', () => {
 
   it('leaves no arrow behind where the pointer was, in the screencast of a still page', async () => {
     const context = await browser.newContext({ viewport: VIEWPORT });
-    await context.addInitScript({ content: OVERLAY_SCRIPT });
+    await showPointer(context);
     const page = await context.newPage();
     await context.route('http://still.test/', (route) =>
       route.fulfill({
@@ -95,6 +96,26 @@ describe.skipIf(!runs)('the overlay, in WebKit', () => {
     expect(await showsArrow(mid)()).toBe(false);
 
     await screencast.stop();
+    await context.close();
+  });
+
+  it("labels keys typed back to back with the names Node gives through showPointer's binding", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    await showPointer(context);
+    const page = await context.newPage();
+    await context.route('http://typing.test/', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<body><input></body>' }),
+    );
+    await page.goto('http://typing.test/');
+    await page.locator('input').focus();
+    const label = () => page.locator('[data-pr-gif="key"]').textContent();
+    const limit = { timeout: FIRST_FRAME_MS };
+
+    // Back to back, with no delay, as a scenario may type.
+    await page.keyboard.type('cat m');
+    await expect.poll(label, limit).toBe('cat m');
+    await page.keyboard.press('Control+k');
+    await expect.poll(label, limit).toBe('Ctrl+K');
     await context.close();
   });
 });
